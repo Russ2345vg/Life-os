@@ -1,3 +1,19 @@
+export {
+  ACTION_SESSION_STATUS,
+  ActionSession,
+  ActionSessionCompleted,
+  ActionSessionPaused,
+  ActionSessionResumed,
+  ActionSessionStarted,
+  PauseInterval,
+  SESSION_COMPLETION_KIND,
+  SessionResultNote,
+  type ActionSessionCompletionInput,
+  type ActionSessionRehydrationData,
+  type ActionSessionStartInput,
+  type ActionSessionStatus,
+  type SessionCompletionKind,
+} from './action-session';
 export { Day } from './day/Day';
 export { DayDate } from './day/DayDate';
 export { DAY_STATUS, type DayStatus } from './day/DayStatus';
