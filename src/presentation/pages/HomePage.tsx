@@ -9,7 +9,7 @@ export function HomePage() {
         </p>
         <div className="foundation-status" aria-label="Текущий этап проекта">
           <span>Текущий этап</span>
-          <strong>Прикладной слой решений</strong>
+          <strong>Предметная модель действий</strong>
         </div>
       </section>
     </main>

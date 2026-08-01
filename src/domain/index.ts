@@ -25,6 +25,25 @@ export {
   type DecisionRestoreInput,
   type DecisionStatus,
 } from './decision';
+export {
+  ActionActualResult,
+  ActionCancelReason,
+  ActionExpectedResult,
+  LifeAction,
+  LifeActionArchived,
+  LifeActionCancelled,
+  LifeActionCompleted,
+  LifeActionDraftCreated,
+  LIFE_ACTION_STATUS,
+  LifeActionReady,
+  LifeActionRescheduled,
+  LifeActionStarted,
+  LifeActionTitle,
+  type LifeActionDraftInput,
+  type LifeActionReadyInput,
+  type LifeActionRehydrationData,
+  type LifeActionStatus,
+} from './life-action';
 export type { DomainEvent } from './shared/DomainEvent';
 export { Entity } from './shared/Entity';
 export { EntityId } from './shared/EntityId';

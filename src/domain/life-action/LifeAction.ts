@@ -1,0 +1,639 @@
+import { DomainError } from '../../shared/errors/DomainError';
+import { DayDate } from '../day/DayDate';
+import type { DomainEvent } from '../shared/DomainEvent';
+import { Entity } from '../shared/Entity';
+import { EntityId } from '../shared/EntityId';
+import { copyDate, copyOptionalDate } from '../shared/dateCopy';
+import { ActionActualResult } from './ActionActualResult';
+import { ActionCancelReason } from './ActionCancelReason';
+import { ActionExpectedResult } from './ActionExpectedResult';
+import { LIFE_ACTION_STATUS, type LifeActionStatus } from './LifeActionStatus';
+import { LifeActionTitle } from './LifeActionTitle';
+import {
+  LifeActionArchived,
+  LifeActionCancelled,
+  LifeActionCompleted,
+  LifeActionDraftCreated,
+  LifeActionReady,
+  LifeActionRescheduled,
+  LifeActionStarted,
+} from './events';
+
+export interface LifeActionDraftInput {
+  readonly id: EntityId;
+  readonly title: LifeActionTitle;
+  readonly description?: string;
+  readonly decisionId?: EntityId;
+  readonly createdAt: Date;
+  readonly eventId: EntityId;
+}
+
+export interface LifeActionReadyInput {
+  readonly expectedResult: ActionExpectedResult;
+  readonly plannedDate: DayDate;
+  readonly occurredAt: Date;
+  readonly eventId: EntityId;
+}
+
+export interface LifeActionRehydrationData {
+  readonly id: EntityId;
+  readonly title: LifeActionTitle;
+  readonly description: string | null;
+  readonly expectedResult: ActionExpectedResult | null;
+  readonly actualResult: ActionActualResult | null;
+  readonly status: LifeActionStatus;
+  readonly decisionId: EntityId | null;
+  readonly plannedDate: DayDate | null;
+  readonly createdAt: Date;
+  readonly readyAt: Date | null;
+  readonly startedAt: Date | null;
+  readonly completedAt: Date | null;
+  readonly cancelledAt: Date | null;
+  readonly cancelReason: ActionCancelReason | null;
+  readonly archivedAt: Date | null;
+  readonly rescheduleCount: number;
+  readonly version: number;
+}
+
+export class LifeAction extends Entity {
+  readonly #title: LifeActionTitle;
+  readonly #description: string | null;
+  readonly #decisionId: EntityId | null;
+  readonly #createdAt: Date;
+  readonly #domainEvents: DomainEvent[];
+  #expectedResult: ActionExpectedResult | null;
+  #actualResult: ActionActualResult | null;
+  #status: LifeActionStatus;
+  #plannedDate: DayDate | null;
+  #readyAt: Date | null;
+  #startedAt: Date | null;
+  #completedAt: Date | null;
+  #cancelledAt: Date | null;
+  #cancelReason: ActionCancelReason | null;
+  #archivedAt: Date | null;
+  #rescheduleCount: number;
+  #version: number;
+
+  private constructor(data: LifeActionRehydrationData, domainEvents: DomainEvent[]) {
+    super(data.id);
+    this.#title = data.title;
+    this.#description = normalizeOptionalDescription(data.description);
+    this.#expectedResult = data.expectedResult;
+    this.#actualResult = data.actualResult;
+    this.#status = data.status;
+    this.#decisionId = data.decisionId;
+    this.#plannedDate = data.plannedDate;
+    this.#createdAt = copyDate(data.createdAt);
+    this.#readyAt = copyOptionalDate(data.readyAt);
+    this.#startedAt = copyOptionalDate(data.startedAt);
+    this.#completedAt = copyOptionalDate(data.completedAt);
+    this.#cancelledAt = copyOptionalDate(data.cancelledAt);
+    this.#cancelReason = data.cancelReason;
+    this.#archivedAt = copyOptionalDate(data.archivedAt);
+    this.#rescheduleCount = data.rescheduleCount;
+    this.#version = data.version;
+    this.#domainEvents = domainEvents;
+  }
+
+  public static createDraft(input: LifeActionDraftInput): LifeAction {
+    assertLifeActionTitle(input.title);
+    assertValidDate(input.createdAt, 'Время создания действия');
+    assertOptionalDecisionId(input.decisionId ?? null);
+
+    const lifeAction = new LifeAction(
+      {
+        id: input.id,
+        title: input.title,
+        description: input.description ?? null,
+        expectedResult: null,
+        actualResult: null,
+        status: LIFE_ACTION_STATUS.draft,
+        decisionId: input.decisionId ?? null,
+        plannedDate: null,
+        createdAt: input.createdAt,
+        readyAt: null,
+        startedAt: null,
+        completedAt: null,
+        cancelledAt: null,
+        cancelReason: null,
+        archivedAt: null,
+        rescheduleCount: 0,
+        version: 1,
+      },
+      [],
+    );
+
+    lifeAction.#domainEvents.push(
+      new LifeActionDraftCreated(
+        input.eventId,
+        lifeAction.id,
+        lifeAction.#title,
+        lifeAction.#decisionId,
+        input.createdAt,
+      ),
+    );
+
+    return lifeAction;
+  }
+
+  public static rehydrate(data: LifeActionRehydrationData): LifeAction {
+    assertRehydrationInvariants(data);
+    return new LifeAction(data, []);
+  }
+
+  public get title(): LifeActionTitle {
+    return this.#title;
+  }
+
+  public get description(): string | null {
+    return this.#description;
+  }
+
+  public get expectedResult(): ActionExpectedResult | null {
+    return this.#expectedResult;
+  }
+
+  public get actualResult(): ActionActualResult | null {
+    return this.#actualResult;
+  }
+
+  public get status(): LifeActionStatus {
+    return this.#status;
+  }
+
+  public get decisionId(): EntityId | null {
+    return this.#decisionId;
+  }
+
+  public get plannedDate(): DayDate | null {
+    return this.#plannedDate;
+  }
+
+  public get createdAt(): Date {
+    return copyDate(this.#createdAt);
+  }
+
+  public get readyAt(): Date | null {
+    return copyOptionalDate(this.#readyAt);
+  }
+
+  public get startedAt(): Date | null {
+    return copyOptionalDate(this.#startedAt);
+  }
+
+  public get completedAt(): Date | null {
+    return copyOptionalDate(this.#completedAt);
+  }
+
+  public get cancelledAt(): Date | null {
+    return copyOptionalDate(this.#cancelledAt);
+  }
+
+  public get cancelReason(): ActionCancelReason | null {
+    return this.#cancelReason;
+  }
+
+  public get archivedAt(): Date | null {
+    return copyOptionalDate(this.#archivedAt);
+  }
+
+  public get rescheduleCount(): number {
+    return this.#rescheduleCount;
+  }
+
+  public get version(): number {
+    return this.#version;
+  }
+
+  public makeReady(input: LifeActionReadyInput): void {
+    this.assertNotArchived();
+
+    if (this.#status !== LIFE_ACTION_STATUS.draft) {
+      throw new DomainError(
+        'life_action.make_ready_requires_draft',
+        'Подготовить к выполнению можно только черновик действия.',
+      );
+    }
+
+    assertExpectedResult(input.expectedResult);
+    assertDayDate(input.plannedDate);
+    assertValidDate(input.occurredAt, 'Время подготовки действия');
+
+    this.#expectedResult = input.expectedResult;
+    this.#plannedDate = input.plannedDate;
+    this.#status = LIFE_ACTION_STATUS.ready;
+    this.#readyAt = copyDate(input.occurredAt);
+    this.#version += 1;
+    this.#domainEvents.push(
+      new LifeActionReady(
+        input.eventId,
+        this.id,
+        input.expectedResult,
+        input.plannedDate,
+        input.occurredAt,
+      ),
+    );
+  }
+
+  public markInProgress(occurredAt: Date, eventId: EntityId): void {
+    this.assertNotArchived();
+
+    if (this.#status === LIFE_ACTION_STATUS.inProgress) {
+      return;
+    }
+
+    if (this.#status !== LIFE_ACTION_STATUS.ready || this.#plannedDate === null) {
+      throw new DomainError(
+        'life_action.start_requires_ready',
+        'Начать выполнение можно только для готового действия.',
+      );
+    }
+
+    assertValidDate(occurredAt, 'Время начала выполнения действия');
+    this.#status = LIFE_ACTION_STATUS.inProgress;
+    this.#startedAt = copyDate(occurredAt);
+    this.#version += 1;
+    this.#domainEvents.push(new LifeActionStarted(eventId, this.id, this.#plannedDate, occurredAt));
+  }
+
+  public reschedule(newDate: DayDate, occurredAt: Date, eventId: EntityId): void {
+    this.assertNotArchived();
+    assertDayDate(newDate);
+
+    if (
+      (this.#status !== LIFE_ACTION_STATUS.ready &&
+        this.#status !== LIFE_ACTION_STATUS.inProgress) ||
+      this.#plannedDate === null
+    ) {
+      throw new DomainError(
+        'life_action.reschedule_not_allowed',
+        'Перенести можно только готовое или выполняемое действие.',
+      );
+    }
+
+    if (this.#plannedDate.equals(newDate)) {
+      throw new DomainError(
+        'life_action.reschedule_same_date',
+        'Новая дата действия должна отличаться от текущей.',
+      );
+    }
+
+    assertValidDate(occurredAt, 'Время переноса действия');
+    const previousDate = this.#plannedDate;
+    this.#plannedDate = newDate;
+    this.#rescheduleCount += 1;
+    this.#version += 1;
+    this.#domainEvents.push(
+      new LifeActionRescheduled(
+        eventId,
+        this.id,
+        previousDate,
+        newDate,
+        this.#rescheduleCount,
+        occurredAt,
+      ),
+    );
+  }
+
+  public complete(actualResult: ActionActualResult, occurredAt: Date, eventId: EntityId): void {
+    this.assertNotArchived();
+
+    if (this.#status !== LIFE_ACTION_STATUS.inProgress) {
+      throw new DomainError(
+        'life_action.complete_requires_in_progress',
+        'Завершить можно только выполняемое действие.',
+      );
+    }
+
+    assertActualResult(actualResult);
+    assertValidDate(occurredAt, 'Время завершения действия');
+    this.#status = LIFE_ACTION_STATUS.completed;
+    this.#actualResult = actualResult;
+    this.#completedAt = copyDate(occurredAt);
+    this.#version += 1;
+    this.#domainEvents.push(new LifeActionCompleted(eventId, this.id, actualResult, occurredAt));
+  }
+
+  public cancel(occurredAt: Date, eventId: EntityId, cancelReason: ActionCancelReason): void {
+    this.assertNotArchived();
+
+    if (
+      this.#status !== LIFE_ACTION_STATUS.draft &&
+      this.#status !== LIFE_ACTION_STATUS.ready &&
+      this.#status !== LIFE_ACTION_STATUS.inProgress
+    ) {
+      throw new DomainError(
+        'life_action.cancel_not_allowed',
+        'Отменить можно только черновик, готовое или выполняемое действие.',
+      );
+    }
+
+    assertCancelReason(cancelReason);
+    assertValidDate(occurredAt, 'Время отмены действия');
+    const previousStatus = this.#status;
+    this.#status = LIFE_ACTION_STATUS.cancelled;
+    this.#cancelledAt = copyDate(occurredAt);
+    this.#cancelReason = cancelReason;
+    this.#version += 1;
+    this.#domainEvents.push(
+      new LifeActionCancelled(eventId, this.id, previousStatus, cancelReason, occurredAt),
+    );
+  }
+
+  public archive(occurredAt: Date, eventId: EntityId): void {
+    if (this.#archivedAt !== null) {
+      return;
+    }
+
+    if (
+      this.#status !== LIFE_ACTION_STATUS.completed &&
+      this.#status !== LIFE_ACTION_STATUS.cancelled
+    ) {
+      throw new DomainError(
+        'life_action.archive_requires_final_status',
+        'Архивировать можно только завершённое или отменённое действие.',
+      );
+    }
+
+    assertValidDate(occurredAt, 'Время архивирования действия');
+    this.#archivedAt = copyDate(occurredAt);
+    this.#version += 1;
+    this.#domainEvents.push(new LifeActionArchived(eventId, this.id, this.#status, occurredAt));
+  }
+
+  public isScheduledFor(date: DayDate): boolean {
+    return this.#plannedDate?.equals(date) ?? false;
+  }
+
+  public isOverdue(currentDate: DayDate): boolean {
+    return (
+      this.#archivedAt === null &&
+      this.#plannedDate !== null &&
+      this.#plannedDate.isBefore(currentDate) &&
+      (this.#status === LIFE_ACTION_STATUS.ready || this.#status === LIFE_ACTION_STATUS.inProgress)
+    );
+  }
+
+  public requiresAttention(currentDate: DayDate): boolean {
+    return this.isOverdue(currentDate);
+  }
+
+  public isArchived(): boolean {
+    return this.#archivedAt !== null;
+  }
+
+  public isLinkedToDecision(): boolean {
+    return this.#decisionId !== null;
+  }
+
+  public getUncommittedEvents(): readonly DomainEvent[] {
+    return [...this.#domainEvents];
+  }
+
+  public clearUncommittedEvents(): void {
+    this.#domainEvents.length = 0;
+  }
+
+  private assertNotArchived(): void {
+    if (this.#archivedAt !== null) {
+      throw new DomainError(
+        'life_action.archived_is_immutable',
+        'Архивированное действие нельзя изменять.',
+      );
+    }
+  }
+}
+
+function assertRehydrationInvariants(data: LifeActionRehydrationData): void {
+  assertLifeActionStatus(data.status);
+  assertLifeActionTitle(data.title);
+  assertOptionalDecisionId(data.decisionId);
+  assertValidDate(data.createdAt, 'Время создания действия');
+
+  if (!Number.isInteger(data.version) || data.version < 1) {
+    throw new DomainError(
+      'life_action.invalid_version',
+      'Версия действия должна быть не меньше 1.',
+    );
+  }
+
+  if (!Number.isInteger(data.rescheduleCount) || data.rescheduleCount < 0) {
+    throw new DomainError(
+      'life_action.invalid_reschedule_count',
+      'Количество переносов действия не может быть отрицательным.',
+    );
+  }
+
+  assertOptionalValueTypes(data);
+
+  const hasAnyReadyField =
+    data.expectedResult !== null || data.plannedDate !== null || data.readyAt !== null;
+  const hasAllReadyFields =
+    data.expectedResult !== null && data.plannedDate !== null && data.readyAt !== null;
+
+  if (hasAnyReadyField && !hasAllReadyFields) {
+    throw new DomainError(
+      'life_action.ready_fields_incomplete',
+      'Подготовленные данные действия должны содержать результат, дату и время подготовки.',
+    );
+  }
+
+  if (
+    (data.status === LIFE_ACTION_STATUS.ready ||
+      data.status === LIFE_ACTION_STATUS.inProgress ||
+      data.status === LIFE_ACTION_STATUS.completed) &&
+    !hasAllReadyFields
+  ) {
+    throw new DomainError(
+      'life_action.ready_fields_required',
+      'Готовое, выполняемое или завершённое действие должно иметь данные подготовки.',
+    );
+  }
+
+  if (
+    (data.status === LIFE_ACTION_STATUS.inProgress ||
+      data.status === LIFE_ACTION_STATUS.completed) &&
+    data.startedAt === null
+  ) {
+    throw new DomainError(
+      'life_action.started_at_required',
+      'Выполняемое или завершённое действие должно иметь время начала.',
+    );
+  }
+
+  if (
+    data.status === LIFE_ACTION_STATUS.completed &&
+    (data.actualResult === null || data.completedAt === null)
+  ) {
+    throw new DomainError(
+      'life_action.completed_fields_required',
+      'Завершённое действие должно иметь фактический результат и время завершения.',
+    );
+  }
+
+  if (
+    data.status !== LIFE_ACTION_STATUS.completed &&
+    (data.actualResult !== null || data.completedAt !== null)
+  ) {
+    throw new DomainError(
+      'life_action.uncompleted_has_result',
+      'Незавершённое действие не может иметь фактический результат завершения.',
+    );
+  }
+
+  if (
+    data.status === LIFE_ACTION_STATUS.cancelled &&
+    (data.cancelledAt === null || data.cancelReason === null)
+  ) {
+    throw new DomainError(
+      'life_action.cancelled_fields_required',
+      'Отменённое действие должно иметь время и причину отмены.',
+    );
+  }
+
+  if (
+    data.status !== LIFE_ACTION_STATUS.cancelled &&
+    (data.cancelledAt !== null || data.cancelReason !== null)
+  ) {
+    throw new DomainError(
+      'life_action.uncancelled_has_cancellation',
+      'Неотменённое действие не может иметь данные отмены.',
+    );
+  }
+
+  if (data.status === LIFE_ACTION_STATUS.draft && (hasAnyReadyField || data.startedAt !== null)) {
+    throw new DomainError(
+      'life_action.draft_has_progress',
+      'Черновик не может иметь данные подготовки или начала выполнения.',
+    );
+  }
+
+  if (data.status === LIFE_ACTION_STATUS.ready && data.startedAt !== null) {
+    throw new DomainError(
+      'life_action.ready_has_started_at',
+      'Готовое действие не может иметь время начала выполнения.',
+    );
+  }
+
+  if (data.startedAt !== null && !hasAllReadyFields) {
+    throw new DomainError(
+      'life_action.started_without_ready_fields',
+      'Начатое действие должно иметь полные данные подготовки.',
+    );
+  }
+
+  if (
+    data.archivedAt !== null &&
+    data.status !== LIFE_ACTION_STATUS.completed &&
+    data.status !== LIFE_ACTION_STATUS.cancelled
+  ) {
+    throw new DomainError(
+      'life_action.invalid_archive_status',
+      'Архивировано может быть только завершённое или отменённое действие.',
+    );
+  }
+
+  for (const date of [
+    data.readyAt,
+    data.startedAt,
+    data.completedAt,
+    data.cancelledAt,
+    data.archivedAt,
+  ]) {
+    if (date !== null) {
+      assertValidDate(date, 'Временное поле действия');
+    }
+  }
+}
+
+function assertOptionalValueTypes(data: LifeActionRehydrationData): void {
+  if (data.expectedResult !== null) {
+    assertExpectedResult(data.expectedResult);
+  }
+
+  if (data.actualResult !== null) {
+    assertActualResult(data.actualResult);
+  }
+
+  if (data.cancelReason !== null) {
+    assertCancelReason(data.cancelReason);
+  }
+
+  if (data.plannedDate !== null) {
+    assertDayDate(data.plannedDate);
+  }
+}
+
+function assertLifeActionStatus(status: LifeActionStatus): void {
+  const allowedStatuses: readonly string[] = Object.values(LIFE_ACTION_STATUS);
+
+  if (!allowedStatuses.includes(status)) {
+    throw new DomainError('life_action.invalid_status', 'Неизвестное состояние действия.');
+  }
+}
+
+function assertLifeActionTitle(title: LifeActionTitle): void {
+  if (!(title instanceof LifeActionTitle)) {
+    throw new DomainError('life_action.title_required', 'Действие должно иметь название.');
+  }
+}
+
+function assertExpectedResult(result: ActionExpectedResult): void {
+  if (!(result instanceof ActionExpectedResult)) {
+    throw new DomainError(
+      'life_action.expected_result_required',
+      'Для готового действия обязателен ожидаемый результат.',
+    );
+  }
+}
+
+function assertActualResult(result: ActionActualResult): void {
+  if (!(result instanceof ActionActualResult)) {
+    throw new DomainError(
+      'life_action.actual_result_required',
+      'Для завершения действия обязателен фактический результат.',
+    );
+  }
+}
+
+function assertCancelReason(reason: ActionCancelReason): void {
+  if (!(reason instanceof ActionCancelReason)) {
+    throw new DomainError(
+      'life_action.cancel_reason_required',
+      'Для отмены действия обязательна причина.',
+    );
+  }
+}
+
+function assertDayDate(date: DayDate): void {
+  if (!(date instanceof DayDate)) {
+    throw new DomainError(
+      'life_action.planned_date_required',
+      'Действию необходима календарная дата.',
+    );
+  }
+}
+
+function assertOptionalDecisionId(decisionId: EntityId | null): void {
+  if (decisionId !== null && !(decisionId instanceof EntityId)) {
+    throw new DomainError(
+      'life_action.invalid_decision_id',
+      'Связь с решением должна содержать корректный идентификатор.',
+    );
+  }
+}
+
+function assertValidDate(value: Date, fieldName: string): void {
+  if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+    throw new DomainError('life_action.invalid_time', `${fieldName} содержит некорректное время.`);
+  }
+}
+
+function normalizeOptionalDescription(value: string | null): string | null {
+  if (value === null) {
+    return null;
+  }
+
+  const normalizedValue = value.trim();
+  return normalizedValue.length === 0 ? null : normalizedValue;
+}
