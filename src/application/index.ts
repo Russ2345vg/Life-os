@@ -20,6 +20,7 @@ export { MainDecisionLimitPolicy } from './decision/MainDecisionLimitPolicy';
 export { GetDecisionsForDate } from './queries/GetDecisionsForDate';
 export { GetLifeActionsForDate } from './queries/GetLifeActionsForDate';
 export { GetLifeActionsForDecision } from './queries/GetLifeActionsForDecision';
+export type { ActionSessionRepository } from './ports/ActionSessionRepository';
 export type { Clock } from './ports/Clock';
 export type { CurrentDateProvider } from './ports/CurrentDateProvider';
 export type { DayRepository } from './ports/DayRepository';

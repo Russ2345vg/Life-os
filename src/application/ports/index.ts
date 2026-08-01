@@ -1,3 +1,4 @@
+export type { ActionSessionRepository } from './ActionSessionRepository';
 export type { Clock } from './Clock';
 export type { CurrentDateProvider } from './CurrentDateProvider';
 export type { DayRepository } from './DayRepository';
