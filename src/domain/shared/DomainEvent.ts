@@ -1,7 +1,7 @@
 import type { EntityId } from './EntityId';
 
-export interface DomainEvent {
+export interface DomainEvent<TEventType extends string = string> {
   readonly eventId: EntityId;
-  readonly eventName: string;
+  readonly eventType: TEventType;
   readonly occurredAt: Date;
 }
