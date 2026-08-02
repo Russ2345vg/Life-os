@@ -1,6 +1,6 @@
 import { HomePage } from '../presentation/pages/HomePage';
 import { StartupPage } from '../presentation/pages/StartupPage';
-import { LifeOsApplicationProvider } from './providers';
+import { LifeOsApplicationProvider, useLifeOsApplication } from './providers';
 
 export function App() {
   return (
@@ -8,7 +8,14 @@ export function App() {
       loadingFallback={<StartupPage status="loading" />}
       errorFallback={() => <StartupPage status="error" />}
     >
-      <HomePage />
+      <ReadyHomePage />
     </LifeOsApplicationProvider>
   );
+}
+
+function ReadyHomePage() {
+  const application = useLifeOsApplication();
+  const currentDate = application.currentDateProvider.getCurrentDate().toString();
+
+  return <HomePage currentDate={currentDate} />;
 }

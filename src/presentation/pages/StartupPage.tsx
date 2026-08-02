@@ -8,16 +8,10 @@ export function StartupPage({ status }: StartupPageProps) {
   return (
     <main className="foundation-page">
       <section className="foundation-panel" aria-labelledby="page-title" aria-live="polite">
-        <h1 id="page-title">LifeOS</h1>
+        <h1 id="page-title">{isLoading ? 'LifeOS' : 'LifeOS не удалось запустить'}</h1>
         <p className={isLoading ? 'foundation-summary' : 'foundation-summary startup-error'}>
-          {isLoading ? 'Загрузка локальной системы…' : 'Не удалось запустить локальную систему.'}
+          {isLoading ? 'Загрузка локальной системы…' : 'Локальное хранилище недоступно'}
         </p>
-        {!isLoading && (
-          <p className="startup-guidance">
-            Обновите страницу. Если ошибка повторится, проверьте доступ к локальному хранилищу
-            браузера.
-          </p>
-        )}
       </section>
     </main>
   );

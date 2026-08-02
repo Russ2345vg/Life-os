@@ -13,7 +13,7 @@ describe('StartupPage', () => {
   it('показывает понятное состояние ошибки вместо пустого экрана', () => {
     const markup = renderToStaticMarkup(StartupPage({ status: 'error' }));
 
-    expect(markup).toContain('Не удалось запустить локальную систему.');
-    expect(markup).toContain('Обновите страницу.');
+    expect(markup).toContain('LifeOS не удалось запустить');
+    expect(markup).toContain('Локальное хранилище недоступно');
   });
 });

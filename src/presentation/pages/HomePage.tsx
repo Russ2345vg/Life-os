@@ -1,16 +1,15 @@
-export function HomePage() {
+interface HomePageProps {
+  readonly currentDate: string;
+}
+
+export function HomePage({ currentDate }: HomePageProps) {
   return (
     <main className="foundation-page">
-      <section className="foundation-panel" aria-labelledby="page-title">
-        <p className="foundation-eyebrow">Техническое основание</p>
+      <section className="foundation-panel" aria-labelledby="page-title" aria-live="polite">
         <h1 id="page-title">LifeOS</h1>
-        <p className="foundation-summary">
-          Самостоятельная система управления решениями, действиями и результатами.
-        </p>
-        <div className="foundation-status" aria-label="Текущий этап проекта">
-          <span>Текущий этап</span>
-          <strong>Согласованный запуск действий</strong>
-        </div>
+        <p className="foundation-summary">Локальная система готова</p>
+        <p className="startup-guidance">Текущая дата: {currentDate}</p>
+        <p className="startup-guidance">Хранилище: IndexedDB подключена</p>
       </section>
     </main>
   );
