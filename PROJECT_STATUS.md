@@ -2,9 +2,9 @@
 
 - Проект: самостоятельный LifeOS
 - Текущий макроблок: предметный слой
-- Текущий этап: IndexedDB foundation with Day and Decision repositories
+- Текущий этап: IndexedDB LifeAction and ActionSession repositories
 - Статус: завершён
-- Следующий допустимый этап: IndexedDB LifeAction and ActionSession repositories
+- Следующий допустимый этап: Application composition with persistent repositories
 
 ## Выполненные работы
 
@@ -12,6 +12,15 @@
   `actionSessions`, основными ключами `id` и требуемыми индексами.
 - Реализованы `IndexedDbDayRepository` и `IndexedDbDecisionRepository` с record mappers,
   завершёнными транзакциями и контролируемыми инфраструктурными ошибками.
+- Реализованы `IndexedDbLifeActionRepository` и `IndexedDbActionSessionRepository` с поиском по
+  `id`, индексами `byPlannedDate`, `byDecisionId`, `byLifeActionId` и `byStatus`, обновлением через
+  `put` и восстановлением новых экземпляров сущностей без предметных событий.
+- `findUnfinished` находит `running` и `paused`, игнорирует `completed` и отклоняет повреждённое
+  состояние с несколькими незавершёнными сессиями ошибкой
+  `session.multiple_unfinished_detected`.
+- Добавлены 2 тестовых файла и 16 автоматических тестов IndexedDB-репозиториев `LifeAction` и
+  `ActionSession`, включая финальные состояния действий, полное восстановление пауз и результата
+  сессии, независимость чтений и передачу mapper-ошибок без маскировки.
 - Добавлены автоматические тесты схемы базы, nullable-индексов, закрытия подключения, сохранения,
   обновления, индексного поиска и восстановления `Day` и `Decision` без предметных событий.
 - Добавлены сериализуемые records schemaVersion 1 и двусторонние mapper-ы для `Day`, `Decision`,
@@ -85,7 +94,7 @@
 
 - `npm.cmd run typecheck` — успешно.
 - `npm.cmd run lint` — успешно.
-- `npm.cmd run test` — успешно, 41 файл и 380 тестов.
+- `npm.cmd run test` — успешно, 43 файла и 396 тестов.
 - `npm.cmd run build` — успешно.
 - `npm.cmd run format:check` — успешно.
 - `git diff --check` — успешно.
@@ -98,14 +107,12 @@
 ## Известные ограничения
 
 - Пользовательский таймер `ActionSession` отсутствует.
-- Постоянное хранилище `LifeAction` отсутствует; временный репозиторий теряет данные после
-  перезапуска.
 - Сохранение `LifeAction` и `ActionSession` пока не объединено постоянной транзакцией.
 - События пока не передаются во внешнюю шину и не сохраняются постоянно.
-- IndexedDB-репозитории `Day` и `Decision` пока не подключены к React-приложению.
+- IndexedDB-репозитории пока не подключены к React-приложению.
 - Интерфейсы решений и действий отсутствуют.
 
 ## Следующий этап
 
-Этап IndexedDB foundation with Day and Decision repositories завершён. Следующий допустимый этап —
-IndexedDB LifeAction and ActionSession repositories отдельным заданием.
+Этап IndexedDB LifeAction and ActionSession repositories завершён. Следующий допустимый этап —
+Application composition with persistent repositories отдельным заданием.

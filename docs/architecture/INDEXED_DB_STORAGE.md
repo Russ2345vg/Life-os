@@ -35,7 +35,8 @@
 IndexedDB хранит только records из `src/infrastructure/persistence/records`. Репозитории не
 сохраняют предметные сущности напрямую:
 
-- `save` сначала вызывает `DayRecordMapper.toRecord` или `DecisionRecordMapper.toRecord`;
+- `save` сначала вызывает соответствующий mapper: `DayRecordMapper`, `DecisionRecordMapper`,
+  `LifeActionRecordMapper` или `ActionSessionRecordMapper`;
 - чтение вызывает соответствующий `fromRecord` после завершения транзакции;
 - ошибки повреждённой record или неподдерживаемой `schemaVersion` передаются вызывающему коду без
   маскировки;
@@ -54,11 +55,20 @@ IndexedDB хранит только records из `src/infrastructure/persistence
 
 ## IndexedDB и InMemory-репозитории
 
-`IndexedDbDayRepository` и `IndexedDbDecisionRepository` обеспечивают постоянное браузерное
-хранение и всегда восстанавливают новые экземпляры сущностей из records. Подключение принадлежит
-`LifeOsIndexedDb` и может быть явно закрыто методом `close`.
+`IndexedDbDayRepository`, `IndexedDbDecisionRepository`, `IndexedDbLifeActionRepository` и
+`IndexedDbActionSessionRepository` обеспечивают постоянное браузерное хранение и всегда
+восстанавливают новые экземпляры сущностей из records. Подключение принадлежит `LifeOsIndexedDb`
+и может быть явно закрыто методом `close`.
+
+`IndexedDbLifeActionRepository` ищет действия по календарной дате через `byPlannedDate`, а по
+связанному решению — через `byDecisionId`. Черновики без даты и действия без решения сохраняются и
+доступны по `id`, но не попадают в соответствующие индексные выборки.
+
+`IndexedDbActionSessionRepository` ищет историю действия через `byLifeActionId`. Метод
+`findUnfinished` использует индекс `byStatus`: состояния `running` и `paused` считаются
+незавершёнными, а `completed` игнорируется. Если хранилище содержит больше одной незавершённой
+сессии, метод возвращает контролируемую ошибку `session.multiple_unfinished_detected`.
 
 InMemory-репозитории остаются быстрыми тестовыми адаптерами. Они хранят ссылки на сущности только в
 памяти процесса и теряют состояние после перезапуска. IndexedDB-адаптеры на этом этапе не
-подключены к React-приложению; репозитории `LifeAction` и `ActionSession` будут реализованы отдельным
-этапом.
+подключены к React-приложению.
