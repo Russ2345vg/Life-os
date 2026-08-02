@@ -2,12 +2,16 @@
 
 - Проект: самостоятельный LifeOS
 - Текущий макроблок: предметный слой
-- Текущий этап: Coordinated LifeAction and ActionSession start
+- Текущий этап: Persistence records and mappers
 - Статус: завершён
-- Следующий допустимый этап: Persistent local storage foundation
+- Следующий допустимый этап: IndexedDB persistence adapters
 
 ## Выполненные работы
 
+- Добавлены сериализуемые records schemaVersion 1 и двусторонние mapper-ы для `Day`, `Decision`,
+  `LifeAction` и `ActionSession`.
+- Зафиксированы ISO UTC для временных отметок и отдельный календарный формат `YYYY-MM-DD` для
+  `DayDate`; восстановление выполняется через предметный `rehydrate()` без новых событий.
 - Добавлены состояния `draft`, `planned`, `in_progress`, `confirmed`, `cancelled`.
 - Добавлены виды `main` и `additional`.
 - Созданы строгие значения названия, ожидаемого и фактического результата, причины отмены.
@@ -75,14 +79,14 @@
 
 - `npm.cmd run typecheck` — успешно.
 - `npm.cmd run lint` — успешно.
-- `npm.cmd run test` — успешно, 34 файла и 345 тестов.
+- `npm.cmd run test` — успешно, 38 файлов и 362 теста.
 - `npm.cmd run build` — успешно.
 - `npm.cmd run format:check` — успешно.
 - `git diff --check` — успешно.
 
 ## Установленные зависимости
 
-Новые зависимости на этапе согласованного запуска не устанавливались.
+Новые зависимости на этапе persistence records and mappers не устанавливались.
 
 ## Известные ограничения
 
@@ -96,5 +100,5 @@
 
 ## Следующий этап
 
-Этап согласованного запуска `LifeAction` и `ActionSession` завершён. Следующий допустимый этап —
-основание постоянного локального хранения отдельным заданием.
+Этап persistence records and mappers завершён. Следующий допустимый этап — IndexedDB persistence
+adapters отдельным заданием.

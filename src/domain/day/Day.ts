@@ -1,7 +1,7 @@
 import { DomainError } from '../../shared/errors/DomainError';
 import type { DomainEvent } from '../shared/DomainEvent';
 import { Entity } from '../shared/Entity';
-import type { EntityId } from '../shared/EntityId';
+import { EntityId } from '../shared/EntityId';
 import { copyDate, copyOptionalDate } from '../shared/dateCopy';
 import { DayDate } from './DayDate';
 import { DAY_STATUS, type DayStatus } from './DayStatus';
@@ -21,6 +21,19 @@ interface CreateCurrentDayInput {
   readonly occurredAt: Date;
   readonly createdEventId: EntityId;
   readonly openedEventId: EntityId;
+}
+
+export interface DayRehydrationData {
+  readonly id: EntityId;
+  readonly date: DayDate;
+  readonly status: DayStatus;
+  readonly createdAt: Date;
+  readonly plannedAt: Date | null;
+  readonly openedAt: Date | null;
+  readonly firstActivityAt: Date | null;
+  readonly completedAt: Date | null;
+  readonly summary: string | null;
+  readonly version: number;
 }
 
 export class Day extends Entity {
@@ -108,6 +121,25 @@ export class Day extends Entity {
       input.occurredAt,
       [createdEvent, openedEvent],
     );
+  }
+
+  public static rehydrate(data: DayRehydrationData): Day {
+    assertRehydrationInvariants(data);
+
+    const day = new Day(
+      data.id,
+      data.date,
+      data.status,
+      data.createdAt,
+      data.plannedAt,
+      data.openedAt,
+      [],
+    );
+    day.#firstActivityAt = copyOptionalDate(data.firstActivityAt);
+    day.#completedAt = copyOptionalDate(data.completedAt);
+    day.#summary = data.summary;
+    day.#version = data.version;
+    return day;
   }
 
   public get date(): DayDate {
@@ -217,5 +249,80 @@ export class Day extends Entity {
 
   public clearUncommittedEvents(): void {
     this.#domainEvents.length = 0;
+  }
+}
+
+function assertRehydrationInvariants(data: DayRehydrationData): void {
+  if (!(data.id instanceof EntityId)) {
+    throw new DomainError('day.invalid_entity_id', 'Идентификатор дня должен быть корректным.');
+  }
+
+  if (!(data.date instanceof DayDate)) {
+    throw new DomainError('day.invalid_date', 'Календарная дата дня должна быть корректной.');
+  }
+
+  const allowedStatuses: readonly string[] = Object.values(DAY_STATUS);
+  if (!allowedStatuses.includes(data.status)) {
+    throw new DomainError('day.invalid_status', 'Неизвестное состояние дня.');
+  }
+
+  assertValidDate(data.createdAt, 'Время создания дня');
+  assertOptionalDate(data.plannedAt, 'Время планирования дня');
+  assertOptionalDate(data.openedAt, 'Время открытия дня');
+  assertOptionalDate(data.firstActivityAt, 'Время первой активности дня');
+  assertOptionalDate(data.completedAt, 'Время завершения дня');
+
+  if (!Number.isInteger(data.version) || data.version < 1) {
+    throw new DomainError('day.invalid_version', 'Версия дня должна быть не меньше 1.');
+  }
+
+  if (data.summary !== null && typeof data.summary !== 'string') {
+    throw new DomainError('day.invalid_summary', 'Итог дня должен быть строкой или null.');
+  }
+
+  if (
+    data.status === DAY_STATUS.planned &&
+    (data.plannedAt === null ||
+      data.openedAt !== null ||
+      data.firstActivityAt !== null ||
+      data.completedAt !== null ||
+      data.summary !== null)
+  ) {
+    throw new DomainError(
+      'day.planned_fields_invalid',
+      'Запланированный день содержит несовместимые поля состояния.',
+    );
+  }
+
+  if (
+    data.status === DAY_STATUS.open &&
+    (data.openedAt === null || data.completedAt !== null || data.summary !== null)
+  ) {
+    throw new DomainError(
+      'day.open_fields_invalid',
+      'Открытый день содержит несовместимые поля состояния.',
+    );
+  }
+
+  if (
+    data.status === DAY_STATUS.completed &&
+    (data.openedAt === null || data.completedAt === null)
+  ) {
+    throw new DomainError(
+      'day.completed_fields_invalid',
+      'Завершённый день должен содержать время открытия и завершения.',
+    );
+  }
+}
+
+function assertOptionalDate(value: Date | null, fieldName: string): void {
+  if (value !== null) {
+    assertValidDate(value, fieldName);
+  }
+}
+
+function assertValidDate(value: Date, fieldName: string): void {
+  if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+    throw new DomainError('day.invalid_time', `${fieldName} содержит некорректное время.`);
   }
 }
