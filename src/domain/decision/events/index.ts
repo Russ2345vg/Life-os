@@ -2,6 +2,7 @@ export { DecisionArchived } from './DecisionArchived';
 export { DecisionCancelled } from './DecisionCancelled';
 export { DecisionConfirmed } from './DecisionConfirmed';
 export { DecisionDraftCreated } from './DecisionDraftCreated';
+export { DecisionDetailsUpdated } from './DecisionDetailsUpdated';
 export { DecisionPlanned } from './DecisionPlanned';
 export { DecisionRescheduled } from './DecisionRescheduled';
 export { DecisionRestored } from './DecisionRestored';

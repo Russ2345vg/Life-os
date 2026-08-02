@@ -525,6 +525,105 @@ button:disabled {
   border-top: 1px solid var(--color-border);
 }
 
+.decision-management {
+  margin-bottom: var(--space-6);
+}
+
+.decision-management-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.decision-management-actions button {
+  width: 100%;
+}
+
+.decision-cancel-button {
+  color: #ffb4ab;
+  border-color: #70433e;
+}
+
+.decision-cancel-button:hover:not(:disabled) {
+  border-color: var(--color-error);
+  background: #281512;
+}
+
+.decision-edit-form,
+.decision-cancellation-confirmation {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-small);
+  background: var(--color-surface);
+}
+
+.decision-edit-form h3,
+.decision-edit-form label,
+.decision-cancellation-confirmation h3,
+.decision-cancellation-confirmation p {
+  min-width: 0;
+  margin: 0;
+}
+
+.decision-edit-form label {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.decision-edit-form label > span {
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  font-weight: 650;
+}
+
+.decision-edit-form input,
+.decision-edit-form textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: var(--space-3);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-small);
+  outline: none;
+  background: #0d110f;
+}
+
+.decision-edit-form textarea {
+  resize: vertical;
+}
+
+.decision-edit-form input:focus,
+.decision-edit-form textarea:focus {
+  border-color: var(--color-accent-gold);
+}
+
+.decision-cancellation-confirmation {
+  border-color: #70433e;
+  background: #1c1210;
+}
+
+.decision-cancellation-confirmation > p:not(.form-error) {
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+.cancelled-decision-result {
+  margin-bottom: var(--space-6);
+  padding: var(--space-4);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-small);
+  background: var(--color-surface);
+}
+
+.cancelled-decision-result p {
+  margin: 0;
+  font-weight: 700;
+}
+
 .decision-result-section {
   margin-bottom: var(--space-6);
   padding: var(--space-5);
@@ -1264,8 +1363,16 @@ button:disabled {
   }
 
   .decision-confirmation-form .form-actions,
-  .decision-confirmation-form .form-actions button {
+  .decision-confirmation-form .form-actions button,
+  .decision-edit-form .form-actions,
+  .decision-edit-form .form-actions button,
+  .decision-cancellation-confirmation .form-actions,
+  .decision-cancellation-confirmation .form-actions button {
     width: 100%;
+  }
+
+  .decision-management-actions {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .action-status {

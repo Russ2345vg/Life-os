@@ -10,6 +10,7 @@ import { DECISION_STATUS } from './DecisionStatus';
 import { DecisionTitle } from './DecisionTitle';
 import { ExpectedResult } from './ExpectedResult';
 import { DecisionConfirmed } from './events/DecisionConfirmed';
+import { DecisionDetailsUpdated } from './events/DecisionDetailsUpdated';
 import { DecisionRescheduled } from './events/DecisionRescheduled';
 
 const YESTERDAY = DayDate.create('2026-07-31');
@@ -183,6 +184,90 @@ describe('Decision', () => {
       decision.cancel(CHANGED_AT, id('cancelled-event'));
 
       expect(() => decision.markInProgress(STARTED_AT, id('started-event'))).toThrow(DomainError);
+    });
+  });
+
+  describe('редактирование сведений', () => {
+    it('изменяет название и ожидаемый результат planned-решения одним событием', () => {
+      const decision = createPlannedMain();
+      const plannedDate = decision.plannedDate;
+      const order = decision.order;
+      const version = decision.version;
+      decision.clearUncommittedEvents();
+
+      const changed = decision.updateDetails({
+        title: DecisionTitle.create('Обновлённое архитектурное решение'),
+        expectedResult: ExpectedResult.create('Обновлённый проверяемый результат'),
+        occurredAt: CHANGED_AT,
+        eventId: id('details-updated-event'),
+      });
+
+      expect(changed).toBe(true);
+      expect(decision.title.toString()).toBe('Обновлённое архитектурное решение');
+      expect(decision.expectedResult?.toString()).toBe('Обновлённый проверяемый результат');
+      expect(decision.status).toBe(DECISION_STATUS.planned);
+      expect(decision.plannedDate).toBe(plannedDate);
+      expect(decision.order).toBe(order);
+      expect(decision.version).toBe(version + 1);
+      const event = decision.getUncommittedEvents()[0];
+      expect(event).toBeInstanceOf(DecisionDetailsUpdated);
+      if (!(event instanceof DecisionDetailsUpdated)) {
+        throw new Error('Ожидалось событие DecisionDetailsUpdated.');
+      }
+      expect(event.title.equals(decision.title)).toBe(true);
+      expect(event.expectedResult?.equals(decision.expectedResult!)).toBe(true);
+      expect(event.occurredAt).toEqual(CHANGED_AT);
+    });
+
+    it('разрешает очистить ожидаемый результат дополнительного planned-решения', () => {
+      const decision = createPlannedAdditional();
+      decision.updateDetails({
+        title: decision.title,
+        expectedResult: ExpectedResult.create('Временный результат'),
+        occurredAt: CHANGED_AT,
+        eventId: id('details-added-event'),
+      });
+      decision.clearUncommittedEvents();
+
+      decision.updateDetails({
+        title: decision.title,
+        expectedResult: null,
+        occurredAt: CHANGED_AT,
+        eventId: id('details-cleared-event'),
+      });
+
+      expect(decision.expectedResult).toBeNull();
+      expect(eventTypes(decision)).toEqual(['decision.details_updated']);
+    });
+
+    it('не создаёт событие и версию для одинаковых сведений', () => {
+      const decision = createPlannedMain();
+      const version = decision.version;
+      decision.clearUncommittedEvents();
+
+      const changed = decision.updateDetails({
+        title: DecisionTitle.create(decision.title.toString()),
+        expectedResult: ExpectedResult.create(decision.expectedResult!.toString()),
+        occurredAt: CHANGED_AT,
+        eventId: id('unused-event'),
+      });
+
+      expect(changed).toBe(false);
+      expect(decision.version).toBe(version);
+      expect(eventTypes(decision)).toEqual([]);
+    });
+
+    it('запрещает редактирование после начала реализации', () => {
+      const decision = createInProgress();
+
+      expect(() =>
+        decision.updateDetails({
+          title: DecisionTitle.create('Недопустимое изменение'),
+          expectedResult: null,
+          occurredAt: CHANGED_AT,
+          eventId: id('details-updated-event'),
+        }),
+      ).toThrowError(expect.objectContaining({ code: 'decision.cannot_edit' }));
     });
   });
 

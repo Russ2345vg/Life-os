@@ -1,4 +1,5 @@
 import type {
+  CancelDecisionSafely,
   CompleteActionSession,
   CompleteLifeAction,
   ConfirmDecisionFromActions,
@@ -6,6 +7,7 @@ import type {
   CreateLifeActionForDecision,
   GetDecisionsForDate,
   GetLifeActionsForDecision,
+  UpdateDecisionDetails,
 } from '../../application';
 import {
   ActionActualResult,
@@ -39,6 +41,11 @@ export interface LifeActionFormState {
 
 export interface DecisionConfirmationFormState {
   readonly actualResult: string;
+}
+
+export interface DecisionEditFormState {
+  readonly title: string;
+  readonly expectedResult: string;
 }
 
 export const ACTION_COMPLETION_CHOICE = {
@@ -101,6 +108,13 @@ export interface TodayPageState {
   readonly isDecisionConfirming: boolean;
   readonly decisionConfirmationForm: DecisionConfirmationFormState;
   readonly decisionConfirmationError: string | null;
+  readonly isDecisionEditFormOpen: boolean;
+  readonly isDecisionEditing: boolean;
+  readonly decisionEditForm: DecisionEditFormState;
+  readonly decisionEditError: string | null;
+  readonly isDecisionCancellationOpen: boolean;
+  readonly isDecisionCancelling: boolean;
+  readonly decisionCancellationError: string | null;
   readonly actionDetails: LifeActionDetailsState;
   readonly isSessionMutating: boolean;
   readonly sessionError: string | null;
@@ -151,6 +165,21 @@ export type TodayPageAction =
   | { readonly type: 'decision_confirmation_started' }
   | { readonly type: 'decision_confirmation_failed'; readonly message: string }
   | { readonly type: 'decision_confirmation_succeeded'; readonly decision: Decision }
+  | { readonly type: 'decision_edit_form_opened' }
+  | { readonly type: 'decision_edit_form_closed' }
+  | { readonly type: 'decision_edit_title_changed'; readonly title: string }
+  | {
+      readonly type: 'decision_edit_expected_result_changed';
+      readonly expectedResult: string;
+    }
+  | { readonly type: 'decision_edit_started' }
+  | { readonly type: 'decision_edit_failed'; readonly message: string }
+  | { readonly type: 'decision_edit_succeeded'; readonly decision: Decision }
+  | { readonly type: 'decision_cancellation_opened' }
+  | { readonly type: 'decision_cancellation_closed' }
+  | { readonly type: 'decision_cancellation_started' }
+  | { readonly type: 'decision_cancellation_failed'; readonly message: string }
+  | { readonly type: 'decision_cancellation_succeeded'; readonly decision: Decision }
   | { readonly type: 'action_details_load_started'; readonly lifeAction: LifeAction }
   | {
       readonly type: 'action_details_load_succeeded';
@@ -207,6 +236,13 @@ export const INITIAL_TODAY_PAGE_STATE: TodayPageState = {
   isDecisionConfirming: false,
   decisionConfirmationForm: createEmptyDecisionConfirmationForm(),
   decisionConfirmationError: null,
+  isDecisionEditFormOpen: false,
+  isDecisionEditing: false,
+  decisionEditForm: createEmptyDecisionEditForm(),
+  decisionEditError: null,
+  isDecisionCancellationOpen: false,
+  isDecisionCancelling: false,
+  decisionCancellationError: null,
   actionDetails: { status: 'closed' },
   isSessionMutating: false,
   sessionError: null,
@@ -261,6 +297,13 @@ export function todayPageReducer(state: TodayPageState, action: TodayPageAction)
         isDecisionConfirming: false,
         decisionConfirmationForm: createEmptyDecisionConfirmationForm(),
         decisionConfirmationError: null,
+        isDecisionEditFormOpen: false,
+        isDecisionEditing: false,
+        decisionEditForm: createEmptyDecisionEditForm(),
+        decisionEditError: null,
+        isDecisionCancellationOpen: false,
+        isDecisionCancelling: false,
+        decisionCancellationError: null,
         actionDetails: { status: 'closed' },
         isSessionMutating: false,
         sessionError: null,
@@ -298,6 +341,13 @@ export function todayPageReducer(state: TodayPageState, action: TodayPageAction)
         isDecisionConfirming: false,
         decisionConfirmationForm: createEmptyDecisionConfirmationForm(),
         decisionConfirmationError: null,
+        isDecisionEditFormOpen: false,
+        isDecisionEditing: false,
+        decisionEditForm: createEmptyDecisionEditForm(),
+        decisionEditError: null,
+        isDecisionCancellationOpen: false,
+        isDecisionCancelling: false,
+        decisionCancellationError: null,
         actionDetails: { status: 'closed' },
         isSessionMutating: false,
         sessionError: null,
@@ -388,6 +438,102 @@ export function todayPageReducer(state: TodayPageState, action: TodayPageAction)
         decisionConfirmationForm: createEmptyDecisionConfirmationForm(),
         decisionConfirmationError: null,
         isLifeActionFormOpen: false,
+      };
+    case 'decision_edit_form_opened':
+      if (state.details.status !== 'ready') {
+        return state;
+      }
+      return {
+        ...state,
+        isDecisionEditFormOpen: true,
+        decisionEditForm: {
+          title: state.details.decision.title.toString(),
+          expectedResult: state.details.decision.expectedResult?.toString() ?? '',
+        },
+        decisionEditError: null,
+        isDecisionCancellationOpen: false,
+        decisionCancellationError: null,
+      };
+    case 'decision_edit_form_closed':
+      return {
+        ...state,
+        isDecisionEditFormOpen: false,
+        decisionEditError: null,
+      };
+    case 'decision_edit_title_changed':
+      return {
+        ...state,
+        decisionEditForm: { ...state.decisionEditForm, title: action.title },
+        decisionEditError: null,
+      };
+    case 'decision_edit_expected_result_changed':
+      return {
+        ...state,
+        decisionEditForm: {
+          ...state.decisionEditForm,
+          expectedResult: action.expectedResult,
+        },
+        decisionEditError: null,
+      };
+    case 'decision_edit_started':
+      return { ...state, isDecisionEditing: true, decisionEditError: null };
+    case 'decision_edit_failed':
+      return { ...state, isDecisionEditing: false, decisionEditError: action.message };
+    case 'decision_edit_succeeded':
+      if (
+        state.details.status !== 'ready' ||
+        !state.details.decisionId.equals(action.decision.id)
+      ) {
+        return state;
+      }
+      return {
+        ...state,
+        decisions: replaceDecisionInDecisionsState(state.decisions, action.decision),
+        details: { ...state.details, decision: action.decision },
+        isDecisionEditFormOpen: false,
+        isDecisionEditing: false,
+        decisionEditForm: createEmptyDecisionEditForm(),
+        decisionEditError: null,
+      };
+    case 'decision_cancellation_opened':
+      return {
+        ...state,
+        isDecisionCancellationOpen: true,
+        decisionCancellationError: null,
+        isDecisionEditFormOpen: false,
+        decisionEditError: null,
+      };
+    case 'decision_cancellation_closed':
+      return {
+        ...state,
+        isDecisionCancellationOpen: false,
+        decisionCancellationError: null,
+      };
+    case 'decision_cancellation_started':
+      return { ...state, isDecisionCancelling: true, decisionCancellationError: null };
+    case 'decision_cancellation_failed':
+      return {
+        ...state,
+        isDecisionCancelling: false,
+        decisionCancellationError: action.message,
+      };
+    case 'decision_cancellation_succeeded':
+      if (
+        state.details.status !== 'ready' ||
+        !state.details.decisionId.equals(action.decision.id)
+      ) {
+        return state;
+      }
+      return {
+        ...state,
+        decisions: replaceDecisionInDecisionsState(state.decisions, action.decision),
+        details: { ...state.details, decision: action.decision },
+        isDecisionCancellationOpen: false,
+        isDecisionCancelling: false,
+        decisionCancellationError: null,
+        isDecisionEditFormOpen: false,
+        isLifeActionFormOpen: false,
+        isDecisionConfirmationFormOpen: false,
       };
     case 'action_details_load_started':
       return {
@@ -666,6 +812,78 @@ export async function confirmDecisionResult(input: {
     : { ok: false, message: decisionConfirmationErrorMessage(result.error.code) };
 }
 
+export function validateDecisionEditForm(
+  form: DecisionEditFormState,
+  kind: DecisionKind,
+): string | null {
+  if (form.title.trim().length === 0) {
+    return 'Введите название решения';
+  }
+
+  if (kind === DECISION_KIND.main && form.expectedResult.trim().length === 0) {
+    return 'Укажите ожидаемый результат';
+  }
+
+  return null;
+}
+
+export async function updateDecisionDetailsResult(input: {
+  readonly decisionId: EntityId;
+  readonly form: DecisionEditFormState;
+  readonly updateDecisionDetails: Pick<UpdateDecisionDetails, 'execute'>;
+}): Promise<
+  | { readonly ok: true; readonly decision: Decision }
+  | { readonly ok: false; readonly message: string }
+> {
+  const result = await input.updateDecisionDetails.execute({
+    decisionId: input.decisionId,
+    title: input.form.title,
+    expectedResult: input.form.expectedResult,
+  });
+
+  return result.ok
+    ? { ok: true, decision: result.value }
+    : { ok: false, message: decisionEditErrorMessage(result.error.code) };
+}
+
+export function decisionEditErrorMessage(code: string): string {
+  switch (code) {
+    case 'decision.title_required':
+    case 'decision_title.invalid':
+      return 'Введите название решения';
+    case 'decision.expected_result_required':
+    case 'decision.main_requires_expected_result':
+    case 'expected_result.invalid':
+      return 'Укажите ожидаемый результат';
+    case 'decision.cannot_edit':
+      return 'Это решение уже нельзя редактировать';
+    default:
+      return 'Не удалось сохранить изменения';
+  }
+}
+
+export async function cancelDecisionResult(input: {
+  readonly decisionId: EntityId;
+  readonly cancelDecisionSafely: Pick<CancelDecisionSafely, 'execute'>;
+}): Promise<
+  | { readonly ok: true; readonly decision: Decision }
+  | { readonly ok: false; readonly message: string }
+> {
+  const result = await input.cancelDecisionSafely.execute({ decisionId: input.decisionId });
+
+  return result.ok
+    ? { ok: true, decision: result.value }
+    : { ok: false, message: decisionCancellationErrorMessage(result.error.code) };
+}
+
+export function decisionCancellationErrorMessage(code: string): string {
+  if (code === 'decision.actions_unfinished') {
+    return 'Сначала завершите или отмените незавершённые действия';
+  }
+
+  return 'Не удалось отменить решение';
+}
+
 export function decisionConfirmationErrorMessage(code: string): string {
   switch (code) {
     case 'decision.actual_result_required':
@@ -887,6 +1105,10 @@ function createEmptyLifeActionForm(): LifeActionFormState {
 
 function createEmptyDecisionConfirmationForm(): DecisionConfirmationFormState {
   return { actualResult: '' };
+}
+
+function createEmptyDecisionEditForm(): DecisionEditFormState {
+  return { title: '', expectedResult: '' };
 }
 
 function createEmptySessionCompletionForm(): SessionCompletionFormState {

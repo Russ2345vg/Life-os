@@ -14,6 +14,7 @@ import {
   DecisionArchived,
   DecisionCancelled,
   DecisionConfirmed,
+  DecisionDetailsUpdated,
   DecisionDraftCreated,
   DecisionPlanned,
   DecisionRescheduled,
@@ -48,6 +49,13 @@ export interface DecisionRestoreInput {
   readonly eventId: EntityId;
 }
 
+export interface DecisionDetailsUpdateInput {
+  readonly title: DecisionTitle;
+  readonly expectedResult: ExpectedResult | null;
+  readonly occurredAt: Date;
+  readonly eventId: EntityId;
+}
+
 export interface DecisionRehydrationData {
   readonly id: EntityId;
   readonly title: DecisionTitle;
@@ -71,7 +79,7 @@ export interface DecisionRehydrationData {
 }
 
 export class Decision extends Entity {
-  readonly #title: DecisionTitle;
+  #title: DecisionTitle;
   readonly #createdAt: Date;
   readonly #domainEvents: DomainEvent[];
   #reason: string | null;
@@ -294,6 +302,44 @@ export class Decision extends Entity {
     this.#startedAt = copyDate(occurredAt);
     this.#version += 1;
     this.#domainEvents.push(new DecisionStarted(eventId, this.id, this.#plannedDate, occurredAt));
+  }
+
+  public updateDetails(input: DecisionDetailsUpdateInput): boolean {
+    this.assertNotArchived();
+
+    if (this.#status !== DECISION_STATUS.planned) {
+      throw new DomainError(
+        'decision.cannot_edit',
+        'Редактировать можно только запланированное решение.',
+      );
+    }
+
+    assertDecisionTitle(input.title);
+    assertPlanningDetails(this.#kind, input.expectedResult, this.#order);
+
+    const hasSameExpectedResult =
+      this.#expectedResult === null
+        ? input.expectedResult === null
+        : input.expectedResult !== null && this.#expectedResult.equals(input.expectedResult);
+
+    if (this.#title.equals(input.title) && hasSameExpectedResult) {
+      return false;
+    }
+
+    assertValidDate(input.occurredAt, 'Время изменения решения');
+    this.#title = input.title;
+    this.#expectedResult = input.expectedResult;
+    this.#version += 1;
+    this.#domainEvents.push(
+      new DecisionDetailsUpdated(
+        input.eventId,
+        this.id,
+        input.title,
+        input.expectedResult,
+        input.occurredAt,
+      ),
+    );
+    return true;
   }
 
   public reschedule(newDate: DayDate, occurredAt: Date, eventId: EntityId): void {

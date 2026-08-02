@@ -30,6 +30,8 @@ function ReadyTodayPage() {
       completeActionSession={application.completeActionSession}
       completeLifeAction={application.completeLifeAction}
       confirmDecisionFromActions={application.confirmDecisionFromActions}
+      updateDecisionDetails={application.updateDecisionDetails}
+      cancelDecisionSafely={application.cancelDecisionSafely}
       getActionSessionsForLifeAction={application.getActionSessionsForLifeAction}
       getUnfinishedActionSession={application.getUnfinishedActionSession}
       clock={application.clock}

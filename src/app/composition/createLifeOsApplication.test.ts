@@ -49,6 +49,8 @@ describe('createLifeOsApplication', () => {
     expect(application.completeActionSession).toBeDefined();
     expect(application.completeLifeAction).toBeDefined();
     expect(application.confirmDecisionFromActions).toBeDefined();
+    expect(application.updateDecisionDetails).toBeDefined();
+    expect(application.cancelDecisionSafely).toBeDefined();
     expect(application.getActionSessionsForLifeAction).toBeDefined();
     expect(application.getUnfinishedActionSession).toBeDefined();
     await expect(
@@ -141,6 +143,50 @@ describe('createLifeOsApplication', () => {
     expect(restored).toHaveLength(1);
     expect(restored[0]?.title.toString()).toBe('Сохранить решение постоянно');
     expect(restored[0]?.order).toBe(1);
+    secondApplication.close();
+  });
+
+  it('сохраняет редактирование и безопасную отмену решения между запусками', async () => {
+    const indexedDbFactory = new IDBFactory();
+    const firstApplication = await createTestApplication(
+      indexedDbFactory,
+      new FakeIdGenerator('decision-management'),
+    );
+    const created = await firstApplication.createDecisionForDate.execute({
+      title: 'Исходное решение',
+      kind: DECISION_KIND.main,
+      plannedDate: firstApplication.currentDate,
+      expectedResult: 'Исходный результат',
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) {
+      throw created.error;
+    }
+
+    const updated = await firstApplication.updateDecisionDetails.execute({
+      decisionId: created.value.id,
+      title: 'Отредактированное решение',
+      expectedResult: 'Отредактированный результат',
+    });
+    expect(updated.ok).toBe(true);
+
+    const cancelled = await firstApplication.cancelDecisionSafely.execute({
+      decisionId: created.value.id,
+    });
+    expect(cancelled.ok).toBe(true);
+    firstApplication.close();
+
+    const secondApplication = await createTestApplication(
+      indexedDbFactory,
+      new FakeIdGenerator('decision-management-reload'),
+    );
+    const restored = await secondApplication.decisionRepository.findById(created.value.id);
+
+    expect(restored?.title.toString()).toBe('Отредактированное решение');
+    expect(restored?.expectedResult?.toString()).toBe('Отредактированный результат');
+    expect(restored?.status).toBe(DECISION_STATUS.cancelled);
+    expect(restored?.cancelReason?.toString()).toBe('Отменено пользователем');
+    expect(restored?.getUncommittedEvents()).toHaveLength(0);
     secondApplication.close();
   });
 

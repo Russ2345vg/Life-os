@@ -2,6 +2,7 @@ export { ActualResultSummary } from './ActualResultSummary';
 export {
   Decision,
   type DecisionDraftInput,
+  type DecisionDetailsUpdateInput,
   type DecisionPlanInput,
   type DecisionRehydrationData,
   type DecisionRestoreInput,
@@ -16,6 +17,7 @@ export {
   DecisionCancelled,
   DecisionConfirmed,
   DecisionDraftCreated,
+  DecisionDetailsUpdated,
   DecisionPlanned,
   DecisionRescheduled,
   DecisionRestored,

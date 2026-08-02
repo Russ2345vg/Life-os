@@ -7,6 +7,7 @@ import {
   type FormEvent,
 } from 'react';
 import type {
+  CancelDecisionSafely,
   Clock,
   CompleteActionSession,
   CompleteLifeAction,
@@ -21,6 +22,7 @@ import type {
   PauseActionSession,
   ResumeActionSession,
   StartLifeActionSession,
+  UpdateDecisionDetails,
 } from '../../application';
 import {
   DECISION_KIND,
@@ -38,6 +40,7 @@ import { DecisionDetailsPanel } from '../components/DecisionDetailsPanel';
 import { LifeActionDetailsPanel } from '../components/LifeActionDetailsPanel';
 import {
   completeSessionWorkflow,
+  cancelDecisionResult,
   confirmDecisionResult,
   createDecisionAndReload,
   createLifeActionAndReload,
@@ -48,9 +51,11 @@ import {
   resumeSessionErrorMessage,
   startSessionErrorMessage,
   todayPageReducer,
+  updateDecisionDetailsResult,
   validateDecisionForm,
   validateLifeActionForm,
   validateDecisionConfirmationForm,
+  validateDecisionEditForm,
   validateSessionCompletionForm,
   type ActionCompletionChoice,
   type DecisionFormState,
@@ -70,6 +75,8 @@ interface TodayPageProps {
   readonly completeActionSession: Pick<CompleteActionSession, 'execute'>;
   readonly completeLifeAction: Pick<CompleteLifeAction, 'execute'>;
   readonly confirmDecisionFromActions: Pick<ConfirmDecisionFromActions, 'execute'>;
+  readonly updateDecisionDetails: Pick<UpdateDecisionDetails, 'execute'>;
+  readonly cancelDecisionSafely: Pick<CancelDecisionSafely, 'execute'>;
   readonly getActionSessionsForLifeAction: Pick<GetActionSessionsForLifeAction, 'execute'>;
   readonly getUnfinishedActionSession: Pick<GetUnfinishedActionSession, 'execute'>;
   readonly clock: Pick<Clock, 'now'>;
@@ -88,6 +95,8 @@ export function TodayPage({
   completeActionSession,
   completeLifeAction,
   confirmDecisionFromActions,
+  updateDecisionDetails,
+  cancelDecisionSafely,
   getActionSessionsForLifeAction,
   getUnfinishedActionSession,
   clock,
@@ -97,6 +106,8 @@ export function TodayPage({
   const lifeActionSavingRef = useRef(false);
   const sessionMutationRef = useRef(false);
   const decisionConfirmationRef = useRef(false);
+  const decisionEditRef = useRef(false);
+  const decisionCancellationRef = useRef(false);
 
   const loadDecisions = useCallback(async () => {
     dispatch({ type: 'load_started' });
@@ -253,6 +264,70 @@ export function TodayPage({
       });
     } finally {
       decisionConfirmationRef.current = false;
+    }
+  }
+
+  async function handleDecisionEdit(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+
+    if (decisionEditRef.current || state.details.status !== 'ready') {
+      return;
+    }
+
+    const validationError = validateDecisionEditForm(
+      state.decisionEditForm,
+      state.details.decision.kind,
+    );
+    if (validationError !== null) {
+      dispatch({ type: 'decision_edit_failed', message: validationError });
+      return;
+    }
+
+    decisionEditRef.current = true;
+    dispatch({ type: 'decision_edit_started' });
+    try {
+      const result = await updateDecisionDetailsResult({
+        decisionId: state.details.decisionId,
+        form: state.decisionEditForm,
+        updateDecisionDetails,
+      });
+
+      if (!result.ok) {
+        dispatch({ type: 'decision_edit_failed', message: result.message });
+        return;
+      }
+
+      dispatch({ type: 'decision_edit_succeeded', decision: result.decision });
+    } catch {
+      dispatch({ type: 'decision_edit_failed', message: 'Не удалось сохранить изменения' });
+    } finally {
+      decisionEditRef.current = false;
+    }
+  }
+
+  async function handleDecisionCancellation(): Promise<void> {
+    if (decisionCancellationRef.current || state.details.status !== 'ready') {
+      return;
+    }
+
+    decisionCancellationRef.current = true;
+    dispatch({ type: 'decision_cancellation_started' });
+    try {
+      const result = await cancelDecisionResult({
+        decisionId: state.details.decisionId,
+        cancelDecisionSafely,
+      });
+
+      if (!result.ok) {
+        dispatch({ type: 'decision_cancellation_failed', message: result.message });
+        return;
+      }
+
+      dispatch({ type: 'decision_cancellation_succeeded', decision: result.decision });
+    } catch {
+      dispatch({ type: 'decision_cancellation_failed', message: 'Не удалось отменить решение' });
+    } finally {
+      decisionCancellationRef.current = false;
     }
   }
 
@@ -484,6 +559,18 @@ export function TodayPage({
         dispatch({ type: 'decision_actual_result_changed', actualResult })
       }
       onDecisionConfirmationSubmit={(event) => void handleDecisionConfirmation(event)}
+      onOpenDecisionEditForm={() => dispatch({ type: 'decision_edit_form_opened' })}
+      onCloseDecisionEditForm={() => dispatch({ type: 'decision_edit_form_closed' })}
+      onDecisionEditTitleChange={(title) =>
+        dispatch({ type: 'decision_edit_title_changed', title })
+      }
+      onDecisionEditExpectedResultChange={(expectedResult) =>
+        dispatch({ type: 'decision_edit_expected_result_changed', expectedResult })
+      }
+      onDecisionEditSubmit={(event) => void handleDecisionEdit(event)}
+      onOpenDecisionCancellation={() => dispatch({ type: 'decision_cancellation_opened' })}
+      onCloseDecisionCancellation={() => dispatch({ type: 'decision_cancellation_closed' })}
+      onConfirmDecisionCancellation={() => void handleDecisionCancellation()}
       onOpenLifeAction={(lifeAction) => void loadLifeActionDetails(lifeAction)}
       onBackToDecision={() => dispatch({ type: 'action_details_closed' })}
       onRetryLifeAction={() => {
@@ -538,6 +625,14 @@ interface TodayPageViewProps {
   readonly onCloseDecisionConfirmationForm: () => void;
   readonly onDecisionActualResultChange: (actualResult: string) => void;
   readonly onDecisionConfirmationSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  readonly onOpenDecisionEditForm: () => void;
+  readonly onCloseDecisionEditForm: () => void;
+  readonly onDecisionEditTitleChange: (title: string) => void;
+  readonly onDecisionEditExpectedResultChange: (expectedResult: string) => void;
+  readonly onDecisionEditSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  readonly onOpenDecisionCancellation: () => void;
+  readonly onCloseDecisionCancellation: () => void;
+  readonly onConfirmDecisionCancellation: () => void;
   readonly onOpenLifeAction: (lifeAction: LifeAction) => void;
   readonly onBackToDecision: () => void;
   readonly onRetryLifeAction: () => void;
@@ -578,6 +673,14 @@ export function TodayPageView({
   onCloseDecisionConfirmationForm,
   onDecisionActualResultChange,
   onDecisionConfirmationSubmit,
+  onOpenDecisionEditForm,
+  onCloseDecisionEditForm,
+  onDecisionEditTitleChange,
+  onDecisionEditExpectedResultChange,
+  onDecisionEditSubmit,
+  onOpenDecisionCancellation,
+  onCloseDecisionCancellation,
+  onConfirmDecisionCancellation,
   onOpenLifeAction,
   onBackToDecision,
   onRetryLifeAction,
@@ -655,6 +758,13 @@ export function TodayPageView({
           isConfirming={state.isDecisionConfirming}
           confirmationActualResult={state.decisionConfirmationForm.actualResult}
           confirmationError={state.decisionConfirmationError}
+          isEditFormOpen={state.isDecisionEditFormOpen}
+          isEditing={state.isDecisionEditing}
+          editForm={state.decisionEditForm}
+          editError={state.decisionEditError}
+          isCancellationOpen={state.isDecisionCancellationOpen}
+          isCancelling={state.isDecisionCancelling}
+          cancellationError={state.decisionCancellationError}
           onClose={onCloseDecision}
           onRetry={onRetryDecision}
           onOpenForm={onOpenLifeActionForm}
@@ -667,6 +777,14 @@ export function TodayPageView({
           onCloseConfirmationForm={onCloseDecisionConfirmationForm}
           onConfirmationActualResultChange={onDecisionActualResultChange}
           onConfirmationSubmit={onDecisionConfirmationSubmit}
+          onOpenEditForm={onOpenDecisionEditForm}
+          onCloseEditForm={onCloseDecisionEditForm}
+          onEditTitleChange={onDecisionEditTitleChange}
+          onEditExpectedResultChange={onDecisionEditExpectedResultChange}
+          onEditSubmit={onDecisionEditSubmit}
+          onOpenCancellation={onOpenDecisionCancellation}
+          onCloseCancellation={onCloseDecisionCancellation}
+          onConfirmCancellation={onConfirmDecisionCancellation}
           onOpenLifeAction={onOpenLifeAction}
         />
       ) : (

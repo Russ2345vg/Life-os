@@ -8,7 +8,11 @@ import {
   type LifeAction,
   type LifeActionStatus,
 } from '../../domain';
-import type { DecisionDetailsState, LifeActionFormState } from '../pages/TodayPageState';
+import type {
+  DecisionDetailsState,
+  DecisionEditFormState,
+  LifeActionFormState,
+} from '../pages/TodayPageState';
 import { isLifeActionActivationKey } from '../pages/TodayPageState';
 
 interface DecisionDetailsPanelProps {
@@ -21,6 +25,13 @@ interface DecisionDetailsPanelProps {
   readonly isConfirming: boolean;
   readonly confirmationActualResult: string;
   readonly confirmationError: string | null;
+  readonly isEditFormOpen: boolean;
+  readonly isEditing: boolean;
+  readonly editForm: DecisionEditFormState;
+  readonly editError: string | null;
+  readonly isCancellationOpen: boolean;
+  readonly isCancelling: boolean;
+  readonly cancellationError: string | null;
   readonly onClose: () => void;
   readonly onRetry: () => void;
   readonly onOpenForm: () => void;
@@ -33,6 +44,14 @@ interface DecisionDetailsPanelProps {
   readonly onCloseConfirmationForm: () => void;
   readonly onConfirmationActualResultChange: (actualResult: string) => void;
   readonly onConfirmationSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  readonly onOpenEditForm: () => void;
+  readonly onCloseEditForm: () => void;
+  readonly onEditTitleChange: (title: string) => void;
+  readonly onEditExpectedResultChange: (expectedResult: string) => void;
+  readonly onEditSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  readonly onOpenCancellation: () => void;
+  readonly onCloseCancellation: () => void;
+  readonly onConfirmCancellation: () => void;
   readonly onOpenLifeAction: (lifeAction: LifeAction) => void;
 }
 
@@ -46,6 +65,13 @@ export function DecisionDetailsPanel({
   isConfirming,
   confirmationActualResult,
   confirmationError,
+  isEditFormOpen,
+  isEditing,
+  editForm,
+  editError,
+  isCancellationOpen,
+  isCancelling,
+  cancellationError,
   onClose,
   onRetry,
   onOpenForm,
@@ -58,6 +84,14 @@ export function DecisionDetailsPanel({
   onCloseConfirmationForm,
   onConfirmationActualResultChange,
   onConfirmationSubmit,
+  onOpenEditForm,
+  onCloseEditForm,
+  onEditTitleChange,
+  onEditExpectedResultChange,
+  onEditSubmit,
+  onOpenCancellation,
+  onCloseCancellation,
+  onConfirmCancellation,
   onOpenLifeAction,
 }: DecisionDetailsPanelProps) {
   if (details.status === 'closed') {
@@ -141,6 +175,57 @@ export function DecisionDetailsPanel({
                 </div>
               ) : null}
             </dl>
+
+            {!details.decision.isArchived() &&
+            (details.decision.status === DECISION_STATUS.planned ||
+              details.decision.status === DECISION_STATUS.inProgress) ? (
+              <section className="decision-management" aria-label="Управление решением">
+                {isEditFormOpen ? (
+                  <DecisionEditForm
+                    form={editForm}
+                    isSaving={isEditing}
+                    error={editError}
+                    isExpectedResultRequired={details.decision.kind === DECISION_KIND.main}
+                    onTitleChange={onEditTitleChange}
+                    onExpectedResultChange={onEditExpectedResultChange}
+                    onClose={onCloseEditForm}
+                    onSubmit={onEditSubmit}
+                  />
+                ) : null}
+
+                {isCancellationOpen ? (
+                  <DecisionCancellationConfirmation
+                    isSaving={isCancelling}
+                    error={cancellationError}
+                    onBack={onCloseCancellation}
+                    onConfirm={onConfirmCancellation}
+                  />
+                ) : null}
+
+                {!isEditFormOpen && !isCancellationOpen ? (
+                  <div className="decision-management-actions">
+                    {details.decision.status === DECISION_STATUS.planned ? (
+                      <button className="secondary-button" type="button" onClick={onOpenEditForm}>
+                        Редактировать
+                      </button>
+                    ) : null}
+                    <button
+                      className="secondary-button decision-cancel-button"
+                      type="button"
+                      onClick={onOpenCancellation}
+                    >
+                      Отменить решение
+                    </button>
+                  </div>
+                ) : null}
+              </section>
+            ) : null}
+
+            {details.decision.status === DECISION_STATUS.cancelled ? (
+              <section className="cancelled-decision-result" role="status">
+                <p>Решение отменено</p>
+              </section>
+            ) : null}
 
             <section className="decision-result-section" aria-labelledby="decision-result-title">
               <div className="section-heading decision-result-heading">
@@ -265,6 +350,109 @@ interface DecisionConfirmationFormProps {
   readonly onActualResultChange: (actualResult: string) => void;
   readonly onClose: () => void;
   readonly onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}
+
+interface DecisionEditFormProps {
+  readonly form: DecisionEditFormState;
+  readonly isSaving: boolean;
+  readonly error: string | null;
+  readonly isExpectedResultRequired: boolean;
+  readonly onTitleChange: (title: string) => void;
+  readonly onExpectedResultChange: (expectedResult: string) => void;
+  readonly onClose: () => void;
+  readonly onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}
+
+function DecisionEditForm({
+  form,
+  isSaving,
+  error,
+  isExpectedResultRequired,
+  onTitleChange,
+  onExpectedResultChange,
+  onClose,
+  onSubmit,
+}: DecisionEditFormProps) {
+  return (
+    <form className="decision-edit-form" onSubmit={onSubmit} noValidate>
+      <h3>Редактирование решения</h3>
+      <label>
+        <span>Название решения *</span>
+        <input
+          value={form.title}
+          disabled={isSaving}
+          maxLength={200}
+          aria-required="true"
+          onChange={(event: ChangeEvent<HTMLInputElement>) => onTitleChange(event.target.value)}
+        />
+      </label>
+      <label>
+        <span>Ожидаемый результат{isExpectedResultRequired ? ' *' : ''}</span>
+        <textarea
+          value={form.expectedResult}
+          disabled={isSaving}
+          maxLength={1000}
+          rows={3}
+          aria-required={isExpectedResultRequired}
+          onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
+            onExpectedResultChange(event.target.value)
+          }
+        />
+      </label>
+      {error === null ? null : (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="form-actions">
+        <button className="primary-button" type="submit" disabled={isSaving}>
+          {isSaving ? 'Сохраняем…' : 'Сохранить изменения'}
+        </button>
+        <button className="secondary-button" type="button" disabled={isSaving} onClick={onClose}>
+          Отмена
+        </button>
+      </div>
+    </form>
+  );
+}
+
+interface DecisionCancellationConfirmationProps {
+  readonly isSaving: boolean;
+  readonly error: string | null;
+  readonly onBack: () => void;
+  readonly onConfirm: () => void;
+}
+
+function DecisionCancellationConfirmation({
+  isSaving,
+  error,
+  onBack,
+  onConfirm,
+}: DecisionCancellationConfirmationProps) {
+  return (
+    <div className="decision-cancellation-confirmation">
+      <h3>Отменить это решение?</h3>
+      <p>Решение останется в истории, но продолжить работу по нему будет нельзя</p>
+      {error === null ? null : (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="form-actions">
+        <button
+          className="secondary-button decision-cancel-button"
+          type="button"
+          disabled={isSaving}
+          onClick={onConfirm}
+        >
+          {isSaving ? 'Отменяем…' : 'Отменить решение'}
+        </button>
+        <button className="secondary-button" type="button" disabled={isSaving} onClick={onBack}>
+          Назад
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function DecisionConfirmationForm({

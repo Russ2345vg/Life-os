@@ -3,6 +3,7 @@ import type {
   Clock,
   CompleteActionSession,
   CompleteLifeAction,
+  CancelDecisionSafely,
   ConfirmDecisionFromActions,
   CreateDecisionForDate,
   CreateLifeActionForDecision,
@@ -19,6 +20,7 @@ import type {
   PauseActionSession,
   ResumeActionSession,
   StartLifeActionSession,
+  UpdateDecisionDetails,
 } from '../../application';
 import { EnsureCurrentDay } from '../../application';
 import type { DayDate } from '../../domain';
@@ -44,6 +46,8 @@ interface LifeOsApplicationServices {
   readonly completeActionSession: CompleteActionSession;
   readonly completeLifeAction: CompleteLifeAction;
   readonly confirmDecisionFromActions: ConfirmDecisionFromActions;
+  readonly updateDecisionDetails: UpdateDecisionDetails;
+  readonly cancelDecisionSafely: CancelDecisionSafely;
   readonly getActionSessionsForLifeAction: GetActionSessionsForLifeAction;
   readonly getUnfinishedActionSession: GetUnfinishedActionSession;
   readonly closeDatabase: () => void;
@@ -70,6 +74,8 @@ export class LifeOsApplication {
   public readonly completeActionSession: CompleteActionSession;
   public readonly completeLifeAction: CompleteLifeAction;
   public readonly confirmDecisionFromActions: ConfirmDecisionFromActions;
+  public readonly updateDecisionDetails: UpdateDecisionDetails;
+  public readonly cancelDecisionSafely: CancelDecisionSafely;
   public readonly getActionSessionsForLifeAction: GetActionSessionsForLifeAction;
   public readonly getUnfinishedActionSession: GetUnfinishedActionSession;
 
@@ -96,6 +102,8 @@ export class LifeOsApplication {
     this.completeActionSession = services.completeActionSession;
     this.completeLifeAction = services.completeLifeAction;
     this.confirmDecisionFromActions = services.confirmDecisionFromActions;
+    this.updateDecisionDetails = services.updateDecisionDetails;
+    this.cancelDecisionSafely = services.cancelDecisionSafely;
     this.getActionSessionsForLifeAction = services.getActionSessionsForLifeAction;
     this.getUnfinishedActionSession = services.getUnfinishedActionSession;
     this.#closeDatabase = services.closeDatabase;

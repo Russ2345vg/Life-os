@@ -11,8 +11,12 @@ import {
 } from '../../domain';
 import { DomainError } from '../../shared/errors/DomainError';
 import { failure, success } from '../../shared/result/Result';
-import { createPlannedDecision } from '../../test/helpers/DecisionTestFactory';
-import { confirmDecision } from '../../test/helpers/DecisionTestFactory';
+import {
+  cancelDecision,
+  confirmDecision,
+  createPlannedDecision,
+  markDecisionInProgress,
+} from '../../test/helpers/DecisionTestFactory';
 import {
   cancelLifeAction,
   completeLifeAction,
@@ -26,10 +30,13 @@ import {
   ACTION_COMPLETION_FAILED_MESSAGE,
   completeSessionWorkflow,
   completeSessionErrorMessage,
+  cancelDecisionResult,
   confirmDecisionResult,
   createDecisionAndReload,
   createLifeActionAndReload,
+  decisionCancellationErrorMessage,
   decisionConfirmationErrorMessage,
+  decisionEditErrorMessage,
   INITIAL_TODAY_PAGE_STATE,
   isDecisionActivationKey,
   isLifeActionActivationKey,
@@ -38,9 +45,11 @@ import {
   resumeSessionErrorMessage,
   startSessionErrorMessage,
   todayPageReducer,
+  updateDecisionDetailsResult,
   validateDecisionForm,
   validateLifeActionForm,
   validateDecisionConfirmationForm,
+  validateDecisionEditForm,
   validateSessionCompletionForm,
   type TodayPageState,
 } from './TodayPageState';
@@ -584,6 +593,127 @@ describe('TodayPage view and workflow', () => {
       decisionId: decision.id,
       actualResult: 'Фактический итог',
     });
+  });
+
+  it('показывает редактирование только для planned и безопасную отмену для активных решений', () => {
+    const planned = createPlannedDecision('management-planned', DATE);
+    const inProgress = markDecisionInProgress(createPlannedDecision('management-progress', DATE));
+    const confirmed = confirmDecision(createPlannedDecision('management-confirmed', DATE));
+
+    const plannedMarkup = renderView(createDetailsState(planned));
+    const progressMarkup = renderView(createDetailsState(inProgress));
+    const confirmedMarkup = renderView(createDetailsState(confirmed));
+
+    expect(plannedMarkup).toContain('Редактировать');
+    expect(plannedMarkup).toContain('Отменить решение');
+    expect(progressMarkup).not.toContain('Редактировать');
+    expect(progressMarkup).toContain('Отменить решение');
+    expect(confirmedMarkup).not.toContain('Редактировать');
+    expect(confirmedMarkup).not.toContain('Отменить решение');
+  });
+
+  it('открывает предзаполненную форму редактирования и проверяет обязательные поля', () => {
+    const decision = createPlannedDecision('edit-form', DATE);
+    const opened = todayPageReducer(createDetailsState(decision), {
+      type: 'decision_edit_form_opened',
+    });
+    const markup = renderView(opened);
+
+    expect(markup).toContain('Редактирование решения');
+    expect(markup).toContain('value="Решение edit-form"');
+    expect(markup).toContain('Результат edit-form');
+    expect(markup).toContain('Ожидаемый результат *');
+    expect(
+      validateDecisionEditForm({ title: ' ', expectedResult: 'Результат' }, decision.kind),
+    ).toBe('Введите название решения');
+    expect(validateDecisionEditForm({ title: 'Решение', expectedResult: ' ' }, decision.kind)).toBe(
+      'Укажите ожидаемый результат',
+    );
+    expect(
+      validateDecisionEditForm({ title: 'Решение', expectedResult: '' }, DECISION_KIND.additional),
+    ).toBeNull();
+  });
+
+  it('сохраняет введённые данные при ошибке редактирования и блокирует повторную отправку', () => {
+    const decision = createPlannedDecision('edit-failure', DATE);
+    const state = {
+      ...createDetailsState(decision),
+      isDecisionEditFormOpen: true,
+      isDecisionEditing: true,
+      decisionEditForm: { title: 'Текст остаётся', expectedResult: 'Результат остаётся' },
+      decisionEditError: decisionEditErrorMessage('decision.cannot_edit'),
+    } satisfies TodayPageState;
+    const markup = renderView(state);
+
+    expect(markup).toContain('Текст остаётся');
+    expect(markup).toContain('Результат остаётся');
+    expect(markup).toContain('Это решение уже нельзя редактировать');
+    expect(markup).not.toContain('decision.cannot_edit');
+    expect(markup).toContain('Сохраняем…');
+    expect(markup.match(/disabled=""/g)?.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it('обновляет решение после редактирования без F5 и вызывает прикладную команду', async () => {
+    const decision = createPlannedDecision('edit-workflow', DATE);
+    decision.updateDetails({
+      title: decision.title,
+      expectedResult: decision.expectedResult,
+      occurredAt: new Date('2026-08-02T11:00:00.000+09:00'),
+      eventId: EntityId.create('unused-edit-event'),
+    });
+    const execute = vi.fn().mockResolvedValue(success(decision));
+
+    const result = await updateDecisionDetailsResult({
+      decisionId: decision.id,
+      form: { title: 'Новое название', expectedResult: 'Новый результат' },
+      updateDecisionDetails: { execute },
+    });
+    const opened = todayPageReducer(createDetailsState(decision), {
+      type: 'decision_edit_form_opened',
+    });
+    const succeeded = todayPageReducer(opened, {
+      type: 'decision_edit_succeeded',
+      decision,
+    });
+
+    expect(result).toEqual({ ok: true, decision });
+    expect(execute).toHaveBeenCalledWith({
+      decisionId: decision.id,
+      title: 'Новое название',
+      expectedResult: 'Новый результат',
+    });
+    expect(succeeded.isDecisionEditFormOpen).toBe(false);
+    expect(succeeded.decisionEditForm).toEqual({ title: '', expectedResult: '' });
+  });
+
+  it('подтверждает отмену отдельно и объясняет блокировку незавершёнными действиями', async () => {
+    const decision = createPlannedDecision('cancel-workflow', DATE);
+    const opened = todayPageReducer(createDetailsState(decision), {
+      type: 'decision_cancellation_opened',
+    });
+    const failed = todayPageReducer(opened, {
+      type: 'decision_cancellation_failed',
+      message: decisionCancellationErrorMessage('decision.actions_unfinished'),
+    });
+    const openedMarkup = renderView(opened);
+    const failedMarkup = renderView(failed);
+    const execute = vi.fn().mockResolvedValue(success(cancelDecision(decision)));
+    const result = await cancelDecisionResult({
+      decisionId: decision.id,
+      cancelDecisionSafely: { execute },
+    });
+    const succeeded = todayPageReducer(failed, {
+      type: 'decision_cancellation_succeeded',
+      decision,
+    });
+
+    expect(openedMarkup).toContain('Отменить это решение?');
+    expect(failedMarkup).toContain('Сначала завершите или отмените незавершённые действия');
+    expect(failedMarkup).not.toContain('decision.actions_unfinished');
+    expect(result).toEqual({ ok: true, decision });
+    expect(execute).toHaveBeenCalledWith({ decisionId: decision.id });
+    expect(renderView(succeeded)).toContain('Решение отменено');
+    expect(renderView(succeeded)).not.toContain('Редактировать');
   });
 
   it('shows action details, decision relation, and back navigation without internal fields', () => {
@@ -1166,6 +1296,14 @@ function renderView(state: TodayPageState): string {
       onCloseDecisionConfirmationForm: NOOP,
       onDecisionActualResultChange: NOOP,
       onDecisionConfirmationSubmit: NOOP,
+      onOpenDecisionEditForm: NOOP,
+      onCloseDecisionEditForm: NOOP,
+      onDecisionEditTitleChange: NOOP,
+      onDecisionEditExpectedResultChange: NOOP,
+      onDecisionEditSubmit: NOOP,
+      onOpenDecisionCancellation: NOOP,
+      onCloseDecisionCancellation: NOOP,
+      onConfirmDecisionCancellation: NOOP,
       onOpenLifeAction: NOOP,
       onBackToDecision: NOOP,
       onRetryLifeAction: NOOP,

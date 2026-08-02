@@ -4,6 +4,7 @@ import {
   CreateLifeActionForDecision,
   CompleteActionSession,
   CompleteLifeAction,
+  CancelDecisionSafely,
   ConfirmDecisionFromActions,
   EnsureCurrentDay,
   GetDecisionsForDate,
@@ -15,6 +16,7 @@ import {
   PauseActionSession,
   ResumeActionSession,
   StartLifeActionSession,
+  UpdateDecisionDetails,
 } from '../../application';
 import { SystemClock } from '../../infrastructure/clock/SystemClock';
 import { SystemCurrentDateProvider } from '../../infrastructure/clock/SystemCurrentDateProvider';
@@ -97,6 +99,13 @@ export async function createLifeOsApplication(
       clock,
       idGenerator,
     );
+    const updateDecisionDetails = new UpdateDecisionDetails(decisionRepository, clock, idGenerator);
+    const cancelDecisionSafely = new CancelDecisionSafely(
+      decisionRepository,
+      lifeActionRepository,
+      clock,
+      idGenerator,
+    );
     const getActionSessionsForLifeAction = new GetActionSessionsForLifeAction(
       actionSessionRepository,
     );
@@ -122,6 +131,8 @@ export async function createLifeOsApplication(
       completeActionSession,
       completeLifeAction,
       confirmDecisionFromActions,
+      updateDecisionDetails,
+      cancelDecisionSafely,
       getActionSessionsForLifeAction,
       getUnfinishedActionSession,
       closeDatabase: () => database.close(),
