@@ -22,6 +22,11 @@ export {
 export { RestoreDecision, type RestoreDecisionInput } from './commands/RestoreDecision';
 export { ResumeActionSession, type ResumeActionSessionInput } from './commands/ResumeActionSession';
 export { StartLifeAction, type StartLifeActionInput } from './commands/StartLifeAction';
+export {
+  StartLifeActionSession,
+  type StartLifeActionSessionInput,
+  type StartLifeActionSessionResult,
+} from './commands/StartLifeActionSession';
 export { MainDecisionLimitPolicy } from './decision/MainDecisionLimitPolicy';
 export { GetDecisionsForDate } from './queries/GetDecisionsForDate';
 export { GetActionSessionById } from './queries/GetActionSessionById';
