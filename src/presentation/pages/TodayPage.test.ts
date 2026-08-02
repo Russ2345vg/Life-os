@@ -1,16 +1,33 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { DayDate, DECISION_KIND } from '../../domain';
+import {
+  ActionSession,
+  DayDate,
+  DECISION_KIND,
+  EntityId,
+  SessionResultNote,
+  type LifeAction,
+} from '../../domain';
 import { DomainError } from '../../shared/errors/DomainError';
 import { failure, success } from '../../shared/result/Result';
 import { createPlannedDecision } from '../../test/helpers/DecisionTestFactory';
-import { createReadyLifeAction } from '../../test/helpers/LifeActionTestFactory';
+import {
+  cancelLifeAction,
+  completeLifeAction,
+  createReadyLifeAction,
+  markLifeActionInProgress,
+} from '../../test/helpers/LifeActionTestFactory';
+import { formatDuration, scheduleSessionTimer } from '../session/sessionTimer';
 import { TodayPageView } from './TodayPage';
 import {
   createDecisionAndReload,
   createLifeActionAndReload,
   INITIAL_TODAY_PAGE_STATE,
   isDecisionActivationKey,
+  isLifeActionActivationKey,
+  pauseSessionErrorMessage,
+  resumeSessionErrorMessage,
+  startSessionErrorMessage,
   todayPageReducer,
   validateDecisionForm,
   validateLifeActionForm,
@@ -370,6 +387,221 @@ describe('TodayPage view and workflow', () => {
     expect(markup).not.toContain('action.decision_unavailable');
     expect(markup).not.toContain('Internal message');
   });
+
+  it('renders linked actions as native buttons activated by Enter and Space', () => {
+    const decision = createPlannedDecision('open-action', DATE);
+    const action = createReadyLifeAction('keyboard-action', DATE, { decisionId: decision.id });
+    const markup = renderView(createDetailsState(decision, [action]));
+
+    expect(markup).toContain('linked-action-card-button');
+    expect(markup).toContain('type="button"');
+    expect(markup).toContain('aria-label="Открыть действие');
+    expect(isLifeActionActivationKey('Enter')).toBe(true);
+    expect(isLifeActionActivationKey(' ')).toBe(true);
+    expect(isLifeActionActivationKey('Escape')).toBe(false);
+  });
+
+  it('shows action details, decision relation, and back navigation without internal fields', () => {
+    const decision = createPlannedDecision('action-details', DATE);
+    const action = createReadyLifeAction('details-action', DATE, {
+      decisionId: decision.id,
+      description: 'Короткое описание действия',
+    });
+    const markup = renderView(createActionDetailsState(decision, action));
+
+    expect(markup).toContain('Назад к решению');
+    expect(markup).toContain('Действие details-action');
+    expect(markup).toContain('Короткое описание действия');
+    expect(markup).toContain('Результат details-action');
+    expect(markup).toContain('Готово к выполнению');
+    expect(markup).toContain('Решение «Решение action-details»');
+    expect(markup).not.toContain('details-action-ready-event');
+    expect(markup).not.toContain('<dt>Version</dt>');
+    expect(markup).not.toContain('session.unfinished_exists');
+  });
+
+  it('shows action-session loading, controlled error, retry, and back navigation', () => {
+    const decision = createPlannedDecision('action-loading', DATE);
+    const action = createReadyLifeAction('loading-action', DATE, { decisionId: decision.id });
+    const loading = todayPageReducer(createDetailsState(decision, [action]), {
+      type: 'action_details_load_started',
+      lifeAction: action,
+    });
+    const failed = todayPageReducer(loading, {
+      type: 'action_details_load_failed',
+      lifeActionId: action.id,
+    });
+    const back = todayPageReducer(failed, { type: 'action_details_closed' });
+
+    expect(renderView(loading)).toContain('Загружаем выполнение…');
+    expect(renderView(failed)).toContain('Не удалось загрузить выполнение');
+    expect(renderView(failed)).toContain('Повторить');
+    expect(renderView(failed)).toContain('Назад к решению');
+    expect(renderView(back)).toContain('Действия по решению');
+  });
+
+  it('shows an empty session history and a compact completed-session history', () => {
+    const decision = createPlannedDecision('history', DATE);
+    const action = createReadyLifeAction('history-action', DATE, { decisionId: decision.id });
+    const emptyMarkup = renderView(createActionDetailsState(decision, action));
+    const completed = completeSession(createSession('completed-history', action.id));
+    const filledMarkup = renderView(createActionDetailsState(decision, action, [completed], null));
+
+    expect(emptyMarkup).toContain('Работа по этому действию ещё не начиналась');
+    expect(filledMarkup).toContain('Завершённые сессии');
+    expect(filledMarkup).toContain('Завершена');
+    expect(filledMarkup).toContain('05:00');
+    expect(filledMarkup).toContain('Результат рабочей сессии');
+  });
+
+  it('shows start controls only for eligible actions without an active session', () => {
+    const decision = createPlannedDecision('start-control', DATE);
+    const ready = createReadyLifeAction('ready-start', DATE, { decisionId: decision.id });
+    const inProgress = markLifeActionInProgress(
+      createReadyLifeAction('progress-start', DATE, { decisionId: decision.id }),
+    );
+    const completed = completeLifeAction(
+      createReadyLifeAction('completed-action', DATE, { decisionId: decision.id }),
+    );
+    const cancelled = cancelLifeAction(
+      createReadyLifeAction('cancelled-action', DATE, { decisionId: decision.id }),
+    );
+
+    expect(renderView(createActionDetailsState(decision, ready))).toContain('Начать выполнение');
+    expect(renderView(createActionDetailsState(decision, inProgress))).toContain(
+      'Продолжить новой сессией',
+    );
+    expect(renderView(createActionDetailsState(decision, completed))).not.toContain(
+      'Начать выполнение',
+    );
+    expect(renderView(createActionDetailsState(decision, cancelled))).not.toContain(
+      'Начать выполнение',
+    );
+  });
+
+  it('updates the action and shows a running session after start without reloading', () => {
+    const decision = createPlannedDecision('started-state', DATE);
+    const action = createReadyLifeAction('started-action', DATE, { decisionId: decision.id });
+    const initial = createActionDetailsState(decision, action);
+    const updatedAction = markLifeActionInProgress(action);
+    const running = createSession('running-after-start', action.id);
+    const started = todayPageReducer(initial, {
+      type: 'session_started',
+      lifeAction: updatedAction,
+      session: running,
+    });
+    const markup = renderView(started);
+
+    expect(markup).toContain('Выполняется');
+    expect(markup).toContain('Пауза');
+    expect(markup).toContain('02:00:00');
+    expect(markup).not.toContain('Начать выполнение');
+    expect(started.details.status === 'ready' && started.details.lifeActions[0]?.status).toBe(
+      'in_progress',
+    );
+  });
+
+  it('blocks start for running and paused sessions that belong to another action', () => {
+    const decision = createPlannedDecision('foreign-session', DATE);
+    const action = createReadyLifeAction('blocked-action', DATE, { decisionId: decision.id });
+    const foreignRunning = createSession('foreign-running', EntityId.create('foreign-action'));
+    const foreignPaused = pauseSession(
+      createSession('foreign-paused', EntityId.create('other-foreign-action')),
+    );
+
+    for (const unfinished of [foreignRunning, foreignPaused]) {
+      const markup = renderView(createActionDetailsState(decision, action, [], unfinished));
+      expect(markup).toContain('Сначала завершите или приостановите текущую работу');
+      expect(markup).toContain('disabled=""');
+    }
+  });
+
+  it('does not block start when another action has only a completed session', () => {
+    const decision = createPlannedDecision('completed-foreign', DATE);
+    const action = createReadyLifeAction('unblocked-action', DATE, { decisionId: decision.id });
+    const completedForeign = completeSession(
+      createSession('foreign-completed', EntityId.create('foreign-completed-action')),
+    );
+    const markup = renderView(createActionDetailsState(decision, action, [completedForeign], null));
+
+    expect(markup).toContain('Начать выполнение');
+    expect(markup).not.toContain('Сначала завершите или приостановите текущую работу');
+  });
+
+  it('switches the active session between running and paused controls', () => {
+    const decision = createPlannedDecision('pause-resume', DATE);
+    const action = markLifeActionInProgress(
+      createReadyLifeAction('pause-resume-action', DATE, { decisionId: decision.id }),
+    );
+    const running = createSession('pause-resume-session', action.id);
+    const initial = createActionDetailsState(decision, action, [running], running);
+    const paused = pauseSession(running);
+    const pausedState = todayPageReducer(initial, { type: 'session_updated', session: paused });
+    const pausedMarkup = renderView(pausedState);
+    const resumed = resumeSession(paused);
+    const resumedState = todayPageReducer(pausedState, {
+      type: 'session_updated',
+      session: resumed,
+    });
+
+    expect(pausedMarkup).toContain('На паузе');
+    expect(pausedMarkup).toContain('Продолжить');
+    expect(renderView(resumedState)).toContain('Выполняется');
+    expect(renderView(resumedState)).toContain('Пауза');
+  });
+
+  it('disables session controls while a command is pending', () => {
+    const decision = createPlannedDecision('pending-session', DATE);
+    const action = markLifeActionInProgress(
+      createReadyLifeAction('pending-action', DATE, { decisionId: decision.id }),
+    );
+    const running = createSession('pending-running', action.id);
+    const pending = todayPageReducer(
+      createActionDetailsState(decision, action, [running], running),
+      { type: 'session_operation_started' },
+    );
+
+    expect(renderView(pending)).toContain('disabled=""');
+    expect(pending.isSessionMutating).toBe(true);
+  });
+
+  it('maps session errors to understandable text without exposing internal codes', () => {
+    const decision = createPlannedDecision('session-errors', DATE);
+    const action = createReadyLifeAction('error-action', DATE, { decisionId: decision.id });
+    const failed = todayPageReducer(createActionDetailsState(decision, action), {
+      type: 'session_operation_failed',
+      message: startSessionErrorMessage('session.unfinished_exists'),
+    });
+    const markup = renderView(failed);
+
+    expect(markup).toContain('Сначала завершите или приостановите текущую работу');
+    expect(markup).not.toContain('session.unfinished_exists');
+    expect(pauseSessionErrorMessage('session.not_found')).toBe('Сессия больше недоступна');
+    expect(pauseSessionErrorMessage('unknown')).toBe('Не удалось поставить работу на паузу');
+    expect(resumeSessionErrorMessage()).toBe('Не удалось продолжить работу');
+  });
+
+  it('formats timers as MM:SS and HH:MM:SS', () => {
+    expect(formatDuration(59_999)).toBe('00:59');
+    expect(formatDuration(3_661_000)).toBe('01:01:01');
+  });
+
+  it('ticks the running timer once per second with managed fake timers', () => {
+    vi.useFakeTimers();
+    try {
+      const onTick = vi.fn();
+      const cancel = scheduleSessionTimer(onTick);
+
+      vi.advanceTimersByTime(3_100);
+      expect(onTick).toHaveBeenCalledTimes(3);
+
+      cancel();
+      vi.advanceTimersByTime(2_000);
+      expect(onTick).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 function createReadyState(
@@ -383,7 +615,7 @@ function createReadyState(
 
 function createDetailsState(
   decision: ReturnType<typeof createPlannedDecision>,
-  lifeActions: readonly ReturnType<typeof createReadyLifeAction>[] = [],
+  lifeActions: readonly LifeAction[] = [],
 ): TodayPageState {
   return {
     ...createReadyState([decision]),
@@ -396,10 +628,63 @@ function createDetailsState(
   };
 }
 
+function createActionDetailsState(
+  decision: ReturnType<typeof createPlannedDecision>,
+  lifeAction: LifeAction,
+  sessions: readonly ActionSession[] = [],
+  unfinishedSession: ActionSession | null = null,
+): TodayPageState {
+  return {
+    ...createDetailsState(decision, [lifeAction]),
+    actionDetails: {
+      status: 'ready',
+      lifeAction,
+      sessions,
+      unfinishedSession,
+    },
+  };
+}
+
+function createSession(id: string, lifeActionId: EntityId): ActionSession {
+  return ActionSession.start({
+    id: EntityId.create(id),
+    lifeActionId,
+    startedAt: new Date('2026-08-02T08:00:00.000+09:00'),
+    eventId: EntityId.create(`${id}-started-event`),
+  });
+}
+
+function pauseSession(session: ActionSession): ActionSession {
+  session.pause(
+    new Date(session.startedAt.getTime() + 60_000),
+    EntityId.create(`${session.id.toString()}-pause-event`),
+  );
+  return session;
+}
+
+function resumeSession(session: ActionSession): ActionSession {
+  session.resume(
+    new Date(session.startedAt.getTime() + 120_000),
+    EntityId.create(`${session.id.toString()}-resume-event`),
+  );
+  return session;
+}
+
+function completeSession(session: ActionSession): ActionSession {
+  session.complete({
+    completedAt: new Date(session.startedAt.getTime() + 300_000),
+    completionKind: 'completed',
+    resultNote: SessionResultNote.create('Результат рабочей сессии'),
+    eventId: EntityId.create(`${session.id.toString()}-complete-event`),
+  });
+  return session;
+}
+
 function renderView(state: TodayPageState): string {
   return renderToStaticMarkup(
     TodayPageView({
       currentDate: DATE,
+      clock: { now: () => new Date('2026-08-02T10:00:00.000+09:00') },
       state,
       onRetry: NOOP,
       onOpenForm: NOOP,
@@ -417,6 +702,12 @@ function renderView(state: TodayPageState): string {
       onLifeActionExpectedResultChange: NOOP,
       onLifeActionDescriptionChange: NOOP,
       onLifeActionSubmit: NOOP,
+      onOpenLifeAction: NOOP,
+      onBackToDecision: NOOP,
+      onRetryLifeAction: NOOP,
+      onStartSession: NOOP,
+      onPauseSession: NOOP,
+      onResumeSession: NOOP,
     }),
   );
 }

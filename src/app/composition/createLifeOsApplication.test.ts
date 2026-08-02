@@ -1,6 +1,13 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it, vi } from 'vitest';
-import { DAY_STATUS, DayDate, DECISION_KIND, EntityId } from '../../domain';
+import {
+  ACTION_SESSION_STATUS,
+  DAY_STATUS,
+  DayDate,
+  DECISION_KIND,
+  EntityId,
+  LIFE_ACTION_STATUS,
+} from '../../domain';
 import { SystemClock } from '../../infrastructure/clock/SystemClock';
 import { SystemCurrentDateProvider } from '../../infrastructure/clock/SystemCurrentDateProvider';
 import { CryptoIdGenerator } from '../../infrastructure/ids/CryptoIdGenerator';
@@ -33,6 +40,11 @@ describe('createLifeOsApplication', () => {
     expect(application.getDecisionById).toBeDefined();
     expect(application.getLifeActionsForDecision).toBeDefined();
     expect(application.createLifeActionForDecision).toBeDefined();
+    expect(application.startLifeActionSession).toBeDefined();
+    expect(application.pauseActionSession).toBeDefined();
+    expect(application.resumeActionSession).toBeDefined();
+    expect(application.getActionSessionsForLifeAction).toBeDefined();
+    expect(application.getUnfinishedActionSession).toBeDefined();
     await expect(
       application.dayRepository.findByDate(application.currentDateProvider.getCurrentDate()),
     ).resolves.not.toBeNull();
@@ -165,6 +177,79 @@ describe('createLifeOsApplication', () => {
     expect(restored[0]?.status).toBe('ready');
     expect(restored[0]?.expectedResult?.toString()).toBe('Следующий шаг выполнен');
     secondApplication.close();
+  });
+
+  it('restores a started and then paused action session across application restarts', async () => {
+    const indexedDbFactory = new IDBFactory();
+    const firstApplication = await createTestApplication(
+      indexedDbFactory,
+      new FakeIdGenerator('session-start'),
+    );
+    const decisionResult = await firstApplication.createDecisionForDate.execute({
+      title: 'Решение с рабочей сессией',
+      kind: DECISION_KIND.main,
+      plannedDate: firstApplication.currentDate,
+      expectedResult: 'Работа сохраняется между запусками',
+    });
+    expect(decisionResult.ok).toBe(true);
+    if (!decisionResult.ok) {
+      throw decisionResult.error;
+    }
+
+    const actionResult = await firstApplication.createLifeActionForDecision.execute({
+      decisionId: decisionResult.value.id,
+      title: 'Продолжить после перезапуска',
+      expectedResult: 'Сессия восстановлена',
+      plannedDate: firstApplication.currentDate,
+    });
+    expect(actionResult.ok).toBe(true);
+    if (!actionResult.ok) {
+      throw actionResult.error;
+    }
+
+    const startResult = await firstApplication.startLifeActionSession.execute({
+      lifeActionId: actionResult.value.id,
+    });
+    expect(startResult.ok).toBe(true);
+    if (!startResult.ok) {
+      throw startResult.error;
+    }
+    const startedAt = startResult.value.session.startedAt;
+    firstApplication.close();
+
+    const secondApplication = await createTestApplication(
+      indexedDbFactory,
+      new FakeIdGenerator('session-pause'),
+    );
+    const restoredActions = await secondApplication.getLifeActionsForDecision.execute(
+      decisionResult.value.id,
+    );
+    const restoredSessions = await secondApplication.getActionSessionsForLifeAction.execute(
+      actionResult.value.id,
+    );
+    const restoredUnfinished = await secondApplication.getUnfinishedActionSession.execute();
+
+    expect(restoredActions[0]?.status).toBe(LIFE_ACTION_STATUS.inProgress);
+    expect(restoredSessions).toHaveLength(1);
+    expect(restoredSessions[0]?.status).toBe(ACTION_SESSION_STATUS.running);
+    expect(restoredSessions[0]?.startedAt).toEqual(startedAt);
+    expect(restoredUnfinished?.id.equals(startResult.value.session.id)).toBe(true);
+
+    const pauseResult = await secondApplication.pauseActionSession.execute({
+      sessionId: restoredSessions[0]!.id,
+    });
+    expect(pauseResult.ok).toBe(true);
+    secondApplication.close();
+
+    const thirdApplication = await createTestApplication(
+      indexedDbFactory,
+      new FakeIdGenerator('session-reload'),
+    );
+    const pausedSession = await thirdApplication.getUnfinishedActionSession.execute();
+
+    expect(pausedSession?.status).toBe(ACTION_SESSION_STATUS.paused);
+    expect(pausedSession?.pausedAt).toEqual(NOW);
+    thirdApplication.close();
   });
 
   it('возвращает контролируемую ошибку и закрывает базу при сбое запуска', async () => {

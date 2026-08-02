@@ -40,6 +40,7 @@ export { GetDecisionsForDate } from './queries/GetDecisionsForDate';
 export { GetDecisionById } from './queries/GetDecisionById';
 export { GetActionSessionById } from './queries/GetActionSessionById';
 export { GetActionSessionsForLifeAction } from './queries/GetActionSessionsForLifeAction';
+export { GetUnfinishedActionSession } from './queries/GetUnfinishedActionSession';
 export { GetLifeActionsForDate } from './queries/GetLifeActionsForDate';
 export { GetLifeActionsForDecision } from './queries/GetLifeActionsForDecision';
 export type { ActionSessionRepository } from './ports/ActionSessionRepository';

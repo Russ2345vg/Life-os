@@ -9,8 +9,13 @@ import type {
   GetDecisionsForDate,
   GetDecisionById,
   GetLifeActionsForDecision,
+  GetActionSessionsForLifeAction,
+  GetUnfinishedActionSession,
   IdGenerator,
   LifeActionRepository,
+  PauseActionSession,
+  ResumeActionSession,
+  StartLifeActionSession,
 } from '../../application';
 import { EnsureCurrentDay } from '../../application';
 import type { DayDate } from '../../domain';
@@ -30,6 +35,11 @@ interface LifeOsApplicationServices {
   readonly getDecisionById: GetDecisionById;
   readonly getLifeActionsForDecision: GetLifeActionsForDecision;
   readonly createLifeActionForDecision: CreateLifeActionForDecision;
+  readonly startLifeActionSession: StartLifeActionSession;
+  readonly pauseActionSession: PauseActionSession;
+  readonly resumeActionSession: ResumeActionSession;
+  readonly getActionSessionsForLifeAction: GetActionSessionsForLifeAction;
+  readonly getUnfinishedActionSession: GetUnfinishedActionSession;
   readonly closeDatabase: () => void;
 }
 
@@ -48,6 +58,11 @@ export class LifeOsApplication {
   public readonly getDecisionById: GetDecisionById;
   public readonly getLifeActionsForDecision: GetLifeActionsForDecision;
   public readonly createLifeActionForDecision: CreateLifeActionForDecision;
+  public readonly startLifeActionSession: StartLifeActionSession;
+  public readonly pauseActionSession: PauseActionSession;
+  public readonly resumeActionSession: ResumeActionSession;
+  public readonly getActionSessionsForLifeAction: GetActionSessionsForLifeAction;
+  public readonly getUnfinishedActionSession: GetUnfinishedActionSession;
 
   readonly #closeDatabase: () => void;
 
@@ -66,6 +81,11 @@ export class LifeOsApplication {
     this.getDecisionById = services.getDecisionById;
     this.getLifeActionsForDecision = services.getLifeActionsForDecision;
     this.createLifeActionForDecision = services.createLifeActionForDecision;
+    this.startLifeActionSession = services.startLifeActionSession;
+    this.pauseActionSession = services.pauseActionSession;
+    this.resumeActionSession = services.resumeActionSession;
+    this.getActionSessionsForLifeAction = services.getActionSessionsForLifeAction;
+    this.getUnfinishedActionSession = services.getUnfinishedActionSession;
     this.#closeDatabase = services.closeDatabase;
   }
 

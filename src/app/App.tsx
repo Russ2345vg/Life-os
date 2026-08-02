@@ -24,6 +24,12 @@ function ReadyTodayPage() {
       getDecisionById={application.getDecisionById}
       getLifeActionsForDecision={application.getLifeActionsForDecision}
       createLifeActionForDecision={application.createLifeActionForDecision}
+      startLifeActionSession={application.startLifeActionSession}
+      pauseActionSession={application.pauseActionSession}
+      resumeActionSession={application.resumeActionSession}
+      getActionSessionsForLifeAction={application.getActionSessionsForLifeAction}
+      getUnfinishedActionSession={application.getUnfinishedActionSession}
+      clock={application.clock}
     />
   );
 }

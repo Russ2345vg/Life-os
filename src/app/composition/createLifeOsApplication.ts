@@ -6,7 +6,12 @@ import {
   GetDecisionsForDate,
   GetDecisionById,
   GetLifeActionsForDecision,
+  GetActionSessionsForLifeAction,
+  GetUnfinishedActionSession,
   MainDecisionLimitPolicy,
+  PauseActionSession,
+  ResumeActionSession,
+  StartLifeActionSession,
 } from '../../application';
 import { SystemClock } from '../../infrastructure/clock/SystemClock';
 import { SystemCurrentDateProvider } from '../../infrastructure/clock/SystemCurrentDateProvider';
@@ -65,6 +70,22 @@ export async function createLifeOsApplication(
       clock,
       idGenerator,
     );
+    const startLifeActionSession = new StartLifeActionSession(
+      lifeActionRepository,
+      actionSessionRepository,
+      clock,
+      idGenerator,
+    );
+    const pauseActionSession = new PauseActionSession(actionSessionRepository, clock, idGenerator);
+    const resumeActionSession = new ResumeActionSession(
+      actionSessionRepository,
+      clock,
+      idGenerator,
+    );
+    const getActionSessionsForLifeAction = new GetActionSessionsForLifeAction(
+      actionSessionRepository,
+    );
+    const getUnfinishedActionSession = new GetUnfinishedActionSession(actionSessionRepository);
     const application = new LifeOsApplication({
       dayRepository,
       decisionRepository,
@@ -80,6 +101,11 @@ export async function createLifeOsApplication(
       getDecisionById,
       getLifeActionsForDecision,
       createLifeActionForDecision,
+      startLifeActionSession,
+      pauseActionSession,
+      resumeActionSession,
+      getActionSessionsForLifeAction,
+      getUnfinishedActionSession,
       closeDatabase: () => database.close(),
     });
 

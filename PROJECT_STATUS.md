@@ -2,11 +2,21 @@
 
 - Проект: самостоятельный LifeOS
 - Текущий макроблок: первый рабочий интерфейс
-- Текущий этап: Decision details and linked LifeAction creation
+- Текущий этап: LifeAction details with start pause and resume controls
 - Статус: завершён
-- Следующий допустимый этап: LifeAction details and session controls interface
+- Следующий допустимый этап: ActionSession completion and LifeAction result interface
 
 ## Выполненные работы
+
+- Добавлена доступная карточка действия со сведениями, историей сессий, восстановлением активной
+  работы из IndexedDB и адаптивной панелью без отдельной маршрутизации.
+- Сценарии `StartLifeActionSession`, `PauseActionSession`, `ResumeActionSession`,
+  `GetActionSessionsForLifeAction` и `GetUnfinishedActionSession` подключены через
+  `LifeOsApplication`; presentation не обращается к репозиториям напрямую.
+- Реализованы запуск, секундный рабочий таймер без ежесекундного сохранения, пауза, продолжение той
+  же сессии и блокировка запуска при чужой running- или paused-сессии.
+- Добавлены unit-, UI- и IndexedDB-интеграционные проверки карточки действия и управления
+  незавершённой сессией, а также описание интерфейса `docs/ui/LIFE_ACTION_DETAILS.md`.
 
 - Добавлена доступная карточка решения с подробностями, связанными действиями, состояниями
   загрузки и ошибок и адаптивной панелью для мобильной ширины.

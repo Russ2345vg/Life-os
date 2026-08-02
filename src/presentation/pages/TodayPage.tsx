@@ -7,11 +7,17 @@ import {
   type FormEvent,
 } from 'react';
 import type {
+  Clock,
   CreateDecisionForDate,
   CreateLifeActionForDecision,
+  GetActionSessionsForLifeAction,
   GetDecisionById,
   GetDecisionsForDate,
   GetLifeActionsForDecision,
+  GetUnfinishedActionSession,
+  PauseActionSession,
+  ResumeActionSession,
+  StartLifeActionSession,
 } from '../../application';
 import {
   DECISION_KIND,
@@ -21,13 +27,19 @@ import {
   type DecisionKind,
   type DecisionStatus,
   type EntityId,
+  type ActionSession,
+  type LifeAction,
 } from '../../domain';
 import { DecisionDetailsPanel } from '../components/DecisionDetailsPanel';
+import { LifeActionDetailsPanel } from '../components/LifeActionDetailsPanel';
 import {
   createDecisionAndReload,
   createLifeActionAndReload,
   INITIAL_TODAY_PAGE_STATE,
   isDecisionActivationKey,
+  pauseSessionErrorMessage,
+  resumeSessionErrorMessage,
+  startSessionErrorMessage,
   todayPageReducer,
   validateDecisionForm,
   validateLifeActionForm,
@@ -42,6 +54,12 @@ interface TodayPageProps {
   readonly getDecisionById: Pick<GetDecisionById, 'execute'>;
   readonly getLifeActionsForDecision: Pick<GetLifeActionsForDecision, 'execute'>;
   readonly createLifeActionForDecision: Pick<CreateLifeActionForDecision, 'execute'>;
+  readonly startLifeActionSession: Pick<StartLifeActionSession, 'execute'>;
+  readonly pauseActionSession: Pick<PauseActionSession, 'execute'>;
+  readonly resumeActionSession: Pick<ResumeActionSession, 'execute'>;
+  readonly getActionSessionsForLifeAction: Pick<GetActionSessionsForLifeAction, 'execute'>;
+  readonly getUnfinishedActionSession: Pick<GetUnfinishedActionSession, 'execute'>;
+  readonly clock: Pick<Clock, 'now'>;
 }
 
 export function TodayPage({
@@ -51,10 +69,17 @@ export function TodayPage({
   getDecisionById,
   getLifeActionsForDecision,
   createLifeActionForDecision,
+  startLifeActionSession,
+  pauseActionSession,
+  resumeActionSession,
+  getActionSessionsForLifeAction,
+  getUnfinishedActionSession,
+  clock,
 }: TodayPageProps) {
   const [state, dispatch] = useReducer(todayPageReducer, INITIAL_TODAY_PAGE_STATE);
   const savingRef = useRef(false);
   const lifeActionSavingRef = useRef(false);
+  const sessionMutationRef = useRef(false);
 
   const loadDecisions = useCallback(async () => {
     dispatch({ type: 'load_started' });
@@ -176,9 +201,118 @@ export function TodayPage({
     }
   }
 
+  const loadLifeActionDetails = useCallback(
+    async (lifeAction: LifeAction) => {
+      dispatch({ type: 'action_details_load_started', lifeAction });
+      try {
+        const [sessions, unfinishedSession] = await Promise.all([
+          getActionSessionsForLifeAction.execute(lifeAction.id),
+          getUnfinishedActionSession.execute(),
+        ]);
+        dispatch({
+          type: 'action_details_load_succeeded',
+          lifeActionId: lifeAction.id,
+          sessions,
+          unfinishedSession,
+        });
+      } catch {
+        dispatch({ type: 'action_details_load_failed', lifeActionId: lifeAction.id });
+      }
+    },
+    [getActionSessionsForLifeAction, getUnfinishedActionSession],
+  );
+
+  async function handleStartSession(): Promise<void> {
+    if (sessionMutationRef.current || state.actionDetails.status !== 'ready') {
+      return;
+    }
+
+    sessionMutationRef.current = true;
+    dispatch({ type: 'session_operation_started' });
+    try {
+      const result = await startLifeActionSession.execute({
+        lifeActionId: state.actionDetails.lifeAction.id,
+      });
+
+      if (!result.ok) {
+        dispatch({
+          type: 'session_operation_failed',
+          message: startSessionErrorMessage(result.error.code),
+        });
+        return;
+      }
+
+      dispatch({
+        type: 'session_started',
+        lifeAction: result.value.lifeAction,
+        session: result.value.session,
+      });
+    } catch {
+      dispatch({ type: 'session_operation_failed', message: 'Не удалось начать выполнение' });
+    } finally {
+      sessionMutationRef.current = false;
+    }
+  }
+
+  async function handlePauseSession(session: ActionSession): Promise<void> {
+    if (sessionMutationRef.current) {
+      return;
+    }
+
+    sessionMutationRef.current = true;
+    dispatch({ type: 'session_operation_started' });
+    try {
+      const result = await pauseActionSession.execute({ sessionId: session.id });
+
+      if (!result.ok) {
+        dispatch({
+          type: 'session_operation_failed',
+          message: pauseSessionErrorMessage(result.error.code),
+        });
+        return;
+      }
+
+      dispatch({ type: 'session_updated', session: result.value });
+    } catch {
+      dispatch({
+        type: 'session_operation_failed',
+        message: 'Не удалось поставить работу на паузу',
+      });
+    } finally {
+      sessionMutationRef.current = false;
+    }
+  }
+
+  async function handleResumeSession(session: ActionSession): Promise<void> {
+    if (sessionMutationRef.current) {
+      return;
+    }
+
+    sessionMutationRef.current = true;
+    dispatch({ type: 'session_operation_started' });
+    try {
+      const result = await resumeActionSession.execute({ sessionId: session.id });
+
+      if (!result.ok) {
+        dispatch({
+          type: 'session_operation_failed',
+          message: resumeSessionErrorMessage(),
+        });
+        return;
+      }
+
+      dispatch({ type: 'session_updated', session: result.value });
+    } catch {
+      dispatch({ type: 'session_operation_failed', message: resumeSessionErrorMessage() });
+    } finally {
+      sessionMutationRef.current = false;
+    }
+  }
+
   return (
     <TodayPageView
       currentDate={currentDate}
+      clock={clock}
       state={state}
       onRetry={() => void loadDecisions()}
       onOpenForm={() => dispatch({ type: 'open_form' })}
@@ -206,12 +340,23 @@ export function TodayPage({
         dispatch({ type: 'life_action_description_changed', description })
       }
       onLifeActionSubmit={(event) => void handleLifeActionSubmit(event)}
+      onOpenLifeAction={(lifeAction) => void loadLifeActionDetails(lifeAction)}
+      onBackToDecision={() => dispatch({ type: 'action_details_closed' })}
+      onRetryLifeAction={() => {
+        if (state.actionDetails.status !== 'closed') {
+          void loadLifeActionDetails(state.actionDetails.lifeAction);
+        }
+      }}
+      onStartSession={() => void handleStartSession()}
+      onPauseSession={(session) => void handlePauseSession(session)}
+      onResumeSession={(session) => void handleResumeSession(session)}
     />
   );
 }
 
 interface TodayPageViewProps {
   readonly currentDate: DayDate;
+  readonly clock: Pick<Clock, 'now'>;
   readonly state: TodayPageState;
   readonly onRetry: () => void;
   readonly onOpenForm: () => void;
@@ -229,10 +374,17 @@ interface TodayPageViewProps {
   readonly onLifeActionExpectedResultChange: (expectedResult: string) => void;
   readonly onLifeActionDescriptionChange: (description: string) => void;
   readonly onLifeActionSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  readonly onOpenLifeAction: (lifeAction: LifeAction) => void;
+  readonly onBackToDecision: () => void;
+  readonly onRetryLifeAction: () => void;
+  readonly onStartSession: () => void;
+  readonly onPauseSession: (session: ActionSession) => void;
+  readonly onResumeSession: (session: ActionSession) => void;
 }
 
 export function TodayPageView({
   currentDate,
+  clock,
   state,
   onRetry,
   onOpenForm,
@@ -250,6 +402,12 @@ export function TodayPageView({
   onLifeActionExpectedResultChange,
   onLifeActionDescriptionChange,
   onLifeActionSubmit,
+  onOpenLifeAction,
+  onBackToDecision,
+  onRetryLifeAction,
+  onStartSession,
+  onPauseSession,
+  onResumeSession,
 }: TodayPageViewProps) {
   return (
     <>
@@ -302,21 +460,40 @@ export function TodayPageView({
         ) : null}
       </main>
 
-      <DecisionDetailsPanel
-        details={state.details}
-        isFormOpen={state.isLifeActionFormOpen}
-        isSaving={state.isLifeActionSaving}
-        form={state.lifeActionForm}
-        formError={state.lifeActionFormError}
-        onClose={onCloseDecision}
-        onRetry={onRetryDecision}
-        onOpenForm={onOpenLifeActionForm}
-        onCloseForm={onCloseLifeActionForm}
-        onTitleChange={onLifeActionTitleChange}
-        onExpectedResultChange={onLifeActionExpectedResultChange}
-        onDescriptionChange={onLifeActionDescriptionChange}
-        onSubmit={onLifeActionSubmit}
-      />
+      {state.actionDetails.status === 'closed' ? (
+        <DecisionDetailsPanel
+          details={state.details}
+          isFormOpen={state.isLifeActionFormOpen}
+          isSaving={state.isLifeActionSaving}
+          form={state.lifeActionForm}
+          formError={state.lifeActionFormError}
+          onClose={onCloseDecision}
+          onRetry={onRetryDecision}
+          onOpenForm={onOpenLifeActionForm}
+          onCloseForm={onCloseLifeActionForm}
+          onTitleChange={onLifeActionTitleChange}
+          onExpectedResultChange={onLifeActionExpectedResultChange}
+          onDescriptionChange={onLifeActionDescriptionChange}
+          onSubmit={onLifeActionSubmit}
+          onOpenLifeAction={onOpenLifeAction}
+        />
+      ) : (
+        <LifeActionDetailsPanel
+          details={state.actionDetails}
+          decisionTitle={
+            state.details.status === 'ready' ? state.details.decision.title.toString() : null
+          }
+          clock={clock}
+          isMutating={state.isSessionMutating}
+          error={state.sessionError}
+          onClose={onCloseDecision}
+          onBack={onBackToDecision}
+          onRetry={onRetryLifeAction}
+          onStart={onStartSession}
+          onPause={onPauseSession}
+          onResume={onResumeSession}
+        />
+      )}
     </>
   );
 }

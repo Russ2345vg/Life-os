@@ -14,6 +14,7 @@ const CHANGED_AT = new Date('2026-08-01T09:00:00.000+09:00');
 interface CreateLifeActionDraftOptions {
   readonly createdAt?: Date;
   readonly decisionId?: EntityId;
+  readonly description?: string;
 }
 
 export function lifeActionId(value: string): EntityId {
@@ -28,6 +29,7 @@ export function createLifeActionDraft(
     id: lifeActionId(id),
     title: LifeActionTitle.create(`Действие ${id}`),
     ...(options.decisionId === undefined ? {} : { decisionId: options.decisionId }),
+    ...(options.description === undefined ? {} : { description: options.description }),
     createdAt: options.createdAt ?? CREATED_AT,
     eventId: lifeActionId(`${id}-draft-event`),
   });

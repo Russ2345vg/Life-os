@@ -9,6 +9,7 @@ import {
   type LifeActionStatus,
 } from '../../domain';
 import type { DecisionDetailsState, LifeActionFormState } from '../pages/TodayPageState';
+import { isLifeActionActivationKey } from '../pages/TodayPageState';
 
 interface DecisionDetailsPanelProps {
   readonly details: DecisionDetailsState;
@@ -24,6 +25,7 @@ interface DecisionDetailsPanelProps {
   readonly onExpectedResultChange: (expectedResult: string) => void;
   readonly onDescriptionChange: (description: string) => void;
   readonly onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  readonly onOpenLifeAction: (lifeAction: LifeAction) => void;
 }
 
 export function DecisionDetailsPanel({
@@ -40,6 +42,7 @@ export function DecisionDetailsPanel({
   onExpectedResultChange,
   onDescriptionChange,
   onSubmit,
+  onOpenLifeAction,
 }: DecisionDetailsPanelProps) {
   if (details.status === 'closed') {
     return null;
@@ -140,7 +143,11 @@ export function DecisionDetailsPanel({
               ) : (
                 <div className="linked-actions-list">
                   {details.lifeActions.map((lifeAction) => (
-                    <LifeActionSummary key={lifeAction.id.toString()} lifeAction={lifeAction} />
+                    <LifeActionSummary
+                      key={lifeAction.id.toString()}
+                      lifeAction={lifeAction}
+                      onOpen={onOpenLifeAction}
+                    />
                   ))}
                 </div>
               )}
@@ -228,9 +235,26 @@ function LifeActionForm({
   );
 }
 
-function LifeActionSummary({ lifeAction }: { readonly lifeAction: LifeAction }) {
+function LifeActionSummary({
+  lifeAction,
+  onOpen,
+}: {
+  readonly lifeAction: LifeAction;
+  readonly onOpen: (lifeAction: LifeAction) => void;
+}) {
   return (
-    <article className="linked-action-card">
+    <button
+      className="linked-action-card linked-action-card-button"
+      type="button"
+      aria-label={`Открыть действие «${lifeAction.title.toString()}»`}
+      onClick={() => onOpen(lifeAction)}
+      onKeyDown={(event) => {
+        if (isLifeActionActivationKey(event.key)) {
+          event.preventDefault();
+          onOpen(lifeAction);
+        }
+      }}
+    >
       <div className="linked-action-card-heading">
         <h4>{lifeAction.title.toString()}</h4>
         <span className={`action-status action-status-${lifeAction.status}`}>
@@ -239,7 +263,10 @@ function LifeActionSummary({ lifeAction }: { readonly lifeAction: LifeAction }) 
       </div>
       <p>{lifeAction.expectedResult?.toString() ?? 'Ожидаемый результат не указан'}</p>
       <time>{formatPlannedDate(lifeAction.plannedDate)}</time>
-    </article>
+      <span className="decision-open-hint" aria-hidden="true">
+        Открыть <span>→</span>
+      </span>
+    </button>
   );
 }
 
