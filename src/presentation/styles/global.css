@@ -74,6 +74,17 @@ h1 {
   line-height: 1.65;
 }
 
+.startup-error {
+  margin-bottom: var(--space-4);
+  color: var(--color-error);
+}
+
+.startup-guidance {
+  margin: 0;
+  color: var(--color-text-muted);
+  line-height: 1.6;
+}
+
 .foundation-status {
   display: flex;
   flex-wrap: wrap;

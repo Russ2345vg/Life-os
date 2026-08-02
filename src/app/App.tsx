@@ -1,5 +1,14 @@
 import { HomePage } from '../presentation/pages/HomePage';
+import { StartupPage } from '../presentation/pages/StartupPage';
+import { LifeOsApplicationProvider } from './providers';
 
 export function App() {
-  return <HomePage />;
+  return (
+    <LifeOsApplicationProvider
+      loadingFallback={<StartupPage status="loading" />}
+      errorFallback={() => <StartupPage status="error" />}
+    >
+      <HomePage />
+    </LifeOsApplicationProvider>
+  );
 }
