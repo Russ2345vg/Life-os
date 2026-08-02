@@ -6,6 +6,10 @@ export {
 export { ArchiveLifeAction, type ArchiveLifeActionInput } from './commands/ArchiveLifeAction';
 export { CancelLifeAction, type CancelLifeActionInput } from './commands/CancelLifeAction';
 export {
+  CancelLifeActionSafely,
+  type CancelLifeActionSafelyInput,
+} from './commands/CancelLifeActionSafely';
+export {
   CancelDecisionSafely,
   type CancelDecisionSafelyInput,
 } from './commands/CancelDecisionSafely';
@@ -40,6 +44,10 @@ export {
   UpdateDecisionDetails,
   type UpdateDecisionDetailsInput,
 } from './commands/UpdateDecisionDetails';
+export {
+  UpdateLifeActionDetails,
+  type UpdateLifeActionDetailsInput,
+} from './commands/UpdateLifeActionDetails';
 export { ResumeActionSession, type ResumeActionSessionInput } from './commands/ResumeActionSession';
 export { StartLifeAction, type StartLifeActionInput } from './commands/StartLifeAction';
 export {

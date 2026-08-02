@@ -12,6 +12,7 @@ import {
   ACTION_COMPLETION_CHOICE,
   type ActionCompletionChoice,
   type LifeActionDetailsState,
+  type LifeActionEditFormState,
   type SessionCompletionFormState,
 } from '../pages/TodayPageState';
 import { formatDuration, scheduleSessionTimer } from '../session/sessionTimer';
@@ -39,6 +40,22 @@ interface LifeActionDetailsPanelProps {
   readonly onActualResultChange: (actualResult: string) => void;
   readonly onComplete: (session: ActionSession) => void;
   readonly onRetryActionCompletion: () => void;
+  readonly isEditFormOpen: boolean;
+  readonly isEditing: boolean;
+  readonly editForm: LifeActionEditFormState;
+  readonly editError: string | null;
+  readonly isCancellationOpen: boolean;
+  readonly isCancelling: boolean;
+  readonly cancellationError: string | null;
+  readonly onOpenEditForm: () => void;
+  readonly onCloseEditForm: () => void;
+  readonly onEditTitleChange: (title: string) => void;
+  readonly onEditDescriptionChange: (description: string) => void;
+  readonly onEditExpectedResultChange: (expectedResult: string) => void;
+  readonly onEditSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  readonly onOpenCancellation: () => void;
+  readonly onCloseCancellation: () => void;
+  readonly onConfirmCancellation: () => void;
 }
 
 export function LifeActionDetailsPanel({
@@ -64,6 +81,22 @@ export function LifeActionDetailsPanel({
   onActualResultChange,
   onComplete,
   onRetryActionCompletion,
+  isEditFormOpen,
+  isEditing,
+  editForm,
+  editError,
+  isCancellationOpen,
+  isCancelling,
+  cancellationError,
+  onOpenEditForm,
+  onCloseEditForm,
+  onEditTitleChange,
+  onEditDescriptionChange,
+  onEditExpectedResultChange,
+  onEditSubmit,
+  onOpenCancellation,
+  onCloseCancellation,
+  onConfirmCancellation,
 }: LifeActionDetailsPanelProps) {
   const timerNow = useSessionTimer(details, clock);
 
@@ -141,13 +174,38 @@ export function LifeActionDetailsPanel({
               </div>
             </dl>
 
+            <LifeActionManagement
+              details={details}
+              isEditFormOpen={isEditFormOpen}
+              isEditing={isEditing}
+              editForm={editForm}
+              editError={editError}
+              isCancellationOpen={isCancellationOpen}
+              isCancelling={isCancelling}
+              isSessionMutating={isMutating}
+              cancellationError={cancellationError}
+              onOpenEditForm={onOpenEditForm}
+              onCloseEditForm={onCloseEditForm}
+              onEditTitleChange={onEditTitleChange}
+              onEditDescriptionChange={onEditDescriptionChange}
+              onEditExpectedResultChange={onEditExpectedResultChange}
+              onEditSubmit={onEditSubmit}
+              onOpenCancellation={onOpenCancellation}
+              onCloseCancellation={onCloseCancellation}
+              onConfirmCancellation={onConfirmCancellation}
+            />
+
             {details.lifeAction.status === LIFE_ACTION_STATUS.completed ? (
               <CompletedActionSummary details={details} />
+            ) : details.lifeAction.status === LIFE_ACTION_STATUS.cancelled ? (
+              <CancelledActionSummary details={details} />
             ) : (
               <SessionControls
                 details={details}
                 now={timerNow}
-                isMutating={isMutating}
+                isMutating={
+                  isMutating || isEditFormOpen || isEditing || isCancellationOpen || isCancelling
+                }
                 error={error}
                 isCompletionFormOpen={isCompletionFormOpen}
                 completionForm={completionForm}
@@ -171,6 +229,168 @@ export function LifeActionDetailsPanel({
         ) : null}
       </aside>
     </div>
+  );
+}
+
+function LifeActionManagement({
+  details,
+  isEditFormOpen,
+  isEditing,
+  editForm,
+  editError,
+  isCancellationOpen,
+  isCancelling,
+  isSessionMutating,
+  cancellationError,
+  onOpenEditForm,
+  onCloseEditForm,
+  onEditTitleChange,
+  onEditDescriptionChange,
+  onEditExpectedResultChange,
+  onEditSubmit,
+  onOpenCancellation,
+  onCloseCancellation,
+  onConfirmCancellation,
+}: {
+  readonly details: Extract<LifeActionDetailsState, { readonly status: 'ready' }>;
+  readonly isEditFormOpen: boolean;
+  readonly isEditing: boolean;
+  readonly editForm: LifeActionEditFormState;
+  readonly editError: string | null;
+  readonly isCancellationOpen: boolean;
+  readonly isCancelling: boolean;
+  readonly isSessionMutating: boolean;
+  readonly cancellationError: string | null;
+  readonly onOpenEditForm: () => void;
+  readonly onCloseEditForm: () => void;
+  readonly onEditTitleChange: (title: string) => void;
+  readonly onEditDescriptionChange: (description: string) => void;
+  readonly onEditExpectedResultChange: (expectedResult: string) => void;
+  readonly onEditSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  readonly onOpenCancellation: () => void;
+  readonly onCloseCancellation: () => void;
+  readonly onConfirmCancellation: () => void;
+}) {
+  const canEdit = details.lifeAction.status === LIFE_ACTION_STATUS.ready;
+  const canCancel =
+    details.lifeAction.status === LIFE_ACTION_STATUS.ready ||
+    details.lifeAction.status === LIFE_ACTION_STATUS.inProgress;
+
+  if (!canEdit && !canCancel) {
+    return null;
+  }
+
+  return (
+    <section className="life-action-management" aria-label="Управление действием">
+      {!isEditFormOpen && !isCancellationOpen ? (
+        <div className="life-action-management-actions">
+          {canEdit ? (
+            <button
+              className="secondary-button"
+              type="button"
+              disabled={isSessionMutating}
+              onClick={onOpenEditForm}
+            >
+              Редактировать
+            </button>
+          ) : null}
+          {canCancel ? (
+            <button
+              className="secondary-button life-action-cancel-button"
+              type="button"
+              disabled={isSessionMutating}
+              onClick={onOpenCancellation}
+            >
+              Отменить действие
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {isEditFormOpen ? (
+        <form className="life-action-edit-form" onSubmit={onEditSubmit} noValidate>
+          <h3>Редактирование действия</h3>
+          <label>
+            <span>Название действия *</span>
+            <input
+              value={editForm.title}
+              maxLength={200}
+              disabled={isEditing}
+              aria-required="true"
+              onChange={(event) => onEditTitleChange(event.target.value)}
+            />
+          </label>
+          <label>
+            <span>Описание</span>
+            <textarea
+              value={editForm.description}
+              rows={3}
+              disabled={isEditing}
+              onChange={(event) => onEditDescriptionChange(event.target.value)}
+            />
+          </label>
+          <label>
+            <span>Ожидаемый результат *</span>
+            <textarea
+              value={editForm.expectedResult}
+              rows={3}
+              maxLength={1000}
+              disabled={isEditing}
+              aria-required="true"
+              onChange={(event) => onEditExpectedResultChange(event.target.value)}
+            />
+          </label>
+          {editError === null ? null : (
+            <p className="form-error" role="alert">
+              {editError}
+            </p>
+          )}
+          <div className="form-actions">
+            <button className="primary-button" type="submit" disabled={isEditing}>
+              {isEditing ? 'Сохраняем…' : 'Сохранить изменения'}
+            </button>
+            <button
+              className="secondary-button"
+              type="button"
+              disabled={isEditing}
+              onClick={onCloseEditForm}
+            >
+              Отмена
+            </button>
+          </div>
+        </form>
+      ) : null}
+
+      {isCancellationOpen ? (
+        <div className="life-action-cancellation-confirmation">
+          <h3>Отменить это действие?</h3>
+          <p>Действие останется в истории, но продолжить его выполнение будет нельзя</p>
+          {cancellationError === null ? null : (
+            <p className="form-error" role="alert">
+              {cancellationError}
+            </p>
+          )}
+          <div className="form-actions">
+            <button
+              className="secondary-button life-action-cancel-button"
+              type="button"
+              disabled={isCancelling}
+              onClick={onConfirmCancellation}
+            >
+              {isCancelling ? 'Отменяем…' : 'Отменить действие'}
+            </button>
+            <button
+              className="secondary-button"
+              type="button"
+              disabled={isCancelling}
+              onClick={onCloseCancellation}
+            >
+              Назад
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -548,6 +768,39 @@ function CompletedActionSummary({
           <dd>{formatDuration(totalPausedDuration)}</dd>
         </div>
       </dl>
+    </section>
+  );
+}
+
+function CancelledActionSummary({
+  details,
+}: {
+  readonly details: Extract<LifeActionDetailsState, { readonly status: 'ready' }>;
+}) {
+  const completedSessions = details.sessions.filter((session) => session.isCompleted());
+  const totalWorkedDuration = completedSessions.reduce(
+    (total, session) => total + session.workedDurationAt(completionTime(session)),
+    0,
+  );
+
+  return (
+    <section className="cancelled-action-summary" aria-labelledby="cancelled-action-title">
+      <p className="section-kicker">Итог</p>
+      <h3 id="cancelled-action-title">Действие отменено</h3>
+      {completedSessions.length === 0 ? (
+        <p>Выполненных до отмены рабочих сессий нет.</p>
+      ) : (
+        <dl>
+          <div>
+            <dt>Завершённых сессий</dt>
+            <dd>{completedSessions.length}</dd>
+          </div>
+          <div>
+            <dt>Отработано до отмены</dt>
+            <dd>{formatDuration(totalWorkedDuration)}</dd>
+          </div>
+        </dl>
+      )}
     </section>
   );
 }

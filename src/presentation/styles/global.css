@@ -539,6 +539,32 @@ button:disabled {
   width: 100%;
 }
 
+.life-action-management {
+  margin-bottom: var(--space-6);
+}
+
+.life-action-management-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.life-action-management-actions button {
+  width: 100%;
+}
+
+.life-action-cancel-button {
+  color: #ddc58d;
+  border-color: #665b3d;
+  background: #171711;
+}
+
+.life-action-cancel-button:hover:not(:disabled) {
+  color: #ead6a5;
+  border-color: #88774c;
+  background: #201e14;
+}
+
 .decision-cancel-button {
   color: #ffb4ab;
   border-color: #70433e;
@@ -550,7 +576,9 @@ button:disabled {
 }
 
 .decision-edit-form,
-.decision-cancellation-confirmation {
+.decision-cancellation-confirmation,
+.life-action-edit-form,
+.life-action-cancellation-confirmation {
   display: grid;
   gap: var(--space-4);
   padding: var(--space-5);
@@ -562,24 +590,32 @@ button:disabled {
 .decision-edit-form h3,
 .decision-edit-form label,
 .decision-cancellation-confirmation h3,
-.decision-cancellation-confirmation p {
+.decision-cancellation-confirmation p,
+.life-action-edit-form h3,
+.life-action-edit-form label,
+.life-action-cancellation-confirmation h3,
+.life-action-cancellation-confirmation p {
   min-width: 0;
   margin: 0;
 }
 
-.decision-edit-form label {
+.decision-edit-form label,
+.life-action-edit-form label {
   display: grid;
   gap: var(--space-2);
 }
 
-.decision-edit-form label > span {
+.decision-edit-form label > span,
+.life-action-edit-form label > span {
   color: var(--color-text-muted);
   font-size: 0.875rem;
   font-weight: 650;
 }
 
 .decision-edit-form input,
-.decision-edit-form textarea {
+.decision-edit-form textarea,
+.life-action-edit-form input,
+.life-action-edit-form textarea {
   width: 100%;
   min-width: 0;
   min-height: 2.75rem;
@@ -591,12 +627,15 @@ button:disabled {
   background: #0d110f;
 }
 
-.decision-edit-form textarea {
+.decision-edit-form textarea,
+.life-action-edit-form textarea {
   resize: vertical;
 }
 
 .decision-edit-form input:focus,
-.decision-edit-form textarea:focus {
+.decision-edit-form textarea:focus,
+.life-action-edit-form input:focus,
+.life-action-edit-form textarea:focus {
   border-color: var(--color-accent-gold);
 }
 
@@ -606,6 +645,16 @@ button:disabled {
 }
 
 .decision-cancellation-confirmation > p:not(.form-error) {
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+.life-action-cancellation-confirmation {
+  border-color: #665b3d;
+  background: #171711;
+}
+
+.life-action-cancellation-confirmation > p:not(.form-error) {
   color: var(--color-text-muted);
   line-height: 1.5;
 }
@@ -1111,6 +1160,43 @@ button:disabled {
   background: #111814;
 }
 
+.cancelled-action-summary {
+  padding: clamp(var(--space-4), 4vw, var(--space-6));
+  color: var(--color-text-muted);
+  border: 1px solid #665b3d;
+  border-radius: var(--radius-medium);
+  background: #171711;
+}
+
+.cancelled-action-summary h3 {
+  margin: var(--space-2) 0 0;
+  color: #ddc58d;
+  font-size: 1.35rem;
+}
+
+.cancelled-action-summary > p:not(.section-kicker) {
+  margin: var(--space-4) 0 0;
+}
+
+.cancelled-action-summary dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: var(--space-4) 0 0;
+}
+
+.cancelled-action-summary dt {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.cancelled-action-summary dd {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+
 .completed-action-summary h3 {
   margin: var(--space-2) 0 0;
   color: #b9dfc2;
@@ -1367,11 +1453,20 @@ button:disabled {
   .decision-edit-form .form-actions,
   .decision-edit-form .form-actions button,
   .decision-cancellation-confirmation .form-actions,
-  .decision-cancellation-confirmation .form-actions button {
+  .decision-cancellation-confirmation .form-actions button,
+  .life-action-edit-form .form-actions,
+  .life-action-edit-form .form-actions button,
+  .life-action-cancellation-confirmation .form-actions,
+  .life-action-cancellation-confirmation .form-actions button {
     width: 100%;
   }
 
   .decision-management-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .life-action-management-actions,
+  .cancelled-action-summary dl {
     grid-template-columns: minmax(0, 1fr);
   }
 

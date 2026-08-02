@@ -1,5 +1,6 @@
 import type {
   CancelDecisionSafely,
+  CancelLifeActionSafely,
   CompleteActionSession,
   CompleteLifeAction,
   ConfirmDecisionFromActions,
@@ -8,6 +9,7 @@ import type {
   GetDecisionsForDate,
   GetLifeActionsForDecision,
   UpdateDecisionDetails,
+  UpdateLifeActionDetails,
 } from '../../application';
 import {
   ActionActualResult,
@@ -45,6 +47,12 @@ export interface DecisionConfirmationFormState {
 
 export interface DecisionEditFormState {
   readonly title: string;
+  readonly expectedResult: string;
+}
+
+export interface LifeActionEditFormState {
+  readonly title: string;
+  readonly description: string;
   readonly expectedResult: string;
 }
 
@@ -116,6 +124,13 @@ export interface TodayPageState {
   readonly isDecisionCancelling: boolean;
   readonly decisionCancellationError: string | null;
   readonly actionDetails: LifeActionDetailsState;
+  readonly isLifeActionEditFormOpen: boolean;
+  readonly isLifeActionEditing: boolean;
+  readonly lifeActionEditForm: LifeActionEditFormState;
+  readonly lifeActionEditError: string | null;
+  readonly isLifeActionCancellationOpen: boolean;
+  readonly isLifeActionCancelling: boolean;
+  readonly lifeActionCancellationError: string | null;
   readonly isSessionMutating: boolean;
   readonly sessionError: string | null;
   readonly isSessionCompletionFormOpen: boolean;
@@ -189,6 +204,22 @@ export type TodayPageAction =
     }
   | { readonly type: 'action_details_load_failed'; readonly lifeActionId: EntityId }
   | { readonly type: 'action_details_closed' }
+  | { readonly type: 'life_action_edit_form_opened' }
+  | { readonly type: 'life_action_edit_form_closed' }
+  | { readonly type: 'life_action_edit_title_changed'; readonly title: string }
+  | { readonly type: 'life_action_edit_description_changed'; readonly description: string }
+  | {
+      readonly type: 'life_action_edit_expected_result_changed';
+      readonly expectedResult: string;
+    }
+  | { readonly type: 'life_action_edit_started' }
+  | { readonly type: 'life_action_edit_failed'; readonly message: string }
+  | { readonly type: 'life_action_edit_succeeded'; readonly lifeAction: LifeAction }
+  | { readonly type: 'life_action_cancellation_opened' }
+  | { readonly type: 'life_action_cancellation_closed' }
+  | { readonly type: 'life_action_cancellation_started' }
+  | { readonly type: 'life_action_cancellation_failed'; readonly message: string }
+  | { readonly type: 'life_action_cancellation_succeeded'; readonly lifeAction: LifeAction }
   | { readonly type: 'session_operation_started' }
   | { readonly type: 'session_operation_failed'; readonly message: string }
   | {
@@ -244,6 +275,13 @@ export const INITIAL_TODAY_PAGE_STATE: TodayPageState = {
   isDecisionCancelling: false,
   decisionCancellationError: null,
   actionDetails: { status: 'closed' },
+  isLifeActionEditFormOpen: false,
+  isLifeActionEditing: false,
+  lifeActionEditForm: createEmptyLifeActionEditForm(),
+  lifeActionEditError: null,
+  isLifeActionCancellationOpen: false,
+  isLifeActionCancelling: false,
+  lifeActionCancellationError: null,
   isSessionMutating: false,
   sessionError: null,
   isSessionCompletionFormOpen: false,
@@ -305,6 +343,7 @@ export function todayPageReducer(state: TodayPageState, action: TodayPageAction)
         isDecisionCancelling: false,
         decisionCancellationError: null,
         actionDetails: { status: 'closed' },
+        ...closedLifeActionManagementState(),
         isSessionMutating: false,
         sessionError: null,
         isSessionCompletionFormOpen: false,
@@ -349,6 +388,7 @@ export function todayPageReducer(state: TodayPageState, action: TodayPageAction)
         isDecisionCancelling: false,
         decisionCancellationError: null,
         actionDetails: { status: 'closed' },
+        ...closedLifeActionManagementState(),
         isSessionMutating: false,
         sessionError: null,
         isSessionCompletionFormOpen: false,
@@ -539,6 +579,7 @@ export function todayPageReducer(state: TodayPageState, action: TodayPageAction)
       return {
         ...state,
         actionDetails: { status: 'loading', lifeAction: action.lifeAction },
+        ...closedLifeActionManagementState(),
         isLifeActionFormOpen: false,
         isSessionMutating: false,
         sessionError: null,
@@ -581,10 +622,118 @@ export function todayPageReducer(state: TodayPageState, action: TodayPageAction)
       return {
         ...state,
         actionDetails: { status: 'closed' },
+        ...closedLifeActionManagementState(),
         isSessionMutating: false,
         sessionError: null,
         isSessionCompletionFormOpen: false,
         sessionCompletionForm: createEmptySessionCompletionForm(),
+        hasPendingActionCompletion: false,
+      };
+    case 'life_action_edit_form_opened':
+      if (state.actionDetails.status !== 'ready') {
+        return state;
+      }
+      return {
+        ...state,
+        isLifeActionEditFormOpen: true,
+        lifeActionEditForm: {
+          title: state.actionDetails.lifeAction.title.toString(),
+          description: state.actionDetails.lifeAction.description ?? '',
+          expectedResult: state.actionDetails.lifeAction.expectedResult?.toString() ?? '',
+        },
+        lifeActionEditError: null,
+        isLifeActionCancellationOpen: false,
+        lifeActionCancellationError: null,
+      };
+    case 'life_action_edit_form_closed':
+      return {
+        ...state,
+        isLifeActionEditFormOpen: false,
+        lifeActionEditError: null,
+      };
+    case 'life_action_edit_title_changed':
+      return {
+        ...state,
+        lifeActionEditForm: { ...state.lifeActionEditForm, title: action.title },
+        lifeActionEditError: null,
+      };
+    case 'life_action_edit_description_changed':
+      return {
+        ...state,
+        lifeActionEditForm: { ...state.lifeActionEditForm, description: action.description },
+        lifeActionEditError: null,
+      };
+    case 'life_action_edit_expected_result_changed':
+      return {
+        ...state,
+        lifeActionEditForm: {
+          ...state.lifeActionEditForm,
+          expectedResult: action.expectedResult,
+        },
+        lifeActionEditError: null,
+      };
+    case 'life_action_edit_started':
+      return { ...state, isLifeActionEditing: true, lifeActionEditError: null };
+    case 'life_action_edit_failed':
+      return { ...state, isLifeActionEditing: false, lifeActionEditError: action.message };
+    case 'life_action_edit_succeeded':
+      if (
+        state.actionDetails.status !== 'ready' ||
+        !state.actionDetails.lifeAction.id.equals(action.lifeAction.id)
+      ) {
+        return state;
+      }
+      return {
+        ...state,
+        details: replaceLifeActionInDecisionDetails(state.details, action.lifeAction),
+        actionDetails: { ...state.actionDetails, lifeAction: action.lifeAction },
+        isLifeActionEditFormOpen: false,
+        isLifeActionEditing: false,
+        lifeActionEditForm: createEmptyLifeActionEditForm(),
+        lifeActionEditError: null,
+      };
+    case 'life_action_cancellation_opened':
+      return {
+        ...state,
+        isLifeActionCancellationOpen: true,
+        lifeActionCancellationError: null,
+        isLifeActionEditFormOpen: false,
+        lifeActionEditError: null,
+      };
+    case 'life_action_cancellation_closed':
+      return {
+        ...state,
+        isLifeActionCancellationOpen: false,
+        lifeActionCancellationError: null,
+      };
+    case 'life_action_cancellation_started':
+      return { ...state, isLifeActionCancelling: true, lifeActionCancellationError: null };
+    case 'life_action_cancellation_failed':
+      return {
+        ...state,
+        isLifeActionCancelling: false,
+        lifeActionCancellationError: action.message,
+      };
+    case 'life_action_cancellation_succeeded':
+      if (
+        state.actionDetails.status !== 'ready' ||
+        !state.actionDetails.lifeAction.id.equals(action.lifeAction.id)
+      ) {
+        return state;
+      }
+      return {
+        ...state,
+        details: replaceLifeActionInDecisionDetails(state.details, action.lifeAction),
+        actionDetails: {
+          ...state.actionDetails,
+          lifeAction: action.lifeAction,
+          unfinishedSession: null,
+        },
+        isLifeActionCancellationOpen: false,
+        isLifeActionCancelling: false,
+        lifeActionCancellationError: null,
+        isLifeActionEditFormOpen: false,
+        isSessionCompletionFormOpen: false,
         hasPendingActionCompletion: false,
       };
     case 'session_operation_started':
@@ -786,6 +935,81 @@ export function validateLifeActionForm(form: LifeActionFormState): string | null
   }
 
   return null;
+}
+
+export function validateLifeActionEditForm(form: LifeActionEditFormState): string | null {
+  if (form.title.trim().length === 0) {
+    return 'Введите название действия';
+  }
+
+  if (form.expectedResult.trim().length === 0) {
+    return 'Укажите ожидаемый результат';
+  }
+
+  return null;
+}
+
+export async function updateLifeActionDetailsResult(input: {
+  readonly lifeActionId: EntityId;
+  readonly form: LifeActionEditFormState;
+  readonly updateLifeActionDetails: Pick<UpdateLifeActionDetails, 'execute'>;
+}): Promise<
+  | { readonly ok: true; readonly lifeAction: LifeAction }
+  | { readonly ok: false; readonly message: string }
+> {
+  const result = await input.updateLifeActionDetails.execute({
+    lifeActionId: input.lifeActionId,
+    title: input.form.title,
+    description: input.form.description,
+    expectedResult: input.form.expectedResult,
+  });
+
+  return result.ok
+    ? { ok: true, lifeAction: result.value }
+    : { ok: false, message: lifeActionEditErrorMessage(result.error.code) };
+}
+
+export function lifeActionEditErrorMessage(code: string): string {
+  switch (code) {
+    case 'action.title_required':
+    case 'life_action_title.invalid':
+      return 'Введите название действия';
+    case 'action.expected_result_required':
+    case 'action_expected_result.invalid':
+      return 'Укажите ожидаемый результат';
+    case 'action.cannot_edit':
+      return 'Это действие уже нельзя редактировать';
+    default:
+      return 'Не удалось сохранить изменения';
+  }
+}
+
+export async function cancelLifeActionResult(input: {
+  readonly lifeActionId: EntityId;
+  readonly cancelLifeActionSafely: Pick<CancelLifeActionSafely, 'execute'>;
+}): Promise<
+  | { readonly ok: true; readonly lifeAction: LifeAction }
+  | { readonly ok: false; readonly message: string }
+> {
+  const result = await input.cancelLifeActionSafely.execute({
+    lifeActionId: input.lifeActionId,
+  });
+
+  return result.ok
+    ? { ok: true, lifeAction: result.value }
+    : { ok: false, message: lifeActionCancellationErrorMessage(result.error.code) };
+}
+
+export function lifeActionCancellationErrorMessage(code: string): string {
+  if (code === 'action.session_unfinished') {
+    return 'Сначала завершите текущую сессию';
+  }
+
+  if (code === 'action.cannot_cancel') {
+    return 'Это действие уже нельзя отменить';
+  }
+
+  return 'Не удалось отменить действие';
 }
 
 export function validateDecisionConfirmationForm(
@@ -1101,6 +1325,31 @@ function createEmptyForm(): DecisionFormState {
 
 function createEmptyLifeActionForm(): LifeActionFormState {
   return { title: '', expectedResult: '', description: '' };
+}
+
+function createEmptyLifeActionEditForm(): LifeActionEditFormState {
+  return { title: '', description: '', expectedResult: '' };
+}
+
+function closedLifeActionManagementState(): Pick<
+  TodayPageState,
+  | 'isLifeActionEditFormOpen'
+  | 'isLifeActionEditing'
+  | 'lifeActionEditForm'
+  | 'lifeActionEditError'
+  | 'isLifeActionCancellationOpen'
+  | 'isLifeActionCancelling'
+  | 'lifeActionCancellationError'
+> {
+  return {
+    isLifeActionEditFormOpen: false,
+    isLifeActionEditing: false,
+    lifeActionEditForm: createEmptyLifeActionEditForm(),
+    lifeActionEditError: null,
+    isLifeActionCancellationOpen: false,
+    isLifeActionCancelling: false,
+    lifeActionCancellationError: null,
+  };
 }
 
 function createEmptyDecisionConfirmationForm(): DecisionConfirmationFormState {

@@ -4,6 +4,7 @@ export { ActionExpectedResult } from './ActionExpectedResult';
 export {
   LifeAction,
   type LifeActionDraftInput,
+  type LifeActionDetailsUpdateInput,
   type LifeActionReadyInput,
   type LifeActionRehydrationData,
 } from './LifeAction';
@@ -13,6 +14,7 @@ export {
   LifeActionArchived,
   LifeActionCancelled,
   LifeActionCompleted,
+  LifeActionDetailsUpdated,
   LifeActionDraftCreated,
   LifeActionReady,
   LifeActionRescheduled,

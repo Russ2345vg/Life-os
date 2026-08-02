@@ -28,6 +28,7 @@ import { TodayPageView } from './TodayPage';
 import {
   ACTION_COMPLETION_CHOICE,
   ACTION_COMPLETION_FAILED_MESSAGE,
+  cancelLifeActionResult,
   completeSessionWorkflow,
   completeSessionErrorMessage,
   cancelDecisionResult,
@@ -40,14 +41,18 @@ import {
   INITIAL_TODAY_PAGE_STATE,
   isDecisionActivationKey,
   isLifeActionActivationKey,
+  lifeActionCancellationErrorMessage,
+  lifeActionEditErrorMessage,
   pauseSessionErrorMessage,
   retryLifeActionCompletion,
   resumeSessionErrorMessage,
   startSessionErrorMessage,
   todayPageReducer,
   updateDecisionDetailsResult,
+  updateLifeActionDetailsResult,
   validateDecisionForm,
   validateLifeActionForm,
+  validateLifeActionEditForm,
   validateDecisionConfirmationForm,
   validateDecisionEditForm,
   validateSessionCompletionForm,
@@ -716,6 +721,196 @@ describe('TodayPage view and workflow', () => {
     expect(renderView(succeeded)).not.toContain('Редактировать');
   });
 
+  it('показывает редактирование только для ready-действия и заполняет форму текущими значениями', () => {
+    const decision = createPlannedDecision('action-edit-visible', DATE);
+    const ready = createReadyLifeAction('action-edit-ready', DATE, {
+      decisionId: decision.id,
+      description: 'Текущее описание',
+    });
+    const inProgress = markLifeActionInProgress(
+      createReadyLifeAction('action-edit-progress', DATE, { decisionId: decision.id }),
+    );
+    const completed = completeLifeAction(
+      createReadyLifeAction('action-edit-completed', DATE, { decisionId: decision.id }),
+    );
+    const cancelled = cancelLifeAction(
+      createReadyLifeAction('action-edit-cancelled', DATE, { decisionId: decision.id }),
+    );
+
+    const readyMarkup = renderView(createActionDetailsState(decision, ready));
+    const opened = todayPageReducer(createActionDetailsState(decision, ready), {
+      type: 'life_action_edit_form_opened',
+    });
+    const openedMarkup = renderView(opened);
+    const closed = todayPageReducer(opened, { type: 'life_action_edit_form_closed' });
+
+    expect(readyMarkup).toContain('Редактировать');
+    expect(openedMarkup).toContain('Редактирование действия');
+    expect(openedMarkup).toContain('Действие action-edit-ready');
+    expect(openedMarkup).toContain('Текущее описание');
+    expect(openedMarkup).toContain('Результат action-edit-ready');
+    expect(renderView(closed)).not.toContain('Редактирование действия');
+    for (const action of [inProgress, completed, cancelled]) {
+      expect(renderView(createActionDetailsState(decision, action))).not.toContain(
+        '>Редактировать<',
+      );
+    }
+  });
+
+  it('проверяет поля редактирования и обновляет панель и список действия без F5', async () => {
+    const decision = createPlannedDecision('action-edit-success', DATE);
+    const current = createReadyLifeAction('action-edit-success', DATE, { decisionId: decision.id });
+    const updated = createReadyLifeAction('action-edit-success', DATE, {
+      decisionId: decision.id,
+      description: 'Новое описание',
+    });
+    updated.updateDetails({
+      title: current.title,
+      description: 'Новое описание',
+      expectedResult: current.expectedResult!,
+      occurredAt: new Date('2026-08-02T12:00:00.000+09:00'),
+      eventId: EntityId.create('ui-details-event'),
+    });
+    const execute = vi.fn().mockResolvedValue(success(updated));
+    const form = {
+      title: updated.title.toString(),
+      description: 'Новое описание',
+      expectedResult: updated.expectedResult!.toString(),
+    };
+
+    expect(validateLifeActionEditForm({ ...form, title: ' ' })).toBe('Введите название действия');
+    expect(validateLifeActionEditForm({ ...form, expectedResult: ' ' })).toBe(
+      'Укажите ожидаемый результат',
+    );
+    const result = await updateLifeActionDetailsResult({
+      lifeActionId: current.id,
+      form,
+      updateLifeActionDetails: { execute },
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      throw new Error('Expected updated LifeAction');
+    }
+    const succeeded = todayPageReducer(
+      {
+        ...createActionDetailsState(decision, current),
+        isLifeActionEditFormOpen: true,
+        lifeActionEditForm: form,
+      },
+      { type: 'life_action_edit_succeeded', lifeAction: result.lifeAction },
+    );
+
+    expect(succeeded.isLifeActionEditFormOpen).toBe(false);
+    expect(succeeded.actionDetails.status === 'ready' && succeeded.actionDetails.lifeAction).toBe(
+      updated,
+    );
+    expect(succeeded.details.status === 'ready' && succeeded.details.lifeActions[0]).toBe(updated);
+    expect(renderView(succeeded)).toContain('Новое описание');
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
+  it('блокирует повторное сохранение и сохраняет введённые значения после понятной ошибки', () => {
+    const decision = createPlannedDecision('action-edit-failed', DATE);
+    const action = createReadyLifeAction('action-edit-failed', DATE, { decisionId: decision.id });
+    const form = {
+      title: 'Введённое название',
+      description: 'Введённое описание',
+      expectedResult: 'Введённый результат',
+    };
+    const pending = {
+      ...createActionDetailsState(decision, action),
+      isLifeActionEditFormOpen: true,
+      isLifeActionEditing: true,
+      lifeActionEditForm: form,
+    } satisfies TodayPageState;
+    const failed = todayPageReducer(pending, {
+      type: 'life_action_edit_failed',
+      message: lifeActionEditErrorMessage('action.cannot_edit'),
+    });
+
+    expect(renderView(pending).match(/disabled=""/g)?.length).toBeGreaterThanOrEqual(5);
+    expect(failed.lifeActionEditForm).toBe(form);
+    expect(renderView(failed)).toContain('Введённое описание');
+    expect(renderView(failed)).toContain('Это действие уже нельзя редактировать');
+    expect(renderView(failed)).not.toContain('action.cannot_edit');
+  });
+
+  it('показывает спокойное подтверждение отмены только для ready и in_progress', () => {
+    const decision = createPlannedDecision('action-cancel-visible', DATE);
+    const ready = createReadyLifeAction('action-cancel-ready', DATE, { decisionId: decision.id });
+    const progress = markLifeActionInProgress(
+      createReadyLifeAction('action-cancel-progress', DATE, { decisionId: decision.id }),
+    );
+    const completed = completeLifeAction(
+      createReadyLifeAction('action-cancel-completed', DATE, { decisionId: decision.id }),
+    );
+    const initial = createActionDetailsState(decision, ready);
+    const opened = todayPageReducer(initial, { type: 'life_action_cancellation_opened' });
+    const backed = todayPageReducer(opened, { type: 'life_action_cancellation_closed' });
+    const markup = renderView(opened);
+
+    expect(renderView(initial)).toContain('Отменить действие');
+    expect(renderView(createActionDetailsState(decision, progress))).toContain('Отменить действие');
+    expect(renderView(createActionDetailsState(decision, completed))).not.toContain(
+      'Отменить действие',
+    );
+    expect(markup).toContain('Отменить это действие?');
+    expect(markup).toContain(
+      'Действие останется в истории, но продолжить его выполнение будет нельзя',
+    );
+    expect(markup).toContain('Назад');
+    expect(backed.actionDetails.status === 'ready' && backed.actionDetails.lifeAction).toBe(ready);
+  });
+
+  it('показывает блокировку активной сессией без внутренних кодов', async () => {
+    const action = markLifeActionInProgress(createReadyLifeAction('active-cancel', DATE));
+    const execute = vi
+      .fn()
+      .mockResolvedValue(
+        failure(new DomainError('action.session_unfinished', 'internal session error')),
+      );
+    const result = await cancelLifeActionResult({
+      lifeActionId: action.id,
+      cancelLifeActionSafely: { execute },
+    });
+
+    expect(result).toEqual({ ok: false, message: 'Сначала завершите текущую сессию' });
+    expect(lifeActionCancellationErrorMessage('action.session_unfinished')).toBe(
+      'Сначала завершите текущую сессию',
+    );
+  });
+
+  it('после отмены обновляет карточки, скрывает управление и сохраняет историю сессий', () => {
+    const decision = createPlannedDecision('action-cancel-success', DATE);
+    const current = markLifeActionInProgress(
+      createReadyLifeAction('action-cancel-success', DATE, { decisionId: decision.id }),
+    );
+    const completedSession = completeSession(createSession('before-cancel', current.id));
+    const cancelled = cancelLifeAction(
+      markLifeActionInProgress(
+        createReadyLifeAction('action-cancel-success', DATE, { decisionId: decision.id }),
+      ),
+    );
+    const state = todayPageReducer(
+      {
+        ...createActionDetailsState(decision, current, [completedSession], null),
+        isLifeActionCancellationOpen: true,
+      },
+      { type: 'life_action_cancellation_succeeded', lifeAction: cancelled },
+    );
+    const markup = renderView(state);
+
+    expect(markup).toContain('Отменено');
+    expect(markup).toContain('Действие отменено');
+    expect(markup).toContain('Завершённые сессии');
+    expect(markup).toContain('Результат рабочей сессии');
+    expect(markup).not.toContain('Начать выполнение');
+    expect(markup).not.toContain('Продолжить новой сессией');
+    expect(markup).not.toContain('>Редактировать<');
+    expect(markup).not.toContain('Отменить это действие?');
+    expect(state.details.status === 'ready' && state.details.lifeActions[0]).toBe(cancelled);
+  });
+
   it('shows action details, decision relation, and back navigation without internal fields', () => {
     const decision = createPlannedDecision('action-details', DATE);
     const action = createReadyLifeAction('details-action', DATE, {
@@ -1318,6 +1513,15 @@ function renderView(state: TodayPageState): string {
       onActionActualResultChange: NOOP,
       onCompleteSession: NOOP,
       onRetryLifeActionCompletion: NOOP,
+      onOpenLifeActionEditForm: NOOP,
+      onCloseLifeActionEditForm: NOOP,
+      onLifeActionEditTitleChange: NOOP,
+      onLifeActionEditDescriptionChange: NOOP,
+      onLifeActionEditExpectedResultChange: NOOP,
+      onLifeActionEditSubmit: NOOP,
+      onOpenLifeActionCancellation: NOOP,
+      onCloseLifeActionCancellation: NOOP,
+      onConfirmLifeActionCancellation: NOOP,
     }),
   );
 }

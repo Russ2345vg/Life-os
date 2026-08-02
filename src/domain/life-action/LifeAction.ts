@@ -13,6 +13,7 @@ import {
   LifeActionArchived,
   LifeActionCancelled,
   LifeActionCompleted,
+  LifeActionDetailsUpdated,
   LifeActionDraftCreated,
   LifeActionReady,
   LifeActionRescheduled,
@@ -31,6 +32,14 @@ export interface LifeActionDraftInput {
 export interface LifeActionReadyInput {
   readonly expectedResult: ActionExpectedResult;
   readonly plannedDate: DayDate;
+  readonly occurredAt: Date;
+  readonly eventId: EntityId;
+}
+
+export interface LifeActionDetailsUpdateInput {
+  readonly title: LifeActionTitle;
+  readonly description: string | null;
+  readonly expectedResult: ActionExpectedResult;
   readonly occurredAt: Date;
   readonly eventId: EntityId;
 }
@@ -56,8 +65,8 @@ export interface LifeActionRehydrationData {
 }
 
 export class LifeAction extends Entity {
-  readonly #title: LifeActionTitle;
-  readonly #description: string | null;
+  #title: LifeActionTitle;
+  #description: string | null;
   readonly #decisionId: EntityId | null;
   readonly #createdAt: Date;
   readonly #domainEvents: DomainEvent[];
@@ -254,6 +263,43 @@ export class LifeAction extends Entity {
     this.#startedAt = copyDate(occurredAt);
     this.#version += 1;
     this.#domainEvents.push(new LifeActionStarted(eventId, this.id, this.#plannedDate, occurredAt));
+  }
+
+  public updateDetails(input: LifeActionDetailsUpdateInput): boolean {
+    this.assertNotArchived();
+
+    if (this.#status !== LIFE_ACTION_STATUS.ready) {
+      throw new DomainError('action.cannot_edit', 'Редактировать можно только готовое действие.');
+    }
+
+    assertLifeActionTitle(input.title);
+    assertExpectedResult(input.expectedResult);
+    const description = normalizeOptionalDescription(input.description);
+
+    if (
+      this.#title.equals(input.title) &&
+      this.#description === description &&
+      this.#expectedResult?.equals(input.expectedResult)
+    ) {
+      return false;
+    }
+
+    assertValidDate(input.occurredAt, 'Время изменения действия');
+    this.#title = input.title;
+    this.#description = description;
+    this.#expectedResult = input.expectedResult;
+    this.#version += 1;
+    this.#domainEvents.push(
+      new LifeActionDetailsUpdated(
+        input.eventId,
+        this.id,
+        input.title,
+        description,
+        input.expectedResult,
+        input.occurredAt,
+      ),
+    );
+    return true;
   }
 
   public reschedule(newDate: DayDate, occurredAt: Date, eventId: EntityId): void {

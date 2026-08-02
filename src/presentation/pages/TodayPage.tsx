@@ -8,6 +8,7 @@ import {
 } from 'react';
 import type {
   CancelDecisionSafely,
+  CancelLifeActionSafely,
   Clock,
   CompleteActionSession,
   CompleteLifeAction,
@@ -23,6 +24,7 @@ import type {
   ResumeActionSession,
   StartLifeActionSession,
   UpdateDecisionDetails,
+  UpdateLifeActionDetails,
 } from '../../application';
 import {
   DECISION_KIND,
@@ -40,6 +42,7 @@ import { DecisionDetailsPanel } from '../components/DecisionDetailsPanel';
 import { LifeActionDetailsPanel } from '../components/LifeActionDetailsPanel';
 import {
   completeSessionWorkflow,
+  cancelLifeActionResult,
   cancelDecisionResult,
   confirmDecisionResult,
   createDecisionAndReload,
@@ -52,8 +55,10 @@ import {
   startSessionErrorMessage,
   todayPageReducer,
   updateDecisionDetailsResult,
+  updateLifeActionDetailsResult,
   validateDecisionForm,
   validateLifeActionForm,
+  validateLifeActionEditForm,
   validateDecisionConfirmationForm,
   validateDecisionEditForm,
   validateSessionCompletionForm,
@@ -77,6 +82,8 @@ interface TodayPageProps {
   readonly confirmDecisionFromActions: Pick<ConfirmDecisionFromActions, 'execute'>;
   readonly updateDecisionDetails: Pick<UpdateDecisionDetails, 'execute'>;
   readonly cancelDecisionSafely: Pick<CancelDecisionSafely, 'execute'>;
+  readonly updateLifeActionDetails: Pick<UpdateLifeActionDetails, 'execute'>;
+  readonly cancelLifeActionSafely: Pick<CancelLifeActionSafely, 'execute'>;
   readonly getActionSessionsForLifeAction: Pick<GetActionSessionsForLifeAction, 'execute'>;
   readonly getUnfinishedActionSession: Pick<GetUnfinishedActionSession, 'execute'>;
   readonly clock: Pick<Clock, 'now'>;
@@ -97,6 +104,8 @@ export function TodayPage({
   confirmDecisionFromActions,
   updateDecisionDetails,
   cancelDecisionSafely,
+  updateLifeActionDetails,
+  cancelLifeActionSafely,
   getActionSessionsForLifeAction,
   getUnfinishedActionSession,
   clock,
@@ -108,6 +117,8 @@ export function TodayPage({
   const decisionConfirmationRef = useRef(false);
   const decisionEditRef = useRef(false);
   const decisionCancellationRef = useRef(false);
+  const lifeActionEditRef = useRef(false);
+  const lifeActionCancellationRef = useRef(false);
 
   const loadDecisions = useCallback(async () => {
     dispatch({ type: 'load_started' });
@@ -328,6 +339,70 @@ export function TodayPage({
       dispatch({ type: 'decision_cancellation_failed', message: 'Не удалось отменить решение' });
     } finally {
       decisionCancellationRef.current = false;
+    }
+  }
+
+  async function handleLifeActionEdit(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+
+    if (lifeActionEditRef.current || state.actionDetails.status !== 'ready') {
+      return;
+    }
+
+    const validationError = validateLifeActionEditForm(state.lifeActionEditForm);
+    if (validationError !== null) {
+      dispatch({ type: 'life_action_edit_failed', message: validationError });
+      return;
+    }
+
+    lifeActionEditRef.current = true;
+    dispatch({ type: 'life_action_edit_started' });
+    try {
+      const result = await updateLifeActionDetailsResult({
+        lifeActionId: state.actionDetails.lifeAction.id,
+        form: state.lifeActionEditForm,
+        updateLifeActionDetails,
+      });
+
+      if (!result.ok) {
+        dispatch({ type: 'life_action_edit_failed', message: result.message });
+        return;
+      }
+
+      dispatch({ type: 'life_action_edit_succeeded', lifeAction: result.lifeAction });
+    } catch {
+      dispatch({ type: 'life_action_edit_failed', message: 'Не удалось сохранить изменения' });
+    } finally {
+      lifeActionEditRef.current = false;
+    }
+  }
+
+  async function handleLifeActionCancellation(): Promise<void> {
+    if (lifeActionCancellationRef.current || state.actionDetails.status !== 'ready') {
+      return;
+    }
+
+    lifeActionCancellationRef.current = true;
+    dispatch({ type: 'life_action_cancellation_started' });
+    try {
+      const result = await cancelLifeActionResult({
+        lifeActionId: state.actionDetails.lifeAction.id,
+        cancelLifeActionSafely,
+      });
+
+      if (!result.ok) {
+        dispatch({ type: 'life_action_cancellation_failed', message: result.message });
+        return;
+      }
+
+      dispatch({ type: 'life_action_cancellation_succeeded', lifeAction: result.lifeAction });
+    } catch {
+      dispatch({
+        type: 'life_action_cancellation_failed',
+        message: 'Не удалось отменить действие',
+      });
+    } finally {
+      lifeActionCancellationRef.current = false;
     }
   }
 
@@ -597,6 +672,21 @@ export function TodayPage({
       }
       onCompleteSession={(session) => void handleCompleteSession(session)}
       onRetryLifeActionCompletion={() => void handleRetryLifeActionCompletion()}
+      onOpenLifeActionEditForm={() => dispatch({ type: 'life_action_edit_form_opened' })}
+      onCloseLifeActionEditForm={() => dispatch({ type: 'life_action_edit_form_closed' })}
+      onLifeActionEditTitleChange={(title) =>
+        dispatch({ type: 'life_action_edit_title_changed', title })
+      }
+      onLifeActionEditDescriptionChange={(description) =>
+        dispatch({ type: 'life_action_edit_description_changed', description })
+      }
+      onLifeActionEditExpectedResultChange={(expectedResult) =>
+        dispatch({ type: 'life_action_edit_expected_result_changed', expectedResult })
+      }
+      onLifeActionEditSubmit={(event) => void handleLifeActionEdit(event)}
+      onOpenLifeActionCancellation={() => dispatch({ type: 'life_action_cancellation_opened' })}
+      onCloseLifeActionCancellation={() => dispatch({ type: 'life_action_cancellation_closed' })}
+      onConfirmLifeActionCancellation={() => void handleLifeActionCancellation()}
     />
   );
 }
@@ -647,6 +737,15 @@ interface TodayPageViewProps {
   readonly onActionActualResultChange: (actualResult: string) => void;
   readonly onCompleteSession: (session: ActionSession) => void;
   readonly onRetryLifeActionCompletion: () => void;
+  readonly onOpenLifeActionEditForm: () => void;
+  readonly onCloseLifeActionEditForm: () => void;
+  readonly onLifeActionEditTitleChange: (title: string) => void;
+  readonly onLifeActionEditDescriptionChange: (description: string) => void;
+  readonly onLifeActionEditExpectedResultChange: (expectedResult: string) => void;
+  readonly onLifeActionEditSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  readonly onOpenLifeActionCancellation: () => void;
+  readonly onCloseLifeActionCancellation: () => void;
+  readonly onConfirmLifeActionCancellation: () => void;
 }
 
 export function TodayPageView({
@@ -695,6 +794,15 @@ export function TodayPageView({
   onActionActualResultChange,
   onCompleteSession,
   onRetryLifeActionCompletion,
+  onOpenLifeActionEditForm,
+  onCloseLifeActionEditForm,
+  onLifeActionEditTitleChange,
+  onLifeActionEditDescriptionChange,
+  onLifeActionEditExpectedResultChange,
+  onLifeActionEditSubmit,
+  onOpenLifeActionCancellation,
+  onCloseLifeActionCancellation,
+  onConfirmLifeActionCancellation,
 }: TodayPageViewProps) {
   return (
     <>
@@ -813,6 +921,22 @@ export function TodayPageView({
           onActualResultChange={onActionActualResultChange}
           onComplete={onCompleteSession}
           onRetryActionCompletion={onRetryLifeActionCompletion}
+          isEditFormOpen={state.isLifeActionEditFormOpen}
+          isEditing={state.isLifeActionEditing}
+          editForm={state.lifeActionEditForm}
+          editError={state.lifeActionEditError}
+          isCancellationOpen={state.isLifeActionCancellationOpen}
+          isCancelling={state.isLifeActionCancelling}
+          cancellationError={state.lifeActionCancellationError}
+          onOpenEditForm={onOpenLifeActionEditForm}
+          onCloseEditForm={onCloseLifeActionEditForm}
+          onEditTitleChange={onLifeActionEditTitleChange}
+          onEditDescriptionChange={onLifeActionEditDescriptionChange}
+          onEditExpectedResultChange={onLifeActionEditExpectedResultChange}
+          onEditSubmit={onLifeActionEditSubmit}
+          onOpenCancellation={onOpenLifeActionCancellation}
+          onCloseCancellation={onCloseLifeActionCancellation}
+          onConfirmCancellation={onConfirmLifeActionCancellation}
         />
       )}
     </>

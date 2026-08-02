@@ -10,6 +10,7 @@ import { LIFE_ACTION_STATUS } from './LifeActionStatus';
 import { LifeActionTitle } from './LifeActionTitle';
 import { LifeActionCancelled } from './events/LifeActionCancelled';
 import { LifeActionCompleted } from './events/LifeActionCompleted';
+import { LifeActionDetailsUpdated } from './events/LifeActionDetailsUpdated';
 import { LifeActionDraftCreated } from './events/LifeActionDraftCreated';
 import { LifeActionReady } from './events/LifeActionReady';
 import { LifeActionRescheduled } from './events/LifeActionRescheduled';
@@ -149,6 +150,82 @@ describe('LifeAction', () => {
           eventId: id('second-ready-event'),
         }),
       ).toThrowError(expect.objectContaining({ code: 'life_action.make_ready_requires_draft' }));
+    });
+  });
+
+  describe('изменение сведений', () => {
+    it('изменяет только сведения ready-действия и создаёт событие', () => {
+      const action = createReady();
+      const decisionId = action.decisionId;
+      const plannedDate = action.plannedDate;
+      const createdAt = action.createdAt;
+      const version = action.version;
+      action.clearUncommittedEvents();
+
+      const changed = action.updateDetails({
+        title: LifeActionTitle.create('  Уточнённое действие  '),
+        description: '  Уточнённое описание  ',
+        expectedResult: ActionExpectedResult.create('  Уточнённый результат  '),
+        occurredAt: CHANGED_AT,
+        eventId: id('details-updated-event'),
+      });
+
+      expect(changed).toBe(true);
+      expect(action.title.toString()).toBe('Уточнённое действие');
+      expect(action.description).toBe('Уточнённое описание');
+      expect(action.expectedResult?.toString()).toBe('Уточнённый результат');
+      expect(action.decisionId).toBe(decisionId);
+      expect(action.plannedDate).toBe(plannedDate);
+      expect(action.createdAt).toEqual(createdAt);
+      expect(action.status).toBe(LIFE_ACTION_STATUS.ready);
+      expect(action.version).toBe(version + 1);
+      const event = action.getUncommittedEvents()[0];
+      expect(event).toBeInstanceOf(LifeActionDetailsUpdated);
+      expect(event).toMatchObject({ eventType: 'action.details_updated' });
+      expect(event?.occurredAt).toEqual(CHANGED_AT);
+    });
+
+    it('не меняет версию и события при тех же нормализованных значениях', () => {
+      const action = createReady();
+      action.clearUncommittedEvents();
+      const version = action.version;
+
+      const changed = action.updateDetails({
+        title: LifeActionTitle.create(` ${action.title.toString()} `),
+        description: action.description,
+        expectedResult: ActionExpectedResult.create(` ${action.expectedResult!.toString()} `),
+        occurredAt: CHANGED_AT,
+        eventId: id('unused-event'),
+      });
+
+      expect(changed).toBe(false);
+      expect(action.version).toBe(version);
+      expect(action.getUncommittedEvents()).toHaveLength(0);
+    });
+
+    it('запрещает изменение draft, in_progress, completed, cancelled и archived', () => {
+      const inProgress = createInProgress();
+      const completed = createCompleted();
+      const cancelled = createReady();
+      cancelled.cancel(CHANGED_AT, id('cancelled-event'), cancelReason());
+      const archived = createCompleted();
+      archived.archive(CHANGED_AT, id('archived-event'));
+
+      for (const action of [createDraft(), inProgress, completed, cancelled, archived]) {
+        expect(() =>
+          action.updateDetails({
+            title: LifeActionTitle.create('Другое действие'),
+            description: null,
+            expectedResult: ActionExpectedResult.create('Другой результат'),
+            occurredAt: CHANGED_AT,
+            eventId: id('details-updated-event'),
+          }),
+        ).toThrowError(
+          expect.objectContaining({
+            code: action.isArchived() ? 'life_action.archived_is_immutable' : 'action.cannot_edit',
+          }),
+        );
+      }
     });
   });
 

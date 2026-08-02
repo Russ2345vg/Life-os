@@ -51,6 +51,8 @@ describe('createLifeOsApplication', () => {
     expect(application.confirmDecisionFromActions).toBeDefined();
     expect(application.updateDecisionDetails).toBeDefined();
     expect(application.cancelDecisionSafely).toBeDefined();
+    expect(application.updateLifeActionDetails).toBeDefined();
+    expect(application.cancelLifeActionSafely).toBeDefined();
     expect(application.getActionSessionsForLifeAction).toBeDefined();
     expect(application.getUnfinishedActionSession).toBeDefined();
     await expect(
@@ -229,6 +231,117 @@ describe('createLifeOsApplication', () => {
     expect(restored[0]?.status).toBe('ready');
     expect(restored[0]?.expectedResult?.toString()).toBe('Следующий шаг выполнен');
     secondApplication.close();
+  });
+
+  it('сохраняет отредактированные сведения ready-действия после повторного запуска', async () => {
+    const indexedDbFactory = new IDBFactory();
+    const firstApplication = await createTestApplication(
+      indexedDbFactory,
+      new FakeIdGenerator('action-edit-persistence'),
+    );
+    const decision = await firstApplication.createDecisionForDate.execute({
+      title: 'Решение для редактируемого действия',
+      kind: DECISION_KIND.main,
+      plannedDate: TODAY,
+      expectedResult: 'Действие остаётся связанным',
+    });
+    expect(decision.ok).toBe(true);
+    if (!decision.ok) {
+      throw decision.error;
+    }
+    const action = await firstApplication.createLifeActionForDecision.execute({
+      decisionId: decision.value.id,
+      title: 'Первоначальное действие',
+      description: 'Первоначальное описание',
+      expectedResult: 'Первоначальный результат',
+      plannedDate: TODAY,
+    });
+    expect(action.ok).toBe(true);
+    if (!action.ok) {
+      throw action.error;
+    }
+    const originalDecisionId = action.value.decisionId;
+    const originalPlannedDate = action.value.plannedDate;
+
+    const updated = await firstApplication.updateLifeActionDetails.execute({
+      lifeActionId: action.value.id,
+      title: 'Отредактированное действие',
+      description: 'Отредактированное описание',
+      expectedResult: 'Отредактированный результат',
+    });
+    expect(updated.ok).toBe(true);
+    firstApplication.close();
+
+    const reloaded = await createTestApplication(
+      indexedDbFactory,
+      new FakeIdGenerator('action-edit-persistence-reload'),
+    );
+    const restored = await reloaded.lifeActionRepository.findById(action.value.id);
+
+    expect(restored?.title.toString()).toBe('Отредактированное действие');
+    expect(restored?.description).toBe('Отредактированное описание');
+    expect(restored?.expectedResult?.toString()).toBe('Отредактированный результат');
+    expect(restored?.decisionId?.equals(originalDecisionId!)).toBe(true);
+    expect(restored?.plannedDate?.equals(originalPlannedDate!)).toBe(true);
+    expect(restored?.status).toBe(LIFE_ACTION_STATUS.ready);
+    expect(restored?.getUncommittedEvents()).toHaveLength(0);
+    reloaded.close();
+  });
+
+  it('сохраняет отменённое действие, связь с решением и возможность создать замену', async () => {
+    const indexedDbFactory = new IDBFactory();
+    const firstApplication = await createTestApplication(
+      indexedDbFactory,
+      new FakeIdGenerator('action-cancel-persistence'),
+    );
+    const decision = await firstApplication.createDecisionForDate.execute({
+      title: 'Решение после отмены действия',
+      kind: DECISION_KIND.main,
+      plannedDate: TODAY,
+      expectedResult: 'Можно выбрать другое действие',
+    });
+    expect(decision.ok).toBe(true);
+    if (!decision.ok) {
+      throw decision.error;
+    }
+    const action = await firstApplication.createLifeActionForDecision.execute({
+      decisionId: decision.value.id,
+      title: 'Действие для безопасной отмены',
+      expectedResult: 'История не удалена',
+      plannedDate: TODAY,
+    });
+    expect(action.ok).toBe(true);
+    if (!action.ok) {
+      throw action.error;
+    }
+
+    const cancelled = await firstApplication.cancelLifeActionSafely.execute({
+      lifeActionId: action.value.id,
+    });
+    expect(cancelled.ok).toBe(true);
+    firstApplication.close();
+
+    const reloaded = await createTestApplication(
+      indexedDbFactory,
+      new FakeIdGenerator('action-cancel-persistence-reload'),
+    );
+    const restored = await reloaded.lifeActionRepository.findById(action.value.id);
+    const linkedActions = await reloaded.getLifeActionsForDecision.execute(decision.value.id);
+    const unfinished = await reloaded.getUnfinishedActionSession.execute();
+    const replacement = await reloaded.createLifeActionForDecision.execute({
+      decisionId: decision.value.id,
+      title: 'Заменяющее действие',
+      expectedResult: 'Новый путь к результату',
+      plannedDate: TODAY,
+    });
+
+    expect(restored?.status).toBe(LIFE_ACTION_STATUS.cancelled);
+    expect(restored?.decisionId?.equals(decision.value.id)).toBe(true);
+    expect(linkedActions.some((item) => item.id.equals(action.value.id))).toBe(true);
+    expect(unfinished).toBeNull();
+    expect(replacement.ok).toBe(true);
+    expect(await reloaded.getLifeActionsForDecision.execute(decision.value.id)).toHaveLength(2);
+    reloaded.close();
   });
 
   it('restores a started and then paused action session across application restarts', async () => {

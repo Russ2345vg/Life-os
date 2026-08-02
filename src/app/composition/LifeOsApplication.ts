@@ -4,6 +4,7 @@ import type {
   CompleteActionSession,
   CompleteLifeAction,
   CancelDecisionSafely,
+  CancelLifeActionSafely,
   ConfirmDecisionFromActions,
   CreateDecisionForDate,
   CreateLifeActionForDecision,
@@ -21,6 +22,7 @@ import type {
   ResumeActionSession,
   StartLifeActionSession,
   UpdateDecisionDetails,
+  UpdateLifeActionDetails,
 } from '../../application';
 import { EnsureCurrentDay } from '../../application';
 import type { DayDate } from '../../domain';
@@ -48,6 +50,8 @@ interface LifeOsApplicationServices {
   readonly confirmDecisionFromActions: ConfirmDecisionFromActions;
   readonly updateDecisionDetails: UpdateDecisionDetails;
   readonly cancelDecisionSafely: CancelDecisionSafely;
+  readonly updateLifeActionDetails: UpdateLifeActionDetails;
+  readonly cancelLifeActionSafely: CancelLifeActionSafely;
   readonly getActionSessionsForLifeAction: GetActionSessionsForLifeAction;
   readonly getUnfinishedActionSession: GetUnfinishedActionSession;
   readonly closeDatabase: () => void;
@@ -76,6 +80,8 @@ export class LifeOsApplication {
   public readonly confirmDecisionFromActions: ConfirmDecisionFromActions;
   public readonly updateDecisionDetails: UpdateDecisionDetails;
   public readonly cancelDecisionSafely: CancelDecisionSafely;
+  public readonly updateLifeActionDetails: UpdateLifeActionDetails;
+  public readonly cancelLifeActionSafely: CancelLifeActionSafely;
   public readonly getActionSessionsForLifeAction: GetActionSessionsForLifeAction;
   public readonly getUnfinishedActionSession: GetUnfinishedActionSession;
 
@@ -104,6 +110,8 @@ export class LifeOsApplication {
     this.confirmDecisionFromActions = services.confirmDecisionFromActions;
     this.updateDecisionDetails = services.updateDecisionDetails;
     this.cancelDecisionSafely = services.cancelDecisionSafely;
+    this.updateLifeActionDetails = services.updateLifeActionDetails;
+    this.cancelLifeActionSafely = services.cancelLifeActionSafely;
     this.getActionSessionsForLifeAction = services.getActionSessionsForLifeAction;
     this.getUnfinishedActionSession = services.getUnfinishedActionSession;
     this.#closeDatabase = services.closeDatabase;
