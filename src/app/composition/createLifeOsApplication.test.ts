@@ -6,6 +6,7 @@ import {
   DAY_STATUS,
   DayDate,
   DECISION_KIND,
+  DECISION_STATUS,
   EntityId,
   LIFE_ACTION_STATUS,
   SESSION_COMPLETION_KIND,
@@ -47,6 +48,7 @@ describe('createLifeOsApplication', () => {
     expect(application.resumeActionSession).toBeDefined();
     expect(application.completeActionSession).toBeDefined();
     expect(application.completeLifeAction).toBeDefined();
+    expect(application.confirmDecisionFromActions).toBeDefined();
     expect(application.getActionSessionsForLifeAction).toBeDefined();
     expect(application.getUnfinishedActionSession).toBeDefined();
     await expect(
@@ -388,6 +390,93 @@ describe('createLifeOsApplication', () => {
       'Работа завершена досрочно, результат достигнут',
     );
     expect(restart.ok).toBe(false);
+    reloaded.close();
+  });
+
+  it('persists decision confirmation from a completed action across restart', async () => {
+    const indexedDbFactory = new IDBFactory();
+    const firstApplication = await createTestApplication(
+      indexedDbFactory,
+      new FakeIdGenerator('decision-confirmation'),
+    );
+    const decisionResult = await firstApplication.createDecisionForDate.execute({
+      title: 'Подтвердить решение после выполненного действия',
+      kind: DECISION_KIND.main,
+      plannedDate: TODAY,
+      expectedResult: 'Фактический результат решения сохранён',
+    });
+    expect(decisionResult.ok).toBe(true);
+    if (!decisionResult.ok) {
+      throw decisionResult.error;
+    }
+    const actionResult = await firstApplication.createLifeActionForDecision.execute({
+      decisionId: decisionResult.value.id,
+      title: 'Получить проверяемый результат',
+      expectedResult: 'Результат получен',
+      plannedDate: TODAY,
+    });
+    expect(actionResult.ok).toBe(true);
+    if (!actionResult.ok) {
+      throw actionResult.error;
+    }
+    const startResult = await firstApplication.startLifeActionSession.execute({
+      lifeActionId: actionResult.value.id,
+    });
+    expect(startResult.ok).toBe(true);
+    if (!startResult.ok) {
+      throw startResult.error;
+    }
+    const sessionResult = await firstApplication.completeActionSession.execute({
+      sessionId: startResult.value.session.id,
+      completionKind: SESSION_COMPLETION_KIND.completed,
+      resultNote: 'Работа завершена',
+    });
+    expect(sessionResult.ok).toBe(true);
+    const actionCompletion = await firstApplication.completeLifeAction.execute({
+      lifeActionId: actionResult.value.id,
+      actualResult: ActionActualResult.create('Действие дало нужный результат'),
+    });
+    expect(actionCompletion.ok).toBe(true);
+    const confirmation = await firstApplication.confirmDecisionFromActions.execute({
+      decisionId: decisionResult.value.id,
+      actualResult: 'Решение привело к фактическому результату',
+    });
+    expect(confirmation.ok).toBe(true);
+    firstApplication.close();
+
+    const reloaded = await createTestApplication(
+      indexedDbFactory,
+      new FakeIdGenerator('decision-confirmation-reload'),
+    );
+    const restoredDecision = await reloaded.getDecisionById.execute(decisionResult.value.id);
+    const restoredActions = await reloaded.getLifeActionsForDecision.execute(
+      decisionResult.value.id,
+    );
+    expect(restoredDecision.ok).toBe(true);
+    if (!restoredDecision.ok) {
+      throw restoredDecision.error;
+    }
+    expect(restoredDecision.value.status).toBe(DECISION_STATUS.confirmed);
+    expect(restoredDecision.value.actualResultSummary?.toString()).toBe(
+      'Решение привело к фактическому результату',
+    );
+    expect(restoredDecision.value.evidenceIds.map(String)).toEqual([
+      actionResult.value.id.toString(),
+    ]);
+    expect(restoredActions[0]?.status).toBe(LIFE_ACTION_STATUS.completed);
+
+    const repeatedConfirmation = await reloaded.confirmDecisionFromActions.execute({
+      decisionId: decisionResult.value.id,
+      actualResult: 'Повторное подтверждение',
+    });
+    const newAction = await reloaded.createLifeActionForDecision.execute({
+      decisionId: decisionResult.value.id,
+      title: 'Новое действие недоступно',
+      expectedResult: 'Не должно сохраниться',
+      plannedDate: TODAY,
+    });
+    expect(repeatedConfirmation.ok).toBe(false);
+    expect(newAction.ok).toBe(false);
     reloaded.close();
   });
 

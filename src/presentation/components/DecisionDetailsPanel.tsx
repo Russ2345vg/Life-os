@@ -17,6 +17,10 @@ interface DecisionDetailsPanelProps {
   readonly isSaving: boolean;
   readonly form: LifeActionFormState;
   readonly formError: string | null;
+  readonly isConfirmationFormOpen: boolean;
+  readonly isConfirming: boolean;
+  readonly confirmationActualResult: string;
+  readonly confirmationError: string | null;
   readonly onClose: () => void;
   readonly onRetry: () => void;
   readonly onOpenForm: () => void;
@@ -25,6 +29,10 @@ interface DecisionDetailsPanelProps {
   readonly onExpectedResultChange: (expectedResult: string) => void;
   readonly onDescriptionChange: (description: string) => void;
   readonly onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  readonly onOpenConfirmationForm: () => void;
+  readonly onCloseConfirmationForm: () => void;
+  readonly onConfirmationActualResultChange: (actualResult: string) => void;
+  readonly onConfirmationSubmit: (event: FormEvent<HTMLFormElement>) => void;
   readonly onOpenLifeAction: (lifeAction: LifeAction) => void;
 }
 
@@ -34,6 +42,10 @@ export function DecisionDetailsPanel({
   isSaving,
   form,
   formError,
+  isConfirmationFormOpen,
+  isConfirming,
+  confirmationActualResult,
+  confirmationError,
   onClose,
   onRetry,
   onOpenForm,
@@ -42,11 +54,29 @@ export function DecisionDetailsPanel({
   onExpectedResultChange,
   onDescriptionChange,
   onSubmit,
+  onOpenConfirmationForm,
+  onCloseConfirmationForm,
+  onConfirmationActualResultChange,
+  onConfirmationSubmit,
   onOpenLifeAction,
 }: DecisionDetailsPanelProps) {
   if (details.status === 'closed') {
     return null;
   }
+
+  const lifeActions = details.status === 'ready' ? details.lifeActions : [];
+  const completedActions = lifeActions.filter(
+    (lifeAction) => lifeAction.status === LIFE_ACTION_STATUS.completed,
+  );
+  const unfinishedActions = lifeActions.filter(
+    (lifeAction) =>
+      lifeAction.status === LIFE_ACTION_STATUS.draft ||
+      lifeAction.status === LIFE_ACTION_STATUS.ready ||
+      lifeAction.status === LIFE_ACTION_STATUS.inProgress,
+  );
+  const cancelledActions = lifeActions.filter(
+    (lifeAction) => lifeAction.status === LIFE_ACTION_STATUS.cancelled,
+  );
 
   return (
     <div className="decision-details-backdrop">
@@ -112,13 +142,82 @@ export function DecisionDetailsPanel({
               ) : null}
             </dl>
 
+            <section className="decision-result-section" aria-labelledby="decision-result-title">
+              <div className="section-heading decision-result-heading">
+                <div>
+                  <p className="section-kicker gold">Проверка результата</p>
+                  <h3 id="decision-result-title">Результат решения</h3>
+                </div>
+              </div>
+
+              <dl className="decision-action-totals">
+                <div>
+                  <dt>Завершено</dt>
+                  <dd>{completedActions.length}</dd>
+                </div>
+                <div>
+                  <dt>Не завершено</dt>
+                  <dd>{unfinishedActions.length}</dd>
+                </div>
+                <div>
+                  <dt>Отменено</dt>
+                  <dd>{cancelledActions.length}</dd>
+                </div>
+              </dl>
+
+              {details.decision.status === DECISION_STATUS.confirmed ? (
+                <ConfirmedDecisionResult
+                  decision={details.decision}
+                  completedActions={completedActions}
+                />
+              ) : null}
+
+              {(details.decision.status === DECISION_STATUS.planned ||
+                details.decision.status === DECISION_STATUS.inProgress) &&
+              !details.decision.isArchived() ? (
+                <>
+                  {unfinishedActions.length > 0 ? (
+                    <p className="decision-confirmation-note">Сначала завершите текущие действия</p>
+                  ) : completedActions.length === 0 ? (
+                    <p className="decision-confirmation-note">
+                      Чтобы подтвердить решение, завершите хотя бы одно действие
+                    </p>
+                  ) : null}
+
+                  {isConfirmationFormOpen ? (
+                    <DecisionConfirmationForm
+                      actualResult={confirmationActualResult}
+                      isSaving={isConfirming}
+                      error={confirmationError}
+                      onActualResultChange={onConfirmationActualResultChange}
+                      onClose={onCloseConfirmationForm}
+                      onSubmit={onConfirmationSubmit}
+                    />
+                  ) : (
+                    <button
+                      className="primary-button decision-confirm-button"
+                      type="button"
+                      disabled={completedActions.length === 0 || unfinishedActions.length > 0}
+                      onClick={onOpenConfirmationForm}
+                    >
+                      Подтвердить результат решения
+                    </button>
+                  )}
+                </>
+              ) : null}
+            </section>
+
             <section className="linked-actions-section" aria-labelledby="linked-actions-title">
               <div className="section-heading linked-actions-heading">
                 <div>
                   <p className="section-kicker">Следующий шаг</p>
                   <h3 id="linked-actions-title">Действия по решению</h3>
                 </div>
-                {isFormOpen ? null : (
+                {isFormOpen ||
+                details.decision.isArchived() ||
+                (details.decision.status !== DECISION_STATUS.draft &&
+                  details.decision.status !== DECISION_STATUS.planned &&
+                  details.decision.status !== DECISION_STATUS.inProgress) ? null : (
                   <button className="primary-button" type="button" onClick={onOpenForm}>
                     Создать действие
                   </button>
@@ -155,6 +254,96 @@ export function DecisionDetailsPanel({
           </div>
         ) : null}
       </aside>
+    </div>
+  );
+}
+
+interface DecisionConfirmationFormProps {
+  readonly actualResult: string;
+  readonly isSaving: boolean;
+  readonly error: string | null;
+  readonly onActualResultChange: (actualResult: string) => void;
+  readonly onClose: () => void;
+  readonly onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}
+
+function DecisionConfirmationForm({
+  actualResult,
+  isSaving,
+  error,
+  onActualResultChange,
+  onClose,
+  onSubmit,
+}: DecisionConfirmationFormProps) {
+  return (
+    <form className="decision-confirmation-form" onSubmit={onSubmit} noValidate>
+      <h4>Подтверждение решения</h4>
+      <label>
+        <span>Фактический результат решения *</span>
+        <textarea
+          value={actualResult}
+          disabled={isSaving}
+          maxLength={2000}
+          rows={4}
+          aria-required="true"
+          onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
+            onActualResultChange(event.target.value)
+          }
+        />
+      </label>
+      <p className="decision-confirmation-help">
+        Завершённые действия будут использованы как подтверждение результата
+      </p>
+      {error === null ? null : (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="form-actions">
+        <button className="primary-button" type="submit" disabled={isSaving}>
+          {isSaving ? 'Подтверждаем…' : 'Подтвердить'}
+        </button>
+        <button className="secondary-button" type="button" disabled={isSaving} onClick={onClose}>
+          Отмена
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function ConfirmedDecisionResult({
+  decision,
+  completedActions,
+}: {
+  readonly decision: Extract<DecisionDetailsState, { readonly status: 'ready' }>['decision'];
+  readonly completedActions: readonly LifeAction[];
+}) {
+  return (
+    <div className="confirmed-decision-result">
+      <p className="confirmed-result-title">Решение подтверждено</p>
+      <p className="confirmed-result-text">{decision.actualResultSummary?.toString()}</p>
+      <dl>
+        <div>
+          <dt>Действий в подтверждении</dt>
+          <dd>{decision.evidenceIds.length}</dd>
+        </div>
+        {decision.confirmedAt === null ? null : (
+          <div>
+            <dt>Подтверждено</dt>
+            <dd>{formatDateTime(decision.confirmedAt)}</dd>
+          </div>
+        )}
+      </dl>
+      {completedActions.length === 0 ? null : (
+        <div className="confirmed-actions">
+          <p>Завершённые действия</p>
+          <ul>
+            {completedActions.map((lifeAction) => (
+              <li key={lifeAction.id.toString()}>{lifeAction.title.toString()}</li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
@@ -312,4 +501,14 @@ function formatPlannedDate(date: DayDate | null): string {
     year: 'numeric',
     timeZone: 'UTC',
   }).format(new Date(Date.UTC(year!, month! - 1, day)));
+}
+
+function formatDateTime(date: Date): string {
+  return new Intl.DateTimeFormat('ru-RU', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
 }

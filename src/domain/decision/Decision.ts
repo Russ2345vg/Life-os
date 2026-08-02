@@ -342,10 +342,10 @@ export class Decision extends Entity {
   ): void {
     this.assertNotArchived();
 
-    if (this.#status !== DECISION_STATUS.inProgress) {
+    if (this.#status !== DECISION_STATUS.planned && this.#status !== DECISION_STATUS.inProgress) {
       throw new DomainError(
-        'decision.confirm_requires_in_progress',
-        'Подтвердить можно только выполняемое решение.',
+        'decision.confirm_not_allowed',
+        'Подтвердить можно только запланированное или выполняемое решение.',
       );
     }
 
@@ -366,6 +366,7 @@ export class Decision extends Entity {
     }
 
     assertValidDate(occurredAt, 'Время подтверждения решения');
+    this.#startedAt ??= copyDate(occurredAt);
     this.#status = DECISION_STATUS.confirmed;
     this.#actualResultSummary = actualResultSummary;
     this.#evidenceIds = uniqueEvidenceIds;

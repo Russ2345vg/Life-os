@@ -10,6 +10,7 @@ import type {
   Clock,
   CompleteActionSession,
   CompleteLifeAction,
+  ConfirmDecisionFromActions,
   CreateDecisionForDate,
   CreateLifeActionForDecision,
   GetActionSessionsForLifeAction,
@@ -37,6 +38,7 @@ import { DecisionDetailsPanel } from '../components/DecisionDetailsPanel';
 import { LifeActionDetailsPanel } from '../components/LifeActionDetailsPanel';
 import {
   completeSessionWorkflow,
+  confirmDecisionResult,
   createDecisionAndReload,
   createLifeActionAndReload,
   INITIAL_TODAY_PAGE_STATE,
@@ -48,6 +50,7 @@ import {
   todayPageReducer,
   validateDecisionForm,
   validateLifeActionForm,
+  validateDecisionConfirmationForm,
   validateSessionCompletionForm,
   type ActionCompletionChoice,
   type DecisionFormState,
@@ -66,6 +69,7 @@ interface TodayPageProps {
   readonly resumeActionSession: Pick<ResumeActionSession, 'execute'>;
   readonly completeActionSession: Pick<CompleteActionSession, 'execute'>;
   readonly completeLifeAction: Pick<CompleteLifeAction, 'execute'>;
+  readonly confirmDecisionFromActions: Pick<ConfirmDecisionFromActions, 'execute'>;
   readonly getActionSessionsForLifeAction: Pick<GetActionSessionsForLifeAction, 'execute'>;
   readonly getUnfinishedActionSession: Pick<GetUnfinishedActionSession, 'execute'>;
   readonly clock: Pick<Clock, 'now'>;
@@ -83,6 +87,7 @@ export function TodayPage({
   resumeActionSession,
   completeActionSession,
   completeLifeAction,
+  confirmDecisionFromActions,
   getActionSessionsForLifeAction,
   getUnfinishedActionSession,
   clock,
@@ -91,6 +96,7 @@ export function TodayPage({
   const savingRef = useRef(false);
   const lifeActionSavingRef = useRef(false);
   const sessionMutationRef = useRef(false);
+  const decisionConfirmationRef = useRef(false);
 
   const loadDecisions = useCallback(async () => {
     dispatch({ type: 'load_started' });
@@ -209,6 +215,44 @@ export function TodayPage({
       dispatch({ type: 'life_action_save_failed', message: 'Не удалось создать действие' });
     } finally {
       lifeActionSavingRef.current = false;
+    }
+  }
+
+  async function handleDecisionConfirmation(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+
+    if (decisionConfirmationRef.current || state.details.status !== 'ready') {
+      return;
+    }
+
+    const validationError = validateDecisionConfirmationForm(state.decisionConfirmationForm);
+    if (validationError !== null) {
+      dispatch({ type: 'decision_confirmation_failed', message: validationError });
+      return;
+    }
+
+    decisionConfirmationRef.current = true;
+    dispatch({ type: 'decision_confirmation_started' });
+    try {
+      const result = await confirmDecisionResult({
+        decisionId: state.details.decisionId,
+        form: state.decisionConfirmationForm,
+        confirmDecisionFromActions,
+      });
+
+      if (!result.ok) {
+        dispatch({ type: 'decision_confirmation_failed', message: result.message });
+        return;
+      }
+
+      dispatch({ type: 'decision_confirmation_succeeded', decision: result.decision });
+    } catch {
+      dispatch({
+        type: 'decision_confirmation_failed',
+        message: 'Не удалось подтвердить решение',
+      });
+    } finally {
+      decisionConfirmationRef.current = false;
     }
   }
 
@@ -432,6 +476,14 @@ export function TodayPage({
         dispatch({ type: 'life_action_description_changed', description })
       }
       onLifeActionSubmit={(event) => void handleLifeActionSubmit(event)}
+      onOpenDecisionConfirmationForm={() => dispatch({ type: 'decision_confirmation_form_opened' })}
+      onCloseDecisionConfirmationForm={() =>
+        dispatch({ type: 'decision_confirmation_form_closed' })
+      }
+      onDecisionActualResultChange={(actualResult) =>
+        dispatch({ type: 'decision_actual_result_changed', actualResult })
+      }
+      onDecisionConfirmationSubmit={(event) => void handleDecisionConfirmation(event)}
       onOpenLifeAction={(lifeAction) => void loadLifeActionDetails(lifeAction)}
       onBackToDecision={() => dispatch({ type: 'action_details_closed' })}
       onRetryLifeAction={() => {
@@ -482,6 +534,10 @@ interface TodayPageViewProps {
   readonly onLifeActionExpectedResultChange: (expectedResult: string) => void;
   readonly onLifeActionDescriptionChange: (description: string) => void;
   readonly onLifeActionSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  readonly onOpenDecisionConfirmationForm: () => void;
+  readonly onCloseDecisionConfirmationForm: () => void;
+  readonly onDecisionActualResultChange: (actualResult: string) => void;
+  readonly onDecisionConfirmationSubmit: (event: FormEvent<HTMLFormElement>) => void;
   readonly onOpenLifeAction: (lifeAction: LifeAction) => void;
   readonly onBackToDecision: () => void;
   readonly onRetryLifeAction: () => void;
@@ -518,6 +574,10 @@ export function TodayPageView({
   onLifeActionExpectedResultChange,
   onLifeActionDescriptionChange,
   onLifeActionSubmit,
+  onOpenDecisionConfirmationForm,
+  onCloseDecisionConfirmationForm,
+  onDecisionActualResultChange,
+  onDecisionConfirmationSubmit,
   onOpenLifeAction,
   onBackToDecision,
   onRetryLifeAction,
@@ -591,6 +651,10 @@ export function TodayPageView({
           isSaving={state.isLifeActionSaving}
           form={state.lifeActionForm}
           formError={state.lifeActionFormError}
+          isConfirmationFormOpen={state.isDecisionConfirmationFormOpen}
+          isConfirming={state.isDecisionConfirming}
+          confirmationActualResult={state.decisionConfirmationForm.actualResult}
+          confirmationError={state.decisionConfirmationError}
           onClose={onCloseDecision}
           onRetry={onRetryDecision}
           onOpenForm={onOpenLifeActionForm}
@@ -599,6 +663,10 @@ export function TodayPageView({
           onExpectedResultChange={onLifeActionExpectedResultChange}
           onDescriptionChange={onLifeActionDescriptionChange}
           onSubmit={onLifeActionSubmit}
+          onOpenConfirmationForm={onOpenDecisionConfirmationForm}
+          onCloseConfirmationForm={onCloseDecisionConfirmationForm}
+          onConfirmationActualResultChange={onDecisionActualResultChange}
+          onConfirmationSubmit={onDecisionConfirmationSubmit}
           onOpenLifeAction={onOpenLifeAction}
         />
       ) : (

@@ -67,14 +67,16 @@
 
 ## Подтверждение
 
-`confirm` разрешён только из `in_progress` и требует:
+`confirm` разрешён из `planned` и `in_progress` и требует:
 
 - отдельный `ActualResultSummary`;
 - хотя бы один идентификатор подтверждающего источника в `evidenceIds`.
 
 Повторяющиеся идентификаторы устраняются с сохранением первого вхождения. После подтверждения
 сохраняются результат, уникальные подтверждения и `confirmedAt`, а событие
-`decision.confirmed` содержит те же `evidenceIds`.
+`decision.confirmed` содержит те же `evidenceIds`. При прямом подтверждении `planned` время начала
+фиксируется равным времени подтверждения: завершённые связанные действия уже доказывают, что
+реализация состоялась.
 
 ## Отмена и восстановление
 
@@ -130,6 +132,7 @@
 draft → planned
 draft → cancelled
 planned → in_progress
+planned → confirmed
 planned → cancelled
 in_progress → confirmed
 in_progress → cancelled
@@ -141,7 +144,7 @@ cancelled + archive       (состояние cancelled сохраняется)
 `reschedule` сохраняет `planned` или `in_progress`. Повторный `markInProgress` и повторное
 архивирование не создают перехода или события.
 
-Запрещены прямые переходы `draft → in_progress`, `planned → confirmed`, восстановление не из
+Запрещены прямые переходы `draft → in_progress`, восстановление не из
 `cancelled`, отмена `confirmed`, любые обычные изменения архивированного решения и повторное
 подтверждение.
 

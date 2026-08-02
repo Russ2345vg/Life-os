@@ -3,6 +3,7 @@ import type {
   Clock,
   CompleteActionSession,
   CompleteLifeAction,
+  ConfirmDecisionFromActions,
   CreateDecisionForDate,
   CreateLifeActionForDecision,
   CurrentDateProvider,
@@ -42,6 +43,7 @@ interface LifeOsApplicationServices {
   readonly resumeActionSession: ResumeActionSession;
   readonly completeActionSession: CompleteActionSession;
   readonly completeLifeAction: CompleteLifeAction;
+  readonly confirmDecisionFromActions: ConfirmDecisionFromActions;
   readonly getActionSessionsForLifeAction: GetActionSessionsForLifeAction;
   readonly getUnfinishedActionSession: GetUnfinishedActionSession;
   readonly closeDatabase: () => void;
@@ -67,6 +69,7 @@ export class LifeOsApplication {
   public readonly resumeActionSession: ResumeActionSession;
   public readonly completeActionSession: CompleteActionSession;
   public readonly completeLifeAction: CompleteLifeAction;
+  public readonly confirmDecisionFromActions: ConfirmDecisionFromActions;
   public readonly getActionSessionsForLifeAction: GetActionSessionsForLifeAction;
   public readonly getUnfinishedActionSession: GetUnfinishedActionSession;
 
@@ -92,6 +95,7 @@ export class LifeOsApplication {
     this.resumeActionSession = services.resumeActionSession;
     this.completeActionSession = services.completeActionSession;
     this.completeLifeAction = services.completeLifeAction;
+    this.confirmDecisionFromActions = services.confirmDecisionFromActions;
     this.getActionSessionsForLifeAction = services.getActionSessionsForLifeAction;
     this.getUnfinishedActionSession = services.getUnfinishedActionSession;
     this.#closeDatabase = services.closeDatabase;

@@ -12,6 +12,7 @@ import {
 import { DomainError } from '../../shared/errors/DomainError';
 import { failure, success } from '../../shared/result/Result';
 import { createPlannedDecision } from '../../test/helpers/DecisionTestFactory';
+import { confirmDecision } from '../../test/helpers/DecisionTestFactory';
 import {
   cancelLifeAction,
   completeLifeAction,
@@ -25,8 +26,10 @@ import {
   ACTION_COMPLETION_FAILED_MESSAGE,
   completeSessionWorkflow,
   completeSessionErrorMessage,
+  confirmDecisionResult,
   createDecisionAndReload,
   createLifeActionAndReload,
+  decisionConfirmationErrorMessage,
   INITIAL_TODAY_PAGE_STATE,
   isDecisionActivationKey,
   isLifeActionActivationKey,
@@ -37,6 +40,7 @@ import {
   todayPageReducer,
   validateDecisionForm,
   validateLifeActionForm,
+  validateDecisionConfirmationForm,
   validateSessionCompletionForm,
   type TodayPageState,
 } from './TodayPageState';
@@ -406,6 +410,180 @@ describe('TodayPage view and workflow', () => {
     expect(isLifeActionActivationKey('Enter')).toBe(true);
     expect(isLifeActionActivationKey(' ')).toBe(true);
     expect(isLifeActionActivationKey('Escape')).toBe(false);
+  });
+
+  it('показывает количества действий по состояниям', () => {
+    const decision = createPlannedDecision('result-counts', DATE);
+    const completed = completeLifeAction(
+      markLifeActionInProgress(
+        createReadyLifeAction('completed-count', DATE, { decisionId: decision.id }),
+      ),
+    );
+    const ready = createReadyLifeAction('ready-count', DATE, { decisionId: decision.id });
+    const cancelled = cancelLifeAction(
+      createReadyLifeAction('cancelled-count', DATE, { decisionId: decision.id }),
+    );
+    const markup = renderView(createDetailsState(decision, [completed, ready, cancelled]));
+
+    expect(markup).toContain('<dt>Завершено</dt><dd>1</dd>');
+    expect(markup).toContain('<dt>Не завершено</dt><dd>1</dd>');
+    expect(markup).toContain('<dt>Отменено</dt><dd>1</dd>');
+  });
+
+  it('без completed-действий блокирует подтверждение и объясняет причину', () => {
+    const decision = createPlannedDecision('no-completed-ui', DATE);
+    const markup = renderView(createDetailsState(decision));
+
+    expect(markup).toContain('Чтобы подтвердить решение, завершите хотя бы одно действие');
+    expect(markup).toContain('decision-confirm-button" type="button" disabled=""');
+  });
+
+  it('unfinished-действие блокирует подтверждение', () => {
+    const decision = createPlannedDecision('unfinished-ui', DATE);
+    const completed = completeLifeAction(
+      markLifeActionInProgress(createReadyLifeAction('done-ui', DATE, { decisionId: decision.id })),
+    );
+    const ready = createReadyLifeAction('ready-ui', DATE, { decisionId: decision.id });
+    const markup = renderView(createDetailsState(decision, [completed, ready]));
+
+    expect(markup).toContain('Сначала завершите текущие действия');
+    expect(markup).toContain('decision-confirm-button" type="button" disabled=""');
+  });
+
+  it('completed-действие разрешает подтверждение, а cancelled его не блокирует', () => {
+    const decision = createPlannedDecision('available-ui', DATE);
+    const completed = completeLifeAction(
+      markLifeActionInProgress(
+        createReadyLifeAction('done-available', DATE, { decisionId: decision.id }),
+      ),
+    );
+    const cancelled = cancelLifeAction(
+      createReadyLifeAction('cancelled-available', DATE, { decisionId: decision.id }),
+    );
+    const markup = renderView(createDetailsState(decision, [completed, cancelled]));
+
+    expect(markup).toContain('Подтвердить результат решения');
+    expect(markup).not.toContain('decision-confirm-button" type="button" disabled=""');
+    expect(markup).not.toContain('Сначала завершите текущие действия');
+  });
+
+  it('открывает и закрывает форму подтверждения', () => {
+    const decision = createPlannedDecision('confirmation-form', DATE);
+    const initial = createDetailsState(decision);
+    const opened = todayPageReducer(initial, { type: 'decision_confirmation_form_opened' });
+    const closed = todayPageReducer(opened, { type: 'decision_confirmation_form_closed' });
+
+    expect(renderView(opened)).toContain('Подтверждение решения');
+    expect(renderView(opened)).toContain('Фактический результат решения *');
+    expect(renderView(opened)).toContain(
+      'Завершённые действия будут использованы как подтверждение результата',
+    );
+    expect(closed.isDecisionConfirmationFormOpen).toBe(false);
+  });
+
+  it('проверяет обязательность actualResult', () => {
+    expect(validateDecisionConfirmationForm({ actualResult: '   ' })).toBe(
+      'Укажите фактический результат решения',
+    );
+    expect(validateDecisionConfirmationForm({ actualResult: 'Факт' })).toBeNull();
+  });
+
+  it('блокирует повторную отправку формы подтверждения', () => {
+    const decision = createPlannedDecision('confirmation-saving', DATE);
+    const state = {
+      ...createDetailsState(decision),
+      isDecisionConfirmationFormOpen: true,
+      isDecisionConfirming: true,
+      decisionConfirmationForm: { actualResult: 'Сохраняемый факт' },
+    } satisfies TodayPageState;
+    const markup = renderView(state);
+
+    expect(markup).toContain('Подтверждаем…');
+    expect(markup.match(/disabled=""/g)?.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('успешное подтверждение обновляет карточку без F5 и очищает форму', () => {
+    const planned = createPlannedDecision('confirmation-success', DATE);
+    const confirmed = confirmDecision(planned);
+    const state = {
+      ...createDetailsState(planned),
+      isDecisionConfirmationFormOpen: true,
+      decisionConfirmationForm: { actualResult: 'Введённый факт' },
+      isLifeActionFormOpen: true,
+    } satisfies TodayPageState;
+
+    const succeeded = todayPageReducer(state, {
+      type: 'decision_confirmation_succeeded',
+      decision: confirmed,
+    });
+
+    expect(succeeded.details.status).toBe('ready');
+    if (succeeded.details.status === 'ready') {
+      expect(succeeded.details.decision).toBe(confirmed);
+    }
+    expect(succeeded.isDecisionConfirmationFormOpen).toBe(false);
+    expect(succeeded.decisionConfirmationForm.actualResult).toBe('');
+    expect(succeeded.isLifeActionFormOpen).toBe(false);
+  });
+
+  it('показывает итог подтверждённого решения без внутренних evidenceIds', () => {
+    const decision = confirmDecision(createPlannedDecision('confirmed-ui', DATE));
+    const completed = completeLifeAction(
+      markLifeActionInProgress(
+        createReadyLifeAction('confirmed-action', DATE, { decisionId: decision.id }),
+      ),
+    );
+    const markup = renderView(createDetailsState(decision, [completed]));
+
+    expect(markup).toContain('Решение подтверждено');
+    expect(markup).toContain('Результат подтверждён');
+    expect(markup).toContain('Действий в подтверждении');
+    expect(markup).toContain('Завершённые действия');
+    expect(markup).toContain('Действие confirmed-action');
+    expect(markup).not.toContain('confirmed-ui-evidence');
+  });
+
+  it('после confirmed скрывает создание действия и повторное подтверждение', () => {
+    const decision = confirmDecision(createPlannedDecision('final-ui', DATE));
+    const markup = renderView(createDetailsState(decision));
+
+    expect(markup).not.toContain('Создать действие');
+    expect(markup).not.toContain('Подтвердить результат решения');
+  });
+
+  it('при ошибке сохраняет введённый actualResult и не показывает внутренний код', () => {
+    const decision = createPlannedDecision('failed-confirmation', DATE);
+    const filled = {
+      ...createDetailsState(decision),
+      isDecisionConfirmationFormOpen: true,
+      decisionConfirmationForm: { actualResult: 'Текст должен остаться' },
+    } satisfies TodayPageState;
+    const failed = todayPageReducer(filled, {
+      type: 'decision_confirmation_failed',
+      message: decisionConfirmationErrorMessage('decision.actions_unfinished'),
+    });
+    const markup = renderView(failed);
+
+    expect(failed.decisionConfirmationForm.actualResult).toBe('Текст должен остаться');
+    expect(markup).toContain('Сначала завершите текущие действия');
+    expect(markup).not.toContain('decision.actions_unfinished');
+  });
+
+  it('вызывает ConfirmDecisionFromActions и возвращает сущность команды', async () => {
+    const decision = confirmDecision(createPlannedDecision('workflow-confirmation', DATE));
+    const execute = vi.fn().mockResolvedValue(success(decision));
+
+    const result = await confirmDecisionResult({
+      decisionId: decision.id,
+      form: { actualResult: 'Фактический итог' },
+      confirmDecisionFromActions: { execute },
+    });
+
+    expect(result).toEqual({ ok: true, decision });
+    expect(execute).toHaveBeenCalledWith({
+      decisionId: decision.id,
+      actualResult: 'Фактический итог',
+    });
   });
 
   it('shows action details, decision relation, and back navigation without internal fields', () => {
@@ -984,6 +1162,10 @@ function renderView(state: TodayPageState): string {
       onLifeActionExpectedResultChange: NOOP,
       onLifeActionDescriptionChange: NOOP,
       onLifeActionSubmit: NOOP,
+      onOpenDecisionConfirmationForm: NOOP,
+      onCloseDecisionConfirmationForm: NOOP,
+      onDecisionActualResultChange: NOOP,
+      onDecisionConfirmationSubmit: NOOP,
       onOpenLifeAction: NOOP,
       onBackToDecision: NOOP,
       onRetryLifeAction: NOOP,

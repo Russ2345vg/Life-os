@@ -525,6 +525,145 @@ button:disabled {
   border-top: 1px solid var(--color-border);
 }
 
+.decision-result-section {
+  margin-bottom: var(--space-6);
+  padding: var(--space-5);
+  border: 1px solid #51482f;
+  border-radius: var(--radius-small);
+  background: #15150f;
+}
+
+.decision-result-heading h3 {
+  margin: var(--space-2) 0 0;
+  font-size: 1.35rem;
+}
+
+.decision-action-totals {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: var(--space-5) 0;
+}
+
+.decision-action-totals div {
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-small);
+  background: #101310;
+}
+
+.decision-action-totals dt,
+.confirmed-decision-result dt {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.decision-action-totals dd,
+.confirmed-decision-result dd {
+  margin: var(--space-1) 0 0;
+  overflow-wrap: anywhere;
+  font-weight: 700;
+}
+
+.decision-confirmation-note,
+.decision-confirmation-help {
+  margin: 0 0 var(--space-4);
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+.decision-confirm-button {
+  width: 100%;
+}
+
+.decision-confirmation-form {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid #665b38;
+  border-radius: var(--radius-small);
+  background: #11140f;
+}
+
+.decision-confirmation-form h4,
+.decision-confirmation-form label,
+.decision-confirmation-form p {
+  min-width: 0;
+  margin: 0;
+}
+
+.decision-confirmation-form label {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.decision-confirmation-form label > span {
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  font-weight: 650;
+}
+
+.decision-confirmation-form textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 7rem;
+  padding: var(--space-3);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-small);
+  outline: none;
+  background: #0d110f;
+  resize: vertical;
+}
+
+.decision-confirmation-form textarea:focus {
+  border-color: var(--color-accent-gold);
+}
+
+.confirmed-decision-result {
+  padding: var(--space-4);
+  border: 1px solid #315c3c;
+  border-radius: var(--radius-small);
+  background: #101a13;
+}
+
+.confirmed-result-title {
+  margin: 0;
+  color: var(--color-accent-green);
+  font-weight: 800;
+}
+
+.confirmed-result-text {
+  margin: var(--space-3) 0;
+  overflow-wrap: anywhere;
+  line-height: 1.55;
+}
+
+.confirmed-decision-result dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.confirmed-actions p {
+  margin: var(--space-4) 0 var(--space-2);
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.confirmed-actions ul {
+  margin: 0;
+  padding-left: var(--space-5);
+}
+
+.confirmed-actions li {
+  overflow-wrap: anywhere;
+}
+
 .linked-actions-heading {
   align-items: center;
 }
@@ -1107,6 +1246,11 @@ button:disabled {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .decision-action-totals,
+  .confirmed-decision-result dl {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .linked-actions-heading,
   .linked-action-card-heading {
     align-items: stretch;
@@ -1116,6 +1260,11 @@ button:disabled {
   .linked-actions-heading .primary-button,
   .life-action-form .form-actions,
   .life-action-form .form-actions button {
+    width: 100%;
+  }
+
+  .decision-confirmation-form .form-actions,
+  .decision-confirmation-form .form-actions button {
     width: 100%;
   }
 

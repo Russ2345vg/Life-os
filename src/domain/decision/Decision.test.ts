@@ -291,18 +291,20 @@ describe('Decision', () => {
       ).toThrowError(expect.objectContaining({ code: 'decision.confirm_requires_actual_result' }));
     });
 
-    it('запрещает подтверждение draft и planned', () => {
+    it('подтверждает planned и фиксирует время начала по времени подтверждения', () => {
+      const decision = createPlannedAdditional();
+
+      decision.confirm(actualResult(), [id('evidence')], CHANGED_AT, id('confirmed-event'));
+
+      expect(decision.status).toBe(DECISION_STATUS.confirmed);
+      expect(decision.startedAt).toEqual(CHANGED_AT);
+      expect(decision.confirmedAt).toEqual(CHANGED_AT);
+    });
+
+    it('запрещает подтверждение draft', () => {
       expect(() =>
         createDraft().confirm(actualResult(), [id('evidence')], CHANGED_AT, id('confirmed-event')),
-      ).toThrow(DomainError);
-      expect(() =>
-        createPlannedAdditional().confirm(
-          actualResult(),
-          [id('evidence')],
-          CHANGED_AT,
-          id('confirmed-event'),
-        ),
-      ).toThrow(DomainError);
+      ).toThrowError(expect.objectContaining({ code: 'decision.confirm_not_allowed' }));
     });
 
     it('запрещает повторное подтверждение', () => {
@@ -315,7 +317,7 @@ describe('Decision', () => {
           CHANGED_AT,
           id('second-confirmed-event'),
         ),
-      ).toThrowError(expect.objectContaining({ code: 'decision.confirm_requires_in_progress' }));
+      ).toThrowError(expect.objectContaining({ code: 'decision.confirm_not_allowed' }));
     });
   });
 

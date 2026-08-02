@@ -4,6 +4,7 @@ import {
   CreateLifeActionForDecision,
   CompleteActionSession,
   CompleteLifeAction,
+  ConfirmDecisionFromActions,
   EnsureCurrentDay,
   GetDecisionsForDate,
   GetDecisionById,
@@ -90,6 +91,12 @@ export async function createLifeOsApplication(
       idGenerator,
     );
     const completeLifeAction = new CompleteLifeAction(lifeActionRepository, clock, idGenerator);
+    const confirmDecisionFromActions = new ConfirmDecisionFromActions(
+      decisionRepository,
+      lifeActionRepository,
+      clock,
+      idGenerator,
+    );
     const getActionSessionsForLifeAction = new GetActionSessionsForLifeAction(
       actionSessionRepository,
     );
@@ -114,6 +121,7 @@ export async function createLifeOsApplication(
       resumeActionSession,
       completeActionSession,
       completeLifeAction,
+      confirmDecisionFromActions,
       getActionSessionsForLifeAction,
       getUnfinishedActionSession,
       closeDatabase: () => database.close(),

@@ -11,6 +11,10 @@ export {
 } from './commands/CompleteActionSession';
 export { CompleteLifeAction, type CompleteLifeActionInput } from './commands/CompleteLifeAction';
 export {
+  ConfirmDecisionFromActions,
+  type ConfirmDecisionFromActionsInput,
+} from './commands/ConfirmDecisionFromActions';
+export {
   CreateLifeActionDraft,
   type CreateLifeActionDraftInput,
 } from './commands/CreateLifeActionDraft';
