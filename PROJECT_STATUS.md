@@ -2,9 +2,9 @@
 
 - Проект: самостоятельный LifeOS
 - Текущий макроблок: предметный слой
-- Текущий этап: ActionSession domain model
+- Текущий этап: ActionSession completion command
 - Статус: завершён
-- Следующий допустимый этап: ActionSession application commands and repository
+- Следующий допустимый этап: Single active session invariant and LifeAction coordination
 
 ## Выполненные работы
 

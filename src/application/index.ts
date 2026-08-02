@@ -1,6 +1,10 @@
 export { CreateDecisionDraft, type CreateDecisionDraftInput } from './commands/CreateDecisionDraft';
 export { ArchiveLifeAction, type ArchiveLifeActionInput } from './commands/ArchiveLifeAction';
 export { CancelLifeAction, type CancelLifeActionInput } from './commands/CancelLifeAction';
+export {
+  CompleteActionSession,
+  type CompleteActionSessionInput,
+} from './commands/CompleteActionSession';
 export { CompleteLifeAction, type CompleteLifeActionInput } from './commands/CompleteLifeAction';
 export {
   CreateLifeActionDraft,
