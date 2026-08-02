@@ -9,12 +9,14 @@ export {
 export { EnsureCurrentDay } from './commands/EnsureCurrentDay';
 export { MakeLifeActionReady, type MakeLifeActionReadyInput } from './commands/MakeLifeActionReady';
 export { PlanDecision, type PlanDecisionInput } from './commands/PlanDecision';
+export { PauseActionSession, type PauseActionSessionInput } from './commands/PauseActionSession';
 export { RescheduleDecision, type RescheduleDecisionInput } from './commands/RescheduleDecision';
 export {
   RescheduleLifeAction,
   type RescheduleLifeActionInput,
 } from './commands/RescheduleLifeAction';
 export { RestoreDecision, type RestoreDecisionInput } from './commands/RestoreDecision';
+export { ResumeActionSession, type ResumeActionSessionInput } from './commands/ResumeActionSession';
 export { StartLifeAction, type StartLifeActionInput } from './commands/StartLifeAction';
 export { MainDecisionLimitPolicy } from './decision/MainDecisionLimitPolicy';
 export { GetDecisionsForDate } from './queries/GetDecisionsForDate';
