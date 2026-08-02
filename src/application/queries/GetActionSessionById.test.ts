@@ -62,6 +62,12 @@ class FakeActionSessionRepository implements ActionSessionRepository {
     return this.#session?.lifeActionId.equals(lifeActionId) === true ? [this.#session] : [];
   }
 
+  public async findUnfinished(): Promise<ActionSessionType | null> {
+    return this.#session?.isRunning() === true || this.#session?.isPaused() === true
+      ? this.#session
+      : null;
+  }
+
   public async save(session: ActionSessionType): Promise<void> {
     void session;
   }

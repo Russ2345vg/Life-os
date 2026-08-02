@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   ACTION_SESSION_STATUS,
+  ActionSession,
   ActionSessionStarted,
   DayDate,
   EntityId,
-  type ActionSession,
+  SESSION_COMPLETION_KIND,
   type LifeAction,
 } from '../../domain';
 import { DomainError } from '../../shared/errors/DomainError';
@@ -24,6 +25,9 @@ import { StartActionSession } from './StartActionSession';
 
 const DATE = DayDate.create('2026-08-02');
 const NOW = new Date('2026-08-02T10:30:00.000+09:00');
+const EXISTING_STARTED_AT = new Date('2026-08-02T09:00:00.000+09:00');
+const EXISTING_PAUSED_AT = new Date('2026-08-02T09:30:00.000+09:00');
+const EXISTING_COMPLETED_AT = new Date('2026-08-02T10:00:00.000+09:00');
 
 describe('StartActionSession', () => {
   it('создаёт и сохраняет running-сессию для in_progress с Clock и двумя идентификаторами', async () => {
@@ -33,9 +37,11 @@ describe('StartActionSession', () => {
     const lifeActionSave = vi.spyOn(lifeActionRepository, 'save');
     const actionSessionRepository = new FakeActionSessionRepository();
     const sessionSave = vi.spyOn(actionSessionRepository, 'save');
+    const findUnfinished = vi.spyOn(actionSessionRepository, 'findUnfinished');
     const clock = new FakeClock(NOW);
     const now = vi.spyOn(clock, 'now');
     const idGenerator = new FakeIdGenerator('session');
+    const generate = vi.spyOn(idGenerator, 'generate');
     const initialVersion = lifeAction.version;
     const initialStartedAt = lifeAction.startedAt;
 
@@ -51,8 +57,15 @@ describe('StartActionSession', () => {
     expect(session.lifeActionId.equals(lifeAction.id)).toBe(true);
     expect(session.startedAt).toEqual(NOW);
     expect(session.id.toString()).toBe('session-1');
+    expect(findUnfinished).toHaveBeenCalledOnce();
     expect(now).toHaveBeenCalledOnce();
     expect(idGenerator.generatedCount).toBe(2);
+    expect(findUnfinished.mock.invocationCallOrder[0]).toBeLessThan(
+      now.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
+    );
+    expect(findUnfinished.mock.invocationCallOrder[0]).toBeLessThan(
+      generate.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
+    );
     expect(sessionSave).toHaveBeenCalledOnce();
     expect(sessionSave).toHaveBeenCalledWith(session);
     await expect(actionSessionRepository.findById(session.id)).resolves.toBe(session);
@@ -161,6 +174,76 @@ describe('StartActionSession', () => {
     expect(sessionSave).not.toHaveBeenCalled();
     expect(lifeActionSave).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ['running той же LifeAction', 'running', 'action-progress'],
+    ['paused той же LifeAction', 'paused', 'action-progress'],
+    ['running другой LifeAction', 'running', 'other-action'],
+  ] as const)(
+    'блокирует запуск при незавершённой сессии: %s',
+    async (_caseName, existingStatus, existingLifeActionId) => {
+      const lifeAction = markLifeActionInProgress(createReadyLifeAction('action-progress', DATE));
+      lifeAction.clearUncommittedEvents();
+      const initialLifeActionState = lifeActionState(lifeAction);
+      const lifeActionRepository = await lifeActionRepositoryWith(lifeAction);
+      const lifeActionSave = vi.spyOn(lifeActionRepository, 'save');
+      const existingSession = createStoredSession(
+        'existing-session',
+        existingLifeActionId,
+        existingStatus,
+      );
+      const initialSessionState = actionSessionState(existingSession);
+      const actionSessionRepository = new FakeActionSessionRepository([existingSession]);
+      const sessionSave = vi.spyOn(actionSessionRepository, 'save');
+      const clock = new FakeClock(NOW);
+      const now = vi.spyOn(clock, 'now');
+      const idGenerator = new FakeIdGenerator('unused');
+
+      const result = await new StartActionSession(
+        actionSessionRepository,
+        lifeActionRepository,
+        clock,
+        idGenerator,
+      ).execute({ lifeActionId: lifeAction.id });
+
+      expectFailureCode(result, 'session.unfinished_exists');
+      expect(now).not.toHaveBeenCalled();
+      expect(idGenerator.generatedCount).toBe(0);
+      expect(sessionSave).not.toHaveBeenCalled();
+      expect(lifeActionSave).not.toHaveBeenCalled();
+      expect(lifeActionState(lifeAction)).toEqual(initialLifeActionState);
+      expect(actionSessionState(existingSession)).toEqual(initialSessionState);
+    },
+  );
+
+  it('разрешает запуск при наличии completed-сессии', async () => {
+    const lifeAction = markLifeActionInProgress(createReadyLifeAction('action-progress', DATE));
+    lifeAction.clearUncommittedEvents();
+    const lifeActionRepository = await lifeActionRepositoryWith(lifeAction);
+    const existingSession = createCompletedStoredSession('completed-session', 'other-action');
+    const initialSessionState = actionSessionState(existingSession);
+    const actionSessionRepository = new FakeActionSessionRepository([existingSession]);
+    const sessionSave = vi.spyOn(actionSessionRepository, 'save');
+    const clock = new FakeClock(NOW);
+    const now = vi.spyOn(clock, 'now');
+    const idGenerator = new FakeIdGenerator('new-session');
+
+    const result = await new StartActionSession(
+      actionSessionRepository,
+      lifeActionRepository,
+      clock,
+      idGenerator,
+    ).execute({ lifeActionId: lifeAction.id });
+    const session = unwrap(result);
+
+    expect(session.status).toBe(ACTION_SESSION_STATUS.running);
+    expect(session.id.toString()).toBe('new-session-1');
+    expect(now).toHaveBeenCalledOnce();
+    expect(idGenerator.generatedCount).toBe(2);
+    expect(sessionSave).toHaveBeenCalledOnce();
+    expect(sessionSave).toHaveBeenCalledWith(session);
+    expect(actionSessionState(existingSession)).toEqual(initialSessionState);
+  });
 });
 
 async function lifeActionRepositoryWith(lifeAction: LifeAction): Promise<FakeLifeActionRepository> {
@@ -172,6 +255,12 @@ async function lifeActionRepositoryWith(lifeAction: LifeAction): Promise<FakeLif
 class FakeActionSessionRepository implements ActionSessionRepository {
   readonly #sessions = new Map<string, ActionSession>();
 
+  public constructor(sessions: readonly ActionSession[] = []) {
+    for (const session of sessions) {
+      this.#sessions.set(session.id.toString(), session);
+    }
+  }
+
   public async findById(id: EntityId): Promise<ActionSession | null> {
     return this.#sessions.get(id.toString()) ?? null;
   }
@@ -179,6 +268,13 @@ class FakeActionSessionRepository implements ActionSessionRepository {
   public async findByLifeActionId(lifeActionId: EntityId): Promise<readonly ActionSession[]> {
     return [...this.#sessions.values()].filter((session) =>
       session.lifeActionId.equals(lifeActionId),
+    );
+  }
+
+  public async findUnfinished(): Promise<ActionSession | null> {
+    return (
+      [...this.#sessions.values()].find((session) => session.isRunning() || session.isPaused()) ??
+      null
     );
   }
 
@@ -218,6 +314,51 @@ function lifeActionState(lifeAction: LifeAction): object {
     cancelledAt: lifeAction.cancelledAt,
     archivedAt: lifeAction.archivedAt,
     events: lifeAction.getUncommittedEvents(),
+  };
+}
+
+function createStoredSession(
+  sessionId: string,
+  lifeActionId: string,
+  status: 'running' | 'paused',
+): ActionSession {
+  const session = ActionSession.start({
+    id: EntityId.create(sessionId),
+    lifeActionId: EntityId.create(lifeActionId),
+    startedAt: EXISTING_STARTED_AT,
+    eventId: EntityId.create(`${sessionId}-started-event`),
+  });
+
+  if (status === 'paused') {
+    session.pause(EXISTING_PAUSED_AT, EntityId.create(`${sessionId}-paused-event`));
+  }
+
+  session.clearUncommittedEvents();
+  return session;
+}
+
+function createCompletedStoredSession(sessionId: string, lifeActionId: string): ActionSession {
+  const session = createStoredSession(sessionId, lifeActionId, 'running');
+  session.complete({
+    completedAt: EXISTING_COMPLETED_AT,
+    completionKind: SESSION_COMPLETION_KIND.completed,
+    eventId: EntityId.create(`${sessionId}-completed-event`),
+  });
+  session.clearUncommittedEvents();
+  return session;
+}
+
+function actionSessionState(session: ActionSession): object {
+  return {
+    status: session.status,
+    version: session.version,
+    startedAt: session.startedAt,
+    pausedAt: session.pausedAt,
+    completedAt: session.completedAt,
+    completionKind: session.completionKind,
+    resultNote: session.resultNote,
+    pauseIntervals: session.pauseIntervals,
+    events: session.getUncommittedEvents(),
   };
 }
 

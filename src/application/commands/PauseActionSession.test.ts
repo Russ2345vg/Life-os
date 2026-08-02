@@ -159,6 +159,13 @@ class FakeActionSessionRepository implements ActionSessionRepository {
     );
   }
 
+  public async findUnfinished(): Promise<ActionSession | null> {
+    return (
+      [...this.#sessions.values()].find((session) => session.isRunning() || session.isPaused()) ??
+      null
+    );
+  }
+
   public async save(session: ActionSession): Promise<void> {
     this.savedStatus = session.status;
     this.savedVersion = session.version;

@@ -5,6 +5,7 @@ import {
   EntityId,
   SESSION_COMPLETION_KIND,
 } from '../../domain';
+import { DomainError } from '../../shared/errors/DomainError';
 import { InMemoryActionSessionRepository } from './InMemoryActionSessionRepository';
 
 const STARTED_AT = new Date('2026-08-01T09:00:00.000+09:00');
@@ -107,6 +108,56 @@ describe('InMemoryActionSessionRepository', () => {
       paused,
       completed,
     ]);
+  });
+
+  it('находит running-сессию как незавершённую', async () => {
+    const repository = new InMemoryActionSessionRepository();
+    const running = createRunningSession('running', 'action-1');
+    await repository.save(running);
+
+    await expect(repository.findUnfinished()).resolves.toBe(running);
+  });
+
+  it('находит paused-сессию как незавершённую', async () => {
+    const repository = new InMemoryActionSessionRepository();
+    const paused = createPausedSession('paused', 'action-1');
+    await repository.save(paused);
+
+    await expect(repository.findUnfinished()).resolves.toBe(paused);
+  });
+
+  it('не возвращает completed-сессию как незавершённую', async () => {
+    const repository = new InMemoryActionSessionRepository();
+    await repository.save(createCompletedSession('completed', 'action-1'));
+
+    await expect(repository.findUnfinished()).resolves.toBeNull();
+  });
+
+  it('возвращает отсутствие результата для пустого репозитория', async () => {
+    const repository = new InMemoryActionSessionRepository();
+
+    await expect(repository.findUnfinished()).resolves.toBeNull();
+  });
+
+  it('игнорирует несколько completed-сессий и находит единственную незавершённую', async () => {
+    const repository = new InMemoryActionSessionRepository();
+    const running = createRunningSession('running', 'action-3');
+    await repository.save(createCompletedSession('completed-1', 'action-1'));
+    await repository.save(createCompletedSession('completed-2', 'action-2'));
+    await repository.save(running);
+
+    await expect(repository.findUnfinished()).resolves.toBe(running);
+  });
+
+  it('явно отклоняет повреждение с несколькими незавершёнными сессиями', async () => {
+    const repository = new InMemoryActionSessionRepository();
+    await repository.save(createRunningSession('running', 'action-1'));
+    await repository.save(createPausedSession('paused', 'action-2'));
+
+    await expect(repository.findUnfinished()).rejects.toBeInstanceOf(DomainError);
+    await expect(repository.findUnfinished()).rejects.toMatchObject({
+      code: 'session.multiple_unfinished_detected',
+    });
   });
 });
 

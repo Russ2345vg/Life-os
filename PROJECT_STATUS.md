@@ -2,9 +2,9 @@
 
 - Проект: самостоятельный LifeOS
 - Текущий макроблок: предметный слой
-- Текущий этап: ActionSession completion command
+- Текущий этап: Single unfinished ActionSession invariant
 - Статус: завершён
-- Следующий допустимый этап: Single active session invariant and LifeAction coordination
+- Следующий допустимый этап: Coordinated LifeAction and ActionSession start
 
 ## Выполненные работы
 

@@ -1,5 +1,6 @@
 import type { ActionSessionRepository } from '../../application';
 import type { ActionSession, EntityId } from '../../domain';
+import { DomainError } from '../../shared/errors/DomainError';
 
 export class InMemoryActionSessionRepository implements ActionSessionRepository {
   readonly #sessionsById = new Map<string, ActionSession>();
@@ -12,6 +13,21 @@ export class InMemoryActionSessionRepository implements ActionSessionRepository 
     return [...this.#sessionsById.values()].filter((session) =>
       session.lifeActionId.equals(lifeActionId),
     );
+  }
+
+  public async findUnfinished(): Promise<ActionSession | null> {
+    const unfinishedSessions = [...this.#sessionsById.values()].filter(
+      (session) => session.isRunning() || session.isPaused(),
+    );
+
+    if (unfinishedSessions.length > 1) {
+      throw new DomainError(
+        'session.multiple_unfinished_detected',
+        'Обнаружено несколько незавершённых сессий.',
+      );
+    }
+
+    return unfinishedSessions[0] ?? null;
   }
 
   public async save(session: ActionSession): Promise<void> {

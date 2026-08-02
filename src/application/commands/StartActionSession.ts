@@ -55,6 +55,25 @@ export class StartActionSession {
       );
     }
 
+    try {
+      const unfinishedSession = await this.#actionSessionRepository.findUnfinished();
+
+      if (unfinishedSession !== null) {
+        return failure(
+          new DomainError(
+            'session.unfinished_exists',
+            'Нельзя начать новую сессию, пока другая сессия не завершена.',
+          ),
+        );
+      }
+    } catch (error: unknown) {
+      if (error instanceof DomainError) {
+        return failure(error);
+      }
+
+      throw error;
+    }
+
     const startedAt = this.#clock.now();
     const sessionId = this.#idGenerator.generate();
     const eventId = this.#idGenerator.generate();
