@@ -1,4 +1,8 @@
 export { CreateDecisionDraft, type CreateDecisionDraftInput } from './commands/CreateDecisionDraft';
+export {
+  CreateDecisionForDate,
+  type CreateDecisionForDateInput,
+} from './commands/CreateDecisionForDate';
 export { ArchiveLifeAction, type ArchiveLifeActionInput } from './commands/ArchiveLifeAction';
 export { CancelLifeAction, type CancelLifeActionInput } from './commands/CancelLifeAction';
 export {

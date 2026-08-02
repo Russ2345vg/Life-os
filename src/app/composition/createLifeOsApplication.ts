@@ -1,5 +1,10 @@
 import type { Clock, CurrentDateProvider, IdGenerator } from '../../application';
-import { EnsureCurrentDay } from '../../application';
+import {
+  CreateDecisionForDate,
+  EnsureCurrentDay,
+  GetDecisionsForDate,
+  MainDecisionLimitPolicy,
+} from '../../application';
 import { SystemClock } from '../../infrastructure/clock/SystemClock';
 import { SystemCurrentDateProvider } from '../../infrastructure/clock/SystemCurrentDateProvider';
 import { CryptoIdGenerator } from '../../infrastructure/ids/CryptoIdGenerator';
@@ -40,6 +45,15 @@ export async function createLifeOsApplication(
       clock,
       idGenerator,
     );
+    const currentDay = await ensureCurrentDay.execute();
+    const mainDecisionLimitPolicy = new MainDecisionLimitPolicy(decisionRepository);
+    const createDecisionForDate = new CreateDecisionForDate(
+      decisionRepository,
+      mainDecisionLimitPolicy,
+      clock,
+      idGenerator,
+    );
+    const getDecisionsForDate = new GetDecisionsForDate(decisionRepository);
     const application = new LifeOsApplication({
       dayRepository,
       decisionRepository,
@@ -49,10 +63,12 @@ export async function createLifeOsApplication(
       currentDateProvider,
       idGenerator,
       ensureCurrentDay,
+      currentDate: currentDay.date,
+      createDecisionForDate,
+      getDecisionsForDate,
       closeDatabase: () => database.close(),
     });
 
-    await ensureCurrentDay.execute();
     return application;
   } catch (error: unknown) {
     database.close();

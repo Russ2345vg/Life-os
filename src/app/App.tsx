@@ -1,5 +1,5 @@
-import { HomePage } from '../presentation/pages/HomePage';
 import { StartupPage } from '../presentation/pages/StartupPage';
+import { TodayPage } from '../presentation/pages/TodayPage';
 import { LifeOsApplicationProvider, useLifeOsApplication } from './providers';
 
 export function App() {
@@ -8,14 +8,19 @@ export function App() {
       loadingFallback={<StartupPage status="loading" />}
       errorFallback={() => <StartupPage status="error" />}
     >
-      <ReadyHomePage />
+      <ReadyTodayPage />
     </LifeOsApplicationProvider>
   );
 }
 
-function ReadyHomePage() {
+function ReadyTodayPage() {
   const application = useLifeOsApplication();
-  const currentDate = application.currentDateProvider.getCurrentDate().toString();
 
-  return <HomePage currentDate={currentDate} />;
+  return (
+    <TodayPage
+      currentDate={application.currentDate}
+      getDecisionsForDate={application.getDecisionsForDate}
+      createDecisionForDate={application.createDecisionForDate}
+    />
+  );
 }

@@ -1,6 +1,6 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it, vi } from 'vitest';
-import { DAY_STATUS, DayDate, EntityId } from '../../domain';
+import { DAY_STATUS, DayDate, DECISION_KIND, EntityId } from '../../domain';
 import { SystemClock } from '../../infrastructure/clock/SystemClock';
 import { SystemCurrentDateProvider } from '../../infrastructure/clock/SystemCurrentDateProvider';
 import { CryptoIdGenerator } from '../../infrastructure/ids/CryptoIdGenerator';
@@ -29,6 +29,7 @@ describe('createLifeOsApplication', () => {
     expect(application.clock).toBeInstanceOf(SystemClock);
     expect(application.currentDateProvider).toBeInstanceOf(SystemCurrentDateProvider);
     expect(application.idGenerator).toBeInstanceOf(CryptoIdGenerator);
+    expect(application.currentDate).toBeInstanceOf(DayDate);
     await expect(
       application.dayRepository.findByDate(application.currentDateProvider.getCurrentDate()),
     ).resolves.not.toBeNull();
@@ -90,6 +91,36 @@ describe('createLifeOsApplication', () => {
     application.close();
 
     expect(close).toHaveBeenCalledOnce();
+  });
+
+  it('сохраняет созданное решение между запусками без дубликата', async () => {
+    const indexedDbFactory = new IDBFactory();
+    const firstApplication = await createTestApplication(
+      indexedDbFactory,
+      new FakeIdGenerator('persistent'),
+    );
+
+    const createResult = await firstApplication.createDecisionForDate.execute({
+      title: 'Сохранить решение постоянно',
+      kind: DECISION_KIND.main,
+      plannedDate: firstApplication.currentDate,
+      expectedResult: 'Решение доступно после перезапуска',
+    });
+    expect(createResult.ok).toBe(true);
+    firstApplication.close();
+
+    const secondApplication = await createTestApplication(
+      indexedDbFactory,
+      new FakeIdGenerator('reload'),
+    );
+    const restored = await secondApplication.getDecisionsForDate.execute(
+      secondApplication.currentDate,
+    );
+
+    expect(restored).toHaveLength(1);
+    expect(restored[0]?.title.toString()).toBe('Сохранить решение постоянно');
+    expect(restored[0]?.order).toBe(1);
+    secondApplication.close();
   });
 
   it('возвращает контролируемую ошибку и закрывает базу при сбое запуска', async () => {
