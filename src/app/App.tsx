@@ -21,6 +21,9 @@ function ReadyTodayPage() {
       currentDate={application.currentDate}
       getDecisionsForDate={application.getDecisionsForDate}
       createDecisionForDate={application.createDecisionForDate}
+      getDecisionById={application.getDecisionById}
+      getLifeActionsForDecision={application.getLifeActionsForDecision}
+      createLifeActionForDecision={application.createLifeActionForDecision}
     />
   );
 }

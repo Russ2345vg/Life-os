@@ -1,5 +1,17 @@
-import type { CreateDecisionForDate, GetDecisionsForDate } from '../../application';
-import { DECISION_KIND, type DayDate, type Decision, type DecisionKind } from '../../domain';
+import type {
+  CreateDecisionForDate,
+  CreateLifeActionForDecision,
+  GetDecisionsForDate,
+  GetLifeActionsForDecision,
+} from '../../application';
+import {
+  DECISION_KIND,
+  type DayDate,
+  type Decision,
+  type DecisionKind,
+  type EntityId,
+  type LifeAction,
+} from '../../domain';
 
 type DecisionsState =
   | { readonly status: 'loading' }
@@ -12,8 +24,29 @@ export interface DecisionFormState {
   readonly expectedResult: string;
 }
 
+export interface LifeActionFormState {
+  readonly title: string;
+  readonly expectedResult: string;
+  readonly description: string;
+}
+
+export type DecisionDetailsState =
+  | { readonly status: 'closed' }
+  | { readonly status: 'loading'; readonly decisionId: EntityId }
+  | { readonly status: 'error'; readonly decisionId: EntityId }
+  | {
+      readonly status: 'ready';
+      readonly decisionId: EntityId;
+      readonly decision: Decision;
+      readonly lifeActions: readonly LifeAction[];
+    };
+
 type DecisionSubmissionResult =
   | { readonly ok: true; readonly decisions: readonly Decision[] }
+  | { readonly ok: false; readonly message: string };
+
+type LifeActionSubmissionResult =
+  | { readonly ok: true; readonly lifeActions: readonly LifeAction[] }
   | { readonly ok: false; readonly message: string };
 
 export interface TodayPageState {
@@ -22,6 +55,11 @@ export interface TodayPageState {
   readonly isSaving: boolean;
   readonly form: DecisionFormState;
   readonly formError: string | null;
+  readonly details: DecisionDetailsState;
+  readonly isLifeActionFormOpen: boolean;
+  readonly isLifeActionSaving: boolean;
+  readonly lifeActionForm: LifeActionFormState;
+  readonly lifeActionFormError: string | null;
 }
 
 export type TodayPageAction =
@@ -35,7 +73,31 @@ export type TodayPageAction =
   | { readonly type: 'expected_result_changed'; readonly expectedResult: string }
   | { readonly type: 'save_started' }
   | { readonly type: 'save_failed'; readonly message: string }
-  | { readonly type: 'save_succeeded' };
+  | { readonly type: 'save_succeeded' }
+  | { readonly type: 'details_load_started'; readonly decisionId: EntityId }
+  | {
+      readonly type: 'details_load_succeeded';
+      readonly decisionId: EntityId;
+      readonly decision: Decision;
+      readonly lifeActions: readonly LifeAction[];
+    }
+  | { readonly type: 'details_load_failed'; readonly decisionId: EntityId }
+  | { readonly type: 'details_closed' }
+  | { readonly type: 'life_action_form_opened' }
+  | { readonly type: 'life_action_form_closed' }
+  | { readonly type: 'life_action_title_changed'; readonly title: string }
+  | {
+      readonly type: 'life_action_expected_result_changed';
+      readonly expectedResult: string;
+    }
+  | { readonly type: 'life_action_description_changed'; readonly description: string }
+  | { readonly type: 'life_action_save_started' }
+  | { readonly type: 'life_action_save_failed'; readonly message: string }
+  | {
+      readonly type: 'life_action_save_succeeded';
+      readonly decisionId: EntityId;
+      readonly lifeActions: readonly LifeAction[];
+    };
 
 export const INITIAL_TODAY_PAGE_STATE: TodayPageState = {
   decisions: { status: 'loading' },
@@ -43,6 +105,11 @@ export const INITIAL_TODAY_PAGE_STATE: TodayPageState = {
   isSaving: false,
   form: createEmptyForm(),
   formError: null,
+  details: { status: 'closed' },
+  isLifeActionFormOpen: false,
+  isLifeActionSaving: false,
+  lifeActionForm: createEmptyLifeActionForm(),
+  lifeActionFormError: null,
 };
 
 export function todayPageReducer(state: TodayPageState, action: TodayPageAction): TodayPageState {
@@ -78,6 +145,80 @@ export function todayPageReducer(state: TodayPageState, action: TodayPageAction)
         isFormOpen: false,
         form: createEmptyForm(),
         formError: null,
+      };
+    case 'details_load_started':
+      return {
+        ...state,
+        details: { status: 'loading', decisionId: action.decisionId },
+        isLifeActionFormOpen: false,
+        isLifeActionSaving: false,
+        lifeActionForm: createEmptyLifeActionForm(),
+        lifeActionFormError: null,
+      };
+    case 'details_load_succeeded':
+      if (!isCurrentDecision(state.details, action.decisionId)) {
+        return state;
+      }
+      return {
+        ...state,
+        details: {
+          status: 'ready',
+          decisionId: action.decisionId,
+          decision: action.decision,
+          lifeActions: action.lifeActions,
+        },
+      };
+    case 'details_load_failed':
+      if (!isCurrentDecision(state.details, action.decisionId)) {
+        return state;
+      }
+      return { ...state, details: { status: 'error', decisionId: action.decisionId } };
+    case 'details_closed':
+      return {
+        ...state,
+        details: { status: 'closed' },
+        isLifeActionFormOpen: false,
+        isLifeActionSaving: false,
+        lifeActionForm: createEmptyLifeActionForm(),
+        lifeActionFormError: null,
+      };
+    case 'life_action_form_opened':
+      return { ...state, isLifeActionFormOpen: true, lifeActionFormError: null };
+    case 'life_action_form_closed':
+      return { ...state, isLifeActionFormOpen: false, lifeActionFormError: null };
+    case 'life_action_title_changed':
+      return {
+        ...state,
+        lifeActionForm: { ...state.lifeActionForm, title: action.title },
+        lifeActionFormError: null,
+      };
+    case 'life_action_expected_result_changed':
+      return {
+        ...state,
+        lifeActionForm: { ...state.lifeActionForm, expectedResult: action.expectedResult },
+        lifeActionFormError: null,
+      };
+    case 'life_action_description_changed':
+      return {
+        ...state,
+        lifeActionForm: { ...state.lifeActionForm, description: action.description },
+        lifeActionFormError: null,
+      };
+    case 'life_action_save_started':
+      return { ...state, isLifeActionSaving: true, lifeActionFormError: null };
+    case 'life_action_save_failed':
+      return { ...state, isLifeActionSaving: false, lifeActionFormError: action.message };
+    case 'life_action_save_succeeded':
+      if (state.details.status !== 'ready' || !state.details.decisionId.equals(action.decisionId)) {
+        return state;
+      }
+      return {
+        ...state,
+        details: { ...state.details, lifeActions: action.lifeActions },
+        isLifeActionFormOpen: false,
+        isLifeActionSaving: false,
+        lifeActionForm: createEmptyLifeActionForm(),
+        lifeActionFormError: null,
       };
   }
 }
@@ -119,6 +260,47 @@ export async function createDecisionAndReload(input: {
   };
 }
 
+export function validateLifeActionForm(form: LifeActionFormState): string | null {
+  if (form.title.trim().length === 0) {
+    return 'Введите название действия';
+  }
+
+  if (form.expectedResult.trim().length === 0) {
+    return 'Укажите ожидаемый результат';
+  }
+
+  return null;
+}
+
+export function isDecisionActivationKey(key: string): boolean {
+  return key === 'Enter' || key === ' ';
+}
+
+export async function createLifeActionAndReload(input: {
+  readonly decisionId: EntityId;
+  readonly plannedDate: DayDate;
+  readonly form: LifeActionFormState;
+  readonly createLifeActionForDecision: Pick<CreateLifeActionForDecision, 'execute'>;
+  readonly getLifeActionsForDecision: Pick<GetLifeActionsForDecision, 'execute'>;
+}): Promise<LifeActionSubmissionResult> {
+  const result = await input.createLifeActionForDecision.execute({
+    decisionId: input.decisionId,
+    title: input.form.title,
+    expectedResult: input.form.expectedResult,
+    plannedDate: input.plannedDate,
+    ...(input.form.description.trim().length === 0 ? {} : { description: input.form.description }),
+  });
+
+  if (!result.ok) {
+    return { ok: false, message: lifeActionErrorMessage(result.error.code) };
+  }
+
+  return {
+    ok: true,
+    lifeActions: await input.getLifeActionsForDecision.execute(input.decisionId),
+  };
+}
+
 function decisionErrorMessage(code: string): string {
   switch (code) {
     case 'decision.main_limit_reached':
@@ -132,6 +314,27 @@ function decisionErrorMessage(code: string): string {
   }
 }
 
+function lifeActionErrorMessage(code: string): string {
+  switch (code) {
+    case 'action.decision_unavailable':
+      return 'Для этого решения больше нельзя создавать действия';
+    case 'life_action_title.invalid':
+      return 'Введите название действия';
+    case 'action_expected_result.invalid':
+      return 'Укажите ожидаемый результат';
+    default:
+      return 'Не удалось создать действие';
+  }
+}
+
 function createEmptyForm(): DecisionFormState {
   return { kind: DECISION_KIND.main, title: '', expectedResult: '' };
+}
+
+function createEmptyLifeActionForm(): LifeActionFormState {
+  return { title: '', expectedResult: '', description: '' };
+}
+
+function isCurrentDecision(details: DecisionDetailsState, decisionId: EntityId): boolean {
+  return details.status !== 'closed' && details.decisionId.equals(decisionId);
 }

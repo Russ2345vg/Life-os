@@ -2,10 +2,13 @@ import type {
   ActionSessionRepository,
   Clock,
   CreateDecisionForDate,
+  CreateLifeActionForDecision,
   CurrentDateProvider,
   DayRepository,
   DecisionRepository,
   GetDecisionsForDate,
+  GetDecisionById,
+  GetLifeActionsForDecision,
   IdGenerator,
   LifeActionRepository,
 } from '../../application';
@@ -24,6 +27,9 @@ interface LifeOsApplicationServices {
   readonly currentDate: DayDate;
   readonly createDecisionForDate: CreateDecisionForDate;
   readonly getDecisionsForDate: GetDecisionsForDate;
+  readonly getDecisionById: GetDecisionById;
+  readonly getLifeActionsForDecision: GetLifeActionsForDecision;
+  readonly createLifeActionForDecision: CreateLifeActionForDecision;
   readonly closeDatabase: () => void;
 }
 
@@ -39,6 +45,9 @@ export class LifeOsApplication {
   public readonly currentDate: DayDate;
   public readonly createDecisionForDate: CreateDecisionForDate;
   public readonly getDecisionsForDate: GetDecisionsForDate;
+  public readonly getDecisionById: GetDecisionById;
+  public readonly getLifeActionsForDecision: GetLifeActionsForDecision;
+  public readonly createLifeActionForDecision: CreateLifeActionForDecision;
 
   readonly #closeDatabase: () => void;
 
@@ -54,6 +63,9 @@ export class LifeOsApplication {
     this.currentDate = services.currentDate;
     this.createDecisionForDate = services.createDecisionForDate;
     this.getDecisionsForDate = services.getDecisionsForDate;
+    this.getDecisionById = services.getDecisionById;
+    this.getLifeActionsForDecision = services.getLifeActionsForDecision;
+    this.createLifeActionForDecision = services.createLifeActionForDecision;
     this.#closeDatabase = services.closeDatabase;
   }
 

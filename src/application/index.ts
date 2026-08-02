@@ -14,6 +14,10 @@ export {
   CreateLifeActionDraft,
   type CreateLifeActionDraftInput,
 } from './commands/CreateLifeActionDraft';
+export {
+  CreateLifeActionForDecision,
+  type CreateLifeActionForDecisionInput,
+} from './commands/CreateLifeActionForDecision';
 export { EnsureCurrentDay } from './commands/EnsureCurrentDay';
 export { MakeLifeActionReady, type MakeLifeActionReadyInput } from './commands/MakeLifeActionReady';
 export { PlanDecision, type PlanDecisionInput } from './commands/PlanDecision';
@@ -33,6 +37,7 @@ export {
 } from './commands/StartLifeActionSession';
 export { MainDecisionLimitPolicy } from './decision/MainDecisionLimitPolicy';
 export { GetDecisionsForDate } from './queries/GetDecisionsForDate';
+export { GetDecisionById } from './queries/GetDecisionById';
 export { GetActionSessionById } from './queries/GetActionSessionById';
 export { GetActionSessionsForLifeAction } from './queries/GetActionSessionsForLifeAction';
 export { GetLifeActionsForDate } from './queries/GetLifeActionsForDate';

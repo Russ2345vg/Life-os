@@ -4,12 +4,16 @@ import { DayDate, DECISION_KIND } from '../../domain';
 import { DomainError } from '../../shared/errors/DomainError';
 import { failure, success } from '../../shared/result/Result';
 import { createPlannedDecision } from '../../test/helpers/DecisionTestFactory';
+import { createReadyLifeAction } from '../../test/helpers/LifeActionTestFactory';
 import { TodayPageView } from './TodayPage';
 import {
   createDecisionAndReload,
+  createLifeActionAndReload,
   INITIAL_TODAY_PAGE_STATE,
+  isDecisionActivationKey,
   todayPageReducer,
   validateDecisionForm,
+  validateLifeActionForm,
   type TodayPageState,
 } from './TodayPageState';
 
@@ -194,6 +198,178 @@ describe('TodayPage view and workflow', () => {
     expect(succeeded.form).toEqual({ kind: DECISION_KIND.main, title: '', expectedResult: '' });
     expect(cancelled.isFormOpen).toBe(false);
   });
+
+  it('renders main and additional decisions as native keyboard-accessible buttons', () => {
+    const main = createPlannedDecision('main-open', DATE, DECISION_KIND.main, 1);
+    const additional = createPlannedDecision('additional-open', DATE, DECISION_KIND.additional);
+
+    const markup = renderView(createReadyState([main, additional]));
+
+    expect(markup).toContain('decision-card-button');
+    expect(markup).toContain('type="button"');
+    expect(markup).toContain('aria-label="Открыть решение');
+    expect(markup.match(/decision-open-hint/g)).toHaveLength(2);
+    expect(isDecisionActivationKey('Enter')).toBe(true);
+    expect(isDecisionActivationKey(' ')).toBe(true);
+    expect(isDecisionActivationKey('Escape')).toBe(false);
+  });
+
+  it('shows decision details for both kinds and no internal identifiers', () => {
+    const main = createPlannedDecision('main-details', DATE, DECISION_KIND.main, 2);
+    const additional = createPlannedDecision('additional-details', DATE, DECISION_KIND.additional);
+    const mainMarkup = renderView(createDetailsState(main));
+    const additionalMarkup = renderView(createDetailsState(additional));
+
+    expect(mainMarkup).toContain('Главное решение');
+    expect(mainMarkup).toContain('Позиция');
+    expect(mainMarkup).toContain('Запланировано');
+    expect(additionalMarkup).toContain('Дополнительное решение');
+    expect(additionalMarkup).not.toContain('<dt>Позиция</dt>');
+    expect(mainMarkup).not.toContain('data-decision-id');
+    expect(mainMarkup).not.toContain('main-details-draft-event');
+    expect(mainMarkup).not.toContain('decision.not_found');
+  });
+
+  it('shows details loading, controlled error with retry, and closes the panel', () => {
+    const decision = createPlannedDecision('details-state', DATE);
+    const loading = todayPageReducer(createReadyState([decision]), {
+      type: 'details_load_started',
+      decisionId: decision.id,
+    });
+    const failed = todayPageReducer(loading, {
+      type: 'details_load_failed',
+      decisionId: decision.id,
+    });
+    const closed = todayPageReducer(failed, { type: 'details_closed' });
+
+    expect(renderView(loading)).toContain('Загружаем решение…');
+    expect(renderView(failed)).toContain('Не удалось открыть решение');
+    expect(renderView(failed)).toContain('Повторить');
+    expect(renderView(failed)).toContain('Закрыть карточку решения');
+    expect(renderView(closed)).not.toContain('decision-details-backdrop');
+  });
+
+  it('shows an empty linked-action state and existing linked actions', () => {
+    const decision = createPlannedDecision('linked-actions', DATE);
+    const emptyMarkup = renderView(createDetailsState(decision));
+    const lifeAction = createReadyLifeAction('linked-ready', DATE, {
+      decisionId: decision.id,
+    });
+    const filledMarkup = renderView(createDetailsState(decision, [lifeAction]));
+
+    expect(emptyMarkup).toContain('Для этого решения пока нет действий');
+    expect(filledMarkup).toContain('Действия по решению');
+    expect(filledMarkup).toContain('Готово к выполнению');
+    expect(filledMarkup).toContain('Результат linked-ready');
+  });
+
+  it('opens the action form, validates required fields, and cancellation closes it', () => {
+    const decision = createPlannedDecision('action-form', DATE);
+    const details = createDetailsState(decision);
+    const opened = todayPageReducer(details, { type: 'life_action_form_opened' });
+    const closed = todayPageReducer(opened, { type: 'life_action_form_closed' });
+
+    expect(renderView(opened)).toContain('Название действия *');
+    expect(renderView(opened)).toContain('Ожидаемый результат *');
+    expect(renderView(opened)).toContain('Описание');
+    expect(
+      validateLifeActionForm({ title: ' ', expectedResult: 'Результат', description: '' }),
+    ).toBe('Введите название действия');
+    expect(
+      validateLifeActionForm({ title: 'Действие', expectedResult: ' ', description: '' }),
+    ).toBe('Укажите ожидаемый результат');
+    expect(closed.isLifeActionFormOpen).toBe(false);
+  });
+
+  it('creates a linked action and reloads the list for the same decision', async () => {
+    const decision = createPlannedDecision('create-linked', DATE);
+    const created = createReadyLifeAction('created-linked', DATE, {
+      decisionId: decision.id,
+    });
+    const createExecute = vi.fn().mockResolvedValue(success(created));
+    const getExecute = vi.fn().mockResolvedValue([created]);
+    const form = {
+      title: 'Новое действие',
+      expectedResult: 'Новый результат',
+      description: 'Подробности',
+    } as const;
+
+    const result = await createLifeActionAndReload({
+      decisionId: decision.id,
+      plannedDate: DATE,
+      form,
+      createLifeActionForDecision: { execute: createExecute },
+      getLifeActionsForDecision: { execute: getExecute },
+    });
+
+    expect(result).toEqual({ ok: true, lifeActions: [created] });
+    expect(createExecute).toHaveBeenCalledWith({
+      decisionId: decision.id,
+      title: 'Новое действие',
+      expectedResult: 'Новый результат',
+      plannedDate: DATE,
+      description: 'Подробности',
+    });
+    expect(getExecute).toHaveBeenCalledWith(decision.id);
+  });
+
+  it('blocks repeated action submission and clears the form after success', () => {
+    const decision = createPlannedDecision('saving-action', DATE);
+    const filled = {
+      ...createDetailsState(decision),
+      isLifeActionFormOpen: true,
+      isLifeActionSaving: true,
+      lifeActionForm: {
+        title: 'Введённое действие',
+        expectedResult: 'Введённый результат',
+        description: 'Описание остаётся',
+      },
+    } satisfies TodayPageState;
+    const markup = renderView(filled);
+    const succeeded = todayPageReducer(filled, {
+      type: 'life_action_save_succeeded',
+      decisionId: decision.id,
+      lifeActions: [],
+    });
+
+    expect(markup).toContain('Создаём…');
+    expect(markup.match(/disabled=""/g)?.length).toBeGreaterThanOrEqual(5);
+    expect(succeeded.isLifeActionFormOpen).toBe(false);
+    expect(succeeded.lifeActionForm).toEqual({ title: '', expectedResult: '', description: '' });
+  });
+
+  it('preserves entered action data and hides internal error codes after failure', async () => {
+    const decision = createPlannedDecision('failed-action', DATE);
+    const form = {
+      title: 'Данные остаются',
+      expectedResult: 'Результат остаётся',
+      description: 'Описание остаётся',
+    } as const;
+    const createExecute = vi
+      .fn()
+      .mockResolvedValue(
+        failure(
+          new DomainError('action.decision_unavailable', 'Internal message that must not be shown'),
+        ),
+      );
+    const result = await createLifeActionAndReload({
+      decisionId: decision.id,
+      plannedDate: DATE,
+      form,
+      createLifeActionForDecision: { execute: createExecute },
+      getLifeActionsForDecision: { execute: vi.fn() },
+    });
+    const failed = todayPageReducer(
+      { ...createDetailsState(decision), isLifeActionFormOpen: true, lifeActionForm: form },
+      { type: 'life_action_save_failed', message: result.ok ? '' : result.message },
+    );
+    const markup = renderView(failed);
+
+    expect(failed.lifeActionForm).toBe(form);
+    expect(markup).toContain('Для этого решения больше нельзя создавать действия');
+    expect(markup).not.toContain('action.decision_unavailable');
+    expect(markup).not.toContain('Internal message');
+  });
 });
 
 function createReadyState(
@@ -202,6 +378,21 @@ function createReadyState(
   return {
     ...INITIAL_TODAY_PAGE_STATE,
     decisions: { status: 'ready', decisions },
+  };
+}
+
+function createDetailsState(
+  decision: ReturnType<typeof createPlannedDecision>,
+  lifeActions: readonly ReturnType<typeof createReadyLifeAction>[] = [],
+): TodayPageState {
+  return {
+    ...createReadyState([decision]),
+    details: {
+      status: 'ready',
+      decisionId: decision.id,
+      decision,
+      lifeActions,
+    },
   };
 }
 
@@ -217,6 +408,15 @@ function renderView(state: TodayPageState): string {
       onTitleChange: NOOP,
       onExpectedResultChange: NOOP,
       onSubmit: NOOP,
+      onOpenDecision: NOOP,
+      onCloseDecision: NOOP,
+      onRetryDecision: NOOP,
+      onOpenLifeActionForm: NOOP,
+      onCloseLifeActionForm: NOOP,
+      onLifeActionTitleChange: NOOP,
+      onLifeActionExpectedResultChange: NOOP,
+      onLifeActionDescriptionChange: NOOP,
+      onLifeActionSubmit: NOOP,
     }),
   );
 }

@@ -6,7 +6,13 @@ import {
   type ChangeEvent,
   type FormEvent,
 } from 'react';
-import type { CreateDecisionForDate, GetDecisionsForDate } from '../../application';
+import type {
+  CreateDecisionForDate,
+  CreateLifeActionForDecision,
+  GetDecisionById,
+  GetDecisionsForDate,
+  GetLifeActionsForDecision,
+} from '../../application';
 import {
   DECISION_KIND,
   DECISION_STATUS,
@@ -14,12 +20,17 @@ import {
   type Decision,
   type DecisionKind,
   type DecisionStatus,
+  type EntityId,
 } from '../../domain';
+import { DecisionDetailsPanel } from '../components/DecisionDetailsPanel';
 import {
   createDecisionAndReload,
+  createLifeActionAndReload,
   INITIAL_TODAY_PAGE_STATE,
+  isDecisionActivationKey,
   todayPageReducer,
   validateDecisionForm,
+  validateLifeActionForm,
   type DecisionFormState,
   type TodayPageState,
 } from './TodayPageState';
@@ -28,15 +39,22 @@ interface TodayPageProps {
   readonly currentDate: DayDate;
   readonly getDecisionsForDate: Pick<GetDecisionsForDate, 'execute'>;
   readonly createDecisionForDate: Pick<CreateDecisionForDate, 'execute'>;
+  readonly getDecisionById: Pick<GetDecisionById, 'execute'>;
+  readonly getLifeActionsForDecision: Pick<GetLifeActionsForDecision, 'execute'>;
+  readonly createLifeActionForDecision: Pick<CreateLifeActionForDecision, 'execute'>;
 }
 
 export function TodayPage({
   currentDate,
   getDecisionsForDate,
   createDecisionForDate,
+  getDecisionById,
+  getLifeActionsForDecision,
+  createLifeActionForDecision,
 }: TodayPageProps) {
   const [state, dispatch] = useReducer(todayPageReducer, INITIAL_TODAY_PAGE_STATE);
   const savingRef = useRef(false);
+  const lifeActionSavingRef = useRef(false);
 
   const loadDecisions = useCallback(async () => {
     dispatch({ type: 'load_started' });
@@ -51,6 +69,33 @@ export function TodayPage({
   useEffect(() => {
     void loadDecisions();
   }, [loadDecisions]);
+
+  const loadDecisionDetails = useCallback(
+    async (decisionId: EntityId) => {
+      dispatch({ type: 'details_load_started', decisionId });
+      try {
+        const [decisionResult, lifeActions] = await Promise.all([
+          getDecisionById.execute(decisionId),
+          getLifeActionsForDecision.execute(decisionId),
+        ]);
+
+        if (!decisionResult.ok) {
+          dispatch({ type: 'details_load_failed', decisionId });
+          return;
+        }
+
+        dispatch({
+          type: 'details_load_succeeded',
+          decisionId,
+          decision: decisionResult.value,
+          lifeActions,
+        });
+      } catch {
+        dispatch({ type: 'details_load_failed', decisionId });
+      }
+    },
+    [getDecisionById, getLifeActionsForDecision],
+  );
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -89,6 +134,48 @@ export function TodayPage({
     }
   }
 
+  async function handleLifeActionSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+
+    if (lifeActionSavingRef.current || state.details.status !== 'ready') {
+      return;
+    }
+
+    const validationError = validateLifeActionForm(state.lifeActionForm);
+    if (validationError !== null) {
+      dispatch({ type: 'life_action_save_failed', message: validationError });
+      return;
+    }
+
+    const decisionId = state.details.decisionId;
+    lifeActionSavingRef.current = true;
+    dispatch({ type: 'life_action_save_started' });
+    try {
+      const result = await createLifeActionAndReload({
+        decisionId,
+        plannedDate: currentDate,
+        form: state.lifeActionForm,
+        createLifeActionForDecision,
+        getLifeActionsForDecision,
+      });
+
+      if (!result.ok) {
+        dispatch({ type: 'life_action_save_failed', message: result.message });
+        return;
+      }
+
+      dispatch({
+        type: 'life_action_save_succeeded',
+        decisionId,
+        lifeActions: result.lifeActions,
+      });
+    } catch {
+      dispatch({ type: 'life_action_save_failed', message: 'Не удалось создать действие' });
+    } finally {
+      lifeActionSavingRef.current = false;
+    }
+  }
+
   return (
     <TodayPageView
       currentDate={currentDate}
@@ -102,6 +189,23 @@ export function TodayPage({
         dispatch({ type: 'expected_result_changed', expectedResult })
       }
       onSubmit={(event) => void handleSubmit(event)}
+      onOpenDecision={(decisionId) => void loadDecisionDetails(decisionId)}
+      onCloseDecision={() => dispatch({ type: 'details_closed' })}
+      onRetryDecision={() => {
+        if (state.details.status !== 'closed') {
+          void loadDecisionDetails(state.details.decisionId);
+        }
+      }}
+      onOpenLifeActionForm={() => dispatch({ type: 'life_action_form_opened' })}
+      onCloseLifeActionForm={() => dispatch({ type: 'life_action_form_closed' })}
+      onLifeActionTitleChange={(title) => dispatch({ type: 'life_action_title_changed', title })}
+      onLifeActionExpectedResultChange={(expectedResult) =>
+        dispatch({ type: 'life_action_expected_result_changed', expectedResult })
+      }
+      onLifeActionDescriptionChange={(description) =>
+        dispatch({ type: 'life_action_description_changed', description })
+      }
+      onLifeActionSubmit={(event) => void handleLifeActionSubmit(event)}
     />
   );
 }
@@ -116,6 +220,15 @@ interface TodayPageViewProps {
   readonly onTitleChange: (title: string) => void;
   readonly onExpectedResultChange: (expectedResult: string) => void;
   readonly onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  readonly onOpenDecision: (decisionId: EntityId) => void;
+  readonly onCloseDecision: () => void;
+  readonly onRetryDecision: () => void;
+  readonly onOpenLifeActionForm: () => void;
+  readonly onCloseLifeActionForm: () => void;
+  readonly onLifeActionTitleChange: (title: string) => void;
+  readonly onLifeActionExpectedResultChange: (expectedResult: string) => void;
+  readonly onLifeActionDescriptionChange: (description: string) => void;
+  readonly onLifeActionSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }
 
 export function TodayPageView({
@@ -128,56 +241,83 @@ export function TodayPageView({
   onTitleChange,
   onExpectedResultChange,
   onSubmit,
+  onOpenDecision,
+  onCloseDecision,
+  onRetryDecision,
+  onOpenLifeActionForm,
+  onCloseLifeActionForm,
+  onLifeActionTitleChange,
+  onLifeActionExpectedResultChange,
+  onLifeActionDescriptionChange,
+  onLifeActionSubmit,
 }: TodayPageViewProps) {
   return (
-    <main className="today-page">
-      <header className="today-header">
-        <p className="today-brand">LifeOS</p>
-        <div>
-          <h1>Сегодня</h1>
-          <p className="today-date">{formatRussianDate(currentDate)}</p>
-        </div>
-        <p className="today-storage-note">Данные сохраняются на этом устройстве</p>
-      </header>
+    <>
+      <main className="today-page">
+        <header className="today-header">
+          <p className="today-brand">LifeOS</p>
+          <div>
+            <h1>Сегодня</h1>
+            <p className="today-date">{formatRussianDate(currentDate)}</p>
+          </div>
+          <p className="today-storage-note">Данные сохраняются на этом устройстве</p>
+        </header>
 
-      <div className="today-actions">
-        <button className="primary-button" type="button" onClick={onOpenForm}>
-          Создать решение
-        </button>
-      </div>
-
-      {state.isFormOpen ? (
-        <DecisionForm
-          form={state.form}
-          isSaving={state.isSaving}
-          error={state.formError}
-          onKindChange={onKindChange}
-          onTitleChange={onTitleChange}
-          onExpectedResultChange={onExpectedResultChange}
-          onClose={onCloseForm}
-          onSubmit={onSubmit}
-        />
-      ) : null}
-
-      {state.decisions.status === 'loading' ? (
-        <p className="page-message" role="status">
-          Загружаем решения…
-        </p>
-      ) : null}
-
-      {state.decisions.status === 'error' ? (
-        <section className="page-message page-error" role="alert">
-          <p>Не удалось загрузить решения</p>
-          <button className="secondary-button" type="button" onClick={onRetry}>
-            Повторить
+        <div className="today-actions">
+          <button className="primary-button" type="button" onClick={onOpenForm}>
+            Создать решение
           </button>
-        </section>
-      ) : null}
+        </div>
 
-      {state.decisions.status === 'ready' ? (
-        <DecisionSections decisions={state.decisions.decisions} />
-      ) : null}
-    </main>
+        {state.isFormOpen ? (
+          <DecisionForm
+            form={state.form}
+            isSaving={state.isSaving}
+            error={state.formError}
+            onKindChange={onKindChange}
+            onTitleChange={onTitleChange}
+            onExpectedResultChange={onExpectedResultChange}
+            onClose={onCloseForm}
+            onSubmit={onSubmit}
+          />
+        ) : null}
+
+        {state.decisions.status === 'loading' ? (
+          <p className="page-message" role="status">
+            Загружаем решения…
+          </p>
+        ) : null}
+
+        {state.decisions.status === 'error' ? (
+          <section className="page-message page-error" role="alert">
+            <p>Не удалось загрузить решения</p>
+            <button className="secondary-button" type="button" onClick={onRetry}>
+              Повторить
+            </button>
+          </section>
+        ) : null}
+
+        {state.decisions.status === 'ready' ? (
+          <DecisionSections decisions={state.decisions.decisions} onOpenDecision={onOpenDecision} />
+        ) : null}
+      </main>
+
+      <DecisionDetailsPanel
+        details={state.details}
+        isFormOpen={state.isLifeActionFormOpen}
+        isSaving={state.isLifeActionSaving}
+        form={state.lifeActionForm}
+        formError={state.lifeActionFormError}
+        onClose={onCloseDecision}
+        onRetry={onRetryDecision}
+        onOpenForm={onOpenLifeActionForm}
+        onCloseForm={onCloseLifeActionForm}
+        onTitleChange={onLifeActionTitleChange}
+        onExpectedResultChange={onLifeActionExpectedResultChange}
+        onDescriptionChange={onLifeActionDescriptionChange}
+        onSubmit={onLifeActionSubmit}
+      />
+    </>
   );
 }
 
@@ -270,7 +410,13 @@ function DecisionForm({
   );
 }
 
-function DecisionSections({ decisions }: { readonly decisions: readonly Decision[] }) {
+function DecisionSections({
+  decisions,
+  onOpenDecision,
+}: {
+  readonly decisions: readonly Decision[];
+  readonly onOpenDecision: (decisionId: EntityId) => void;
+}) {
   const mainDecisions = decisions.filter((decision) => decision.kind === DECISION_KIND.main);
   const additionalDecisions = decisions.filter(
     (decision) => decision.kind === DECISION_KIND.additional,
@@ -292,7 +438,13 @@ function DecisionSections({ decisions }: { readonly decisions: readonly Decision
             return decision === undefined ? (
               <EmptyMainDecision key={order} order={order} />
             ) : (
-              <DecisionCard key={decision.id.toString()} decision={decision} order={order} main />
+              <DecisionCard
+                key={decision.id.toString()}
+                decision={decision}
+                order={order}
+                main
+                onOpen={onOpenDecision}
+              />
             );
           })}
         </div>
@@ -310,7 +462,11 @@ function DecisionSections({ decisions }: { readonly decisions: readonly Decision
         ) : (
           <div className="additional-decision-list">
             {additionalDecisions.map((decision) => (
-              <DecisionCard key={decision.id.toString()} decision={decision} />
+              <DecisionCard
+                key={decision.id.toString()}
+                decision={decision}
+                onOpen={onOpenDecision}
+              />
             ))}
           </div>
         )}
@@ -332,22 +488,38 @@ function DecisionCard({
   decision,
   order,
   main = false,
+  onOpen,
 }: {
   readonly decision: Decision;
   readonly order?: number;
   readonly main?: boolean;
+  readonly onOpen: (decisionId: EntityId) => void;
 }) {
   return (
-    <article className={`decision-card${main ? ' main-decision' : ''}`}>
+    <button
+      className={`decision-card decision-card-button${main ? ' main-decision' : ''}`}
+      type="button"
+      aria-label={`Открыть решение «${decision.title.toString()}»`}
+      onClick={() => onOpen(decision.id)}
+      onKeyDown={(event) => {
+        if (isDecisionActivationKey(event.key)) {
+          event.preventDefault();
+          onOpen(decision.id);
+        }
+      }}
+    >
       {order === undefined ? null : <span className="decision-order">{order}</span>}
-      <h3>{decision.title.toString()}</h3>
+      <span className="decision-card-title">{decision.title.toString()}</span>
       {decision.expectedResult === null ? null : (
-        <p className="decision-result">{decision.expectedResult.toString()}</p>
+        <span className="decision-result">{decision.expectedResult.toString()}</span>
       )}
       <span className={`status-badge status-${decision.status}`}>
         {decisionStatusLabel(decision.status)}
       </span>
-    </article>
+      <span className="decision-open-hint" aria-hidden="true">
+        Открыть <span>→</span>
+      </span>
+    </button>
   );
 }
 

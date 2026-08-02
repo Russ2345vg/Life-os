@@ -1,8 +1,11 @@
 import type { Clock, CurrentDateProvider, IdGenerator } from '../../application';
 import {
   CreateDecisionForDate,
+  CreateLifeActionForDecision,
   EnsureCurrentDay,
   GetDecisionsForDate,
+  GetDecisionById,
+  GetLifeActionsForDecision,
   MainDecisionLimitPolicy,
 } from '../../application';
 import { SystemClock } from '../../infrastructure/clock/SystemClock';
@@ -54,6 +57,14 @@ export async function createLifeOsApplication(
       idGenerator,
     );
     const getDecisionsForDate = new GetDecisionsForDate(decisionRepository);
+    const getDecisionById = new GetDecisionById(decisionRepository);
+    const getLifeActionsForDecision = new GetLifeActionsForDecision(lifeActionRepository);
+    const createLifeActionForDecision = new CreateLifeActionForDecision(
+      decisionRepository,
+      lifeActionRepository,
+      clock,
+      idGenerator,
+    );
     const application = new LifeOsApplication({
       dayRepository,
       decisionRepository,
@@ -66,6 +77,9 @@ export async function createLifeOsApplication(
       currentDate: currentDay.date,
       createDecisionForDate,
       getDecisionsForDate,
+      getDecisionById,
+      getLifeActionsForDecision,
+      createLifeActionForDecision,
       closeDatabase: () => database.close(),
     });
 

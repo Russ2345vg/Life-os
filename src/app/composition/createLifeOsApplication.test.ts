@@ -30,6 +30,9 @@ describe('createLifeOsApplication', () => {
     expect(application.currentDateProvider).toBeInstanceOf(SystemCurrentDateProvider);
     expect(application.idGenerator).toBeInstanceOf(CryptoIdGenerator);
     expect(application.currentDate).toBeInstanceOf(DayDate);
+    expect(application.getDecisionById).toBeDefined();
+    expect(application.getLifeActionsForDecision).toBeDefined();
+    expect(application.createLifeActionForDecision).toBeDefined();
     await expect(
       application.dayRepository.findByDate(application.currentDateProvider.getCurrentDate()),
     ).resolves.not.toBeNull();
@@ -120,6 +123,47 @@ describe('createLifeOsApplication', () => {
     expect(restored).toHaveLength(1);
     expect(restored[0]?.title.toString()).toBe('Сохранить решение постоянно');
     expect(restored[0]?.order).toBe(1);
+    secondApplication.close();
+  });
+
+  it('persists a ready linked action across application restarts without duplicates', async () => {
+    const indexedDbFactory = new IDBFactory();
+    const firstApplication = await createTestApplication(
+      indexedDbFactory,
+      new FakeIdGenerator('persistent-action'),
+    );
+    const decisionResult = await firstApplication.createDecisionForDate.execute({
+      title: 'Решение со связанным действием',
+      kind: DECISION_KIND.main,
+      plannedDate: firstApplication.currentDate,
+      expectedResult: 'Решение имеет следующий шаг',
+    });
+    expect(decisionResult.ok).toBe(true);
+    if (!decisionResult.ok) {
+      throw decisionResult.error;
+    }
+
+    const actionResult = await firstApplication.createLifeActionForDecision.execute({
+      decisionId: decisionResult.value.id,
+      title: 'Выполнить следующий шаг',
+      expectedResult: 'Следующий шаг выполнен',
+      plannedDate: firstApplication.currentDate,
+    });
+    expect(actionResult.ok).toBe(true);
+    firstApplication.close();
+
+    const secondApplication = await createTestApplication(
+      indexedDbFactory,
+      new FakeIdGenerator('reload-action'),
+    );
+    const restored = await secondApplication.getLifeActionsForDecision.execute(
+      decisionResult.value.id,
+    );
+
+    expect(restored).toHaveLength(1);
+    expect(restored[0]?.decisionId?.equals(decisionResult.value.id)).toBe(true);
+    expect(restored[0]?.status).toBe('ready');
+    expect(restored[0]?.expectedResult?.toString()).toBe('Следующий шаг выполнен');
     secondApplication.close();
   });
 
