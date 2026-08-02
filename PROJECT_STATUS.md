@@ -2,12 +2,18 @@
 
 - Проект: самостоятельный LifeOS
 - Текущий макроблок: предметный слой
-- Текущий этап: Persistence records and mappers
+- Текущий этап: IndexedDB foundation with Day and Decision repositories
 - Статус: завершён
-- Следующий допустимый этап: IndexedDB persistence adapters
+- Следующий допустимый этап: IndexedDB LifeAction and ActionSession repositories
 
 ## Выполненные работы
 
+- Создана база IndexedDB `lifeos` версии 1 с object stores `days`, `decisions`, `lifeActions` и
+  `actionSessions`, основными ключами `id` и требуемыми индексами.
+- Реализованы `IndexedDbDayRepository` и `IndexedDbDecisionRepository` с record mappers,
+  завершёнными транзакциями и контролируемыми инфраструктурными ошибками.
+- Добавлены автоматические тесты схемы базы, nullable-индексов, закрытия подключения, сохранения,
+  обновления, индексного поиска и восстановления `Day` и `Decision` без предметных событий.
 - Добавлены сериализуемые records schemaVersion 1 и двусторонние mapper-ы для `Day`, `Decision`,
   `LifeAction` и `ActionSession`.
 - Зафиксированы ISO UTC для временных отметок и отдельный календарный формат `YYYY-MM-DD` для
@@ -79,14 +85,15 @@
 
 - `npm.cmd run typecheck` — успешно.
 - `npm.cmd run lint` — успешно.
-- `npm.cmd run test` — успешно, 38 файлов и 362 теста.
+- `npm.cmd run test` — успешно, 41 файл и 380 тестов.
 - `npm.cmd run build` — успешно.
 - `npm.cmd run format:check` — успешно.
 - `git diff --check` — успешно.
 
 ## Установленные зависимости
 
-Новые зависимости на этапе persistence records and mappers не устанавливались.
+Добавлена только тестовая devDependency `fake-indexeddb`. Runtime-зависимости хранения не
+добавлялись: приложение использует браузерный IndexedDB напрямую.
 
 ## Известные ограничения
 
@@ -95,10 +102,10 @@
   перезапуска.
 - Сохранение `LifeAction` и `ActionSession` пока не объединено постоянной транзакцией.
 - События пока не передаются во внешнюю шину и не сохраняются постоянно.
-- `InMemoryDecisionRepository` не обеспечивает постоянное хранение после перезапуска.
+- IndexedDB-репозитории `Day` и `Decision` пока не подключены к React-приложению.
 - Интерфейсы решений и действий отсутствуют.
 
 ## Следующий этап
 
-Этап persistence records and mappers завершён. Следующий допустимый этап — IndexedDB persistence
-adapters отдельным заданием.
+Этап IndexedDB foundation with Day and Decision repositories завершён. Следующий допустимый этап —
+IndexedDB LifeAction and ActionSession repositories отдельным заданием.
