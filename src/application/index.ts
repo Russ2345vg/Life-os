@@ -18,6 +18,7 @@ export { RestoreDecision, type RestoreDecisionInput } from './commands/RestoreDe
 export { StartLifeAction, type StartLifeActionInput } from './commands/StartLifeAction';
 export { MainDecisionLimitPolicy } from './decision/MainDecisionLimitPolicy';
 export { GetDecisionsForDate } from './queries/GetDecisionsForDate';
+export { GetActionSessionById } from './queries/GetActionSessionById';
 export { GetLifeActionsForDate } from './queries/GetLifeActionsForDate';
 export { GetLifeActionsForDecision } from './queries/GetLifeActionsForDecision';
 export type { ActionSessionRepository } from './ports/ActionSessionRepository';
