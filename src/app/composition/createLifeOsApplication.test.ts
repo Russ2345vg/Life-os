@@ -2,11 +2,13 @@ import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it, vi } from 'vitest';
 import {
   ACTION_SESSION_STATUS,
+  ActionActualResult,
   DAY_STATUS,
   DayDate,
   DECISION_KIND,
   EntityId,
   LIFE_ACTION_STATUS,
+  SESSION_COMPLETION_KIND,
 } from '../../domain';
 import { SystemClock } from '../../infrastructure/clock/SystemClock';
 import { SystemCurrentDateProvider } from '../../infrastructure/clock/SystemCurrentDateProvider';
@@ -43,6 +45,8 @@ describe('createLifeOsApplication', () => {
     expect(application.startLifeActionSession).toBeDefined();
     expect(application.pauseActionSession).toBeDefined();
     expect(application.resumeActionSession).toBeDefined();
+    expect(application.completeActionSession).toBeDefined();
+    expect(application.completeLifeAction).toBeDefined();
     expect(application.getActionSessionsForLifeAction).toBeDefined();
     expect(application.getUnfinishedActionSession).toBeDefined();
     await expect(
@@ -250,6 +254,141 @@ describe('createLifeOsApplication', () => {
     expect(pausedSession?.status).toBe(ACTION_SESSION_STATUS.paused);
     expect(pausedSession?.pausedAt).toEqual(NOW);
     thirdApplication.close();
+  });
+
+  it('persists a completed session while the action remains in progress across restart', async () => {
+    const indexedDbFactory = new IDBFactory();
+    const clock = new FakeClock(NOW);
+    const firstApplication = await createLifeOsApplication({
+      database: new LifeOsIndexedDb(indexedDbFactory),
+      clock,
+      currentDateProvider: new FakeCurrentDateProvider(TODAY),
+      idGenerator: new FakeIdGenerator('session-completion-a'),
+    });
+    const decisionResult = await firstApplication.createDecisionForDate.execute({
+      title: 'Решение для завершения отдельной сессии',
+      kind: DECISION_KIND.main,
+      plannedDate: TODAY,
+      expectedResult: 'Сессия сохранена отдельно',
+    });
+    expect(decisionResult.ok).toBe(true);
+    if (!decisionResult.ok) {
+      throw decisionResult.error;
+    }
+    const actionResult = await firstApplication.createLifeActionForDecision.execute({
+      decisionId: decisionResult.value.id,
+      title: 'Продолжить действие позже',
+      expectedResult: 'Действие остаётся выполняемым',
+      plannedDate: TODAY,
+    });
+    expect(actionResult.ok).toBe(true);
+    if (!actionResult.ok) {
+      throw actionResult.error;
+    }
+    const startResult = await firstApplication.startLifeActionSession.execute({
+      lifeActionId: actionResult.value.id,
+    });
+    expect(startResult.ok).toBe(true);
+    if (!startResult.ok) {
+      throw startResult.error;
+    }
+    clock.setTime(new Date(NOW.getTime() + 5 * 60_000));
+    await firstApplication.pauseActionSession.execute({ sessionId: startResult.value.session.id });
+    clock.setTime(new Date(NOW.getTime() + 7 * 60_000));
+    await firstApplication.resumeActionSession.execute({ sessionId: startResult.value.session.id });
+    clock.setTime(new Date(NOW.getTime() + 20 * 60_000));
+    const completion = await firstApplication.completeActionSession.execute({
+      sessionId: startResult.value.session.id,
+      completionKind: SESSION_COMPLETION_KIND.completed,
+      resultNote: 'Первый этап выполнен',
+    });
+    expect(completion.ok).toBe(true);
+    firstApplication.close();
+
+    const reloaded = await createTestApplication(
+      indexedDbFactory,
+      new FakeIdGenerator('session-completion-a-reload'),
+    );
+    const actions = await reloaded.getLifeActionsForDecision.execute(decisionResult.value.id);
+    const sessions = await reloaded.getActionSessionsForLifeAction.execute(actionResult.value.id);
+    const unfinished = await reloaded.getUnfinishedActionSession.execute();
+
+    expect(actions[0]?.status).toBe(LIFE_ACTION_STATUS.inProgress);
+    expect(unfinished).toBeNull();
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]?.status).toBe(ACTION_SESSION_STATUS.completed);
+    expect(sessions[0]?.pauseIntervals).toHaveLength(1);
+    expect(sessions[0]?.workedDurationAt(new Date(NOW.getTime() + 60 * 60_000))).toBe(18 * 60_000);
+    expect(sessions[0]?.pausedDurationAt(new Date(NOW.getTime() + 60 * 60_000))).toBe(2 * 60_000);
+    expect(sessions[0]?.resultNote?.toString()).toBe('Первый этап выполнен');
+    reloaded.close();
+  });
+
+  it('persists completed action result and completed session and prevents a new session', async () => {
+    const indexedDbFactory = new IDBFactory();
+    const firstApplication = await createTestApplication(
+      indexedDbFactory,
+      new FakeIdGenerator('session-completion-b'),
+    );
+    const decisionResult = await firstApplication.createDecisionForDate.execute({
+      title: 'Решение для полного завершения',
+      kind: DECISION_KIND.main,
+      plannedDate: TODAY,
+      expectedResult: 'Действие завершено полностью',
+    });
+    expect(decisionResult.ok).toBe(true);
+    if (!decisionResult.ok) {
+      throw decisionResult.error;
+    }
+    const actionResult = await firstApplication.createLifeActionForDecision.execute({
+      decisionId: decisionResult.value.id,
+      title: 'Завершить с фактическим результатом',
+      expectedResult: 'Фактический результат сохранён',
+      plannedDate: TODAY,
+    });
+    expect(actionResult.ok).toBe(true);
+    if (!actionResult.ok) {
+      throw actionResult.error;
+    }
+    const startResult = await firstApplication.startLifeActionSession.execute({
+      lifeActionId: actionResult.value.id,
+    });
+    expect(startResult.ok).toBe(true);
+    if (!startResult.ok) {
+      throw startResult.error;
+    }
+    const sessionCompletion = await firstApplication.completeActionSession.execute({
+      sessionId: startResult.value.session.id,
+      completionKind: SESSION_COMPLETION_KIND.interrupted,
+      resultNote: 'Работа завершена досрочно, результат достигнут',
+    });
+    expect(sessionCompletion.ok).toBe(true);
+    const actionCompletion = await firstApplication.completeLifeAction.execute({
+      lifeActionId: actionResult.value.id,
+      actualResult: ActionActualResult.create('Получен фактический результат'),
+    });
+    expect(actionCompletion.ok).toBe(true);
+    firstApplication.close();
+
+    const reloaded = await createTestApplication(
+      indexedDbFactory,
+      new FakeIdGenerator('session-completion-b-reload'),
+    );
+    const actions = await reloaded.getLifeActionsForDecision.execute(decisionResult.value.id);
+    const sessions = await reloaded.getActionSessionsForLifeAction.execute(actionResult.value.id);
+    const restart = await reloaded.startLifeActionSession.execute({
+      lifeActionId: actionResult.value.id,
+    });
+
+    expect(actions[0]?.status).toBe(LIFE_ACTION_STATUS.completed);
+    expect(actions[0]?.actualResult?.toString()).toBe('Получен фактический результат');
+    expect(sessions[0]?.status).toBe(ACTION_SESSION_STATUS.completed);
+    expect(sessions[0]?.completionKind).toBe(SESSION_COMPLETION_KIND.interrupted);
+    expect(sessions[0]?.resultNote?.toString()).toBe(
+      'Работа завершена досрочно, результат достигнут',
+    );
+    expect(restart.ok).toBe(false);
+    reloaded.close();
   });
 
   it('возвращает контролируемую ошибку и закрывает базу при сбое запуска', async () => {

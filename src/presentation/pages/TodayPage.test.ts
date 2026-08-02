@@ -5,6 +5,7 @@ import {
   DayDate,
   DECISION_KIND,
   EntityId,
+  SESSION_COMPLETION_KIND,
   SessionResultNote,
   type LifeAction,
 } from '../../domain';
@@ -20,17 +21,23 @@ import {
 import { formatDuration, scheduleSessionTimer } from '../session/sessionTimer';
 import { TodayPageView } from './TodayPage';
 import {
+  ACTION_COMPLETION_CHOICE,
+  ACTION_COMPLETION_FAILED_MESSAGE,
+  completeSessionWorkflow,
+  completeSessionErrorMessage,
   createDecisionAndReload,
   createLifeActionAndReload,
   INITIAL_TODAY_PAGE_STATE,
   isDecisionActivationKey,
   isLifeActionActivationKey,
   pauseSessionErrorMessage,
+  retryLifeActionCompletion,
   resumeSessionErrorMessage,
   startSessionErrorMessage,
   todayPageReducer,
   validateDecisionForm,
   validateLifeActionForm,
+  validateSessionCompletionForm,
   type TodayPageState,
 } from './TodayPageState';
 
@@ -447,7 +454,7 @@ describe('TodayPage view and workflow', () => {
     const completed = completeSession(createSession('completed-history', action.id));
     const filledMarkup = renderView(createActionDetailsState(decision, action, [completed], null));
 
-    expect(emptyMarkup).toContain('Работа по этому действию ещё не начиналась');
+    expect(emptyMarkup).toContain('Завершённых сессий пока нет');
     expect(filledMarkup).toContain('Завершённые сессии');
     expect(filledMarkup).toContain('Завершена');
     expect(filledMarkup).toContain('05:00');
@@ -546,8 +553,274 @@ describe('TodayPage view and workflow', () => {
 
     expect(pausedMarkup).toContain('На паузе');
     expect(pausedMarkup).toContain('Продолжить');
+    expect(pausedMarkup).toContain('Завершить');
     expect(renderView(resumedState)).toContain('Выполняется');
     expect(renderView(resumedState)).toContain('Пауза');
+    expect(renderView(resumedState)).toContain('Завершить');
+  });
+
+  it('opens and cancels the completion form with the required defaults', () => {
+    const decision = createPlannedDecision('completion-form', DATE);
+    const action = markLifeActionInProgress(
+      createReadyLifeAction('completion-form-action', DATE, { decisionId: decision.id }),
+    );
+    const running = createSession('completion-form-session', action.id);
+    const initial = createActionDetailsState(decision, action, [running], running);
+    const opened = todayPageReducer(initial, { type: 'session_completion_form_opened' });
+    const markup = renderView(opened);
+
+    expect(markup).toContain('Завершение работы');
+    expect(markup).toContain('Что сделано за эту сессию');
+    expect(markup).toContain('Сессия завершена');
+    expect(markup).toContain('Работа прервана');
+    expect(markup).toContain('Продолжить действие позже');
+    expect(markup).toContain('Завершить действие полностью');
+    expect(markup).not.toContain('Фактический результат *');
+    expect(opened.sessionCompletionForm.completionKind).toBe(SESSION_COMPLETION_KIND.completed);
+    expect(opened.sessionCompletionForm.actionChoice).toBe(ACTION_COMPLETION_CHOICE.continueLater);
+    expect(validateSessionCompletionForm(opened.sessionCompletionForm)).toBeNull();
+
+    const cancelled = todayPageReducer(opened, { type: 'session_completion_form_closed' });
+    expect(cancelled.isSessionCompletionFormOpen).toBe(false);
+    expect(renderView(cancelled)).not.toContain('Завершение работы');
+  });
+
+  it('supports interrupted completion and requires an actual result only for the whole action', () => {
+    const decision = createPlannedDecision('completion-fields', DATE);
+    const action = markLifeActionInProgress(
+      createReadyLifeAction('completion-fields-action', DATE, { decisionId: decision.id }),
+    );
+    const running = createSession('completion-fields-session', action.id);
+    let state = todayPageReducer(createActionDetailsState(decision, action, [running], running), {
+      type: 'session_completion_form_opened',
+    });
+    state = todayPageReducer(state, {
+      type: 'session_completion_kind_changed',
+      completionKind: SESSION_COMPLETION_KIND.interrupted,
+    });
+    state = todayPageReducer(state, {
+      type: 'action_completion_choice_changed',
+      actionChoice: ACTION_COMPLETION_CHOICE.completeAction,
+    });
+
+    expect(renderView(state)).toContain('Фактический результат *');
+    expect(validateSessionCompletionForm(state.sessionCompletionForm)).toBe(
+      'Укажите фактический результат',
+    );
+
+    state = todayPageReducer(state, {
+      type: 'action_actual_result_changed',
+      actualResult: 'Получен проверенный результат',
+    });
+    expect(validateSessionCompletionForm(state.sessionCompletionForm)).toBeNull();
+    expect(state.sessionCompletionForm.completionKind).toBe(SESSION_COMPLETION_KIND.interrupted);
+  });
+
+  it('completes only the session and leaves the action in progress', async () => {
+    const action = markLifeActionInProgress(createReadyLifeAction('session-only', DATE));
+    const running = createSession('session-only-running', action.id);
+    const completed = completeSession(createSession('session-only-running', action.id));
+    const completeSessionExecute = vi.fn().mockResolvedValue(success(completed));
+    const completeActionExecute = vi.fn();
+
+    const result = await completeSessionWorkflow({
+      session: running,
+      lifeAction: action,
+      form: {
+        resultNote: '',
+        completionKind: SESSION_COMPLETION_KIND.completed,
+        actionChoice: ACTION_COMPLETION_CHOICE.continueLater,
+        actualResult: '',
+      },
+      completeActionSession: { execute: completeSessionExecute },
+      completeLifeAction: { execute: completeActionExecute },
+    });
+
+    expect(result.status).toBe('session_completed');
+    expect(completeSessionExecute).toHaveBeenCalledWith({
+      sessionId: running.id,
+      completionKind: SESSION_COMPLETION_KIND.completed,
+    });
+    expect(completeActionExecute).not.toHaveBeenCalled();
+    expect(action.status).toBe('in_progress');
+  });
+
+  it('completes the session and action in order and renders the final summary', async () => {
+    const decision = createPlannedDecision('full-completion', DATE);
+    const action = markLifeActionInProgress(
+      createReadyLifeAction('full-completion-action', DATE, { decisionId: decision.id }),
+    );
+    const running = createSession('full-completion-session', action.id);
+    const completedSession = completeSession(createSession('full-completion-session', action.id));
+    const completedAction = completeLifeAction(
+      markLifeActionInProgress(
+        createReadyLifeAction('full-completion-action', DATE, { decisionId: decision.id }),
+      ),
+    );
+    const callOrder: string[] = [];
+    const completeSessionExecute = vi.fn().mockImplementation(async () => {
+      callOrder.push('session');
+      return success(completedSession);
+    });
+    const completeActionExecute = vi.fn().mockImplementation(async () => {
+      callOrder.push('action');
+      return success(completedAction);
+    });
+
+    const result = await completeSessionWorkflow({
+      session: running,
+      lifeAction: action,
+      form: {
+        resultNote: 'Итог сессии',
+        completionKind: SESSION_COMPLETION_KIND.completed,
+        actionChoice: ACTION_COMPLETION_CHOICE.completeAction,
+        actualResult: 'Фактический итог',
+      },
+      completeActionSession: { execute: completeSessionExecute },
+      completeLifeAction: { execute: completeActionExecute },
+    });
+
+    expect(callOrder).toEqual(['session', 'action']);
+    expect(completeActionExecute.mock.calls[0]?.[0].actualResult.toString()).toBe(
+      'Фактический итог',
+    );
+    expect(result.status).toBe('action_completed');
+    if (result.status !== 'action_completed') {
+      throw new Error('Expected complete action result');
+    }
+    const state = todayPageReducer(createActionDetailsState(decision, action, [running], running), {
+      type: 'life_action_completed',
+      lifeAction: result.lifeAction,
+      session: result.session,
+    });
+    const markup = renderView(state);
+
+    expect(markup).toContain('Действие завершено');
+    expect(markup).toContain('Действие выполнено');
+    expect(markup).toContain('Завершённых сессий');
+    expect(markup).not.toContain('Начать выполнение');
+    expect(markup).not.toContain('Продолжить новой сессией');
+    expect(markup).not.toContain('Пауза');
+  });
+
+  it('keeps the completed session and retries only action completion after a partial failure', async () => {
+    const decision = createPlannedDecision('partial-failure', DATE);
+    const action = markLifeActionInProgress(
+      createReadyLifeAction('partial-failure-action', DATE, { decisionId: decision.id }),
+    );
+    const running = createSession('partial-failure-session', action.id);
+    const completedSession = completeSession(createSession('partial-failure-session', action.id));
+    const completedAction = completeLifeAction(
+      markLifeActionInProgress(
+        createReadyLifeAction('partial-failure-action', DATE, { decisionId: decision.id }),
+      ),
+    );
+    const completeSessionExecute = vi.fn().mockResolvedValue(success(completedSession));
+    const completeActionExecute = vi
+      .fn()
+      .mockResolvedValueOnce(
+        failure(new DomainError('action.persistence_failed', 'internal failure')),
+      )
+      .mockResolvedValueOnce(success(completedAction));
+    const form = {
+      resultNote: 'Сессия сохранена',
+      completionKind: SESSION_COMPLETION_KIND.completed,
+      actionChoice: ACTION_COMPLETION_CHOICE.completeAction,
+      actualResult: 'Результат не должен потеряться',
+    } as const;
+
+    const workflow = await completeSessionWorkflow({
+      session: running,
+      lifeAction: action,
+      form,
+      completeActionSession: { execute: completeSessionExecute },
+      completeLifeAction: { execute: completeActionExecute },
+    });
+    expect(workflow.status).toBe('action_failed');
+    if (workflow.status !== 'action_failed') {
+      throw new Error('Expected partial failure');
+    }
+    const failedState = todayPageReducer(
+      {
+        ...createActionDetailsState(decision, action, [running], running),
+        sessionCompletionForm: form,
+        isSessionCompletionFormOpen: true,
+      },
+      {
+        type: 'session_completed_action_failed',
+        session: workflow.session,
+        message: workflow.message,
+      },
+    );
+    const failedMarkup = renderView(failedState);
+
+    expect(
+      failedState.actionDetails.status === 'ready' && failedState.actionDetails.unfinishedSession,
+    ).toBeNull();
+    expect(failedState.sessionCompletionForm.actualResult).toBe('Результат не должен потеряться');
+    expect(failedMarkup).toContain(ACTION_COMPLETION_FAILED_MESSAGE);
+    expect(failedMarkup).toContain('Повторить завершение действия');
+    expect(failedMarkup).not.toContain('Продолжить новой сессией');
+
+    const retry = await retryLifeActionCompletion({
+      lifeAction: action,
+      actualResult: failedState.sessionCompletionForm.actualResult,
+      completeLifeAction: { execute: completeActionExecute },
+    });
+
+    expect(retry.ok).toBe(true);
+    expect(completeSessionExecute).toHaveBeenCalledOnce();
+    expect(completeActionExecute).toHaveBeenCalledTimes(2);
+  });
+
+  it('blocks repeated completion submission and preserves entered data after an error', () => {
+    const decision = createPlannedDecision('completion-pending', DATE);
+    const action = markLifeActionInProgress(
+      createReadyLifeAction('completion-pending-action', DATE, { decisionId: decision.id }),
+    );
+    const running = createSession('completion-pending-session', action.id);
+    const form = {
+      resultNote: 'Введённый итог',
+      completionKind: SESSION_COMPLETION_KIND.interrupted,
+      actionChoice: ACTION_COMPLETION_CHOICE.completeAction,
+      actualResult: 'Введённый фактический результат',
+    } as const;
+    const pending = {
+      ...createActionDetailsState(decision, action, [running], running),
+      isSessionMutating: true,
+      isSessionCompletionFormOpen: true,
+      sessionCompletionForm: form,
+    } satisfies TodayPageState;
+    const failed = todayPageReducer(pending, {
+      type: 'session_operation_failed',
+      message: 'Не удалось завершить сессию',
+    });
+
+    expect(renderView(pending).match(/disabled=""/g)?.length).toBeGreaterThanOrEqual(8);
+    expect(failed.sessionCompletionForm).toBe(form);
+    expect(renderView(failed)).toContain('Введённый фактический результат');
+    expect(renderView(failed)).not.toContain('session.not_found');
+  });
+
+  it('shows interrupted session duration, pause time, and newest-first history', () => {
+    const decision = createPlannedDecision('history-details', DATE);
+    const action = markLifeActionInProgress(
+      createReadyLifeAction('history-details-action', DATE, { decisionId: decision.id }),
+    );
+    const older = completeSession(createSession('older-session', action.id));
+    const newer = completeSession(
+      pauseSession(
+        createSession('newer-session', action.id, new Date('2026-08-02T09:00:00.000+09:00')),
+      ),
+      SESSION_COMPLETION_KIND.interrupted,
+    );
+    const markup = renderView(createActionDetailsState(decision, action, [older, newer], null));
+
+    expect(markup).toContain('Прервана');
+    expect(markup).toContain('01:00');
+    expect(markup).toContain('04:00');
+    expect(markup.indexOf('newer-session')).toBe(-1);
+    expect(markup.indexOf('09:00')).toBeLessThan(markup.indexOf('08:00'));
   });
 
   it('disables session controls while a command is pending', () => {
@@ -579,6 +852,8 @@ describe('TodayPage view and workflow', () => {
     expect(pauseSessionErrorMessage('session.not_found')).toBe('Сессия больше недоступна');
     expect(pauseSessionErrorMessage('unknown')).toBe('Не удалось поставить работу на паузу');
     expect(resumeSessionErrorMessage()).toBe('Не удалось продолжить работу');
+    expect(completeSessionErrorMessage('session.not_found')).toBe('Сессия больше недоступна');
+    expect(completeSessionErrorMessage('unknown')).toBe('Не удалось завершить сессию');
   });
 
   it('formats timers as MM:SS and HH:MM:SS', () => {
@@ -645,11 +920,15 @@ function createActionDetailsState(
   };
 }
 
-function createSession(id: string, lifeActionId: EntityId): ActionSession {
+function createSession(
+  id: string,
+  lifeActionId: EntityId,
+  startedAt = new Date('2026-08-02T08:00:00.000+09:00'),
+): ActionSession {
   return ActionSession.start({
     id: EntityId.create(id),
     lifeActionId,
-    startedAt: new Date('2026-08-02T08:00:00.000+09:00'),
+    startedAt,
     eventId: EntityId.create(`${id}-started-event`),
   });
 }
@@ -670,10 +949,13 @@ function resumeSession(session: ActionSession): ActionSession {
   return session;
 }
 
-function completeSession(session: ActionSession): ActionSession {
+function completeSession(
+  session: ActionSession,
+  completionKind: 'completed' | 'interrupted' = 'completed',
+): ActionSession {
   session.complete({
     completedAt: new Date(session.startedAt.getTime() + 300_000),
-    completionKind: 'completed',
+    completionKind,
     resultNote: SessionResultNote.create('Результат рабочей сессии'),
     eventId: EntityId.create(`${session.id.toString()}-complete-event`),
   });
@@ -708,6 +990,14 @@ function renderView(state: TodayPageState): string {
       onStartSession: NOOP,
       onPauseSession: NOOP,
       onResumeSession: NOOP,
+      onOpenSessionCompletionForm: NOOP,
+      onCloseSessionCompletionForm: NOOP,
+      onSessionResultNoteChange: NOOP,
+      onSessionCompletionKindChange: NOOP,
+      onActionCompletionChoiceChange: NOOP,
+      onActionActualResultChange: NOOP,
+      onCompleteSession: NOOP,
+      onRetryLifeActionCompletion: NOOP,
     }),
   );
 }

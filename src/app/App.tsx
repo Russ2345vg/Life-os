@@ -27,6 +27,8 @@ function ReadyTodayPage() {
       startLifeActionSession={application.startLifeActionSession}
       pauseActionSession={application.pauseActionSession}
       resumeActionSession={application.resumeActionSession}
+      completeActionSession={application.completeActionSession}
+      completeLifeAction={application.completeLifeAction}
       getActionSessionsForLifeAction={application.getActionSessionsForLifeAction}
       getUnfinishedActionSession={application.getUnfinishedActionSession}
       clock={application.clock}

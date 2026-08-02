@@ -1,12 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import type { Clock } from '../../application';
 import {
   LIFE_ACTION_STATUS,
+  SESSION_COMPLETION_KIND,
   type ActionSession,
   type DayDate,
   type LifeActionStatus,
+  type SessionCompletionKind,
 } from '../../domain';
-import type { LifeActionDetailsState } from '../pages/TodayPageState';
+import {
+  ACTION_COMPLETION_CHOICE,
+  type ActionCompletionChoice,
+  type LifeActionDetailsState,
+  type SessionCompletionFormState,
+} from '../pages/TodayPageState';
 import { formatDuration, scheduleSessionTimer } from '../session/sessionTimer';
 
 interface LifeActionDetailsPanelProps {
@@ -15,12 +22,23 @@ interface LifeActionDetailsPanelProps {
   readonly clock: Pick<Clock, 'now'>;
   readonly isMutating: boolean;
   readonly error: string | null;
+  readonly isCompletionFormOpen: boolean;
+  readonly completionForm: SessionCompletionFormState;
+  readonly hasPendingActionCompletion: boolean;
   readonly onClose: () => void;
   readonly onBack: () => void;
   readonly onRetry: () => void;
   readonly onStart: () => void;
   readonly onPause: (session: ActionSession) => void;
   readonly onResume: (session: ActionSession) => void;
+  readonly onOpenCompletionForm: () => void;
+  readonly onCloseCompletionForm: () => void;
+  readonly onResultNoteChange: (resultNote: string) => void;
+  readonly onCompletionKindChange: (completionKind: SessionCompletionKind) => void;
+  readonly onActionChoiceChange: (choice: ActionCompletionChoice) => void;
+  readonly onActualResultChange: (actualResult: string) => void;
+  readonly onComplete: (session: ActionSession) => void;
+  readonly onRetryActionCompletion: () => void;
 }
 
 export function LifeActionDetailsPanel({
@@ -29,12 +47,23 @@ export function LifeActionDetailsPanel({
   clock,
   isMutating,
   error,
+  isCompletionFormOpen,
+  completionForm,
+  hasPendingActionCompletion,
   onClose,
   onBack,
   onRetry,
   onStart,
   onPause,
   onResume,
+  onOpenCompletionForm,
+  onCloseCompletionForm,
+  onResultNoteChange,
+  onCompletionKindChange,
+  onActionChoiceChange,
+  onActualResultChange,
+  onComplete,
+  onRetryActionCompletion,
 }: LifeActionDetailsPanelProps) {
   const timerNow = useSessionTimer(details, clock);
 
@@ -112,15 +141,30 @@ export function LifeActionDetailsPanel({
               </div>
             </dl>
 
-            <SessionControls
-              details={details}
-              now={timerNow}
-              isMutating={isMutating}
-              error={error}
-              onStart={onStart}
-              onPause={onPause}
-              onResume={onResume}
-            />
+            {details.lifeAction.status === LIFE_ACTION_STATUS.completed ? (
+              <CompletedActionSummary details={details} />
+            ) : (
+              <SessionControls
+                details={details}
+                now={timerNow}
+                isMutating={isMutating}
+                error={error}
+                isCompletionFormOpen={isCompletionFormOpen}
+                completionForm={completionForm}
+                hasPendingActionCompletion={hasPendingActionCompletion}
+                onStart={onStart}
+                onPause={onPause}
+                onResume={onResume}
+                onOpenCompletionForm={onOpenCompletionForm}
+                onCloseCompletionForm={onCloseCompletionForm}
+                onResultNoteChange={onResultNoteChange}
+                onCompletionKindChange={onCompletionKindChange}
+                onActionChoiceChange={onActionChoiceChange}
+                onActualResultChange={onActualResultChange}
+                onComplete={onComplete}
+                onRetryActionCompletion={onRetryActionCompletion}
+              />
+            )}
 
             <SessionHistory sessions={details.sessions} />
           </div>
@@ -135,17 +179,39 @@ function SessionControls({
   now,
   isMutating,
   error,
+  isCompletionFormOpen,
+  completionForm,
+  hasPendingActionCompletion,
   onStart,
   onPause,
   onResume,
+  onOpenCompletionForm,
+  onCloseCompletionForm,
+  onResultNoteChange,
+  onCompletionKindChange,
+  onActionChoiceChange,
+  onActualResultChange,
+  onComplete,
+  onRetryActionCompletion,
 }: {
   readonly details: Extract<LifeActionDetailsState, { readonly status: 'ready' }>;
   readonly now: Date;
   readonly isMutating: boolean;
   readonly error: string | null;
+  readonly isCompletionFormOpen: boolean;
+  readonly completionForm: SessionCompletionFormState;
+  readonly hasPendingActionCompletion: boolean;
   readonly onStart: () => void;
   readonly onPause: (session: ActionSession) => void;
   readonly onResume: (session: ActionSession) => void;
+  readonly onOpenCompletionForm: () => void;
+  readonly onCloseCompletionForm: () => void;
+  readonly onResultNoteChange: (resultNote: string) => void;
+  readonly onCompletionKindChange: (completionKind: SessionCompletionKind) => void;
+  readonly onActionChoiceChange: (choice: ActionCompletionChoice) => void;
+  readonly onActualResultChange: (actualResult: string) => void;
+  readonly onComplete: (session: ActionSession) => void;
+  readonly onRetryActionCompletion: () => void;
 }) {
   const unfinishedSession = details.unfinishedSession;
   const activeSession =
@@ -165,7 +231,7 @@ function SessionControls({
             <p className="section-kicker">Выполнение</p>
             <h3 id="session-controls-title">Рабочая сессия</h3>
           </div>
-          {canStart ? (
+          {canStart && !hasPendingActionCompletion ? (
             <button
               className="primary-button session-primary-button"
               type="button"
@@ -185,8 +251,31 @@ function SessionControls({
           isMutating={isMutating}
           onPause={onPause}
           onResume={onResume}
+          isCompletionFormOpen={isCompletionFormOpen}
+          completionForm={completionForm}
+          onOpenCompletionForm={onOpenCompletionForm}
+          onCloseCompletionForm={onCloseCompletionForm}
+          onResultNoteChange={onResultNoteChange}
+          onCompletionKindChange={onCompletionKindChange}
+          onActionChoiceChange={onActionChoiceChange}
+          onActualResultChange={onActualResultChange}
+          onComplete={onComplete}
         />
       )}
+
+      {hasPendingActionCompletion ? (
+        <div className="action-completion-retry" role="alert">
+          <p>Сессия завершена, но действие не удалось завершить</p>
+          <button
+            className="primary-button"
+            type="button"
+            disabled={isMutating}
+            onClick={onRetryActionCompletion}
+          >
+            Повторить завершение действия
+          </button>
+        </div>
+      ) : null}
 
       {hasForeignSession ? (
         <p className="session-conflict" role="status">
@@ -194,7 +283,7 @@ function SessionControls({
         </p>
       ) : null}
 
-      {error === null ? null : (
+      {error === null || hasPendingActionCompletion ? null : (
         <p className="form-error session-error" role="alert">
           {error}
         </p>
@@ -209,12 +298,30 @@ function ActiveSession({
   isMutating,
   onPause,
   onResume,
+  isCompletionFormOpen,
+  completionForm,
+  onOpenCompletionForm,
+  onCloseCompletionForm,
+  onResultNoteChange,
+  onCompletionKindChange,
+  onActionChoiceChange,
+  onActualResultChange,
+  onComplete,
 }: {
   readonly session: ActionSession;
   readonly now: Date;
   readonly isMutating: boolean;
   readonly onPause: (session: ActionSession) => void;
   readonly onResume: (session: ActionSession) => void;
+  readonly isCompletionFormOpen: boolean;
+  readonly completionForm: SessionCompletionFormState;
+  readonly onOpenCompletionForm: () => void;
+  readonly onCloseCompletionForm: () => void;
+  readonly onResultNoteChange: (resultNote: string) => void;
+  readonly onCompletionKindChange: (completionKind: SessionCompletionKind) => void;
+  readonly onActionChoiceChange: (choice: ActionCompletionChoice) => void;
+  readonly onActualResultChange: (actualResult: string) => void;
+  readonly onComplete: (session: ActionSession) => void;
 }) {
   return (
     <div className={`active-session-card active-session-${session.status}`}>
@@ -243,31 +350,212 @@ function ActiveSession({
         </div>
       </dl>
 
-      {session.isRunning() ? (
+      <div className="session-control-actions">
+        {session.isRunning() ? (
+          <button
+            className="secondary-button session-control-button"
+            type="button"
+            disabled={isMutating}
+            onClick={() => onPause(session)}
+          >
+            Пауза
+          </button>
+        ) : (
+          <button
+            className="primary-button session-control-button"
+            type="button"
+            disabled={isMutating}
+            onClick={() => onResume(session)}
+          >
+            Продолжить
+          </button>
+        )}
         <button
           className="secondary-button session-control-button"
           type="button"
           disabled={isMutating}
-          onClick={() => onPause(session)}
+          onClick={onOpenCompletionForm}
         >
-          Пауза
+          Завершить
         </button>
-      ) : (
-        <button
-          className="primary-button session-control-button"
-          type="button"
-          disabled={isMutating}
-          onClick={() => onResume(session)}
-        >
-          Продолжить
-        </button>
-      )}
+      </div>
+
+      {isCompletionFormOpen ? (
+        <SessionCompletionForm
+          session={session}
+          form={completionForm}
+          isSaving={isMutating}
+          onClose={onCloseCompletionForm}
+          onResultNoteChange={onResultNoteChange}
+          onCompletionKindChange={onCompletionKindChange}
+          onActionChoiceChange={onActionChoiceChange}
+          onActualResultChange={onActualResultChange}
+          onComplete={onComplete}
+        />
+      ) : null}
     </div>
   );
 }
 
+function SessionCompletionForm({
+  session,
+  form,
+  isSaving,
+  onClose,
+  onResultNoteChange,
+  onCompletionKindChange,
+  onActionChoiceChange,
+  onActualResultChange,
+  onComplete,
+}: {
+  readonly session: ActionSession;
+  readonly form: SessionCompletionFormState;
+  readonly isSaving: boolean;
+  readonly onClose: () => void;
+  readonly onResultNoteChange: (resultNote: string) => void;
+  readonly onCompletionKindChange: (completionKind: SessionCompletionKind) => void;
+  readonly onActionChoiceChange: (choice: ActionCompletionChoice) => void;
+  readonly onActualResultChange: (actualResult: string) => void;
+  readonly onComplete: (session: ActionSession) => void;
+}) {
+  const completesAction = form.actionChoice === ACTION_COMPLETION_CHOICE.completeAction;
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>): void {
+    event.preventDefault();
+    onComplete(session);
+  }
+
+  return (
+    <form className="session-completion-form" onSubmit={handleSubmit} noValidate>
+      <h4>Завершение работы</h4>
+
+      <label>
+        <span>Что сделано за эту сессию</span>
+        <textarea
+          value={form.resultNote}
+          rows={3}
+          maxLength={1000}
+          disabled={isSaving}
+          onChange={(event) => onResultNoteChange(event.target.value)}
+        />
+      </label>
+
+      <fieldset>
+        <legend>Характер завершения</legend>
+        <label>
+          <input
+            type="radio"
+            name="completion-kind"
+            checked={form.completionKind === SESSION_COMPLETION_KIND.completed}
+            disabled={isSaving}
+            onChange={() => onCompletionKindChange(SESSION_COMPLETION_KIND.completed)}
+          />
+          <span>Сессия завершена</span>
+        </label>
+        <label>
+          <input
+            type="radio"
+            name="completion-kind"
+            checked={form.completionKind === SESSION_COMPLETION_KIND.interrupted}
+            disabled={isSaving}
+            onChange={() => onCompletionKindChange(SESSION_COMPLETION_KIND.interrupted)}
+          />
+          <span>Работа прервана</span>
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Что делать с действием</legend>
+        <label>
+          <input
+            type="radio"
+            name="action-choice"
+            checked={form.actionChoice === ACTION_COMPLETION_CHOICE.continueLater}
+            disabled={isSaving}
+            onChange={() => onActionChoiceChange(ACTION_COMPLETION_CHOICE.continueLater)}
+          />
+          <span>Продолжить действие позже</span>
+        </label>
+        <label>
+          <input
+            type="radio"
+            name="action-choice"
+            checked={completesAction}
+            disabled={isSaving}
+            onChange={() => onActionChoiceChange(ACTION_COMPLETION_CHOICE.completeAction)}
+          />
+          <span>Завершить действие полностью</span>
+        </label>
+      </fieldset>
+
+      {completesAction ? (
+        <label>
+          <span>Фактический результат *</span>
+          <textarea
+            value={form.actualResult}
+            rows={4}
+            maxLength={2000}
+            aria-required="true"
+            disabled={isSaving}
+            onChange={(event) => onActualResultChange(event.target.value)}
+          />
+        </label>
+      ) : null}
+
+      <div className="form-actions">
+        <button className="primary-button" type="submit" disabled={isSaving}>
+          {isSaving ? 'Сохраняем…' : 'Сохранить'}
+        </button>
+        <button className="secondary-button" type="button" disabled={isSaving} onClick={onClose}>
+          Отмена
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function CompletedActionSummary({
+  details,
+}: {
+  readonly details: Extract<LifeActionDetailsState, { readonly status: 'ready' }>;
+}) {
+  const completedSessions = details.sessions.filter((session) => session.isCompleted());
+  const totalWorkedDuration = completedSessions.reduce(
+    (total, session) => total + session.workedDurationAt(completionTime(session)),
+    0,
+  );
+  const totalPausedDuration = completedSessions.reduce(
+    (total, session) => total + session.pausedDurationAt(completionTime(session)),
+    0,
+  );
+
+  return (
+    <section className="completed-action-summary" aria-labelledby="completed-action-title">
+      <p className="section-kicker action-kicker">Итог</p>
+      <h3 id="completed-action-title">Действие завершено</h3>
+      <p className="completed-action-result">{details.lifeAction.actualResult?.toString()}</p>
+      <dl>
+        <div>
+          <dt>Завершённых сессий</dt>
+          <dd>{completedSessions.length}</dd>
+        </div>
+        <div>
+          <dt>Отработано</dt>
+          <dd>{formatDuration(totalWorkedDuration)}</dd>
+        </div>
+        <div>
+          <dt>Время пауз</dt>
+          <dd>{formatDuration(totalPausedDuration)}</dd>
+        </div>
+      </dl>
+    </section>
+  );
+}
+
 function SessionHistory({ sessions }: { readonly sessions: readonly ActionSession[] }) {
-  const completedSessions = sessions.filter((session) => session.isCompleted());
+  const completedSessions = sessions
+    .filter((session) => session.isCompleted())
+    .sort((left, right) => right.startedAt.getTime() - left.startedAt.getTime());
 
   return (
     <section className="session-history" aria-labelledby="session-history-title">
@@ -279,16 +567,28 @@ function SessionHistory({ sessions }: { readonly sessions: readonly ActionSessio
       </div>
 
       {completedSessions.length === 0 ? (
-        <p className="empty-session-history">Работа по этому действию ещё не начиналась</p>
+        <p className="empty-session-history">Завершённых сессий пока нет</p>
       ) : (
         <div className="session-history-list">
           {completedSessions.map((session) => (
-            <article className="session-history-card" key={session.id.toString()}>
+            <article
+              className={`session-history-card${session.isInterrupted() ? ' session-history-interrupted' : ''}`}
+              key={session.id.toString()}
+            >
               <div>
                 <time>{formatSessionStart(session.startedAt)}</time>
-                <span>Завершена</span>
+                <span>{session.isInterrupted() ? 'Прервана' : 'Завершена'}</span>
               </div>
-              <strong>{formatDuration(session.workedDurationAt(session.completedAt!))}</strong>
+              <dl className="session-history-durations">
+                <div>
+                  <dt>Работа</dt>
+                  <dd>{formatDuration(session.workedDurationAt(completionTime(session)))}</dd>
+                </div>
+                <div>
+                  <dt>Паузы</dt>
+                  <dd>{formatDuration(session.pausedDurationAt(completionTime(session)))}</dd>
+                </div>
+              </dl>
               {session.resultNote === null ? null : <p>{session.resultNote.toString()}</p>}
             </article>
           ))}
@@ -296,6 +596,10 @@ function SessionHistory({ sessions }: { readonly sessions: readonly ActionSessio
       )}
     </section>
   );
+}
+
+function completionTime(session: ActionSession): Date {
+  return session.completedAt ?? session.startedAt;
 }
 
 function useSessionTimer(details: LifeActionDetailsState, clock: Pick<Clock, 'now'>): Date {

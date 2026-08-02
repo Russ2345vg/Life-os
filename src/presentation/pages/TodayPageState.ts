@@ -1,17 +1,22 @@
 import type {
+  CompleteActionSession,
+  CompleteLifeAction,
   CreateDecisionForDate,
   CreateLifeActionForDecision,
   GetDecisionsForDate,
   GetLifeActionsForDecision,
 } from '../../application';
 import {
+  ActionActualResult,
   DECISION_KIND,
+  SESSION_COMPLETION_KIND,
   type ActionSession,
   type DayDate,
   type Decision,
   type DecisionKind,
   type EntityId,
   type LifeAction,
+  type SessionCompletionKind,
 } from '../../domain';
 
 type DecisionsState =
@@ -29,6 +34,21 @@ export interface LifeActionFormState {
   readonly title: string;
   readonly expectedResult: string;
   readonly description: string;
+}
+
+export const ACTION_COMPLETION_CHOICE = {
+  continueLater: 'continue_later',
+  completeAction: 'complete_action',
+} as const;
+
+export type ActionCompletionChoice =
+  (typeof ACTION_COMPLETION_CHOICE)[keyof typeof ACTION_COMPLETION_CHOICE];
+
+export interface SessionCompletionFormState {
+  readonly resultNote: string;
+  readonly completionKind: SessionCompletionKind;
+  readonly actionChoice: ActionCompletionChoice;
+  readonly actualResult: string;
 }
 
 export type DecisionDetailsState =
@@ -75,6 +95,9 @@ export interface TodayPageState {
   readonly actionDetails: LifeActionDetailsState;
   readonly isSessionMutating: boolean;
   readonly sessionError: string | null;
+  readonly isSessionCompletionFormOpen: boolean;
+  readonly sessionCompletionForm: SessionCompletionFormState;
+  readonly hasPendingActionCompletion: boolean;
 }
 
 export type TodayPageAction =
@@ -129,7 +152,30 @@ export type TodayPageAction =
       readonly lifeAction: LifeAction;
       readonly session: ActionSession;
     }
-  | { readonly type: 'session_updated'; readonly session: ActionSession };
+  | { readonly type: 'session_updated'; readonly session: ActionSession }
+  | { readonly type: 'session_completion_form_opened' }
+  | { readonly type: 'session_completion_form_closed' }
+  | { readonly type: 'session_result_note_changed'; readonly resultNote: string }
+  | {
+      readonly type: 'session_completion_kind_changed';
+      readonly completionKind: SessionCompletionKind;
+    }
+  | {
+      readonly type: 'action_completion_choice_changed';
+      readonly actionChoice: ActionCompletionChoice;
+    }
+  | { readonly type: 'action_actual_result_changed'; readonly actualResult: string }
+  | { readonly type: 'session_completed'; readonly session: ActionSession }
+  | {
+      readonly type: 'session_completed_action_failed';
+      readonly session: ActionSession;
+      readonly message: string;
+    }
+  | {
+      readonly type: 'life_action_completed';
+      readonly lifeAction: LifeAction;
+      readonly session?: ActionSession;
+    };
 
 export const INITIAL_TODAY_PAGE_STATE: TodayPageState = {
   decisions: { status: 'loading' },
@@ -145,6 +191,9 @@ export const INITIAL_TODAY_PAGE_STATE: TodayPageState = {
   actionDetails: { status: 'closed' },
   isSessionMutating: false,
   sessionError: null,
+  isSessionCompletionFormOpen: false,
+  sessionCompletionForm: createEmptySessionCompletionForm(),
+  hasPendingActionCompletion: false,
 };
 
 export function todayPageReducer(state: TodayPageState, action: TodayPageAction): TodayPageState {
@@ -192,6 +241,9 @@ export function todayPageReducer(state: TodayPageState, action: TodayPageAction)
         actionDetails: { status: 'closed' },
         isSessionMutating: false,
         sessionError: null,
+        isSessionCompletionFormOpen: false,
+        sessionCompletionForm: createEmptySessionCompletionForm(),
+        hasPendingActionCompletion: false,
       };
     case 'details_load_succeeded':
       if (!isCurrentDecision(state.details, action.decisionId)) {
@@ -222,6 +274,9 @@ export function todayPageReducer(state: TodayPageState, action: TodayPageAction)
         actionDetails: { status: 'closed' },
         isSessionMutating: false,
         sessionError: null,
+        isSessionCompletionFormOpen: false,
+        sessionCompletionForm: createEmptySessionCompletionForm(),
+        hasPendingActionCompletion: false,
       };
     case 'life_action_form_opened':
       return { ...state, isLifeActionFormOpen: true, lifeActionFormError: null };
@@ -268,6 +323,9 @@ export function todayPageReducer(state: TodayPageState, action: TodayPageAction)
         isLifeActionFormOpen: false,
         isSessionMutating: false,
         sessionError: null,
+        isSessionCompletionFormOpen: false,
+        sessionCompletionForm: createEmptySessionCompletionForm(),
+        hasPendingActionCompletion: false,
       };
     case 'action_details_load_succeeded':
       if (
@@ -306,6 +364,9 @@ export function todayPageReducer(state: TodayPageState, action: TodayPageAction)
         actionDetails: { status: 'closed' },
         isSessionMutating: false,
         sessionError: null,
+        isSessionCompletionFormOpen: false,
+        sessionCompletionForm: createEmptySessionCompletionForm(),
+        hasPendingActionCompletion: false,
       };
     case 'session_operation_started':
       return { ...state, isSessionMutating: true, sessionError: null };
@@ -346,6 +407,115 @@ export function todayPageReducer(state: TodayPageState, action: TodayPageAction)
         },
         isSessionMutating: false,
         sessionError: null,
+      };
+    case 'session_completion_form_opened':
+      return { ...state, isSessionCompletionFormOpen: true, sessionError: null };
+    case 'session_completion_form_closed':
+      return {
+        ...state,
+        isSessionCompletionFormOpen: false,
+        sessionCompletionForm: createEmptySessionCompletionForm(),
+        sessionError: null,
+      };
+    case 'session_result_note_changed':
+      return {
+        ...state,
+        sessionCompletionForm: {
+          ...state.sessionCompletionForm,
+          resultNote: action.resultNote,
+        },
+        sessionError: null,
+      };
+    case 'session_completion_kind_changed':
+      return {
+        ...state,
+        sessionCompletionForm: {
+          ...state.sessionCompletionForm,
+          completionKind: action.completionKind,
+        },
+        sessionError: null,
+      };
+    case 'action_completion_choice_changed':
+      return {
+        ...state,
+        sessionCompletionForm: {
+          ...state.sessionCompletionForm,
+          actionChoice: action.actionChoice,
+        },
+        sessionError: null,
+      };
+    case 'action_actual_result_changed':
+      return {
+        ...state,
+        sessionCompletionForm: {
+          ...state.sessionCompletionForm,
+          actualResult: action.actualResult,
+        },
+        sessionError: null,
+      };
+    case 'session_completed':
+      if (
+        state.actionDetails.status !== 'ready' ||
+        !state.actionDetails.lifeAction.id.equals(action.session.lifeActionId)
+      ) {
+        return state;
+      }
+      return {
+        ...state,
+        actionDetails: {
+          ...state.actionDetails,
+          sessions: replaceSession(state.actionDetails.sessions, action.session),
+          unfinishedSession: null,
+        },
+        isSessionMutating: false,
+        sessionError: null,
+        isSessionCompletionFormOpen: false,
+        sessionCompletionForm: createEmptySessionCompletionForm(),
+        hasPendingActionCompletion: false,
+      };
+    case 'session_completed_action_failed':
+      if (
+        state.actionDetails.status !== 'ready' ||
+        !state.actionDetails.lifeAction.id.equals(action.session.lifeActionId)
+      ) {
+        return state;
+      }
+      return {
+        ...state,
+        actionDetails: {
+          ...state.actionDetails,
+          sessions: replaceSession(state.actionDetails.sessions, action.session),
+          unfinishedSession: null,
+        },
+        isSessionMutating: false,
+        sessionError: action.message,
+        isSessionCompletionFormOpen: false,
+        hasPendingActionCompletion: true,
+      };
+    case 'life_action_completed':
+      if (
+        state.actionDetails.status !== 'ready' ||
+        !state.actionDetails.lifeAction.id.equals(action.lifeAction.id)
+      ) {
+        return state;
+      }
+      return {
+        ...state,
+        details: replaceLifeActionInDecisionDetails(state.details, action.lifeAction),
+        actionDetails: {
+          ...state.actionDetails,
+          lifeAction: action.lifeAction,
+          sessions:
+            action.session === undefined
+              ? state.actionDetails.sessions
+              : replaceSession(state.actionDetails.sessions, action.session),
+          unfinishedSession: null,
+        },
+        isSessionMutating: false,
+        sessionError: null,
+        isSessionCompletionFormOpen: false,
+        sessionCompletionForm: createEmptySessionCompletionForm(),
+        hasPendingActionCompletion: false,
       };
   }
 }
@@ -427,6 +597,122 @@ export function resumeSessionErrorMessage(): string {
   return 'Не удалось продолжить работу';
 }
 
+export function validateSessionCompletionForm(form: SessionCompletionFormState): string | null {
+  if (
+    form.actionChoice === ACTION_COMPLETION_CHOICE.completeAction &&
+    form.actualResult.trim().length === 0
+  ) {
+    return 'Укажите фактический результат';
+  }
+
+  return null;
+}
+
+export function completeSessionErrorMessage(code: string): string {
+  if (code === 'session.not_found') {
+    return 'Сессия больше недоступна';
+  }
+
+  return 'Не удалось завершить сессию';
+}
+
+export const ACTION_COMPLETION_FAILED_MESSAGE =
+  'Сессия завершена, но действие не удалось завершить';
+
+export type SessionCompletionWorkflowResult =
+  | { readonly status: 'session_failed'; readonly message: string }
+  | { readonly status: 'session_completed'; readonly session: ActionSession }
+  | {
+      readonly status: 'action_completed';
+      readonly session: ActionSession;
+      readonly lifeAction: LifeAction;
+    }
+  | {
+      readonly status: 'action_failed';
+      readonly session: ActionSession;
+      readonly message: string;
+    };
+
+export async function completeSessionWorkflow(input: {
+  readonly session: ActionSession;
+  readonly lifeAction: LifeAction;
+  readonly form: SessionCompletionFormState;
+  readonly completeActionSession: Pick<CompleteActionSession, 'execute'>;
+  readonly completeLifeAction: Pick<CompleteLifeAction, 'execute'>;
+}): Promise<SessionCompletionWorkflowResult> {
+  const actualResult =
+    input.form.actionChoice === ACTION_COMPLETION_CHOICE.completeAction
+      ? ActionActualResult.create(input.form.actualResult)
+      : null;
+  let sessionResult: Awaited<ReturnType<CompleteActionSession['execute']>>;
+  try {
+    sessionResult = await input.completeActionSession.execute({
+      sessionId: input.session.id,
+      completionKind: input.form.completionKind,
+      ...(input.form.resultNote.trim().length === 0 ? {} : { resultNote: input.form.resultNote }),
+    });
+  } catch {
+    return { status: 'session_failed', message: 'Не удалось завершить сессию' };
+  }
+
+  if (!sessionResult.ok) {
+    return {
+      status: 'session_failed',
+      message: completeSessionErrorMessage(sessionResult.error.code),
+    };
+  }
+
+  if (actualResult === null) {
+    return { status: 'session_completed', session: sessionResult.value };
+  }
+
+  let actionResult: Awaited<ReturnType<CompleteLifeAction['execute']>>;
+  try {
+    actionResult = await input.completeLifeAction.execute({
+      lifeActionId: input.lifeAction.id,
+      actualResult,
+    });
+  } catch {
+    return {
+      status: 'action_failed',
+      session: sessionResult.value,
+      message: ACTION_COMPLETION_FAILED_MESSAGE,
+    };
+  }
+
+  if (!actionResult.ok) {
+    return {
+      status: 'action_failed',
+      session: sessionResult.value,
+      message: ACTION_COMPLETION_FAILED_MESSAGE,
+    };
+  }
+
+  return {
+    status: 'action_completed',
+    session: sessionResult.value,
+    lifeAction: actionResult.value,
+  };
+}
+
+export async function retryLifeActionCompletion(input: {
+  readonly lifeAction: LifeAction;
+  readonly actualResult: string;
+  readonly completeLifeAction: Pick<CompleteLifeAction, 'execute'>;
+}): Promise<
+  | { readonly ok: true; readonly lifeAction: LifeAction }
+  | { readonly ok: false; readonly message: string }
+> {
+  const result = await input.completeLifeAction.execute({
+    lifeActionId: input.lifeAction.id,
+    actualResult: ActionActualResult.create(input.actualResult),
+  });
+
+  return result.ok
+    ? { ok: true, lifeAction: result.value }
+    : { ok: false, message: ACTION_COMPLETION_FAILED_MESSAGE };
+}
+
 export async function createLifeActionAndReload(input: {
   readonly decisionId: EntityId;
   readonly plannedDate: DayDate;
@@ -484,6 +770,15 @@ function createEmptyForm(): DecisionFormState {
 
 function createEmptyLifeActionForm(): LifeActionFormState {
   return { title: '', expectedResult: '', description: '' };
+}
+
+function createEmptySessionCompletionForm(): SessionCompletionFormState {
+  return {
+    resultNote: '',
+    completionKind: SESSION_COMPLETION_KIND.completed,
+    actionChoice: ACTION_COMPLETION_CHOICE.continueLater,
+    actualResult: '',
+  };
 }
 
 function isCurrentDecision(details: DecisionDetailsState, decisionId: EntityId): boolean {

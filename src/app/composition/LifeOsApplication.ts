@@ -1,6 +1,8 @@
 import type {
   ActionSessionRepository,
   Clock,
+  CompleteActionSession,
+  CompleteLifeAction,
   CreateDecisionForDate,
   CreateLifeActionForDecision,
   CurrentDateProvider,
@@ -38,6 +40,8 @@ interface LifeOsApplicationServices {
   readonly startLifeActionSession: StartLifeActionSession;
   readonly pauseActionSession: PauseActionSession;
   readonly resumeActionSession: ResumeActionSession;
+  readonly completeActionSession: CompleteActionSession;
+  readonly completeLifeAction: CompleteLifeAction;
   readonly getActionSessionsForLifeAction: GetActionSessionsForLifeAction;
   readonly getUnfinishedActionSession: GetUnfinishedActionSession;
   readonly closeDatabase: () => void;
@@ -61,6 +65,8 @@ export class LifeOsApplication {
   public readonly startLifeActionSession: StartLifeActionSession;
   public readonly pauseActionSession: PauseActionSession;
   public readonly resumeActionSession: ResumeActionSession;
+  public readonly completeActionSession: CompleteActionSession;
+  public readonly completeLifeAction: CompleteLifeAction;
   public readonly getActionSessionsForLifeAction: GetActionSessionsForLifeAction;
   public readonly getUnfinishedActionSession: GetUnfinishedActionSession;
 
@@ -84,6 +90,8 @@ export class LifeOsApplication {
     this.startLifeActionSession = services.startLifeActionSession;
     this.pauseActionSession = services.pauseActionSession;
     this.resumeActionSession = services.resumeActionSession;
+    this.completeActionSession = services.completeActionSession;
+    this.completeLifeAction = services.completeLifeAction;
     this.getActionSessionsForLifeAction = services.getActionSessionsForLifeAction;
     this.getUnfinishedActionSession = services.getUnfinishedActionSession;
     this.#closeDatabase = services.closeDatabase;

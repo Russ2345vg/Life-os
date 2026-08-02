@@ -2,6 +2,8 @@ import type { Clock, CurrentDateProvider, IdGenerator } from '../../application'
 import {
   CreateDecisionForDate,
   CreateLifeActionForDecision,
+  CompleteActionSession,
+  CompleteLifeAction,
   EnsureCurrentDay,
   GetDecisionsForDate,
   GetDecisionById,
@@ -82,6 +84,12 @@ export async function createLifeOsApplication(
       clock,
       idGenerator,
     );
+    const completeActionSession = new CompleteActionSession(
+      actionSessionRepository,
+      clock,
+      idGenerator,
+    );
+    const completeLifeAction = new CompleteLifeAction(lifeActionRepository, clock, idGenerator);
     const getActionSessionsForLifeAction = new GetActionSessionsForLifeAction(
       actionSessionRepository,
     );
@@ -104,6 +112,8 @@ export async function createLifeOsApplication(
       startLifeActionSession,
       pauseActionSession,
       resumeActionSession,
+      completeActionSession,
+      completeLifeAction,
       getActionSessionsForLifeAction,
       getUnfinishedActionSession,
       closeDatabase: () => database.close(),

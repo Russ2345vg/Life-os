@@ -8,6 +8,8 @@ import {
 } from 'react';
 import type {
   Clock,
+  CompleteActionSession,
+  CompleteLifeAction,
   CreateDecisionForDate,
   CreateLifeActionForDecision,
   GetActionSessionsForLifeAction,
@@ -29,20 +31,25 @@ import {
   type EntityId,
   type ActionSession,
   type LifeAction,
+  type SessionCompletionKind,
 } from '../../domain';
 import { DecisionDetailsPanel } from '../components/DecisionDetailsPanel';
 import { LifeActionDetailsPanel } from '../components/LifeActionDetailsPanel';
 import {
+  completeSessionWorkflow,
   createDecisionAndReload,
   createLifeActionAndReload,
   INITIAL_TODAY_PAGE_STATE,
   isDecisionActivationKey,
   pauseSessionErrorMessage,
+  retryLifeActionCompletion,
   resumeSessionErrorMessage,
   startSessionErrorMessage,
   todayPageReducer,
   validateDecisionForm,
   validateLifeActionForm,
+  validateSessionCompletionForm,
+  type ActionCompletionChoice,
   type DecisionFormState,
   type TodayPageState,
 } from './TodayPageState';
@@ -57,6 +64,8 @@ interface TodayPageProps {
   readonly startLifeActionSession: Pick<StartLifeActionSession, 'execute'>;
   readonly pauseActionSession: Pick<PauseActionSession, 'execute'>;
   readonly resumeActionSession: Pick<ResumeActionSession, 'execute'>;
+  readonly completeActionSession: Pick<CompleteActionSession, 'execute'>;
+  readonly completeLifeAction: Pick<CompleteLifeAction, 'execute'>;
   readonly getActionSessionsForLifeAction: Pick<GetActionSessionsForLifeAction, 'execute'>;
   readonly getUnfinishedActionSession: Pick<GetUnfinishedActionSession, 'execute'>;
   readonly clock: Pick<Clock, 'now'>;
@@ -72,6 +81,8 @@ export function TodayPage({
   startLifeActionSession,
   pauseActionSession,
   resumeActionSession,
+  completeActionSession,
+  completeLifeAction,
   getActionSessionsForLifeAction,
   getUnfinishedActionSession,
   clock,
@@ -309,6 +320,87 @@ export function TodayPage({
     }
   }
 
+  async function handleCompleteSession(session: ActionSession): Promise<void> {
+    if (sessionMutationRef.current || state.actionDetails.status !== 'ready') {
+      return;
+    }
+
+    const validationError = validateSessionCompletionForm(state.sessionCompletionForm);
+    if (validationError !== null) {
+      dispatch({ type: 'session_operation_failed', message: validationError });
+      return;
+    }
+
+    sessionMutationRef.current = true;
+    dispatch({ type: 'session_operation_started' });
+    try {
+      const result = await completeSessionWorkflow({
+        session,
+        lifeAction: state.actionDetails.lifeAction,
+        form: state.sessionCompletionForm,
+        completeActionSession,
+        completeLifeAction,
+      });
+
+      switch (result.status) {
+        case 'session_failed':
+          dispatch({ type: 'session_operation_failed', message: result.message });
+          break;
+        case 'session_completed':
+          dispatch({ type: 'session_completed', session: result.session });
+          break;
+        case 'action_failed':
+          dispatch({
+            type: 'session_completed_action_failed',
+            session: result.session,
+            message: result.message,
+          });
+          break;
+        case 'action_completed':
+          dispatch({
+            type: 'life_action_completed',
+            lifeAction: result.lifeAction,
+            session: result.session,
+          });
+          break;
+      }
+    } catch {
+      dispatch({ type: 'session_operation_failed', message: 'Не удалось завершить сессию' });
+    } finally {
+      sessionMutationRef.current = false;
+    }
+  }
+
+  async function handleRetryLifeActionCompletion(): Promise<void> {
+    if (sessionMutationRef.current || state.actionDetails.status !== 'ready') {
+      return;
+    }
+
+    sessionMutationRef.current = true;
+    dispatch({ type: 'session_operation_started' });
+    try {
+      const result = await retryLifeActionCompletion({
+        lifeAction: state.actionDetails.lifeAction,
+        actualResult: state.sessionCompletionForm.actualResult,
+        completeLifeAction,
+      });
+
+      if (!result.ok) {
+        dispatch({ type: 'session_operation_failed', message: result.message });
+        return;
+      }
+
+      dispatch({ type: 'life_action_completed', lifeAction: result.lifeAction });
+    } catch {
+      dispatch({
+        type: 'session_operation_failed',
+        message: 'Сессия завершена, но действие не удалось завершить',
+      });
+    } finally {
+      sessionMutationRef.current = false;
+    }
+  }
+
   return (
     <TodayPageView
       currentDate={currentDate}
@@ -350,6 +442,22 @@ export function TodayPage({
       onStartSession={() => void handleStartSession()}
       onPauseSession={(session) => void handlePauseSession(session)}
       onResumeSession={(session) => void handleResumeSession(session)}
+      onOpenSessionCompletionForm={() => dispatch({ type: 'session_completion_form_opened' })}
+      onCloseSessionCompletionForm={() => dispatch({ type: 'session_completion_form_closed' })}
+      onSessionResultNoteChange={(resultNote) =>
+        dispatch({ type: 'session_result_note_changed', resultNote })
+      }
+      onSessionCompletionKindChange={(completionKind) =>
+        dispatch({ type: 'session_completion_kind_changed', completionKind })
+      }
+      onActionCompletionChoiceChange={(actionChoice) =>
+        dispatch({ type: 'action_completion_choice_changed', actionChoice })
+      }
+      onActionActualResultChange={(actualResult) =>
+        dispatch({ type: 'action_actual_result_changed', actualResult })
+      }
+      onCompleteSession={(session) => void handleCompleteSession(session)}
+      onRetryLifeActionCompletion={() => void handleRetryLifeActionCompletion()}
     />
   );
 }
@@ -380,6 +488,14 @@ interface TodayPageViewProps {
   readonly onStartSession: () => void;
   readonly onPauseSession: (session: ActionSession) => void;
   readonly onResumeSession: (session: ActionSession) => void;
+  readonly onOpenSessionCompletionForm: () => void;
+  readonly onCloseSessionCompletionForm: () => void;
+  readonly onSessionResultNoteChange: (resultNote: string) => void;
+  readonly onSessionCompletionKindChange: (completionKind: SessionCompletionKind) => void;
+  readonly onActionCompletionChoiceChange: (actionChoice: ActionCompletionChoice) => void;
+  readonly onActionActualResultChange: (actualResult: string) => void;
+  readonly onCompleteSession: (session: ActionSession) => void;
+  readonly onRetryLifeActionCompletion: () => void;
 }
 
 export function TodayPageView({
@@ -408,6 +524,14 @@ export function TodayPageView({
   onStartSession,
   onPauseSession,
   onResumeSession,
+  onOpenSessionCompletionForm,
+  onCloseSessionCompletionForm,
+  onSessionResultNoteChange,
+  onSessionCompletionKindChange,
+  onActionCompletionChoiceChange,
+  onActionActualResultChange,
+  onCompleteSession,
+  onRetryLifeActionCompletion,
 }: TodayPageViewProps) {
   return (
     <>
@@ -486,12 +610,23 @@ export function TodayPageView({
           clock={clock}
           isMutating={state.isSessionMutating}
           error={state.sessionError}
+          isCompletionFormOpen={state.isSessionCompletionFormOpen}
+          completionForm={state.sessionCompletionForm}
+          hasPendingActionCompletion={state.hasPendingActionCompletion}
           onClose={onCloseDecision}
           onBack={onBackToDecision}
           onRetry={onRetryLifeAction}
           onStart={onStartSession}
           onPause={onPauseSession}
           onResume={onResumeSession}
+          onOpenCompletionForm={onOpenSessionCompletionForm}
+          onCloseCompletionForm={onCloseSessionCompletionForm}
+          onResultNoteChange={onSessionResultNoteChange}
+          onCompletionKindChange={onSessionCompletionKindChange}
+          onActionChoiceChange={onActionCompletionChoiceChange}
+          onActualResultChange={onActionActualResultChange}
+          onComplete={onCompleteSession}
+          onRetryActionCompletion={onRetryLifeActionCompletion}
         />
       )}
     </>
