@@ -19,6 +19,7 @@ export { StartLifeAction, type StartLifeActionInput } from './commands/StartLife
 export { MainDecisionLimitPolicy } from './decision/MainDecisionLimitPolicy';
 export { GetDecisionsForDate } from './queries/GetDecisionsForDate';
 export { GetActionSessionById } from './queries/GetActionSessionById';
+export { GetActionSessionsForLifeAction } from './queries/GetActionSessionsForLifeAction';
 export { GetLifeActionsForDate } from './queries/GetLifeActionsForDate';
 export { GetLifeActionsForDecision } from './queries/GetLifeActionsForDecision';
 export type { ActionSessionRepository } from './ports/ActionSessionRepository';
