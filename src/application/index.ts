@@ -36,6 +36,10 @@ export { PlanDecision, type PlanDecisionInput } from './commands/PlanDecision';
 export { PauseActionSession, type PauseActionSessionInput } from './commands/PauseActionSession';
 export { RescheduleDecision, type RescheduleDecisionInput } from './commands/RescheduleDecision';
 export {
+  RescheduleDecisionSafely,
+  type RescheduleDecisionSafelyInput,
+} from './commands/RescheduleDecisionSafely';
+export {
   RescheduleLifeAction,
   type RescheduleLifeActionInput,
 } from './commands/RescheduleLifeAction';

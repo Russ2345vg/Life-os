@@ -8,6 +8,7 @@ import type {
   CreateLifeActionForDecision,
   GetDecisionsForDate,
   GetLifeActionsForDecision,
+  RescheduleDecisionSafely,
   RescheduleLifeActionSafely,
   UpdateDecisionDetails,
   UpdateLifeActionDetails,
@@ -49,6 +50,10 @@ export interface DecisionConfirmationFormState {
 export interface DecisionEditFormState {
   readonly title: string;
   readonly expectedResult: string;
+}
+
+export interface DecisionRescheduleFormState {
+  readonly newPlannedDate: string;
 }
 
 export interface LifeActionEditFormState {
@@ -128,6 +133,11 @@ export interface TodayPageState {
   readonly isDecisionCancellationOpen: boolean;
   readonly isDecisionCancelling: boolean;
   readonly decisionCancellationError: string | null;
+  readonly isDecisionRescheduleFormOpen: boolean;
+  readonly isDecisionRescheduling: boolean;
+  readonly decisionRescheduleForm: DecisionRescheduleFormState;
+  readonly decisionRescheduleError: string | null;
+  readonly decisionRescheduleNotice: string | null;
   readonly actionDetails: LifeActionDetailsState;
   readonly isLifeActionEditFormOpen: boolean;
   readonly isLifeActionEditing: boolean;
@@ -204,6 +214,17 @@ export type TodayPageAction =
   | { readonly type: 'decision_cancellation_started' }
   | { readonly type: 'decision_cancellation_failed'; readonly message: string }
   | { readonly type: 'decision_cancellation_succeeded'; readonly decision: Decision }
+  | { readonly type: 'decision_reschedule_form_opened' }
+  | { readonly type: 'decision_reschedule_form_closed' }
+  | { readonly type: 'decision_reschedule_date_changed'; readonly newPlannedDate: string }
+  | { readonly type: 'decision_reschedule_started' }
+  | { readonly type: 'decision_reschedule_failed'; readonly message: string }
+  | {
+      readonly type: 'decision_reschedule_succeeded';
+      readonly decision: Decision;
+      readonly movedOffCurrentDay: boolean;
+      readonly message: string | null;
+    }
   | { readonly type: 'action_details_load_started'; readonly lifeAction: LifeAction }
   | {
       readonly type: 'action_details_load_succeeded';
@@ -289,6 +310,11 @@ export const INITIAL_TODAY_PAGE_STATE: TodayPageState = {
   isDecisionCancellationOpen: false,
   isDecisionCancelling: false,
   decisionCancellationError: null,
+  isDecisionRescheduleFormOpen: false,
+  isDecisionRescheduling: false,
+  decisionRescheduleForm: createEmptyDecisionRescheduleForm(),
+  decisionRescheduleError: null,
+  decisionRescheduleNotice: null,
   actionDetails: { status: 'closed' },
   isLifeActionEditFormOpen: false,
   isLifeActionEditing: false,
@@ -361,6 +387,8 @@ export function todayPageReducer(state: TodayPageState, action: TodayPageAction)
         isDecisionCancellationOpen: false,
         isDecisionCancelling: false,
         decisionCancellationError: null,
+        ...closedDecisionRescheduleState(),
+        decisionRescheduleNotice: null,
         actionDetails: { status: 'closed' },
         ...closedLifeActionManagementState(),
         isSessionMutating: false,
@@ -406,6 +434,7 @@ export function todayPageReducer(state: TodayPageState, action: TodayPageAction)
         isDecisionCancellationOpen: false,
         isDecisionCancelling: false,
         decisionCancellationError: null,
+        ...closedDecisionRescheduleState(),
         actionDetails: { status: 'closed' },
         ...closedLifeActionManagementState(),
         isSessionMutating: false,
@@ -510,6 +539,8 @@ export function todayPageReducer(state: TodayPageState, action: TodayPageAction)
           expectedResult: state.details.decision.expectedResult?.toString() ?? '',
         },
         decisionEditError: null,
+        isDecisionRescheduleFormOpen: false,
+        decisionRescheduleError: null,
         isDecisionCancellationOpen: false,
         decisionCancellationError: null,
       };
@@ -518,6 +549,8 @@ export function todayPageReducer(state: TodayPageState, action: TodayPageAction)
         ...state,
         isDecisionEditFormOpen: false,
         decisionEditError: null,
+        isDecisionRescheduleFormOpen: false,
+        decisionRescheduleError: null,
       };
     case 'decision_edit_title_changed':
       return {
@@ -561,6 +594,8 @@ export function todayPageReducer(state: TodayPageState, action: TodayPageAction)
         decisionCancellationError: null,
         isDecisionEditFormOpen: false,
         decisionEditError: null,
+        isDecisionRescheduleFormOpen: false,
+        decisionRescheduleError: null,
       };
     case 'decision_cancellation_closed':
       return {
@@ -593,6 +628,61 @@ export function todayPageReducer(state: TodayPageState, action: TodayPageAction)
         isDecisionEditFormOpen: false,
         isLifeActionFormOpen: false,
         isDecisionConfirmationFormOpen: false,
+      };
+    case 'decision_reschedule_form_opened':
+      return {
+        ...state,
+        isDecisionRescheduleFormOpen: true,
+        decisionRescheduleForm: createEmptyDecisionRescheduleForm(),
+        decisionRescheduleError: null,
+        isDecisionEditFormOpen: false,
+        decisionEditError: null,
+        isDecisionCancellationOpen: false,
+        decisionCancellationError: null,
+      };
+    case 'decision_reschedule_form_closed':
+      return {
+        ...state,
+        isDecisionRescheduleFormOpen: false,
+        decisionRescheduleError: null,
+      };
+    case 'decision_reschedule_date_changed':
+      return {
+        ...state,
+        decisionRescheduleForm: {
+          ...state.decisionRescheduleForm,
+          newPlannedDate: action.newPlannedDate,
+        },
+        decisionRescheduleError: null,
+      };
+    case 'decision_reschedule_started':
+      return { ...state, isDecisionRescheduling: true, decisionRescheduleError: null };
+    case 'decision_reschedule_failed':
+      return {
+        ...state,
+        isDecisionRescheduling: false,
+        decisionRescheduleError: action.message,
+      };
+    case 'decision_reschedule_succeeded':
+      if (
+        state.details.status !== 'ready' ||
+        !state.details.decisionId.equals(action.decision.id)
+      ) {
+        return state;
+      }
+      return {
+        ...state,
+        decisions: action.movedOffCurrentDay
+          ? removeDecisionFromDecisionsState(state.decisions, action.decision.id)
+          : replaceDecisionInDecisionsState(state.decisions, action.decision),
+        details: action.movedOffCurrentDay
+          ? { status: 'closed' }
+          : { ...state.details, decision: action.decision },
+        isDecisionRescheduleFormOpen: false,
+        isDecisionRescheduling: false,
+        decisionRescheduleForm: createEmptyDecisionRescheduleForm(),
+        decisionRescheduleError: null,
+        decisionRescheduleNotice: action.message,
       };
     case 'action_details_load_started':
       return {
@@ -1014,6 +1104,45 @@ export function validateLifeActionForm(form: LifeActionFormState): string | null
   }
 
   return null;
+}
+
+export function validateDecisionRescheduleForm(form: DecisionRescheduleFormState): string | null {
+  return form.newPlannedDate.trim().length === 0 ? 'Выберите новую дату' : null;
+}
+
+export async function rescheduleDecisionResult(input: {
+  readonly decisionId: EntityId;
+  readonly form: DecisionRescheduleFormState;
+  readonly rescheduleDecisionSafely: Pick<RescheduleDecisionSafely, 'execute'>;
+}): Promise<
+  | { readonly ok: true; readonly decision: Decision }
+  | { readonly ok: false; readonly message: string }
+> {
+  const result = await input.rescheduleDecisionSafely.execute({
+    decisionId: input.decisionId,
+    newPlannedDate: input.form.newPlannedDate,
+  });
+
+  return result.ok
+    ? { ok: true, decision: result.value }
+    : { ok: false, message: decisionRescheduleErrorMessage(result.error.code) };
+}
+
+export function decisionRescheduleErrorMessage(code: string): string {
+  switch (code) {
+    case 'decision.planned_date_required':
+      return 'Выберите новую дату';
+    case 'decision.planned_date_in_past':
+      return 'Нельзя перенести решение на прошедшую дату';
+    case 'decision.main_limit_reached':
+      return 'На выбранную дату уже назначены три главных решения';
+    case 'decision.actions_block_reschedule':
+      return 'Сначала завершите настройку или выполнение связанных действий';
+    case 'decision.cannot_reschedule':
+      return 'Это решение уже нельзя переносить';
+    default:
+      return 'Не удалось перенести решение';
+  }
 }
 
 export function validateLifeActionEditForm(form: LifeActionEditFormState): string | null {
@@ -1449,6 +1578,25 @@ function createEmptyLifeActionEditForm(): LifeActionEditFormState {
   return { title: '', description: '', expectedResult: '' };
 }
 
+function createEmptyDecisionRescheduleForm(): DecisionRescheduleFormState {
+  return { newPlannedDate: '' };
+}
+
+function closedDecisionRescheduleState(): Pick<
+  TodayPageState,
+  | 'isDecisionRescheduleFormOpen'
+  | 'isDecisionRescheduling'
+  | 'decisionRescheduleForm'
+  | 'decisionRescheduleError'
+> {
+  return {
+    isDecisionRescheduleFormOpen: false,
+    isDecisionRescheduling: false,
+    decisionRescheduleForm: createEmptyDecisionRescheduleForm(),
+    decisionRescheduleError: null,
+  };
+}
+
 function createEmptyLifeActionRescheduleForm(): LifeActionRescheduleFormState {
   return { newPlannedDate: '' };
 }
@@ -1542,5 +1690,19 @@ function replaceDecisionInDecisionsState(
     decisions: state.decisions.map((decision) =>
       decision.id.equals(updatedDecision.id) ? updatedDecision : decision,
     ),
+  };
+}
+
+function removeDecisionFromDecisionsState(
+  state: DecisionsState,
+  decisionId: EntityId,
+): DecisionsState {
+  if (state.status !== 'ready') {
+    return state;
+  }
+
+  return {
+    status: 'ready',
+    decisions: state.decisions.filter((decision) => !decision.id.equals(decisionId)),
   };
 }

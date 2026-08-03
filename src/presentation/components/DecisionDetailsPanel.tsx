@@ -11,12 +11,14 @@ import {
 import type {
   DecisionDetailsState,
   DecisionEditFormState,
+  DecisionRescheduleFormState,
   LifeActionFormState,
 } from '../pages/TodayPageState';
 import { isLifeActionActivationKey } from '../pages/TodayPageState';
 
 interface DecisionDetailsPanelProps {
   readonly details: DecisionDetailsState;
+  readonly currentDate: DayDate;
   readonly isFormOpen: boolean;
   readonly isSaving: boolean;
   readonly form: LifeActionFormState;
@@ -32,6 +34,10 @@ interface DecisionDetailsPanelProps {
   readonly isCancellationOpen: boolean;
   readonly isCancelling: boolean;
   readonly cancellationError: string | null;
+  readonly isRescheduleFormOpen: boolean;
+  readonly isRescheduling: boolean;
+  readonly rescheduleForm: DecisionRescheduleFormState;
+  readonly rescheduleError: string | null;
   readonly onClose: () => void;
   readonly onRetry: () => void;
   readonly onOpenForm: () => void;
@@ -52,11 +58,16 @@ interface DecisionDetailsPanelProps {
   readonly onOpenCancellation: () => void;
   readonly onCloseCancellation: () => void;
   readonly onConfirmCancellation: () => void;
+  readonly onOpenRescheduleForm: () => void;
+  readonly onCloseRescheduleForm: () => void;
+  readonly onRescheduleDateChange: (newPlannedDate: string) => void;
+  readonly onRescheduleSubmit: (event: FormEvent<HTMLFormElement>) => void;
   readonly onOpenLifeAction: (lifeAction: LifeAction) => void;
 }
 
 export function DecisionDetailsPanel({
   details,
+  currentDate,
   isFormOpen,
   isSaving,
   form,
@@ -72,6 +83,10 @@ export function DecisionDetailsPanel({
   isCancellationOpen,
   isCancelling,
   cancellationError,
+  isRescheduleFormOpen,
+  isRescheduling,
+  rescheduleForm,
+  rescheduleError,
   onClose,
   onRetry,
   onOpenForm,
@@ -92,6 +107,10 @@ export function DecisionDetailsPanel({
   onOpenCancellation,
   onCloseCancellation,
   onConfirmCancellation,
+  onOpenRescheduleForm,
+  onCloseRescheduleForm,
+  onRescheduleDateChange,
+  onRescheduleSubmit,
   onOpenLifeAction,
 }: DecisionDetailsPanelProps) {
   if (details.status === 'closed') {
@@ -110,6 +129,14 @@ export function DecisionDetailsPanel({
   );
   const cancelledActions = lifeActions.filter(
     (lifeAction) => lifeAction.status === LIFE_ACTION_STATUS.cancelled,
+  );
+  const readyActions = lifeActions.filter(
+    (lifeAction) => lifeAction.status === LIFE_ACTION_STATUS.ready,
+  );
+  const rescheduleBlockingActions = lifeActions.filter(
+    (lifeAction) =>
+      lifeAction.status === LIFE_ACTION_STATUS.draft ||
+      lifeAction.status === LIFE_ACTION_STATUS.inProgress,
   );
 
   return (
@@ -202,12 +229,39 @@ export function DecisionDetailsPanel({
                   />
                 ) : null}
 
-                {!isEditFormOpen && !isCancellationOpen ? (
+                {isRescheduleFormOpen ? (
+                  <DecisionRescheduleForm
+                    decision={details.decision}
+                    currentDate={currentDate}
+                    lifeActions={lifeActions}
+                    readyCount={readyActions.length}
+                    completedCount={completedActions.length}
+                    cancelledCount={cancelledActions.length}
+                    hasBlockingActions={rescheduleBlockingActions.length > 0}
+                    form={rescheduleForm}
+                    isSaving={isRescheduling}
+                    error={rescheduleError}
+                    onDateChange={onRescheduleDateChange}
+                    onClose={onCloseRescheduleForm}
+                    onSubmit={onRescheduleSubmit}
+                  />
+                ) : null}
+
+                {!isEditFormOpen && !isCancellationOpen && !isRescheduleFormOpen ? (
                   <div className="decision-management-actions">
                     {details.decision.status === DECISION_STATUS.planned ? (
-                      <button className="secondary-button" type="button" onClick={onOpenEditForm}>
-                        Редактировать
-                      </button>
+                      <>
+                        <button className="secondary-button" type="button" onClick={onOpenEditForm}>
+                          Редактировать
+                        </button>
+                        <button
+                          className="secondary-button"
+                          type="button"
+                          onClick={onOpenRescheduleForm}
+                        >
+                          Перенести
+                        </button>
+                      </>
                     ) : null}
                     <button
                       className="secondary-button decision-cancel-button"
@@ -340,6 +394,123 @@ export function DecisionDetailsPanel({
         ) : null}
       </aside>
     </div>
+  );
+}
+
+interface DecisionRescheduleFormProps {
+  readonly decision: Extract<DecisionDetailsState, { readonly status: 'ready' }>['decision'];
+  readonly currentDate: DayDate;
+  readonly lifeActions: readonly LifeAction[];
+  readonly readyCount: number;
+  readonly completedCount: number;
+  readonly cancelledCount: number;
+  readonly hasBlockingActions: boolean;
+  readonly form: DecisionRescheduleFormState;
+  readonly isSaving: boolean;
+  readonly error: string | null;
+  readonly onDateChange: (newPlannedDate: string) => void;
+  readonly onClose: () => void;
+  readonly onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}
+
+function DecisionRescheduleForm({
+  decision,
+  currentDate,
+  lifeActions,
+  readyCount,
+  completedCount,
+  cancelledCount,
+  hasBlockingActions,
+  form,
+  isSaving,
+  error,
+  onDateChange,
+  onClose,
+  onSubmit,
+}: DecisionRescheduleFormProps) {
+  return (
+    <form className="decision-reschedule-form" onSubmit={onSubmit} noValidate>
+      <h3>Перенос решения</h3>
+      <p>
+        Текущая дата решения: <strong>{formatPlannedDate(decision.plannedDate)}</strong>
+      </p>
+      {decision.kind === DECISION_KIND.main ? (
+        <p>
+          Текущая позиция: <strong>{decision.order}</strong>
+        </p>
+      ) : null}
+      <label>
+        <span>Новая дата</span>
+        <input
+          type="date"
+          value={form.newPlannedDate}
+          min={currentDate.toString()}
+          disabled={isSaving}
+          aria-required="true"
+          onChange={(event: ChangeEvent<HTMLInputElement>) => onDateChange(event.target.value)}
+        />
+      </label>
+      <div className="decision-reschedule-quick-options" aria-label="Быстрый выбор даты">
+        <button
+          className="secondary-button"
+          type="button"
+          disabled={isSaving}
+          onClick={() => onDateChange(addDays(currentDate, 1))}
+        >
+          Завтра
+        </button>
+        <button
+          className="secondary-button"
+          type="button"
+          disabled={isSaving}
+          onClick={() => onDateChange(addDays(currentDate, 7))}
+        >
+          Через неделю
+        </button>
+      </div>
+      {decision.kind === DECISION_KIND.main ? (
+        <p className="decision-reschedule-position-note">
+          На новой дате решение займёт свободную позицию автоматически
+        </p>
+      ) : null}
+      {lifeActions.length > 0 ? (
+        <div className="decision-reschedule-actions-note">
+          <p>Связанные действия сохранят свои текущие даты</p>
+          <dl>
+            <div>
+              <dt>Готово</dt>
+              <dd>{readyCount}</dd>
+            </div>
+            <div>
+              <dt>Завершено</dt>
+              <dd>{completedCount}</dd>
+            </div>
+            <div>
+              <dt>Отменено</dt>
+              <dd>{cancelledCount}</dd>
+            </div>
+          </dl>
+        </div>
+      ) : null}
+      {hasBlockingActions ? (
+        <p className="decision-reschedule-blocked" role="alert">
+          Сначала завершите настройку или выполнение связанных действий
+        </p>
+      ) : null}
+      {error === null ? null : (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="form-actions">
+        <button className="primary-button" type="submit" disabled={isSaving || hasBlockingActions}>
+          {isSaving ? 'Переносим…' : 'Перенести'}
+        </button>
+        <button className="secondary-button" type="button" disabled={isSaving} onClick={onClose}>
+          Отмена
+        </button>
+      </div>
+    </form>
   );
 }
 
@@ -699,4 +870,13 @@ function formatDateTime(date: Date): string {
     hour: '2-digit',
     minute: '2-digit',
   }).format(date);
+}
+
+function addDays(date: DayDate, days: number): string {
+  const [year, month, day] = date.toString().split('-').map(Number);
+  const value = new Date(Date.UTC(year!, month! - 1, day));
+  value.setUTCDate(value.getUTCDate() + days);
+  return `${value.getUTCFullYear().toString().padStart(4, '0')}-${(value.getUTCMonth() + 1)
+    .toString()
+    .padStart(2, '0')}-${value.getUTCDate().toString().padStart(2, '0')}`;
 }

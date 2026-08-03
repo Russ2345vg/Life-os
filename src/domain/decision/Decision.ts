@@ -342,7 +342,12 @@ export class Decision extends Entity {
     return true;
   }
 
-  public reschedule(newDate: DayDate, occurredAt: Date, eventId: EntityId): void {
+  public reschedule(
+    newDate: DayDate,
+    occurredAt: Date,
+    eventId: EntityId,
+    newOrder?: number | null,
+  ): boolean {
     this.assertNotArchived();
     assertDayDate(newDate);
 
@@ -357,15 +362,16 @@ export class Decision extends Entity {
     }
 
     if (this.#plannedDate.equals(newDate)) {
-      throw new DomainError(
-        'decision.reschedule_same_date',
-        'Новая дата решения должна отличаться от текущей.',
-      );
+      return false;
     }
 
     assertValidDate(occurredAt, 'Время переноса решения');
     const previousDate = this.#plannedDate;
+    const previousOrder = this.#order;
+    const resolvedOrder = this.#kind === DECISION_KIND.main ? (newOrder ?? this.#order) : null;
+    assertPlanningDetails(this.#kind, this.#expectedResult, resolvedOrder);
     this.#plannedDate = newDate;
+    this.#order = resolvedOrder;
     this.#rescheduleCount += 1;
     this.#version += 1;
     this.#domainEvents.push(
@@ -374,10 +380,13 @@ export class Decision extends Entity {
         this.id,
         previousDate,
         newDate,
+        previousOrder,
+        resolvedOrder,
         this.#rescheduleCount,
         occurredAt,
       ),
     );
+    return true;
   }
 
   public confirm(

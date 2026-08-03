@@ -22,6 +22,7 @@ import type {
   GetUnfinishedActionSession,
   PauseActionSession,
   ResumeActionSession,
+  RescheduleDecisionSafely,
   RescheduleLifeActionSafely,
   StartLifeActionSession,
   UpdateDecisionDetails,
@@ -53,6 +54,7 @@ import {
   pauseSessionErrorMessage,
   retryLifeActionCompletion,
   rescheduleLifeActionResult,
+  rescheduleDecisionResult,
   resumeSessionErrorMessage,
   startSessionErrorMessage,
   todayPageReducer,
@@ -62,6 +64,7 @@ import {
   validateLifeActionForm,
   validateLifeActionEditForm,
   validateLifeActionRescheduleForm,
+  validateDecisionRescheduleForm,
   validateDecisionConfirmationForm,
   validateDecisionEditForm,
   validateSessionCompletionForm,
@@ -87,6 +90,7 @@ interface TodayPageProps {
   readonly cancelDecisionSafely: Pick<CancelDecisionSafely, 'execute'>;
   readonly updateLifeActionDetails: Pick<UpdateLifeActionDetails, 'execute'>;
   readonly cancelLifeActionSafely: Pick<CancelLifeActionSafely, 'execute'>;
+  readonly rescheduleDecisionSafely: Pick<RescheduleDecisionSafely, 'execute'>;
   readonly rescheduleLifeActionSafely: Pick<RescheduleLifeActionSafely, 'execute'>;
   readonly getActionSessionsForLifeAction: Pick<GetActionSessionsForLifeAction, 'execute'>;
   readonly getUnfinishedActionSession: Pick<GetUnfinishedActionSession, 'execute'>;
@@ -110,6 +114,7 @@ export function TodayPage({
   cancelDecisionSafely,
   updateLifeActionDetails,
   cancelLifeActionSafely,
+  rescheduleDecisionSafely,
   rescheduleLifeActionSafely,
   getActionSessionsForLifeAction,
   getUnfinishedActionSession,
@@ -122,6 +127,7 @@ export function TodayPage({
   const decisionConfirmationRef = useRef(false);
   const decisionEditRef = useRef(false);
   const decisionCancellationRef = useRef(false);
+  const decisionRescheduleRef = useRef(false);
   const lifeActionEditRef = useRef(false);
   const lifeActionCancellationRef = useRef(false);
   const lifeActionRescheduleRef = useRef(false);
@@ -345,6 +351,57 @@ export function TodayPage({
       dispatch({ type: 'decision_cancellation_failed', message: 'Не удалось отменить решение' });
     } finally {
       decisionCancellationRef.current = false;
+    }
+  }
+
+  async function handleDecisionReschedule(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+
+    if (decisionRescheduleRef.current || state.details.status !== 'ready') {
+      return;
+    }
+
+    const validationError = validateDecisionRescheduleForm(state.decisionRescheduleForm);
+    if (validationError !== null) {
+      dispatch({ type: 'decision_reschedule_failed', message: validationError });
+      return;
+    }
+
+    const previousPlannedDate = state.details.decision.plannedDate;
+    decisionRescheduleRef.current = true;
+    dispatch({ type: 'decision_reschedule_started' });
+    try {
+      const result = await rescheduleDecisionResult({
+        decisionId: state.details.decisionId,
+        form: state.decisionRescheduleForm,
+        rescheduleDecisionSafely,
+      });
+
+      if (!result.ok) {
+        dispatch({ type: 'decision_reschedule_failed', message: result.message });
+        return;
+      }
+
+      const newPlannedDate = result.decision.plannedDate;
+      const changed =
+        previousPlannedDate !== null &&
+        newPlannedDate !== null &&
+        !previousPlannedDate.equals(newPlannedDate);
+      const movedOffCurrentDay =
+        changed && previousPlannedDate.equals(currentDate) && !newPlannedDate.equals(currentDate);
+      dispatch({
+        type: 'decision_reschedule_succeeded',
+        decision: result.decision,
+        movedOffCurrentDay,
+        message:
+          changed && newPlannedDate !== null
+            ? `Решение перенесено на ${formatShortRussianDate(newPlannedDate)}`
+            : null,
+      });
+    } catch {
+      dispatch({ type: 'decision_reschedule_failed', message: 'Не удалось перенести решение' });
+    } finally {
+      decisionRescheduleRef.current = false;
     }
   }
 
@@ -690,6 +747,12 @@ export function TodayPage({
       onOpenDecisionCancellation={() => dispatch({ type: 'decision_cancellation_opened' })}
       onCloseDecisionCancellation={() => dispatch({ type: 'decision_cancellation_closed' })}
       onConfirmDecisionCancellation={() => void handleDecisionCancellation()}
+      onOpenDecisionRescheduleForm={() => dispatch({ type: 'decision_reschedule_form_opened' })}
+      onCloseDecisionRescheduleForm={() => dispatch({ type: 'decision_reschedule_form_closed' })}
+      onDecisionRescheduleDateChange={(newPlannedDate) =>
+        dispatch({ type: 'decision_reschedule_date_changed', newPlannedDate })
+      }
+      onDecisionRescheduleSubmit={(event) => void handleDecisionReschedule(event)}
       onOpenLifeAction={(lifeAction) => void loadLifeActionDetails(lifeAction)}
       onBackToDecision={() => dispatch({ type: 'action_details_closed' })}
       onRetryLifeAction={() => {
@@ -777,6 +840,10 @@ interface TodayPageViewProps {
   readonly onOpenDecisionCancellation: () => void;
   readonly onCloseDecisionCancellation: () => void;
   readonly onConfirmDecisionCancellation: () => void;
+  readonly onOpenDecisionRescheduleForm: () => void;
+  readonly onCloseDecisionRescheduleForm: () => void;
+  readonly onDecisionRescheduleDateChange: (newPlannedDate: string) => void;
+  readonly onDecisionRescheduleSubmit: (event: FormEvent<HTMLFormElement>) => void;
   readonly onOpenLifeAction: (lifeAction: LifeAction) => void;
   readonly onBackToDecision: () => void;
   readonly onRetryLifeAction: () => void;
@@ -838,6 +905,10 @@ export function TodayPageView({
   onOpenDecisionCancellation,
   onCloseDecisionCancellation,
   onConfirmDecisionCancellation,
+  onOpenDecisionRescheduleForm,
+  onCloseDecisionRescheduleForm,
+  onDecisionRescheduleDateChange,
+  onDecisionRescheduleSubmit,
   onOpenLifeAction,
   onBackToDecision,
   onRetryLifeAction,
@@ -884,6 +955,12 @@ export function TodayPageView({
           </button>
         </div>
 
+        {state.decisionRescheduleNotice === null ? null : (
+          <p className="decision-reschedule-notice" role="status">
+            {state.decisionRescheduleNotice}
+          </p>
+        )}
+
         {state.isFormOpen ? (
           <DecisionForm
             form={state.form}
@@ -920,6 +997,7 @@ export function TodayPageView({
       {state.actionDetails.status === 'closed' ? (
         <DecisionDetailsPanel
           details={state.details}
+          currentDate={currentDate}
           isFormOpen={state.isLifeActionFormOpen}
           isSaving={state.isLifeActionSaving}
           form={state.lifeActionForm}
@@ -935,6 +1013,10 @@ export function TodayPageView({
           isCancellationOpen={state.isDecisionCancellationOpen}
           isCancelling={state.isDecisionCancelling}
           cancellationError={state.decisionCancellationError}
+          isRescheduleFormOpen={state.isDecisionRescheduleFormOpen}
+          isRescheduling={state.isDecisionRescheduling}
+          rescheduleForm={state.decisionRescheduleForm}
+          rescheduleError={state.decisionRescheduleError}
           onClose={onCloseDecision}
           onRetry={onRetryDecision}
           onOpenForm={onOpenLifeActionForm}
@@ -955,6 +1037,10 @@ export function TodayPageView({
           onOpenCancellation={onOpenDecisionCancellation}
           onCloseCancellation={onCloseDecisionCancellation}
           onConfirmCancellation={onConfirmDecisionCancellation}
+          onOpenRescheduleForm={onOpenDecisionRescheduleForm}
+          onCloseRescheduleForm={onCloseDecisionRescheduleForm}
+          onRescheduleDateChange={onDecisionRescheduleDateChange}
+          onRescheduleSubmit={onDecisionRescheduleSubmit}
           onOpenLifeAction={onOpenLifeAction}
         />
       ) : (
@@ -1249,6 +1335,16 @@ function formatRussianDate(date: DayDate): string {
   const [year, month, day] = date.toString().split('-').map(Number);
   return new Intl.DateTimeFormat('ru-RU', {
     weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(Date.UTC(year!, month! - 1, day)));
+}
+
+function formatShortRussianDate(date: DayDate): string {
+  const [year, month, day] = date.toString().split('-').map(Number);
+  return new Intl.DateTimeFormat('ru-RU', {
     day: 'numeric',
     month: 'long',
     year: 'numeric',

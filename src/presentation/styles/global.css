@@ -531,7 +531,7 @@ button:disabled {
 
 .decision-management-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-3);
 }
 
@@ -577,6 +577,7 @@ button:disabled {
 
 .decision-edit-form,
 .decision-cancellation-confirmation,
+.decision-reschedule-form,
 .life-action-edit-form,
 .life-action-reschedule-form,
 .life-action-cancellation-confirmation {
@@ -592,6 +593,9 @@ button:disabled {
 .decision-edit-form label,
 .decision-cancellation-confirmation h3,
 .decision-cancellation-confirmation p,
+.decision-reschedule-form h3,
+.decision-reschedule-form label,
+.decision-reschedule-form p,
 .life-action-edit-form h3,
 .life-action-edit-form label,
 .life-action-reschedule-form h3,
@@ -609,7 +613,8 @@ button:disabled {
   gap: var(--space-2);
 }
 
-.life-action-reschedule-form label {
+.life-action-reschedule-form label,
+.decision-reschedule-form label {
   display: grid;
   gap: var(--space-2);
 }
@@ -621,7 +626,8 @@ button:disabled {
   font-weight: 650;
 }
 
-.life-action-reschedule-form label > span {
+.life-action-reschedule-form label > span,
+.decision-reschedule-form label > span {
   color: var(--color-text-muted);
   font-size: 0.875rem;
   font-weight: 650;
@@ -642,7 +648,8 @@ button:disabled {
   background: #0d110f;
 }
 
-.life-action-reschedule-form input {
+.life-action-reschedule-form input,
+.decision-reschedule-form input {
   width: 100%;
   min-width: 0;
   min-height: 2.75rem;
@@ -655,7 +662,8 @@ button:disabled {
   background: #0d110f;
 }
 
-.life-action-reschedule-form input:focus {
+.life-action-reschedule-form input:focus,
+.decision-reschedule-form input:focus {
   border-color: var(--color-accent-gold);
 }
 
@@ -668,10 +676,60 @@ button:disabled {
   color: var(--color-text);
 }
 
-.life-action-reschedule-quick-options {
+.life-action-reschedule-quick-options,
+.decision-reschedule-quick-options {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-3);
+}
+
+.decision-reschedule-position-note,
+.decision-reschedule-actions-note,
+.decision-reschedule-blocked {
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.decision-reschedule-position-note,
+.decision-reschedule-actions-note {
+  color: var(--color-text-muted);
+}
+
+.decision-reschedule-actions-note dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+}
+
+.decision-reschedule-actions-note dl div {
+  min-width: 0;
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-small);
+}
+
+.decision-reschedule-actions-note dt {
+  font-size: 0.75rem;
+}
+
+.decision-reschedule-actions-note dd {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text);
+  font-weight: 700;
+}
+
+.decision-reschedule-blocked {
+  color: var(--color-error);
+}
+
+.decision-reschedule-notice {
+  margin: 0 0 var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  color: var(--color-accent-gold);
+  border: 1px solid #625733;
+  border-radius: var(--radius-small);
+  background: #19170f;
 }
 
 .life-action-date-warning {
@@ -1507,6 +1565,8 @@ button:disabled {
   .decision-edit-form .form-actions button,
   .decision-cancellation-confirmation .form-actions,
   .decision-cancellation-confirmation .form-actions button,
+  .decision-reschedule-form .form-actions,
+  .decision-reschedule-form .form-actions button,
   .life-action-edit-form .form-actions,
   .life-action-edit-form .form-actions button,
   .life-action-reschedule-form .form-actions,

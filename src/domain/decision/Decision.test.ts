@@ -289,7 +289,27 @@ describe('Decision', () => {
       }
       expect(event.previousDate.equals(TODAY)).toBe(true);
       expect(event.newDate.equals(TOMORROW)).toBe(true);
+      expect(event.previousPlannedDate.equals(TODAY)).toBe(true);
+      expect(event.newPlannedDate.equals(TOMORROW)).toBe(true);
+      expect(event.previousOrder).toBeNull();
+      expect(event.newOrder).toBeNull();
       expect(event.rescheduleNumber).toBe(1);
+    });
+
+    it('переносит главное решение на вычисленную позицию', () => {
+      const decision = createPlannedMain();
+      decision.clearUncommittedEvents();
+
+      expect(decision.reschedule(TOMORROW, CHANGED_AT, id('rescheduled-event'), 3)).toBe(true);
+
+      expect(decision.order).toBe(3);
+      const event = decision.getUncommittedEvents()[0];
+      expect(event).toBeInstanceOf(DecisionRescheduled);
+      if (!(event instanceof DecisionRescheduled)) {
+        throw new Error('Ожидалось событие DecisionRescheduled.');
+      }
+      expect(event.previousOrder).toBe(1);
+      expect(event.newOrder).toBe(3);
     });
 
     it('переносит in_progress без смены состояния и без создания нового объекта', () => {
@@ -303,12 +323,14 @@ describe('Decision', () => {
       expect(decision.plannedDate?.equals(TOMORROW)).toBe(true);
     });
 
-    it('запрещает перенос на ту же дату', () => {
+    it('идемпотентно принимает перенос на ту же дату', () => {
       const decision = createPlannedAdditional();
+      decision.clearUncommittedEvents();
+      const version = decision.version;
 
-      expect(() => decision.reschedule(TODAY, CHANGED_AT, id('rescheduled-event'))).toThrowError(
-        expect.objectContaining({ code: 'decision.reschedule_same_date' }),
-      );
+      expect(decision.reschedule(TODAY, CHANGED_AT, id('rescheduled-event'))).toBe(false);
+      expect(decision.version).toBe(version);
+      expect(decision.getUncommittedEvents()).toHaveLength(0);
     });
 
     it('запрещает перенос confirmed', () => {
