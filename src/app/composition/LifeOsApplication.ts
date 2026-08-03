@@ -20,6 +20,7 @@ import type {
   LifeActionRepository,
   PauseActionSession,
   ResumeActionSession,
+  RescheduleLifeActionSafely,
   StartLifeActionSession,
   UpdateDecisionDetails,
   UpdateLifeActionDetails,
@@ -52,6 +53,7 @@ interface LifeOsApplicationServices {
   readonly cancelDecisionSafely: CancelDecisionSafely;
   readonly updateLifeActionDetails: UpdateLifeActionDetails;
   readonly cancelLifeActionSafely: CancelLifeActionSafely;
+  readonly rescheduleLifeActionSafely: RescheduleLifeActionSafely;
   readonly getActionSessionsForLifeAction: GetActionSessionsForLifeAction;
   readonly getUnfinishedActionSession: GetUnfinishedActionSession;
   readonly closeDatabase: () => void;
@@ -82,6 +84,7 @@ export class LifeOsApplication {
   public readonly cancelDecisionSafely: CancelDecisionSafely;
   public readonly updateLifeActionDetails: UpdateLifeActionDetails;
   public readonly cancelLifeActionSafely: CancelLifeActionSafely;
+  public readonly rescheduleLifeActionSafely: RescheduleLifeActionSafely;
   public readonly getActionSessionsForLifeAction: GetActionSessionsForLifeAction;
   public readonly getUnfinishedActionSession: GetUnfinishedActionSession;
 
@@ -112,6 +115,7 @@ export class LifeOsApplication {
     this.cancelDecisionSafely = services.cancelDecisionSafely;
     this.updateLifeActionDetails = services.updateLifeActionDetails;
     this.cancelLifeActionSafely = services.cancelLifeActionSafely;
+    this.rescheduleLifeActionSafely = services.rescheduleLifeActionSafely;
     this.getActionSessionsForLifeAction = services.getActionSessionsForLifeAction;
     this.getUnfinishedActionSession = services.getUnfinishedActionSession;
     this.#closeDatabase = services.closeDatabase;

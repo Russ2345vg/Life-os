@@ -545,7 +545,7 @@ button:disabled {
 
 .life-action-management-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-3);
 }
 
@@ -578,6 +578,7 @@ button:disabled {
 .decision-edit-form,
 .decision-cancellation-confirmation,
 .life-action-edit-form,
+.life-action-reschedule-form,
 .life-action-cancellation-confirmation {
   display: grid;
   gap: var(--space-4);
@@ -593,6 +594,9 @@ button:disabled {
 .decision-cancellation-confirmation p,
 .life-action-edit-form h3,
 .life-action-edit-form label,
+.life-action-reschedule-form h3,
+.life-action-reschedule-form label,
+.life-action-reschedule-form p,
 .life-action-cancellation-confirmation h3,
 .life-action-cancellation-confirmation p {
   min-width: 0;
@@ -605,8 +609,19 @@ button:disabled {
   gap: var(--space-2);
 }
 
+.life-action-reschedule-form label {
+  display: grid;
+  gap: var(--space-2);
+}
+
 .decision-edit-form label > span,
 .life-action-edit-form label > span {
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  font-weight: 650;
+}
+
+.life-action-reschedule-form label > span {
   color: var(--color-text-muted);
   font-size: 0.875rem;
   font-weight: 650;
@@ -625,6 +640,44 @@ button:disabled {
   border-radius: var(--radius-small);
   outline: none;
   background: #0d110f;
+}
+
+.life-action-reschedule-form input {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: var(--space-3);
+  color: var(--color-text);
+  color-scheme: dark;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-small);
+  outline: none;
+  background: #0d110f;
+}
+
+.life-action-reschedule-form input:focus {
+  border-color: var(--color-accent-gold);
+}
+
+.life-action-current-date {
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+.life-action-current-date strong {
+  color: var(--color-text);
+}
+
+.life-action-reschedule-quick-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.life-action-date-warning {
+  color: #d7c38c;
+  font-size: 0.875rem;
+  line-height: 1.5;
 }
 
 .decision-edit-form textarea,
@@ -1456,6 +1509,8 @@ button:disabled {
   .decision-cancellation-confirmation .form-actions button,
   .life-action-edit-form .form-actions,
   .life-action-edit-form .form-actions button,
+  .life-action-reschedule-form .form-actions,
+  .life-action-reschedule-form .form-actions button,
   .life-action-cancellation-confirmation .form-actions,
   .life-action-cancellation-confirmation .form-actions button {
     width: 100%;

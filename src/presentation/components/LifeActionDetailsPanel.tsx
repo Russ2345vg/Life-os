@@ -13,13 +13,16 @@ import {
   type ActionCompletionChoice,
   type LifeActionDetailsState,
   type LifeActionEditFormState,
+  type LifeActionRescheduleFormState,
   type SessionCompletionFormState,
 } from '../pages/TodayPageState';
 import { formatDuration, scheduleSessionTimer } from '../session/sessionTimer';
 
 interface LifeActionDetailsPanelProps {
   readonly details: LifeActionDetailsState;
+  readonly currentDate: DayDate;
   readonly decisionTitle: string | null;
+  readonly decisionPlannedDate: DayDate | null;
   readonly clock: Pick<Clock, 'now'>;
   readonly isMutating: boolean;
   readonly error: string | null;
@@ -56,11 +59,21 @@ interface LifeActionDetailsPanelProps {
   readonly onOpenCancellation: () => void;
   readonly onCloseCancellation: () => void;
   readonly onConfirmCancellation: () => void;
+  readonly isRescheduleFormOpen: boolean;
+  readonly isRescheduling: boolean;
+  readonly rescheduleForm: LifeActionRescheduleFormState;
+  readonly rescheduleError: string | null;
+  readonly onOpenRescheduleForm: () => void;
+  readonly onCloseRescheduleForm: () => void;
+  readonly onRescheduleDateChange: (newPlannedDate: string) => void;
+  readonly onRescheduleSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }
 
 export function LifeActionDetailsPanel({
   details,
+  currentDate,
   decisionTitle,
+  decisionPlannedDate,
   clock,
   isMutating,
   error,
@@ -97,6 +110,14 @@ export function LifeActionDetailsPanel({
   onOpenCancellation,
   onCloseCancellation,
   onConfirmCancellation,
+  isRescheduleFormOpen,
+  isRescheduling,
+  rescheduleForm,
+  rescheduleError,
+  onOpenRescheduleForm,
+  onCloseRescheduleForm,
+  onRescheduleDateChange,
+  onRescheduleSubmit,
 }: LifeActionDetailsPanelProps) {
   const timerNow = useSessionTimer(details, clock);
 
@@ -184,6 +205,12 @@ export function LifeActionDetailsPanel({
               isCancelling={isCancelling}
               isSessionMutating={isMutating}
               cancellationError={cancellationError}
+              currentDate={currentDate}
+              decisionPlannedDate={decisionPlannedDate}
+              isRescheduleFormOpen={isRescheduleFormOpen}
+              isRescheduling={isRescheduling}
+              rescheduleForm={rescheduleForm}
+              rescheduleError={rescheduleError}
               onOpenEditForm={onOpenEditForm}
               onCloseEditForm={onCloseEditForm}
               onEditTitleChange={onEditTitleChange}
@@ -193,6 +220,10 @@ export function LifeActionDetailsPanel({
               onOpenCancellation={onOpenCancellation}
               onCloseCancellation={onCloseCancellation}
               onConfirmCancellation={onConfirmCancellation}
+              onOpenRescheduleForm={onOpenRescheduleForm}
+              onCloseRescheduleForm={onCloseRescheduleForm}
+              onRescheduleDateChange={onRescheduleDateChange}
+              onRescheduleSubmit={onRescheduleSubmit}
             />
 
             {details.lifeAction.status === LIFE_ACTION_STATUS.completed ? (
@@ -204,7 +235,13 @@ export function LifeActionDetailsPanel({
                 details={details}
                 now={timerNow}
                 isMutating={
-                  isMutating || isEditFormOpen || isEditing || isCancellationOpen || isCancelling
+                  isMutating ||
+                  isEditFormOpen ||
+                  isEditing ||
+                  isCancellationOpen ||
+                  isCancelling ||
+                  isRescheduleFormOpen ||
+                  isRescheduling
                 }
                 error={error}
                 isCompletionFormOpen={isCompletionFormOpen}
@@ -242,6 +279,12 @@ function LifeActionManagement({
   isCancelling,
   isSessionMutating,
   cancellationError,
+  currentDate,
+  decisionPlannedDate,
+  isRescheduleFormOpen,
+  isRescheduling,
+  rescheduleForm,
+  rescheduleError,
   onOpenEditForm,
   onCloseEditForm,
   onEditTitleChange,
@@ -251,6 +294,10 @@ function LifeActionManagement({
   onOpenCancellation,
   onCloseCancellation,
   onConfirmCancellation,
+  onOpenRescheduleForm,
+  onCloseRescheduleForm,
+  onRescheduleDateChange,
+  onRescheduleSubmit,
 }: {
   readonly details: Extract<LifeActionDetailsState, { readonly status: 'ready' }>;
   readonly isEditFormOpen: boolean;
@@ -261,6 +308,12 @@ function LifeActionManagement({
   readonly isCancelling: boolean;
   readonly isSessionMutating: boolean;
   readonly cancellationError: string | null;
+  readonly currentDate: DayDate;
+  readonly decisionPlannedDate: DayDate | null;
+  readonly isRescheduleFormOpen: boolean;
+  readonly isRescheduling: boolean;
+  readonly rescheduleForm: LifeActionRescheduleFormState;
+  readonly rescheduleError: string | null;
   readonly onOpenEditForm: () => void;
   readonly onCloseEditForm: () => void;
   readonly onEditTitleChange: (title: string) => void;
@@ -270,6 +323,10 @@ function LifeActionManagement({
   readonly onOpenCancellation: () => void;
   readonly onCloseCancellation: () => void;
   readonly onConfirmCancellation: () => void;
+  readonly onOpenRescheduleForm: () => void;
+  readonly onCloseRescheduleForm: () => void;
+  readonly onRescheduleDateChange: (newPlannedDate: string) => void;
+  readonly onRescheduleSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   const canEdit = details.lifeAction.status === LIFE_ACTION_STATUS.ready;
   const canCancel =
@@ -282,7 +339,7 @@ function LifeActionManagement({
 
   return (
     <section className="life-action-management" aria-label="Управление действием">
-      {!isEditFormOpen && !isCancellationOpen ? (
+      {!isEditFormOpen && !isCancellationOpen && !isRescheduleFormOpen ? (
         <div className="life-action-management-actions">
           {canEdit ? (
             <button
@@ -292,6 +349,16 @@ function LifeActionManagement({
               onClick={onOpenEditForm}
             >
               Редактировать
+            </button>
+          ) : null}
+          {canEdit ? (
+            <button
+              className="secondary-button"
+              type="button"
+              disabled={isSessionMutating}
+              onClick={onOpenRescheduleForm}
+            >
+              Перенести
             </button>
           ) : null}
           {canCancel ? (
@@ -305,6 +372,70 @@ function LifeActionManagement({
             </button>
           ) : null}
         </div>
+      ) : null}
+
+      {isRescheduleFormOpen ? (
+        <form className="life-action-reschedule-form" onSubmit={onRescheduleSubmit} noValidate>
+          <h3>Перенос действия</h3>
+          <p className="life-action-current-date">
+            Текущая дата действия:{' '}
+            <strong>{formatPlannedDate(details.lifeAction.plannedDate)}</strong>
+          </p>
+          <label>
+            <span>Новая дата</span>
+            <input
+              type="date"
+              value={rescheduleForm.newPlannedDate}
+              min={currentDate.toString()}
+              disabled={isRescheduling}
+              aria-required="true"
+              onChange={(event) => onRescheduleDateChange(event.target.value)}
+            />
+          </label>
+          <div className="life-action-reschedule-quick-options" aria-label="Быстрый выбор даты">
+            <button
+              className="secondary-button"
+              type="button"
+              disabled={isRescheduling}
+              onClick={() => onRescheduleDateChange(addDays(currentDate, 1))}
+            >
+              Завтра
+            </button>
+            <button
+              className="secondary-button"
+              type="button"
+              disabled={isRescheduling}
+              onClick={() => onRescheduleDateChange(addDays(currentDate, 7))}
+            >
+              Через неделю
+            </button>
+          </div>
+          {decisionPlannedDate !== null &&
+          rescheduleForm.newPlannedDate.length > 0 &&
+          rescheduleForm.newPlannedDate !== decisionPlannedDate.toString() ? (
+            <p className="life-action-date-warning" role="status">
+              Дата действия будет отличаться от даты решения
+            </p>
+          ) : null}
+          {rescheduleError === null ? null : (
+            <p className="form-error" role="alert">
+              {rescheduleError}
+            </p>
+          )}
+          <div className="form-actions">
+            <button className="primary-button" type="submit" disabled={isRescheduling}>
+              {isRescheduling ? 'Переносим…' : 'Перенести'}
+            </button>
+            <button
+              className="secondary-button"
+              type="button"
+              disabled={isRescheduling}
+              onClick={onCloseRescheduleForm}
+            >
+              Отмена
+            </button>
+          </div>
+        </form>
       ) : null}
 
       {isEditFormOpen ? (
@@ -906,6 +1037,15 @@ function formatPlannedDate(date: DayDate | null): string {
     year: 'numeric',
     timeZone: 'UTC',
   }).format(new Date(Date.UTC(year!, month! - 1, day)));
+}
+
+function addDays(date: DayDate, days: number): string {
+  const [year, month, day] = date.toString().split('-').map(Number);
+  const value = new Date(Date.UTC(year!, month! - 1, day));
+  value.setUTCDate(value.getUTCDate() + days);
+  return `${value.getUTCFullYear().toString().padStart(4, '0')}-${(value.getUTCMonth() + 1)
+    .toString()
+    .padStart(2, '0')}-${value.getUTCDate().toString().padStart(2, '0')}`;
 }
 
 function formatSessionStart(date: Date): string {

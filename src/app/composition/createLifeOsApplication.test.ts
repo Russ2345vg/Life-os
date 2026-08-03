@@ -53,6 +53,7 @@ describe('createLifeOsApplication', () => {
     expect(application.cancelDecisionSafely).toBeDefined();
     expect(application.updateLifeActionDetails).toBeDefined();
     expect(application.cancelLifeActionSafely).toBeDefined();
+    expect(application.rescheduleLifeActionSafely).toBeDefined();
     expect(application.getActionSessionsForLifeAction).toBeDefined();
     expect(application.getUnfinishedActionSession).toBeDefined();
     await expect(
@@ -231,6 +232,65 @@ describe('createLifeOsApplication', () => {
     expect(restored[0]?.status).toBe('ready');
     expect(restored[0]?.expectedResult?.toString()).toBe('Следующий шаг выполнен');
     secondApplication.close();
+  });
+
+  it('сохраняет перенос ready-действия в IndexedDB и обновляет поиск по дате', async () => {
+    const indexedDbFactory = new IDBFactory();
+    const newDate = DayDate.create('2026-08-10');
+    const firstApplication = await createTestApplication(
+      indexedDbFactory,
+      new FakeIdGenerator('reschedule-persistence'),
+    );
+    const decision = await firstApplication.createDecisionForDate.execute({
+      title: 'Решение с переносимым действием',
+      kind: DECISION_KIND.main,
+      plannedDate: TODAY,
+      expectedResult: 'Действие остаётся связанным',
+    });
+    expect(decision.ok).toBe(true);
+    if (!decision.ok) {
+      throw decision.error;
+    }
+    const action = await firstApplication.createLifeActionForDecision.execute({
+      decisionId: decision.value.id,
+      title: 'Перенести без дубликата',
+      description: 'Описание сохраняется',
+      expectedResult: 'Новая дата сохранена',
+      plannedDate: TODAY,
+    });
+    expect(action.ok).toBe(true);
+    if (!action.ok) {
+      throw action.error;
+    }
+
+    const rescheduled = await firstApplication.rescheduleLifeActionSafely.execute({
+      lifeActionId: action.value.id,
+      newPlannedDate: newDate.toString(),
+    });
+
+    expect(rescheduled.ok).toBe(true);
+    firstApplication.close();
+
+    const reloaded = await createTestApplication(
+      indexedDbFactory,
+      new FakeIdGenerator('reschedule-persistence-reload'),
+    );
+    const restored = await reloaded.lifeActionRepository.findById(action.value.id);
+    const oldDateActions = await reloaded.lifeActionRepository.findByDate(TODAY);
+    const newDateActions = await reloaded.lifeActionRepository.findByDate(newDate);
+    const linkedActions = await reloaded.lifeActionRepository.findByDecisionId(decision.value.id);
+
+    expect(restored?.plannedDate?.equals(newDate)).toBe(true);
+    expect(restored?.decisionId?.equals(decision.value.id)).toBe(true);
+    expect(restored?.title.toString()).toBe('Перенести без дубликата');
+    expect(restored?.description).toBe('Описание сохраняется');
+    expect(restored?.expectedResult?.toString()).toBe('Новая дата сохранена');
+    expect(restored?.status).toBe(LIFE_ACTION_STATUS.ready);
+    expect(oldDateActions.some((item) => item.id.equals(action.value.id))).toBe(false);
+    expect(newDateActions.filter((item) => item.id.equals(action.value.id))).toHaveLength(1);
+    expect(linkedActions.filter((item) => item.id.equals(action.value.id))).toHaveLength(1);
+    expect(restored?.getUncommittedEvents()).toHaveLength(0);
+    reloaded.close();
   });
 
   it('сохраняет отредактированные сведения ready-действия после повторного запуска', async () => {

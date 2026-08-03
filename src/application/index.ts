@@ -39,6 +39,10 @@ export {
   RescheduleLifeAction,
   type RescheduleLifeActionInput,
 } from './commands/RescheduleLifeAction';
+export {
+  RescheduleLifeActionSafely,
+  type RescheduleLifeActionSafelyInput,
+} from './commands/RescheduleLifeActionSafely';
 export { RestoreDecision, type RestoreDecisionInput } from './commands/RestoreDecision';
 export {
   UpdateDecisionDetails,

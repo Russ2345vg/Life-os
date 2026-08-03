@@ -6,6 +6,8 @@ export class LifeActionRescheduled extends LifeActionEvent<'action.rescheduled'>
   public readonly eventType = 'action.rescheduled';
   public readonly previousDate: DayDate;
   public readonly newDate: DayDate;
+  public readonly previousPlannedDate: DayDate;
+  public readonly newPlannedDate: DayDate;
   public readonly rescheduleNumber: number;
 
   public constructor(
@@ -19,6 +21,8 @@ export class LifeActionRescheduled extends LifeActionEvent<'action.rescheduled'>
     super(eventId, lifeActionId, occurredAt);
     this.previousDate = previousDate;
     this.newDate = newDate;
+    this.previousPlannedDate = previousDate;
+    this.newPlannedDate = newDate;
     this.rescheduleNumber = rescheduleNumber;
   }
 }

@@ -22,6 +22,7 @@ import type {
   GetUnfinishedActionSession,
   PauseActionSession,
   ResumeActionSession,
+  RescheduleLifeActionSafely,
   StartLifeActionSession,
   UpdateDecisionDetails,
   UpdateLifeActionDetails,
@@ -51,6 +52,7 @@ import {
   isDecisionActivationKey,
   pauseSessionErrorMessage,
   retryLifeActionCompletion,
+  rescheduleLifeActionResult,
   resumeSessionErrorMessage,
   startSessionErrorMessage,
   todayPageReducer,
@@ -59,6 +61,7 @@ import {
   validateDecisionForm,
   validateLifeActionForm,
   validateLifeActionEditForm,
+  validateLifeActionRescheduleForm,
   validateDecisionConfirmationForm,
   validateDecisionEditForm,
   validateSessionCompletionForm,
@@ -84,6 +87,7 @@ interface TodayPageProps {
   readonly cancelDecisionSafely: Pick<CancelDecisionSafely, 'execute'>;
   readonly updateLifeActionDetails: Pick<UpdateLifeActionDetails, 'execute'>;
   readonly cancelLifeActionSafely: Pick<CancelLifeActionSafely, 'execute'>;
+  readonly rescheduleLifeActionSafely: Pick<RescheduleLifeActionSafely, 'execute'>;
   readonly getActionSessionsForLifeAction: Pick<GetActionSessionsForLifeAction, 'execute'>;
   readonly getUnfinishedActionSession: Pick<GetUnfinishedActionSession, 'execute'>;
   readonly clock: Pick<Clock, 'now'>;
@@ -106,6 +110,7 @@ export function TodayPage({
   cancelDecisionSafely,
   updateLifeActionDetails,
   cancelLifeActionSafely,
+  rescheduleLifeActionSafely,
   getActionSessionsForLifeAction,
   getUnfinishedActionSession,
   clock,
@@ -119,6 +124,7 @@ export function TodayPage({
   const decisionCancellationRef = useRef(false);
   const lifeActionEditRef = useRef(false);
   const lifeActionCancellationRef = useRef(false);
+  const lifeActionRescheduleRef = useRef(false);
 
   const loadDecisions = useCallback(async () => {
     dispatch({ type: 'load_started' });
@@ -406,6 +412,44 @@ export function TodayPage({
     }
   }
 
+  async function handleLifeActionReschedule(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+
+    if (lifeActionRescheduleRef.current || state.actionDetails.status !== 'ready') {
+      return;
+    }
+
+    const validationError = validateLifeActionRescheduleForm(state.lifeActionRescheduleForm);
+    if (validationError !== null) {
+      dispatch({ type: 'life_action_reschedule_failed', message: validationError });
+      return;
+    }
+
+    lifeActionRescheduleRef.current = true;
+    dispatch({ type: 'life_action_reschedule_started' });
+    try {
+      const result = await rescheduleLifeActionResult({
+        lifeActionId: state.actionDetails.lifeAction.id,
+        form: state.lifeActionRescheduleForm,
+        rescheduleLifeActionSafely,
+      });
+
+      if (!result.ok) {
+        dispatch({ type: 'life_action_reschedule_failed', message: result.message });
+        return;
+      }
+
+      dispatch({ type: 'life_action_reschedule_succeeded', lifeAction: result.lifeAction });
+    } catch {
+      dispatch({
+        type: 'life_action_reschedule_failed',
+        message: 'Не удалось перенести действие',
+      });
+    } finally {
+      lifeActionRescheduleRef.current = false;
+    }
+  }
+
   const loadLifeActionDetails = useCallback(
     async (lifeAction: LifeAction) => {
       dispatch({ type: 'action_details_load_started', lifeAction });
@@ -687,6 +731,16 @@ export function TodayPage({
       onOpenLifeActionCancellation={() => dispatch({ type: 'life_action_cancellation_opened' })}
       onCloseLifeActionCancellation={() => dispatch({ type: 'life_action_cancellation_closed' })}
       onConfirmLifeActionCancellation={() => void handleLifeActionCancellation()}
+      onOpenLifeActionRescheduleForm={() =>
+        dispatch({ type: 'life_action_reschedule_form_opened' })
+      }
+      onCloseLifeActionRescheduleForm={() =>
+        dispatch({ type: 'life_action_reschedule_form_closed' })
+      }
+      onLifeActionRescheduleDateChange={(newPlannedDate) =>
+        dispatch({ type: 'life_action_reschedule_date_changed', newPlannedDate })
+      }
+      onLifeActionRescheduleSubmit={(event) => void handleLifeActionReschedule(event)}
     />
   );
 }
@@ -746,6 +800,10 @@ interface TodayPageViewProps {
   readonly onOpenLifeActionCancellation: () => void;
   readonly onCloseLifeActionCancellation: () => void;
   readonly onConfirmLifeActionCancellation: () => void;
+  readonly onOpenLifeActionRescheduleForm: () => void;
+  readonly onCloseLifeActionRescheduleForm: () => void;
+  readonly onLifeActionRescheduleDateChange: (newPlannedDate: string) => void;
+  readonly onLifeActionRescheduleSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }
 
 export function TodayPageView({
@@ -803,6 +861,10 @@ export function TodayPageView({
   onOpenLifeActionCancellation,
   onCloseLifeActionCancellation,
   onConfirmLifeActionCancellation,
+  onOpenLifeActionRescheduleForm,
+  onCloseLifeActionRescheduleForm,
+  onLifeActionRescheduleDateChange,
+  onLifeActionRescheduleSubmit,
 }: TodayPageViewProps) {
   return (
     <>
@@ -898,8 +960,12 @@ export function TodayPageView({
       ) : (
         <LifeActionDetailsPanel
           details={state.actionDetails}
+          currentDate={currentDate}
           decisionTitle={
             state.details.status === 'ready' ? state.details.decision.title.toString() : null
+          }
+          decisionPlannedDate={
+            state.details.status === 'ready' ? state.details.decision.plannedDate : null
           }
           clock={clock}
           isMutating={state.isSessionMutating}
@@ -937,6 +1003,14 @@ export function TodayPageView({
           onOpenCancellation={onOpenLifeActionCancellation}
           onCloseCancellation={onCloseLifeActionCancellation}
           onConfirmCancellation={onConfirmLifeActionCancellation}
+          isRescheduleFormOpen={state.isLifeActionRescheduleFormOpen}
+          isRescheduling={state.isLifeActionRescheduling}
+          rescheduleForm={state.lifeActionRescheduleForm}
+          rescheduleError={state.lifeActionRescheduleError}
+          onOpenRescheduleForm={onOpenLifeActionRescheduleForm}
+          onCloseRescheduleForm={onCloseLifeActionRescheduleForm}
+          onRescheduleDateChange={onLifeActionRescheduleDateChange}
+          onRescheduleSubmit={onLifeActionRescheduleSubmit}
         />
       )}
     </>

@@ -8,6 +8,7 @@ import type {
   CreateLifeActionForDecision,
   GetDecisionsForDate,
   GetLifeActionsForDecision,
+  RescheduleLifeActionSafely,
   UpdateDecisionDetails,
   UpdateLifeActionDetails,
 } from '../../application';
@@ -54,6 +55,10 @@ export interface LifeActionEditFormState {
   readonly title: string;
   readonly description: string;
   readonly expectedResult: string;
+}
+
+export interface LifeActionRescheduleFormState {
+  readonly newPlannedDate: string;
 }
 
 export const ACTION_COMPLETION_CHOICE = {
@@ -131,6 +136,10 @@ export interface TodayPageState {
   readonly isLifeActionCancellationOpen: boolean;
   readonly isLifeActionCancelling: boolean;
   readonly lifeActionCancellationError: string | null;
+  readonly isLifeActionRescheduleFormOpen: boolean;
+  readonly isLifeActionRescheduling: boolean;
+  readonly lifeActionRescheduleForm: LifeActionRescheduleFormState;
+  readonly lifeActionRescheduleError: string | null;
   readonly isSessionMutating: boolean;
   readonly sessionError: string | null;
   readonly isSessionCompletionFormOpen: boolean;
@@ -220,6 +229,12 @@ export type TodayPageAction =
   | { readonly type: 'life_action_cancellation_started' }
   | { readonly type: 'life_action_cancellation_failed'; readonly message: string }
   | { readonly type: 'life_action_cancellation_succeeded'; readonly lifeAction: LifeAction }
+  | { readonly type: 'life_action_reschedule_form_opened' }
+  | { readonly type: 'life_action_reschedule_form_closed' }
+  | { readonly type: 'life_action_reschedule_date_changed'; readonly newPlannedDate: string }
+  | { readonly type: 'life_action_reschedule_started' }
+  | { readonly type: 'life_action_reschedule_failed'; readonly message: string }
+  | { readonly type: 'life_action_reschedule_succeeded'; readonly lifeAction: LifeAction }
   | { readonly type: 'session_operation_started' }
   | { readonly type: 'session_operation_failed'; readonly message: string }
   | {
@@ -282,6 +297,10 @@ export const INITIAL_TODAY_PAGE_STATE: TodayPageState = {
   isLifeActionCancellationOpen: false,
   isLifeActionCancelling: false,
   lifeActionCancellationError: null,
+  isLifeActionRescheduleFormOpen: false,
+  isLifeActionRescheduling: false,
+  lifeActionRescheduleForm: createEmptyLifeActionRescheduleForm(),
+  lifeActionRescheduleError: null,
   isSessionMutating: false,
   sessionError: null,
   isSessionCompletionFormOpen: false,
@@ -644,6 +663,8 @@ export function todayPageReducer(state: TodayPageState, action: TodayPageAction)
         lifeActionEditError: null,
         isLifeActionCancellationOpen: false,
         lifeActionCancellationError: null,
+        isLifeActionRescheduleFormOpen: false,
+        lifeActionRescheduleError: null,
       };
     case 'life_action_edit_form_closed':
       return {
@@ -699,6 +720,8 @@ export function todayPageReducer(state: TodayPageState, action: TodayPageAction)
         lifeActionCancellationError: null,
         isLifeActionEditFormOpen: false,
         lifeActionEditError: null,
+        isLifeActionRescheduleFormOpen: false,
+        lifeActionRescheduleError: null,
       };
     case 'life_action_cancellation_closed':
       return {
@@ -735,6 +758,62 @@ export function todayPageReducer(state: TodayPageState, action: TodayPageAction)
         isLifeActionEditFormOpen: false,
         isSessionCompletionFormOpen: false,
         hasPendingActionCompletion: false,
+      };
+    case 'life_action_reschedule_form_opened':
+      if (state.actionDetails.status !== 'ready') {
+        return state;
+      }
+      return {
+        ...state,
+        isLifeActionRescheduleFormOpen: true,
+        lifeActionRescheduleForm: {
+          newPlannedDate: state.actionDetails.lifeAction.plannedDate?.toString() ?? '',
+        },
+        lifeActionRescheduleError: null,
+        isLifeActionEditFormOpen: false,
+        lifeActionEditError: null,
+        isLifeActionCancellationOpen: false,
+        lifeActionCancellationError: null,
+      };
+    case 'life_action_reschedule_form_closed':
+      return {
+        ...state,
+        isLifeActionRescheduleFormOpen: false,
+        lifeActionRescheduleError: null,
+      };
+    case 'life_action_reschedule_date_changed':
+      return {
+        ...state,
+        lifeActionRescheduleForm: { newPlannedDate: action.newPlannedDate },
+        lifeActionRescheduleError: null,
+      };
+    case 'life_action_reschedule_started':
+      return {
+        ...state,
+        isLifeActionRescheduling: true,
+        lifeActionRescheduleError: null,
+      };
+    case 'life_action_reschedule_failed':
+      return {
+        ...state,
+        isLifeActionRescheduling: false,
+        lifeActionRescheduleError: action.message,
+      };
+    case 'life_action_reschedule_succeeded':
+      if (
+        state.actionDetails.status !== 'ready' ||
+        !state.actionDetails.lifeAction.id.equals(action.lifeAction.id)
+      ) {
+        return state;
+      }
+      return {
+        ...state,
+        details: replaceLifeActionInDecisionDetails(state.details, action.lifeAction),
+        actionDetails: { ...state.actionDetails, lifeAction: action.lifeAction },
+        isLifeActionRescheduleFormOpen: false,
+        isLifeActionRescheduling: false,
+        lifeActionRescheduleForm: createEmptyLifeActionRescheduleForm(),
+        lifeActionRescheduleError: null,
       };
     case 'session_operation_started':
       return { ...state, isSessionMutating: true, sessionError: null };
@@ -947,6 +1026,45 @@ export function validateLifeActionEditForm(form: LifeActionEditFormState): strin
   }
 
   return null;
+}
+
+export function validateLifeActionRescheduleForm(
+  form: LifeActionRescheduleFormState,
+): string | null {
+  return form.newPlannedDate.trim().length === 0 ? 'Выберите новую дату' : null;
+}
+
+export async function rescheduleLifeActionResult(input: {
+  readonly lifeActionId: EntityId;
+  readonly form: LifeActionRescheduleFormState;
+  readonly rescheduleLifeActionSafely: Pick<RescheduleLifeActionSafely, 'execute'>;
+}): Promise<
+  | { readonly ok: true; readonly lifeAction: LifeAction }
+  | { readonly ok: false; readonly message: string }
+> {
+  const result = await input.rescheduleLifeActionSafely.execute({
+    lifeActionId: input.lifeActionId,
+    newPlannedDate: input.form.newPlannedDate,
+  });
+
+  return result.ok
+    ? { ok: true, lifeAction: result.value }
+    : { ok: false, message: lifeActionRescheduleErrorMessage(result.error.code) };
+}
+
+export function lifeActionRescheduleErrorMessage(code: string): string {
+  switch (code) {
+    case 'action.planned_date_required':
+      return 'Выберите новую дату';
+    case 'action.planned_date_in_past':
+      return 'Нельзя перенести действие на прошедшую дату';
+    case 'action.session_unfinished':
+      return 'Сначала завершите текущую сессию';
+    case 'action.cannot_reschedule':
+      return 'Это действие уже нельзя переносить';
+    default:
+      return 'Не удалось перенести действие';
+  }
 }
 
 export async function updateLifeActionDetailsResult(input: {
@@ -1331,6 +1449,10 @@ function createEmptyLifeActionEditForm(): LifeActionEditFormState {
   return { title: '', description: '', expectedResult: '' };
 }
 
+function createEmptyLifeActionRescheduleForm(): LifeActionRescheduleFormState {
+  return { newPlannedDate: '' };
+}
+
 function closedLifeActionManagementState(): Pick<
   TodayPageState,
   | 'isLifeActionEditFormOpen'
@@ -1340,6 +1462,10 @@ function closedLifeActionManagementState(): Pick<
   | 'isLifeActionCancellationOpen'
   | 'isLifeActionCancelling'
   | 'lifeActionCancellationError'
+  | 'isLifeActionRescheduleFormOpen'
+  | 'isLifeActionRescheduling'
+  | 'lifeActionRescheduleForm'
+  | 'lifeActionRescheduleError'
 > {
   return {
     isLifeActionEditFormOpen: false,
@@ -1349,6 +1475,10 @@ function closedLifeActionManagementState(): Pick<
     isLifeActionCancellationOpen: false,
     isLifeActionCancelling: false,
     lifeActionCancellationError: null,
+    isLifeActionRescheduleFormOpen: false,
+    isLifeActionRescheduling: false,
+    lifeActionRescheduleForm: createEmptyLifeActionRescheduleForm(),
+    lifeActionRescheduleError: null,
   };
 }
 

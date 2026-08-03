@@ -43,8 +43,10 @@ import {
   isLifeActionActivationKey,
   lifeActionCancellationErrorMessage,
   lifeActionEditErrorMessage,
+  lifeActionRescheduleErrorMessage,
   pauseSessionErrorMessage,
   retryLifeActionCompletion,
+  rescheduleLifeActionResult,
   resumeSessionErrorMessage,
   startSessionErrorMessage,
   todayPageReducer,
@@ -53,6 +55,7 @@ import {
   validateDecisionForm,
   validateLifeActionForm,
   validateLifeActionEditForm,
+  validateLifeActionRescheduleForm,
   validateDecisionConfirmationForm,
   validateDecisionEditForm,
   validateSessionCompletionForm,
@@ -835,6 +838,157 @@ describe('TodayPage view and workflow', () => {
     expect(renderView(failed)).not.toContain('action.cannot_edit');
   });
 
+  it('показывает перенос только для ready-действия и открывает предзаполненную форму', () => {
+    const decision = createPlannedDecision('action-reschedule-visible', DATE);
+    const ready = createReadyLifeAction('action-reschedule-ready', DATE, {
+      decisionId: decision.id,
+    });
+    const inProgress = markLifeActionInProgress(
+      createReadyLifeAction('action-reschedule-progress', DATE, { decisionId: decision.id }),
+    );
+    const completed = completeLifeAction(
+      createReadyLifeAction('action-reschedule-completed', DATE, { decisionId: decision.id }),
+    );
+    const cancelled = cancelLifeAction(
+      createReadyLifeAction('action-reschedule-cancelled', DATE, { decisionId: decision.id }),
+    );
+    const initial = createActionDetailsState(decision, ready);
+    const opened = todayPageReducer(initial, { type: 'life_action_reschedule_form_opened' });
+    const openedMarkup = renderView(opened);
+    const closed = todayPageReducer(opened, { type: 'life_action_reschedule_form_closed' });
+
+    expect(renderView(initial)).toContain('>Перенести<');
+    expect(openedMarkup).toContain('Перенос действия');
+    expect(openedMarkup).toContain('Текущая дата действия:');
+    expect(openedMarkup).toContain('value="2026-08-02"');
+    expect(openedMarkup).toContain('>Завтра<');
+    expect(openedMarkup).toContain('>Через неделю<');
+    expect(renderView(closed)).not.toContain('Перенос действия');
+    expect(closed.actionDetails.status === 'ready' && closed.actionDetails.lifeAction).toBe(ready);
+    for (const action of [inProgress, completed, cancelled]) {
+      expect(renderView(createActionDetailsState(decision, action))).not.toContain('>Перенести<');
+    }
+  });
+
+  it('быстрые варианты заполняют дату, а отличие от даты решения показывает предупреждение', () => {
+    const decision = createPlannedDecision('action-reschedule-quick', DATE);
+    const action = createReadyLifeAction('action-reschedule-quick', DATE, {
+      decisionId: decision.id,
+    });
+    const opened = todayPageReducer(createActionDetailsState(decision, action), {
+      type: 'life_action_reschedule_form_opened',
+    });
+    const tomorrow = todayPageReducer(opened, {
+      type: 'life_action_reschedule_date_changed',
+      newPlannedDate: '2026-08-03',
+    });
+    const nextWeek = todayPageReducer(opened, {
+      type: 'life_action_reschedule_date_changed',
+      newPlannedDate: '2026-08-09',
+    });
+
+    expect(tomorrow.lifeActionRescheduleForm.newPlannedDate).toBe('2026-08-03');
+    expect(nextWeek.lifeActionRescheduleForm.newPlannedDate).toBe('2026-08-09');
+    expect(renderView(tomorrow)).toContain('Дата действия будет отличаться от даты решения');
+    expect(renderView(opened)).not.toContain('Дата действия будет отличаться от даты решения');
+  });
+
+  it('показывает понятные ошибки переноса, сохраняет дату и блокирует повторную отправку', async () => {
+    const decision = createPlannedDecision('action-reschedule-error', DATE);
+    const action = createReadyLifeAction('action-reschedule-error', DATE, {
+      decisionId: decision.id,
+    });
+    const form = { newPlannedDate: '2026-08-01' };
+    const execute = vi
+      .fn()
+      .mockResolvedValue(
+        failure(new DomainError('action.planned_date_in_past', 'internal reschedule error')),
+      );
+
+    expect(validateLifeActionRescheduleForm({ newPlannedDate: ' ' })).toBe('Выберите новую дату');
+    const result = await rescheduleLifeActionResult({
+      lifeActionId: action.id,
+      form,
+      rescheduleLifeActionSafely: { execute },
+    });
+    expect(result).toEqual({
+      ok: false,
+      message: 'Нельзя перенести действие на прошедшую дату',
+    });
+    const pending = {
+      ...createActionDetailsState(decision, action),
+      isLifeActionRescheduleFormOpen: true,
+      isLifeActionRescheduling: true,
+      lifeActionRescheduleForm: form,
+    } satisfies TodayPageState;
+    const failed = todayPageReducer(pending, {
+      type: 'life_action_reschedule_failed',
+      message: result.ok ? '' : result.message,
+    });
+    const pendingMarkup = renderView(pending);
+    const failedMarkup = renderView(failed);
+
+    expect(pendingMarkup).toContain('Переносим…');
+    expect(pendingMarkup.match(/disabled=""/g)?.length).toBeGreaterThanOrEqual(4);
+    expect(failed.lifeActionRescheduleForm).toBe(form);
+    expect(failedMarkup).toContain('value="2026-08-01"');
+    expect(failedMarkup).toContain('Нельзя перенести действие на прошедшую дату');
+    expect(failedMarkup).not.toContain('action.planned_date_in_past');
+    expect(lifeActionRescheduleErrorMessage('action.session_unfinished')).toBe(
+      'Сначала завершите текущую сессию',
+    );
+    expect(lifeActionRescheduleErrorMessage('action.cannot_reschedule')).toBe(
+      'Это действие уже нельзя переносить',
+    );
+  });
+
+  it('успешный перенос сразу обновляет панель и список решения без дубликата', async () => {
+    const decision = createPlannedDecision('action-reschedule-success', DATE);
+    const current = createReadyLifeAction('action-reschedule-success', DATE, {
+      decisionId: decision.id,
+    });
+    const newDate = DayDate.create('2026-08-03');
+    const updated = createReadyLifeAction('action-reschedule-success', DATE, {
+      decisionId: decision.id,
+    });
+    updated.clearUncommittedEvents();
+    updated.reschedule(
+      newDate,
+      new Date('2026-08-02T12:00:00.000+09:00'),
+      EntityId.create('ui-rescheduled-event'),
+    );
+    const execute = vi.fn().mockResolvedValue(success(updated));
+    const result = await rescheduleLifeActionResult({
+      lifeActionId: current.id,
+      form: { newPlannedDate: newDate.toString() },
+      rescheduleLifeActionSafely: { execute },
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      throw new Error('Expected rescheduled LifeAction');
+    }
+    const succeeded = todayPageReducer(
+      {
+        ...createActionDetailsState(decision, current),
+        isLifeActionRescheduleFormOpen: true,
+        lifeActionRescheduleForm: { newPlannedDate: newDate.toString() },
+      },
+      { type: 'life_action_reschedule_succeeded', lifeAction: result.lifeAction },
+    );
+    const markup = renderView(succeeded);
+
+    expect(succeeded.isLifeActionRescheduleFormOpen).toBe(false);
+    expect(succeeded.actionDetails.status === 'ready' && succeeded.actionDetails.lifeAction).toBe(
+      updated,
+    );
+    expect(succeeded.details.status === 'ready' && succeeded.details.lifeActions).toEqual([
+      updated,
+    ]);
+    expect(markup).toContain('3 августа 2026 г.');
+    expect(markup).not.toContain('Перенос действия');
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
   it('показывает спокойное подтверждение отмены только для ready и in_progress', () => {
     const decision = createPlannedDecision('action-cancel-visible', DATE);
     const ready = createReadyLifeAction('action-cancel-ready', DATE, { decisionId: decision.id });
@@ -1522,6 +1676,10 @@ function renderView(state: TodayPageState): string {
       onOpenLifeActionCancellation: NOOP,
       onCloseLifeActionCancellation: NOOP,
       onConfirmLifeActionCancellation: NOOP,
+      onOpenLifeActionRescheduleForm: NOOP,
+      onCloseLifeActionRescheduleForm: NOOP,
+      onLifeActionRescheduleDateChange: NOOP,
+      onLifeActionRescheduleSubmit: NOOP,
     }),
   );
 }

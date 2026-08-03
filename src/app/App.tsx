@@ -34,6 +34,7 @@ function ReadyTodayPage() {
       cancelDecisionSafely={application.cancelDecisionSafely}
       updateLifeActionDetails={application.updateLifeActionDetails}
       cancelLifeActionSafely={application.cancelLifeActionSafely}
+      rescheduleLifeActionSafely={application.rescheduleLifeActionSafely}
       getActionSessionsForLifeAction={application.getActionSessionsForLifeAction}
       getUnfinishedActionSession={application.getUnfinishedActionSession}
       clock={application.clock}

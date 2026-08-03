@@ -16,6 +16,7 @@ import {
   MainDecisionLimitPolicy,
   PauseActionSession,
   ResumeActionSession,
+  RescheduleLifeActionSafely,
   StartLifeActionSession,
   UpdateDecisionDetails,
   UpdateLifeActionDetails,
@@ -119,6 +120,13 @@ export async function createLifeOsApplication(
       clock,
       idGenerator,
     );
+    const rescheduleLifeActionSafely = new RescheduleLifeActionSafely(
+      lifeActionRepository,
+      actionSessionRepository,
+      clock,
+      idGenerator,
+      currentDateProvider,
+    );
     const getActionSessionsForLifeAction = new GetActionSessionsForLifeAction(
       actionSessionRepository,
     );
@@ -148,6 +156,7 @@ export async function createLifeOsApplication(
       cancelDecisionSafely,
       updateLifeActionDetails,
       cancelLifeActionSafely,
+      rescheduleLifeActionSafely,
       getActionSessionsForLifeAction,
       getUnfinishedActionSession,
       closeDatabase: () => database.close(),
