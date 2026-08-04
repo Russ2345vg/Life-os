@@ -19,6 +19,7 @@ import { isLifeActionActivationKey } from '../pages/TodayPageState';
 interface DecisionDetailsPanelProps {
   readonly details: DecisionDetailsState;
   readonly currentDate: DayDate;
+  readonly readOnly: boolean;
   readonly isFormOpen: boolean;
   readonly isSaving: boolean;
   readonly form: LifeActionFormState;
@@ -68,6 +69,7 @@ interface DecisionDetailsPanelProps {
 export function DecisionDetailsPanel({
   details,
   currentDate,
+  readOnly,
   isFormOpen,
   isSaving,
   form,
@@ -251,9 +253,15 @@ export function DecisionDetailsPanel({
                   <div className="decision-management-actions">
                     {details.decision.status === DECISION_STATUS.planned ? (
                       <>
-                        <button className="secondary-button" type="button" onClick={onOpenEditForm}>
-                          Редактировать
-                        </button>
+                        {readOnly ? null : (
+                          <button
+                            className="secondary-button"
+                            type="button"
+                            onClick={onOpenEditForm}
+                          >
+                            Редактировать
+                          </button>
+                        )}
                         <button
                           className="secondary-button"
                           type="button"
@@ -353,6 +361,7 @@ export function DecisionDetailsPanel({
                   <h3 id="linked-actions-title">Действия по решению</h3>
                 </div>
                 {isFormOpen ||
+                readOnly ||
                 details.decision.isArchived() ||
                 (details.decision.status !== DECISION_STATUS.draft &&
                   details.decision.status !== DECISION_STATUS.planned &&
@@ -363,7 +372,7 @@ export function DecisionDetailsPanel({
                 )}
               </div>
 
-              {isFormOpen ? (
+              {isFormOpen && !readOnly ? (
                 <LifeActionForm
                   form={form}
                   isSaving={isSaving}

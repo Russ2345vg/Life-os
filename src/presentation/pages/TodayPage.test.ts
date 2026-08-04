@@ -7,6 +7,7 @@ import {
   EntityId,
   SESSION_COMPLETION_KIND,
   SessionResultNote,
+  type Decision,
   type LifeAction,
 } from '../../domain';
 import { DomainError } from '../../shared/errors/DomainError';
@@ -46,6 +47,7 @@ import {
   lifeActionCancellationErrorMessage,
   lifeActionEditErrorMessage,
   lifeActionRescheduleErrorMessage,
+  loadSelectedDateDecisions,
   pauseSessionErrorMessage,
   retryLifeActionCompletion,
   rescheduleLifeActionResult,
@@ -89,8 +91,8 @@ describe('TodayPage view and workflow', () => {
       decisions: { status: 'error' },
     });
 
-    expect(loadingMarkup).toContain('Загружаем решения…');
-    expect(errorMarkup).toContain('Не удалось загрузить решения');
+    expect(loadingMarkup).toContain('Загружаем решения на выбранную дату…');
+    expect(errorMarkup).toContain('Не удалось загрузить выбранный день');
     expect(errorMarkup).toContain('Повторить');
   });
 
@@ -155,7 +157,7 @@ describe('TodayPage view and workflow', () => {
     const getExecute = vi.fn().mockResolvedValue([created]);
 
     const result = await createDecisionAndReload({
-      currentDate: DATE,
+      selectedDate: DATE,
       form: {
         kind: DECISION_KIND.main,
         title: 'Новое решение',
@@ -207,7 +209,7 @@ describe('TodayPage view and workflow', () => {
     } as const;
 
     const result = await createDecisionAndReload({
-      currentDate: DATE,
+      selectedDate: DATE,
       form,
       createDecisionForDate: { execute: createExecute },
       getDecisionsForDate: { execute: getExecute },
@@ -222,7 +224,7 @@ describe('TodayPage view and workflow', () => {
 
     expect(result).toEqual({
       ok: false,
-      message: 'На сегодня уже назначены три главных решения',
+      message: 'На выбранную дату уже назначены три главных решения',
     });
     expect(failedState.form).toBe(form);
     expect(renderView(failedState)).toContain('Результат остаётся');
@@ -246,6 +248,121 @@ describe('TodayPage view and workflow', () => {
     expect(succeeded.isFormOpen).toBe(false);
     expect(succeeded.form).toEqual({ kind: DECISION_KIND.main, title: '', expectedResult: '' });
     expect(cancelled.isFormOpen).toBe(false);
+  });
+
+  it('показывает навигацию, относительные заголовки и русскую дату выбранного дня', () => {
+    const todayMarkup = renderView(createReadyState([]));
+    const tomorrowMarkup = renderView(createReadyState([]), DayDate.create('2026-08-03'));
+    const yesterdayMarkup = renderView(createReadyState([]), DayDate.create('2026-08-01'));
+    const otherMarkup = renderView(createReadyState([]), DayDate.create('2026-08-08'));
+
+    expect(todayMarkup).toContain('aria-label="Открыть предыдущий день"');
+    expect(todayMarkup).toContain('aria-label="Открыть следующий день"');
+    expect(todayMarkup).toContain('Выбрать дату');
+    expect(todayMarkup).toContain('type="date"');
+    expect(todayMarkup).toContain('Сегодня');
+    expect(tomorrowMarkup).toContain('<h1>Завтра</h1>');
+    expect(yesterdayMarkup).toContain('<h1>Вчера</h1>');
+    expect(otherMarkup).toContain('<h1>8 августа 2026</h1>');
+    expect(otherMarkup).toContain('Суббота');
+  });
+
+  it('показывает прошлый день только для просмотра и будущее пустое состояние', () => {
+    const pastMarkup = renderView(createReadyState([]), DayDate.create('2026-08-01'));
+    const futureMarkup = renderView(createReadyState([]), DayDate.create('2026-08-09'));
+
+    expect(pastMarkup).toContain('Прошедший день доступен только для просмотра');
+    expect(pastMarkup).toContain('На этот день решений не было');
+    expect(pastMarkup).not.toContain('>Создать решение</button>');
+    expect(futureMarkup).toContain('На этот день решения ещё не запланированы');
+    expect(futureMarkup).toContain('Планировать завтра');
+    expect(futureMarkup).toContain('>Создать решение</button>');
+  });
+
+  it('скрывает редактирование и создание действия в карточке прошедшего решения', () => {
+    const pastDate = DayDate.create('2026-08-01');
+    const decision = createPlannedDecision('прошедшее', pastDate);
+    const markup = renderView(createDetailsState(decision), pastDate);
+
+    expect(markup).not.toContain('>Редактировать</button>');
+    expect(markup).not.toContain('>Создать действие</button>');
+    expect(markup).toContain('>Перенести</button>');
+    expect(markup).toContain('>Отменить решение</button>');
+  });
+
+  it('создаёт решение именно на выбранную будущую дату', async () => {
+    const selectedDate = DayDate.create('2026-08-09');
+    const created = createPlannedDecision('будущее', selectedDate, DECISION_KIND.additional);
+    const createExecute = vi.fn().mockResolvedValue(success(created));
+    const getExecute = vi.fn().mockResolvedValue([created]);
+
+    const result = await createDecisionAndReload({
+      selectedDate,
+      form: {
+        kind: DECISION_KIND.additional,
+        title: 'Будущее решение',
+        expectedResult: '',
+      },
+      createDecisionForDate: { execute: createExecute },
+      getDecisionsForDate: { execute: getExecute },
+    });
+
+    expect(result).toEqual({ ok: true, decisions: [created] });
+    expect(createExecute).toHaveBeenCalledWith({
+      title: 'Будущее решение',
+      kind: DECISION_KIND.additional,
+      plannedDate: selectedDate,
+    });
+    expect(getExecute).toHaveBeenCalledWith(selectedDate);
+  });
+
+  it('закрывает карточки, формы и ошибки при смене выбранной даты', () => {
+    const decision = createPlannedDecision('открытое', DATE);
+    const changed = todayPageReducer(
+      {
+        ...createDetailsState(decision),
+        isFormOpen: true,
+        formError: 'Ошибка старого дня',
+        decisionRescheduleNotice: 'Старое уведомление',
+      },
+      { type: 'selected_date_changed' },
+    );
+
+    expect(changed).toEqual(INITIAL_TODAY_PAGE_STATE);
+  });
+
+  it('не принимает устаревший ответ после быстрого переключения дат', async () => {
+    const oldDate = DayDate.create('2026-08-03');
+    const newDate = DayDate.create('2026-08-04');
+    const oldDecision = createPlannedDecision('старый ответ', oldDate);
+    const newDecision = createPlannedDecision('новый ответ', newDate);
+    let selectedDate = oldDate;
+    let resolveOld!: (decisions: readonly Decision[]) => void;
+    const execute = vi.fn((date: DayDate): Promise<readonly Decision[]> => {
+      if (date.equals(oldDate)) {
+        return new Promise((resolve) => {
+          resolveOld = resolve;
+        });
+      }
+
+      return Promise.resolve([newDecision]);
+    });
+
+    const oldLoad = loadSelectedDateDecisions({
+      selectedDate: oldDate,
+      getDecisionsForDate: { execute },
+      isCurrent: () => selectedDate.equals(oldDate),
+    });
+    selectedDate = newDate;
+    const newLoad = await loadSelectedDateDecisions({
+      selectedDate: newDate,
+      getDecisionsForDate: { execute },
+      isCurrent: () => selectedDate.equals(newDate),
+    });
+    resolveOld([oldDecision]);
+
+    await expect(oldLoad).resolves.toEqual({ status: 'stale' });
+    expect(newLoad).toEqual({ status: 'succeeded', decisions: [newDecision] });
   });
 
   it('renders main and additional decisions as native keyboard-accessible buttons', () => {
@@ -1781,13 +1898,19 @@ function completeSession(
   return session;
 }
 
-function renderView(state: TodayPageState): string {
+function renderView(state: TodayPageState, selectedDate: DayDate = DATE): string {
   return renderToStaticMarkup(
     TodayPageView({
       currentDate: DATE,
+      selectedDate,
       clock: { now: () => new Date('2026-08-02T10:00:00.000+09:00') },
       state,
       onRetry: NOOP,
+      onOpenPreviousDay: NOOP,
+      onOpenNextDay: NOOP,
+      onOpenToday: NOOP,
+      onDateChange: NOOP,
+      onPlanTomorrow: NOOP,
       onOpenForm: NOOP,
       onCloseForm: NOOP,
       onKindChange: NOOP,

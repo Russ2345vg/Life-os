@@ -150,6 +150,62 @@ describe('createLifeOsApplication', () => {
     secondApplication.close();
   });
 
+  it('изолирует решения трёх дат в IndexedDB и восстанавливает их без дубликатов', async () => {
+    const indexedDbFactory = new IDBFactory();
+    const tomorrow = DayDate.create('2026-08-03');
+    const nextWeek = DayDate.create('2026-08-09');
+    const firstApplication = await createTestApplication(
+      indexedDbFactory,
+      new FakeIdGenerator('date-planning'),
+    );
+
+    const todayDecision = await firstApplication.createDecisionForDate.execute({
+      title: 'Решение на сегодня',
+      kind: DECISION_KIND.main,
+      plannedDate: TODAY,
+      expectedResult: 'Сегодняшний результат',
+    });
+    const tomorrowDecision = await firstApplication.createDecisionForDate.execute({
+      title: 'Решение на завтра',
+      kind: DECISION_KIND.main,
+      plannedDate: tomorrow,
+      expectedResult: 'Завтрашний результат',
+    });
+    const nextWeekDecision = await firstApplication.createDecisionForDate.execute({
+      title: 'Дополнительное решение через неделю',
+      kind: DECISION_KIND.additional,
+      plannedDate: nextWeek,
+    });
+
+    expect(todayDecision.ok).toBe(true);
+    expect(tomorrowDecision.ok).toBe(true);
+    expect(nextWeekDecision.ok).toBe(true);
+    firstApplication.close();
+
+    const reloaded = await createTestApplication(
+      indexedDbFactory,
+      new FakeIdGenerator('date-planning-reload'),
+    );
+    const todayDecisions = await reloaded.getDecisionsForDate.execute(TODAY);
+    const tomorrowDecisions = await reloaded.getDecisionsForDate.execute(tomorrow);
+    const nextWeekDecisions = await reloaded.getDecisionsForDate.execute(nextWeek);
+    const allIds = [...todayDecisions, ...tomorrowDecisions, ...nextWeekDecisions].map((decision) =>
+      decision.id.toString(),
+    );
+
+    expect(todayDecisions.map((decision) => decision.title.toString())).toEqual([
+      'Решение на сегодня',
+    ]);
+    expect(tomorrowDecisions.map((decision) => decision.title.toString())).toEqual([
+      'Решение на завтра',
+    ]);
+    expect(nextWeekDecisions.map((decision) => decision.title.toString())).toEqual([
+      'Дополнительное решение через неделю',
+    ]);
+    expect(new Set(allIds).size).toBe(3);
+    reloaded.close();
+  });
+
   it('сохраняет редактирование и безопасную отмену решения между запусками', async () => {
     const indexedDbFactory = new IDBFactory();
     const firstApplication = await createTestApplication(

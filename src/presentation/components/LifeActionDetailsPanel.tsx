@@ -21,6 +21,7 @@ import { formatDuration, scheduleSessionTimer } from '../session/sessionTimer';
 interface LifeActionDetailsPanelProps {
   readonly details: LifeActionDetailsState;
   readonly currentDate: DayDate;
+  readonly readOnly: boolean;
   readonly decisionTitle: string | null;
   readonly decisionPlannedDate: DayDate | null;
   readonly clock: Pick<Clock, 'now'>;
@@ -72,6 +73,7 @@ interface LifeActionDetailsPanelProps {
 export function LifeActionDetailsPanel({
   details,
   currentDate,
+  readOnly,
   decisionTitle,
   decisionPlannedDate,
   clock,
@@ -197,6 +199,7 @@ export function LifeActionDetailsPanel({
 
             <LifeActionManagement
               details={details}
+              readOnly={readOnly}
               isEditFormOpen={isEditFormOpen}
               isEditing={isEditing}
               editForm={editForm}
@@ -271,6 +274,7 @@ export function LifeActionDetailsPanel({
 
 function LifeActionManagement({
   details,
+  readOnly,
   isEditFormOpen,
   isEditing,
   editForm,
@@ -300,6 +304,7 @@ function LifeActionManagement({
   onRescheduleSubmit,
 }: {
   readonly details: Extract<LifeActionDetailsState, { readonly status: 'ready' }>;
+  readonly readOnly: boolean;
   readonly isEditFormOpen: boolean;
   readonly isEditing: boolean;
   readonly editForm: LifeActionEditFormState;
@@ -341,7 +346,7 @@ function LifeActionManagement({
     <section className="life-action-management" aria-label="Управление действием">
       {!isEditFormOpen && !isCancellationOpen && !isRescheduleFormOpen ? (
         <div className="life-action-management-actions">
-          {canEdit ? (
+          {canEdit && !readOnly ? (
             <button
               className="secondary-button"
               type="button"

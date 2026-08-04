@@ -120,10 +120,82 @@ button:disabled {
   opacity: 0.62;
 }
 
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--color-accent-gold);
+  outline-offset: 2px;
+}
+
 .today-page {
   width: min(100% - 2rem, 72rem);
   margin: 0 auto;
   padding: clamp(var(--space-6), 5vw, var(--space-12)) 0;
+}
+
+.date-navigation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-6);
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-6);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-medium);
+  background: var(--color-surface);
+}
+
+.date-navigation-controls {
+  display: flex;
+  flex: 1 1 23rem;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.date-arrow-button {
+  width: 2.75rem;
+  flex: 0 0 2.75rem;
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  background: #101412;
+  font-size: 1.2rem;
+}
+
+.date-navigation-value {
+  min-width: 7.5rem;
+  margin: 0;
+  color: var(--color-accent-gold);
+  font-weight: 750;
+  text-align: center;
+}
+
+.date-today-button {
+  padding: var(--space-2) var(--space-4);
+}
+
+.date-picker-label {
+  display: flex;
+  flex: 0 1 17rem;
+  gap: var(--space-2);
+  align-items: center;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  font-weight: 650;
+}
+
+.date-picker-label input {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-text);
+  color-scheme: dark;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-small);
+  background: #101412;
 }
 
 .today-header {
@@ -165,8 +237,17 @@ button:disabled {
 
 .today-actions {
   display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
   justify-content: flex-end;
   padding: var(--space-6) 0;
+}
+
+.past-date-note {
+  margin: calc(-1 * var(--space-3)) 0 var(--space-6);
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  text-align: right;
 }
 
 .primary-button,
@@ -1507,9 +1588,41 @@ button:disabled {
     gap: var(--space-4);
   }
 
-  .today-actions,
-  .today-actions .primary-button {
+  .today-header h1 {
+    overflow-wrap: anywhere;
+    font-size: clamp(2rem, 12vw, 3rem);
+    line-height: 1.05;
+  }
+
+  .date-navigation,
+  .date-navigation-controls,
+  .date-picker-label {
     width: 100%;
+  }
+
+  .date-navigation-controls {
+    flex-basis: 100%;
+  }
+
+  .date-navigation-value {
+    flex: 1 1 7rem;
+  }
+
+  .date-today-button {
+    flex: 1 1 100%;
+  }
+
+  .date-picker-label {
+    flex-wrap: wrap;
+  }
+
+  .today-actions,
+  .today-actions button {
+    width: 100%;
+  }
+
+  .past-date-note {
+    text-align: left;
   }
 
   .decision-form,

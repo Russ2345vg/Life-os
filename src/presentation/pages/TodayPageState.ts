@@ -111,6 +111,11 @@ type LifeActionSubmissionResult =
   | { readonly ok: true; readonly lifeActions: readonly LifeAction[] }
   | { readonly ok: false; readonly message: string };
 
+export type SelectedDateLoadResult =
+  | { readonly status: 'succeeded'; readonly decisions: readonly Decision[] }
+  | { readonly status: 'failed' }
+  | { readonly status: 'stale' };
+
 export interface TodayPageState {
   readonly decisions: DecisionsState;
   readonly isFormOpen: boolean;
@@ -158,6 +163,7 @@ export interface TodayPageState {
 }
 
 export type TodayPageAction =
+  | { readonly type: 'selected_date_changed' }
   | { readonly type: 'load_started' }
   | { readonly type: 'load_succeeded'; readonly decisions: readonly Decision[] }
   | { readonly type: 'load_failed' }
@@ -336,6 +342,8 @@ export const INITIAL_TODAY_PAGE_STATE: TodayPageState = {
 
 export function todayPageReducer(state: TodayPageState, action: TodayPageAction): TodayPageState {
   switch (action.type) {
+    case 'selected_date_changed':
+      return { ...INITIAL_TODAY_PAGE_STATE };
     case 'load_started':
       return { ...state, decisions: { status: 'loading' } };
     case 'load_succeeded':
@@ -1070,7 +1078,7 @@ export function validateDecisionForm(form: DecisionFormState): string | null {
 }
 
 export async function createDecisionAndReload(input: {
-  readonly currentDate: DayDate;
+  readonly selectedDate: DayDate;
   readonly form: DecisionFormState;
   readonly createDecisionForDate: Pick<CreateDecisionForDate, 'execute'>;
   readonly getDecisionsForDate: Pick<GetDecisionsForDate, 'execute'>;
@@ -1078,7 +1086,7 @@ export async function createDecisionAndReload(input: {
   const result = await input.createDecisionForDate.execute({
     title: input.form.title,
     kind: input.form.kind,
-    plannedDate: input.currentDate,
+    plannedDate: input.selectedDate,
     ...(input.form.expectedResult.trim().length === 0
       ? {}
       : { expectedResult: input.form.expectedResult }),
@@ -1090,8 +1098,21 @@ export async function createDecisionAndReload(input: {
 
   return {
     ok: true,
-    decisions: await input.getDecisionsForDate.execute(input.currentDate),
+    decisions: await input.getDecisionsForDate.execute(input.selectedDate),
   };
+}
+
+export async function loadSelectedDateDecisions(input: {
+  readonly selectedDate: DayDate;
+  readonly getDecisionsForDate: Pick<GetDecisionsForDate, 'execute'>;
+  readonly isCurrent: () => boolean;
+}): Promise<SelectedDateLoadResult> {
+  try {
+    const decisions = await input.getDecisionsForDate.execute(input.selectedDate);
+    return input.isCurrent() ? { status: 'succeeded', decisions } : { status: 'stale' };
+  } catch {
+    return input.isCurrent() ? { status: 'failed' } : { status: 'stale' };
+  }
 }
 
 export function validateLifeActionForm(form: LifeActionFormState): string | null {
@@ -1543,7 +1564,7 @@ export async function createLifeActionAndReload(input: {
 function decisionErrorMessage(code: string): string {
   switch (code) {
     case 'decision.main_limit_reached':
-      return 'На сегодня уже назначены три главных решения';
+      return 'На выбранную дату уже назначены три главных решения';
     case 'decision_title.invalid':
       return 'Введите название решения';
     case 'decision.main_requires_expected_result':

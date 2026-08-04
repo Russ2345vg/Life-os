@@ -3,6 +3,7 @@ import {
   useEffect,
   useReducer,
   useRef,
+  useState,
   type ChangeEvent,
   type FormEvent,
 } from 'react';
@@ -31,7 +32,7 @@ import type {
 import {
   DECISION_KIND,
   DECISION_STATUS,
-  type DayDate,
+  DayDate,
   type Decision,
   type DecisionKind,
   type DecisionStatus,
@@ -43,6 +44,13 @@ import {
 import { DecisionDetailsPanel } from '../components/DecisionDetailsPanel';
 import { LifeActionDetailsPanel } from '../components/LifeActionDetailsPanel';
 import {
+  addDays,
+  formatSelectedDateTitle,
+  formatSelectedDateWeekday,
+  isPastDate,
+  isToday,
+} from '../date/selectedDate';
+import {
   completeSessionWorkflow,
   cancelLifeActionResult,
   cancelDecisionResult,
@@ -51,6 +59,7 @@ import {
   createLifeActionAndReload,
   INITIAL_TODAY_PAGE_STATE,
   isDecisionActivationKey,
+  loadSelectedDateDecisions,
   pauseSessionErrorMessage,
   retryLifeActionCompletion,
   rescheduleLifeActionResult,
@@ -121,6 +130,9 @@ export function TodayPage({
   clock,
 }: TodayPageProps) {
   const [state, dispatch] = useReducer(todayPageReducer, INITIAL_TODAY_PAGE_STATE);
+  const [selectedDate, setSelectedDate] = useState(currentDate);
+  const selectedDateRef = useRef(currentDate);
+  const loadGenerationRef = useRef(0);
   const savingRef = useRef(false);
   const lifeActionSavingRef = useRef(false);
   const sessionMutationRef = useRef(false);
@@ -132,19 +144,42 @@ export function TodayPage({
   const lifeActionCancellationRef = useRef(false);
   const lifeActionRescheduleRef = useRef(false);
 
-  const loadDecisions = useCallback(async () => {
-    dispatch({ type: 'load_started' });
-    try {
-      const decisions = await getDecisionsForDate.execute(currentDate);
-      dispatch({ type: 'load_succeeded', decisions });
-    } catch {
-      dispatch({ type: 'load_failed' });
-    }
-  }, [currentDate, getDecisionsForDate]);
+  const loadDecisions = useCallback(
+    async (date: DayDate) => {
+      const generation = ++loadGenerationRef.current;
+      dispatch({ type: 'load_started' });
+      const result = await loadSelectedDateDecisions({
+        selectedDate: date,
+        getDecisionsForDate,
+        isCurrent: () =>
+          generation === loadGenerationRef.current && selectedDateRef.current.equals(date),
+      });
+
+      if (result.status === 'succeeded') {
+        dispatch({ type: 'load_succeeded', decisions: result.decisions });
+      } else if (result.status === 'failed') {
+        dispatch({ type: 'load_failed' });
+      }
+    },
+    [getDecisionsForDate],
+  );
 
   useEffect(() => {
-    void loadDecisions();
-  }, [loadDecisions]);
+    void loadDecisions(selectedDate);
+  }, [loadDecisions, selectedDate]);
+
+  function selectDate(date: DayDate, openForm = false): void {
+    if (!date.equals(selectedDateRef.current)) {
+      loadGenerationRef.current += 1;
+      selectedDateRef.current = date;
+      dispatch({ type: 'selected_date_changed' });
+      setSelectedDate(date);
+    }
+
+    if (openForm) {
+      dispatch({ type: 'open_form' });
+    }
+  }
 
   const loadDecisionDetails = useCallback(
     async (decisionId: EntityId) => {
@@ -189,12 +224,17 @@ export function TodayPage({
     savingRef.current = true;
     dispatch({ type: 'save_started' });
     try {
+      const submissionDate = selectedDate;
       const result = await createDecisionAndReload({
-        currentDate,
+        selectedDate: submissionDate,
         form: state.form,
         createDecisionForDate,
         getDecisionsForDate,
       });
+
+      if (!selectedDateRef.current.equals(submissionDate)) {
+        return;
+      }
 
       if (!result.ok) {
         dispatch({ type: 'save_failed', message: result.message });
@@ -229,7 +269,7 @@ export function TodayPage({
     try {
       const result = await createLifeActionAndReload({
         decisionId,
-        plannedDate: currentDate,
+        plannedDate: selectedDate,
         form: state.lifeActionForm,
         createLifeActionForDecision,
         getLifeActionsForDecision,
@@ -388,7 +428,7 @@ export function TodayPage({
         newPlannedDate !== null &&
         !previousPlannedDate.equals(newPlannedDate);
       const movedOffCurrentDay =
-        changed && previousPlannedDate.equals(currentDate) && !newPlannedDate.equals(currentDate);
+        changed && previousPlannedDate.equals(selectedDate) && !newPlannedDate.equals(selectedDate);
       dispatch({
         type: 'decision_reschedule_succeeded',
         decision: result.decision,
@@ -699,9 +739,15 @@ export function TodayPage({
   return (
     <TodayPageView
       currentDate={currentDate}
+      selectedDate={selectedDate}
       clock={clock}
       state={state}
-      onRetry={() => void loadDecisions()}
+      onRetry={() => void loadDecisions(selectedDate)}
+      onOpenPreviousDay={() => selectDate(addDays(selectedDateRef.current, -1))}
+      onOpenNextDay={() => selectDate(addDays(selectedDateRef.current, 1))}
+      onOpenToday={() => selectDate(currentDate)}
+      onDateChange={(date) => selectDate(date)}
+      onPlanTomorrow={() => selectDate(addDays(currentDate, 1), true)}
       onOpenForm={() => dispatch({ type: 'open_form' })}
       onCloseForm={() => dispatch({ type: 'close_form' })}
       onKindChange={(kind) => dispatch({ type: 'kind_changed', kind })}
@@ -810,9 +856,15 @@ export function TodayPage({
 
 interface TodayPageViewProps {
   readonly currentDate: DayDate;
+  readonly selectedDate: DayDate;
   readonly clock: Pick<Clock, 'now'>;
   readonly state: TodayPageState;
   readonly onRetry: () => void;
+  readonly onOpenPreviousDay: () => void;
+  readonly onOpenNextDay: () => void;
+  readonly onOpenToday: () => void;
+  readonly onDateChange: (date: DayDate) => void;
+  readonly onPlanTomorrow: () => void;
   readonly onOpenForm: () => void;
   readonly onCloseForm: () => void;
   readonly onKindChange: (kind: DecisionKind) => void;
@@ -875,9 +927,15 @@ interface TodayPageViewProps {
 
 export function TodayPageView({
   currentDate,
+  selectedDate,
   clock,
   state,
   onRetry,
+  onOpenPreviousDay,
+  onOpenNextDay,
+  onOpenToday,
+  onDateChange,
+  onPlanTomorrow,
   onOpenForm,
   onCloseForm,
   onKindChange,
@@ -937,23 +995,79 @@ export function TodayPageView({
   onLifeActionRescheduleDateChange,
   onLifeActionRescheduleSubmit,
 }: TodayPageViewProps) {
+  const pastDate = isPastDate(selectedDate, currentDate);
+  const selectedDateTitle = formatSelectedDateTitle(selectedDate, currentDate);
+
   return (
     <>
       <main className="today-page">
+        <section className="date-navigation" aria-label="Навигация по датам">
+          <div className="date-navigation-controls">
+            <button
+              className="date-arrow-button"
+              type="button"
+              aria-label="Открыть предыдущий день"
+              onClick={onOpenPreviousDay}
+            >
+              ←
+            </button>
+            <p className="date-navigation-value">{selectedDate.toString()}</p>
+            <button
+              className="date-arrow-button"
+              type="button"
+              aria-label="Открыть следующий день"
+              onClick={onOpenNextDay}
+            >
+              →
+            </button>
+            <button
+              className="secondary-button date-today-button"
+              type="button"
+              disabled={isToday(selectedDate, currentDate)}
+              onClick={onOpenToday}
+            >
+              Сегодня
+            </button>
+          </div>
+          <label className="date-picker-label">
+            <span>Выбрать дату</span>
+            <input
+              type="date"
+              value={selectedDate.toString()}
+              onInput={(event: FormEvent<HTMLInputElement>) => {
+                if (event.currentTarget.value.length > 0) {
+                  onDateChange(DayDate.create(event.currentTarget.value));
+                }
+              }}
+            />
+          </label>
+        </section>
+
         <header className="today-header">
           <p className="today-brand">LifeOS</p>
           <div>
-            <h1>Сегодня</h1>
-            <p className="today-date">{formatRussianDate(currentDate)}</p>
+            <h1>{selectedDateTitle}</h1>
+            <p className="today-date">
+              {formatSelectedDateWeekday(selectedDate)} · {formatRussianDate(selectedDate)}
+            </p>
           </div>
           <p className="today-storage-note">Данные сохраняются на этом устройстве</p>
         </header>
 
         <div className="today-actions">
-          <button className="primary-button" type="button" onClick={onOpenForm}>
-            Создать решение
+          {pastDate ? null : (
+            <button className="primary-button" type="button" onClick={onOpenForm}>
+              Создать решение
+            </button>
+          )}
+          <button className="secondary-button" type="button" onClick={onPlanTomorrow}>
+            Планировать завтра
           </button>
         </div>
+
+        {pastDate ? (
+          <p className="past-date-note">Прошедший день доступен только для просмотра</p>
+        ) : null}
 
         {state.decisionRescheduleNotice === null ? null : (
           <p className="decision-reschedule-notice" role="status">
@@ -976,13 +1090,13 @@ export function TodayPageView({
 
         {state.decisions.status === 'loading' ? (
           <p className="page-message" role="status">
-            Загружаем решения…
+            Загружаем решения на выбранную дату…
           </p>
         ) : null}
 
         {state.decisions.status === 'error' ? (
           <section className="page-message page-error" role="alert">
-            <p>Не удалось загрузить решения</p>
+            <p>Не удалось загрузить выбранный день</p>
             <button className="secondary-button" type="button" onClick={onRetry}>
               Повторить
             </button>
@@ -990,7 +1104,18 @@ export function TodayPageView({
         ) : null}
 
         {state.decisions.status === 'ready' ? (
-          <DecisionSections decisions={state.decisions.decisions} onOpenDecision={onOpenDecision} />
+          state.decisions.decisions.length === 0 && !isToday(selectedDate, currentDate) ? (
+            <p className="page-message">
+              {pastDate
+                ? 'На этот день решений не было'
+                : 'На этот день решения ещё не запланированы'}
+            </p>
+          ) : (
+            <DecisionSections
+              decisions={state.decisions.decisions}
+              onOpenDecision={onOpenDecision}
+            />
+          )
         ) : null}
       </main>
 
@@ -998,6 +1123,7 @@ export function TodayPageView({
         <DecisionDetailsPanel
           details={state.details}
           currentDate={currentDate}
+          readOnly={pastDate}
           isFormOpen={state.isLifeActionFormOpen}
           isSaving={state.isLifeActionSaving}
           form={state.lifeActionForm}
@@ -1047,6 +1173,7 @@ export function TodayPageView({
         <LifeActionDetailsPanel
           details={state.actionDetails}
           currentDate={currentDate}
+          readOnly={pastDate}
           decisionTitle={
             state.details.status === 'ready' ? state.details.decision.title.toString() : null
           }
@@ -1334,7 +1461,6 @@ function decisionStatusLabel(status: DecisionStatus): string {
 function formatRussianDate(date: DayDate): string {
   const [year, month, day] = date.toString().split('-').map(Number);
   return new Intl.DateTimeFormat('ru-RU', {
-    weekday: 'long',
     day: 'numeric',
     month: 'long',
     year: 'numeric',
