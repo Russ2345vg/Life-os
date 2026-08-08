@@ -2,12 +2,17 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import {
   ActionSession,
+  Day,
   DayDate,
+  DAY_STATUS,
   DECISION_KIND,
+  DECISION_PRIORITY,
+  Decision,
+  DecisionTitle,
   EntityId,
+  ExpectedResult,
   SESSION_COMPLETION_KIND,
   SessionResultNote,
-  type Decision,
   type LifeAction,
 } from '../../domain';
 import { DomainError } from '../../shared/errors/DomainError';
@@ -27,6 +32,7 @@ import {
 } from '../../test/helpers/LifeActionTestFactory';
 import { formatDuration, scheduleSessionTimer } from '../session/sessionTimer';
 import { TodayPageView } from './TodayPage';
+import { resolveTodayScreenState } from './TodayScreenState';
 import {
   ACTION_COMPLETION_CHOICE,
   ACTION_COMPLETION_FAILED_MESSAGE,
@@ -75,13 +81,260 @@ describe('TodayPage view and workflow', () => {
   it('показывает текущую дату по-русски без старого технического экрана', () => {
     const markup = renderView(createReadyState([]));
 
-    expect(markup).toContain('LifeOS');
+    expect(markup).toContain('План дня');
     expect(markup).toContain('Сегодня');
     expect(markup).toContain('2 августа 2026 г.');
-    expect(markup).toContain('Данные сохраняются на этом устройстве');
+    expect(markup).not.toContain('Данные сохраняются на этом устройстве');
     expect(markup).not.toContain('Локальная система готова');
     expect(markup).not.toContain('IndexedDB');
     expect(markup).not.toContain('repository');
+  });
+
+  it('показывает явное начало дня и блокирует его без главного решения', () => {
+    const markup = renderView(createReadyState([]));
+
+    expect(markup).toContain('День не запланирован');
+    expect(markup).toContain('Главных решений');
+    expect(markup).toContain('0 из 3');
+    expect(markup).toContain('Добавьте хотя бы одно главное решение');
+    expect(markup).toContain('disabled=""');
+  });
+
+  it('разрешает кнопку начала при наличии главного решения', () => {
+    const markup = renderView(
+      createReadyState([createPlannedDecision('main-start', DATE, DECISION_KIND.main, 1)]),
+    );
+
+    expect(markup).toContain('1 из 3');
+    expect(markup).toContain('Начать день');
+  });
+
+  it('до запуска блокирует начало дня и показывает восстановление при нескольких активных днях', () => {
+    const firstOpen = createOpenDayForRecovery('conflict-first', DayDate.create('2026-08-01'));
+    const secondOpen = createOpenDayForRecovery('conflict-second', DayDate.create('2026-08-02'));
+    const markup = renderView(
+      createReadyState([createPlannedDecision('main-conflict', DATE, DECISION_KIND.main, 1)]),
+      DATE,
+      createCurrentPlannedDay(),
+      {
+        openDayConflictState: {
+          status: 'ready',
+          snapshot: {
+            hasConflict: true,
+            openDays: [
+              { day: firstOpen, hasUnfinishedSession: false },
+              { day: secondOpen, hasUnfinishedSession: false },
+            ],
+            unfinishedSession: null,
+            unfinishedLifeAction: null,
+            unfinishedSessionDayId: null,
+            hasOrphanedUnfinishedSession: false,
+          },
+        },
+      },
+    );
+
+    expect(markup).toContain('Обнаружено несколько активных дней');
+    expect(markup).toContain('Восстановить состояние');
+    expect(markup).toContain('Сначала восстановите конфликт активных дней');
+    expect(markup).toContain('disabled=""');
+  });
+
+  it('показывает точную дату единственного прошлого активного дня и блокирует запуск сегодня', () => {
+    const staleDate = DayDate.create('2026-08-01');
+    const staleDay = createOpenDayForRecovery('single-stale-open', staleDate);
+    const markup = renderView(
+      createReadyState([createPlannedDecision('main-current', DATE, DECISION_KIND.main, 1)]),
+      DATE,
+      createCurrentPlannedDay(),
+      {
+        openDayConflictState: {
+          status: 'ready',
+          snapshot: {
+            hasConflict: false,
+            openDays: [{ day: staleDay, hasUnfinishedSession: false }],
+            unfinishedSession: null,
+            unfinishedLifeAction: null,
+            unfinishedSessionDayId: null,
+            hasOrphanedUnfinishedSession: false,
+          },
+        },
+      },
+    );
+
+    expect(markup).toContain('Незавершённый день');
+    expect(markup).toContain('День 1 августа 2026 г. всё ещё открыт');
+    expect(markup).toContain('Открыть активный день');
+    expect(markup).toContain('Сначала завершите день 1 августа 2026 г.');
+    expect(markup).toContain('disabled=""');
+  });
+
+  it('для прошлого активного дня оставляет только безопасное завершение через вечерний контроль', () => {
+    const staleDate = DayDate.create('2026-08-01');
+    const staleDay = createOpenDayForRecovery('selected-stale-open', staleDate);
+    const markup = renderView(createReadyState([]), staleDate, createCurrentPlannedDay(), {
+      openDayConflictState: {
+        status: 'ready',
+        snapshot: {
+          hasConflict: false,
+          openDays: [{ day: staleDay, hasUnfinishedSession: false }],
+          unfinishedSession: null,
+          unfinishedLifeAction: null,
+          unfinishedSessionDayId: null,
+          hasOrphanedUnfinishedSession: false,
+        },
+      },
+    });
+
+    expect(markup).toContain('Открыть вечерний контроль');
+    expect(markup).toContain('Обычное редактирование прошлого дня заблокировано');
+    expect(markup).not.toContain('Прошедший день доступен только для просмотра');
+    expect(markup).not.toContain('>Создать решение</button>');
+  });
+
+  it('открывает вечерний контроль только для начатого дня', () => {
+    const markup = renderView(createReadyState([]), DATE, createCurrentOpenDay());
+
+    expect(markup).toContain('День начат');
+    expect(markup).toContain('Вечерний контроль');
+    expect(markup).toContain('Проверьте остатки, запишите итог и подготовьте завтра.');
+    expect(markup).not.toContain('Начать день');
+  });
+
+  it('показывает начатый день с текущим действием отдельно от пустого состояния', () => {
+    const action = createReadyLifeAction('today-screen-ready-action', DATE);
+    const startedMarkup = renderView(createReadyState([]), DATE, createCurrentOpenDay(), {
+      currentLifeActions: [action],
+    });
+    const emptyMarkup = renderView(createReadyState([]), DATE, createCurrentOpenDay());
+
+    expect(startedMarkup).toContain('День начат');
+    expect(startedMarkup).toContain('today-screen-ready-action');
+    expect(startedMarkup).toContain('Начать сессию');
+    expect(startedMarkup).toContain('>Открыть<');
+    expect(emptyMarkup).toContain('Нет текущего действия');
+    expect(emptyMarkup).not.toContain('Начать сессию');
+  });
+
+  it('показывает следующее действие как спокойную подсказку без кнопки запуска', () => {
+    const current = createReadyLifeAction('today-current-action', DATE, {
+      createdAt: new Date('2026-08-02T08:00:00.000+09:00'),
+    });
+    const next = createReadyLifeAction('today-next-action', DATE, {
+      createdAt: new Date('2026-08-02T08:05:00.000+09:00'),
+    });
+    const markup = renderView(createReadyState([]), DATE, createCurrentOpenDay(), {
+      currentLifeActions: [next, current],
+    });
+
+    expect(markup).toContain('Следующее действие');
+    expect(markup).toContain('today-next-action');
+    expect(markup).toContain('Это предварительная подсказка');
+    expect(markup.match(/current-action-primary-button/g)).toHaveLength(1);
+    expect(markup.match(/>Начать сессию</g)).toHaveLength(1);
+  });
+
+  it('показывает навигацию, счётчик и выбранное действие среди нескольких доступных', () => {
+    const first = createReadyLifeAction('today-navigator-first', DATE, {
+      createdAt: new Date('2026-08-02T08:00:00.000+09:00'),
+    });
+    const second = createReadyLifeAction('today-navigator-second', DATE, {
+      createdAt: new Date('2026-08-02T08:05:00.000+09:00'),
+    });
+    const third = createReadyLifeAction('today-navigator-third', DATE, {
+      createdAt: new Date('2026-08-02T08:10:00.000+09:00'),
+    });
+    const markup = renderView(createReadyState([]), DATE, createCurrentOpenDay(), {
+      currentLifeActions: [third, first, second],
+      preferredLifeActionId: second.id.toString(),
+    });
+
+    expect(markup).toContain('Действия дня');
+    expect(markup).toContain('2 из 3');
+    expect(markup).toContain('today-navigator-second');
+    expect(markup.match(/aria-current="true"/g)).toHaveLength(1);
+    expect(markup).toContain('today-navigator-third');
+  });
+
+  it('блокирует переключение во время незавершённой рабочей сессии', () => {
+    const active = markLifeActionInProgress(createReadyLifeAction('today-navigator-active', DATE));
+    const other = createReadyLifeAction('today-navigator-other', DATE);
+    const session = createSession('today-navigator-session', active.id);
+    const markup = renderView(createReadyState([]), DATE, createCurrentOpenDay(), {
+      currentLifeActions: [other, active],
+      currentDaySessions: [session],
+      unfinishedSession: session,
+      preferredLifeActionId: other.id.toString(),
+    });
+
+    expect(markup).toContain('today-navigator-active');
+    expect(markup).toContain('Выбор другого действия доступен после завершения');
+    expect(markup).toContain('Сессия идёт');
+  });
+
+  it('показывает явное пустое состояние, когда продолжение не запланировано', () => {
+    const current = createReadyLifeAction('today-only-action', DATE);
+    const markup = renderView(createReadyState([]), DATE, createCurrentOpenDay(), {
+      currentLifeActions: [current],
+    });
+
+    expect(markup).toContain('Следующее действие');
+    expect(markup).toContain('продолжение пока не запланировано');
+  });
+
+  it('показывает активную и приостановленную сессию как разные состояния главного экрана', () => {
+    const action = markLifeActionInProgress(
+      createReadyLifeAction('today-screen-session-action', DATE),
+    );
+    const session = createSession('today-screen-session', action.id);
+    const runningMarkup = renderView(createReadyState([]), DATE, createCurrentOpenDay(), {
+      currentLifeActions: [action],
+      currentDaySessions: [session],
+      unfinishedSession: session,
+    });
+
+    pauseSession(session);
+    const pausedMarkup = renderView(createReadyState([]), DATE, createCurrentOpenDay(), {
+      currentLifeActions: [action],
+      currentDaySessions: [session],
+      unfinishedSession: session,
+    });
+
+    expect(runningMarkup).toContain('Рабочая сессия идёт');
+    expect(runningMarkup).toContain('Приостановить');
+    expect(runningMarkup).toContain('Завершить сессию');
+    expect(pausedMarkup).toContain('Рабочая сессия на паузе');
+    expect(pausedMarkup).toContain('>Пауза<');
+  });
+
+  it('показывает открытый вечерний контроль отдельным состоянием главной страницы', () => {
+    const markup = renderView(createReadyState([]), DATE, createCurrentOpenDay(), {
+      isEveningControlOpen: true,
+    });
+
+    expect(markup).toContain('Шаг завершения');
+    expect(markup).toContain('Проверка дня открыта');
+  });
+
+  it('показывает контролируемую ошибку восстановления без изменения данных', () => {
+    const markup = renderView(createReadyState([]), DATE, createCurrentOpenDay(), {
+      recoveryStatus: 'error',
+    });
+
+    expect(markup).toContain('Не удалось восстановить состояние дня');
+    expect(markup).toContain('Данные не изменены');
+    expect(markup).toContain('Повторить восстановление');
+    expect(markup).not.toContain('repository');
+  });
+
+  it('после завершения показывает сохранённый итог и не предлагает завершить день повторно', () => {
+    const markup = renderView(createReadyState([]), DATE, createCompletedCurrentDay());
+
+    expect(markup).toContain('День завершён');
+    expect(markup).toContain('Итог контрольного дня');
+    expect(markup).toContain('Повторное завершение и запуск недоступны');
+    expect(markup).not.toContain('Вечерний контроль');
+    expect(markup).not.toContain('Начать день');
   });
 
   it('показывает загрузку и контролируемую ошибку чтения с повтором', () => {
@@ -273,9 +526,12 @@ describe('TodayPage view and workflow', () => {
 
     expect(pastMarkup).toContain('Прошедший день доступен только для просмотра');
     expect(pastMarkup).toContain('На этот день решений не было');
+    expect(pastMarkup).toContain('Количество решений: 0');
+    expect(pastMarkup).toContain('Следующий день');
+    expect(pastMarkup).toContain('Вернуться к сегодня');
     expect(pastMarkup).not.toContain('>Создать решение</button>');
     expect(futureMarkup).toContain('На этот день решения ещё не запланированы');
-    expect(futureMarkup).toContain('Планировать завтра');
+    expect(futureMarkup).toContain('Планировать 3 августа');
     expect(futureMarkup).toContain('>Создать решение</button>');
   });
 
@@ -468,7 +724,7 @@ describe('TodayPage view and workflow', () => {
       getLifeActionsForDecision: { execute: getExecute },
     });
 
-    expect(result).toEqual({ ok: true, lifeActions: [created] });
+    expect(result).toEqual({ ok: true, lifeAction: created, lifeActions: [created] });
     expect(createExecute).toHaveBeenCalledWith({
       decisionId: decision.id,
       title: 'Новое действие',
@@ -572,7 +828,9 @@ describe('TodayPage view and workflow', () => {
     const decision = createPlannedDecision('no-completed-ui', DATE);
     const markup = renderView(createDetailsState(decision));
 
-    expect(markup).toContain('Чтобы подтвердить решение, завершите хотя бы одно действие');
+    expect(markup).toContain(
+      'Решение остаётся активным: для подтверждения нужен хотя бы один проверенный результат завершённого действия.',
+    );
     expect(markup).toContain('decision-confirm-button" type="button" disabled=""');
   });
 
@@ -584,7 +842,9 @@ describe('TodayPage view and workflow', () => {
     const ready = createReadyLifeAction('ready-ui', DATE, { decisionId: decision.id });
     const markup = renderView(createDetailsState(decision, [completed, ready]));
 
-    expect(markup).toContain('Сначала завершите текущие действия');
+    expect(markup).toContain(
+      'Решение остаётся активным: завершите все текущие действия, прежде чем подтверждать общий результат.',
+    );
     expect(markup).toContain('decision-confirm-button" type="button" disabled=""');
   });
 
@@ -600,9 +860,11 @@ describe('TodayPage view and workflow', () => {
     );
     const markup = renderView(createDetailsState(decision, [completed, cancelled]));
 
-    expect(markup).toContain('Подтвердить результат решения');
+    expect(markup).toContain('Подтвердить решение результатами действий');
     expect(markup).not.toContain('decision-confirm-button" type="button" disabled=""');
-    expect(markup).not.toContain('Сначала завершите текущие действия');
+    expect(markup).not.toContain(
+      'Решение остаётся активным: завершите все текущие действия, прежде чем подтверждать общий результат.',
+    );
   });
 
   it('открывает и закрывает форму подтверждения', () => {
@@ -614,7 +876,7 @@ describe('TodayPage view and workflow', () => {
     expect(renderView(opened)).toContain('Подтверждение решения');
     expect(renderView(opened)).toContain('Фактический результат решения *');
     expect(renderView(opened)).toContain(
-      'Завершённые действия будут использованы как подтверждение результата',
+      'Проверьте общий итог. Завершённые действия будут зафиксированы как доказательства результата решения.',
     );
     expect(closed.isDecisionConfirmationFormOpen).toBe(false);
   });
@@ -686,7 +948,7 @@ describe('TodayPage view and workflow', () => {
     const markup = renderView(createDetailsState(decision));
 
     expect(markup).not.toContain('Создать действие');
-    expect(markup).not.toContain('Подтвердить результат решения');
+    expect(markup).not.toContain('Подтвердить решение результатами действий');
   });
 
   it('при ошибке сохраняет введённый actualResult и не показывает внутренний код', () => {
@@ -703,7 +965,9 @@ describe('TodayPage view and workflow', () => {
     const markup = renderView(failed);
 
     expect(failed.decisionConfirmationForm.actualResult).toBe('Текст должен остаться');
-    expect(markup).toContain('Сначала завершите текущие действия');
+    expect(markup).toContain(
+      'Завершите все текущие действия, прежде чем подтверждать общий результат',
+    );
     expect(markup).not.toContain('decision.actions_unfinished');
   });
 
@@ -737,7 +1001,7 @@ describe('TodayPage view and workflow', () => {
     expect(plannedMarkup).toContain('>Перенести<');
     expect(plannedMarkup).toContain('Отменить решение');
     expect(progressMarkup).not.toContain('Редактировать');
-    expect(progressMarkup).not.toContain('>Перенести<');
+    expect(progressMarkup).toContain('>Перенести<');
     expect(progressMarkup).toContain('Отменить решение');
     expect(confirmedMarkup).not.toContain('Редактировать');
     expect(confirmedMarkup).not.toContain('>Перенести<');
@@ -768,35 +1032,42 @@ describe('TodayPage view and workflow', () => {
     expect(markup).toContain('2 августа 2026 г.');
     expect(markup).toContain('Текущая позиция');
     expect(markup).toContain('>2<');
-    expect(markup).toContain('Завтра');
+    expect(markup).toContain('Следующий день');
     expect(markup).toContain('Через неделю');
     expect(markup).toContain('value="2026-08-03"');
-    expect(markup).toContain('Связанные действия сохранят свои текущие даты');
+    expect(markup).toContain('Незавершённая работа переносится вместе с решением одной операцией');
     expect(markup).toContain('На новой дате решение займёт свободную позицию автоматически');
     expect(renderView(closed)).not.toContain('Перенос решения');
   });
 
-  it('блокирует перенос draft- и in_progress-действиями и показывает понятную ошибку', () => {
-    const decision = createPlannedDecision('reschedule-blocked', DATE);
+  it('показывает перенос незавершённых действий и сохранение исторических результатов', () => {
+    const decision = createPlannedDecision('reschedule-actions', DATE);
     const draft = createLifeActionDraft('reschedule-draft', { decisionId: decision.id });
     const inProgress = markLifeActionInProgress(
       createReadyLifeAction('reschedule-progress', DATE, { decisionId: decision.id }),
     );
+    const completed = completeLifeAction(
+      createReadyLifeAction('reschedule-completed', DATE, { decisionId: decision.id }),
+    );
     const state = {
-      ...createDetailsState(decision, [draft, inProgress]),
+      ...createDetailsState(decision, [draft, inProgress, completed]),
       isDecisionRescheduleFormOpen: true,
-      decisionRescheduleForm: { newPlannedDate: '2026-08-03' },
+      decisionRescheduleForm: {
+        newPlannedDate: '2026-08-03',
+        reason: 'Нужно продолжить в отдельный день',
+      },
     } satisfies TodayPageState;
     const markup = renderView(state);
 
-    expect(markup).toContain('Сначала завершите настройку или выполнение связанных действий');
-    expect(markup).toContain('disabled=""');
-    expect(markup).not.toContain('decision.actions_block_reschedule');
+    expect(markup).toContain('Будет перенесено');
+    expect(markup).toContain('Черновики останутся связаны');
+    expect(markup).toContain('Завершено в истории');
+    expect(markup).not.toContain('Сначала завершите настройку');
   });
 
   it('сохраняет дату при ошибке, блокирует повторную отправку и переводит коды в сообщения', async () => {
     const decision = createPlannedDecision('reschedule-failed', DATE);
-    const form = { newPlannedDate: '2026-08-01' };
+    const form = { newPlannedDate: '2026-08-01', reason: 'Нужен дополнительный день' };
     const execute = vi
       .fn()
       .mockResolvedValue(
@@ -804,6 +1075,7 @@ describe('TodayPage view and workflow', () => {
       );
     const result = await rescheduleDecisionResult({
       decisionId: decision.id,
+      expectedVersion: decision.version,
       form,
       rescheduleDecisionSafely: { execute },
     });
@@ -818,7 +1090,12 @@ describe('TodayPage view and workflow', () => {
       message: result.ok ? '' : result.message,
     });
 
-    expect(validateDecisionRescheduleForm({ newPlannedDate: ' ' })).toBe('Выберите новую дату');
+    expect(validateDecisionRescheduleForm({ newPlannedDate: ' ', reason: '' })).toBe(
+      'Выберите новую дату',
+    );
+    expect(validateDecisionRescheduleForm({ newPlannedDate: '2026-08-03', reason: ' ' })).toBe(
+      'Укажите причину переноса',
+    );
     expect(renderView(pending)).toContain('Переносим…');
     expect(renderView(pending).match(/disabled=""/g)?.length).toBeGreaterThanOrEqual(4);
     expect(failed.decisionRescheduleForm).toBe(form);
@@ -828,8 +1105,8 @@ describe('TodayPage view and workflow', () => {
     expect(decisionRescheduleErrorMessage('decision.main_limit_reached')).toBe(
       'На выбранную дату уже назначены три главных решения',
     );
-    expect(decisionRescheduleErrorMessage('decision.actions_block_reschedule')).toBe(
-      'Сначала завершите настройку или выполнение связанных действий',
+    expect(decisionRescheduleErrorMessage('decision.session_unfinished')).toBe(
+      'Сначала завершите активную или приостановленную рабочую сессию',
     );
     expect(decisionRescheduleErrorMessage('decision.cannot_reschedule')).toBe(
       'Это решение уже нельзя переносить',
@@ -843,6 +1120,7 @@ describe('TodayPage view and workflow', () => {
     updated.clearUncommittedEvents();
     updated.reschedule(
       newDate,
+      'Нужно перенести работу',
       new Date('2026-08-02T12:00:00.000+09:00'),
       EntityId.create('decision-ui-rescheduled-event'),
       1,
@@ -850,7 +1128,8 @@ describe('TodayPage view and workflow', () => {
     const execute = vi.fn().mockResolvedValue(success(updated));
     const result = await rescheduleDecisionResult({
       decisionId: current.id,
-      form: { newPlannedDate: newDate.toString() },
+      expectedVersion: current.version,
+      form: { newPlannedDate: newDate.toString(), reason: 'Нужно перенести работу' },
       rescheduleDecisionSafely: { execute },
     });
     expect(result.ok).toBe(true);
@@ -861,7 +1140,10 @@ describe('TodayPage view and workflow', () => {
       {
         ...createDetailsState(current),
         isDecisionRescheduleFormOpen: true,
-        decisionRescheduleForm: { newPlannedDate: newDate.toString() },
+        decisionRescheduleForm: {
+          newPlannedDate: newDate.toString(),
+          reason: 'Нужно перенести работу',
+        },
       },
       {
         type: 'decision_reschedule_succeeded',
@@ -878,7 +1160,9 @@ describe('TodayPage view and workflow', () => {
     expect(markup).toContain('Решение перенесено на 3 августа 2026 г.');
     expect(execute).toHaveBeenCalledWith({
       decisionId: current.id,
+      expectedVersion: current.version,
       newPlannedDate: '2026-08-03',
+      reason: 'Нужно перенести работу',
     });
   });
 
@@ -899,16 +1183,48 @@ describe('TodayPage view and workflow', () => {
     expect(succeeded.decisionRescheduleNotice).toBeNull();
   });
 
-  it('открывает предзаполненную форму редактирования и проверяет обязательные поля', () => {
+  it('открывает полную предзаполненную форму редактирования с версией и неизменяемой датой', () => {
     const decision = createPlannedDecision('edit-form', DATE);
+    decision.updateDetails({
+      reason: 'Причина решения',
+      sphere: 'Разработка',
+      price: 'Два часа',
+      sacrifices: 'Не отвлекаться',
+      priority: DECISION_PRIORITY.high,
+      projectReference: 'LifeOS',
+      occurredAt: new Date('2026-08-02T09:00:00.000+09:00'),
+      eventId: EntityId.create('edit-form-details-event'),
+    });
     const opened = todayPageReducer(createDetailsState(decision), {
       type: 'decision_edit_form_opened',
     });
     const markup = renderView(opened);
 
+    expect(opened.decisionEditForm).toEqual({
+      title: 'Решение edit-form',
+      reason: 'Причина решения',
+      expectedResult: 'Результат edit-form',
+      sphere: 'Разработка',
+      price: 'Два часа',
+      sacrifices: 'Не отвлекаться',
+      projectReference: 'LifeOS',
+      kind: DECISION_KIND.main,
+      priority: DECISION_PRIORITY.high,
+      expectedVersion: decision.version,
+    });
     expect(markup).toContain('Редактирование решения');
+    expect(markup).toContain(`Версия ${decision.version}`);
+    expect(markup).toContain('Дата решения:');
+    expect(markup).toContain('Перенос выполняется отдельной командой');
+    expect(markup).toContain('Вид решения');
+    expect(markup).toContain('Приоритет');
     expect(markup).toContain('value="Решение edit-form"');
+    expect(markup).toContain('Причина решения');
     expect(markup).toContain('Результат edit-form');
+    expect(markup).toContain('Разработка');
+    expect(markup).toContain('LifeOS');
+    expect(markup).toContain('Два часа');
+    expect(markup).toContain('Не отвлекаться');
     expect(markup).toContain('Ожидаемый результат *');
     expect(
       validateDecisionEditForm({ title: ' ', expectedResult: 'Результат' }, decision.kind),
@@ -919,6 +1235,109 @@ describe('TodayPage view and workflow', () => {
     expect(
       validateDecisionEditForm({ title: 'Решение', expectedResult: '' }, DECISION_KIND.additional),
     ).toBeNull();
+  });
+
+  it('после начала показывает режим уточнения и блокирует плановые поля', () => {
+    const decision = markDecisionInProgress(createPlannedDecision('edit-started', DATE));
+    const opened = todayPageReducer(createDetailsState(decision), {
+      type: 'decision_edit_form_opened',
+    });
+    const markup = renderView(opened);
+
+    expect(markup).toContain('Уточнение решения');
+    expect(markup).toContain('Можно уточнить причину, ожидаемый результат, цену и жертвы');
+    expect(markup).toContain('Формулировка, вид, сфера, приоритет и проект зафиксированы');
+    expect(markup.match(/disabled=""/g)?.length).toBeGreaterThanOrEqual(5);
+    expect(markup).not.toContain('>Перенести<');
+  });
+
+  it('передаёт в прикладную команду все поля и ожидаемую версию', async () => {
+    const decision = createPlannedDecision('edit-complete-input', DATE);
+    const execute = vi.fn().mockResolvedValue(success(decision));
+    const form = {
+      title: 'Обновлённое решение',
+      reason: 'Новая причина',
+      expectedResult: 'Новый результат',
+      sphere: 'Разработка',
+      price: 'Три часа',
+      sacrifices: 'Сосредоточиться',
+      projectReference: 'LifeOS',
+      kind: DECISION_KIND.additional,
+      priority: DECISION_PRIORITY.low,
+      expectedVersion: 7,
+    } as const;
+
+    const result = await updateDecisionDetailsResult({
+      decisionId: decision.id,
+      form,
+      updateDecisionDetails: { execute },
+    });
+
+    expect(result).toEqual({ ok: true, decision });
+    expect(execute).toHaveBeenCalledWith({
+      decisionId: decision.id,
+      expectedVersion: 7,
+      title: 'Обновлённое решение',
+      reason: 'Новая причина',
+      expectedResult: 'Новый результат',
+      sphere: 'Разработка',
+      price: 'Три часа',
+      sacrifices: 'Сосредоточиться',
+      projectReference: 'LifeOS',
+      kind: DECISION_KIND.additional,
+      priority: DECISION_PRIORITY.low,
+    });
+  });
+
+  it('показывает конфликт версии без закрытия формы и сохраняет введённые значения', () => {
+    const decision = createPlannedDecision('edit-conflict', DATE);
+    const opened = todayPageReducer(createDetailsState(decision), {
+      type: 'decision_edit_form_opened',
+    });
+    const changed = todayPageReducer(opened, {
+      type: 'decision_edit_text_changed',
+      field: 'reason',
+      value: 'Несохранённое уточнение',
+    });
+    const failed = todayPageReducer(changed, {
+      type: 'decision_edit_failed',
+      message: decisionEditErrorMessage('decision.edit_conflict'),
+    });
+    const markup = renderView(failed);
+
+    expect(failed.isDecisionEditFormOpen).toBe(true);
+    expect(failed.decisionEditForm.reason).toBe('Несохранённое уточнение');
+    expect(markup).toContain('Решение изменилось в другой вкладке');
+    expect(markup).toContain('Несохранённое уточнение');
+  });
+
+  it('показывает ошибки обязательных полей рядом с соответствующими полями', () => {
+    const decision = createPlannedDecision('edit-field-error', DATE);
+    const state = {
+      ...createDetailsState(decision),
+      isDecisionEditFormOpen: true,
+      decisionEditForm: {
+        title: '',
+        expectedResult: decision.expectedResult!.toString(),
+        kind: DECISION_KIND.main,
+        expectedVersion: decision.version,
+      },
+      decisionEditError: 'Введите название решения',
+    } satisfies TodayPageState;
+    const markup = renderView(state);
+
+    expect(markup).toContain('aria-invalid="true"');
+    expect(markup).toContain('<small class="field-error">Введите название решения</small>');
+    expect(markup).not.toContain('<p class="form-error" role="alert">Введите название решения</p>');
+  });
+
+  it('не предлагает обычное редактирование подтверждённого решения', () => {
+    const decision = confirmDecision(createPlannedDecision('edit-confirmed', DATE));
+    const markup = renderView(createDetailsState(decision));
+
+    expect(markup).not.toContain('>Редактировать<');
+    expect(markup).not.toContain('>Уточнить решение<');
+    expect(markup).not.toContain('Сохранить изменения');
   });
 
   it('сохраняет введённые данные при ошибке редактирования и блокирует повторную отправку', () => {
@@ -1001,6 +1420,59 @@ describe('TodayPage view and workflow', () => {
     expect(execute).toHaveBeenCalledWith({ decisionId: decision.id });
     expect(renderView(succeeded)).toContain('Решение отменено');
     expect(renderView(succeeded)).not.toContain('Редактировать');
+  });
+
+  it('в прошлом активном дне разрешает завершить только существующую незавершённую сессию', () => {
+    const pastDate = DayDate.create('2026-08-01');
+    const decision = createPlannedDecision('session-recovery-decision', pastDate);
+    const action = markLifeActionInProgress(
+      createReadyLifeAction('session-recovery-action', pastDate, { decisionId: decision.id }),
+    );
+    const session = createSession(
+      'session-recovery-running',
+      action.id,
+      new Date('2026-08-01T08:00:00.000+09:00'),
+    );
+    const staleDay = createOpenDayForRecovery('session-recovery-open-day', pastDate);
+    const markup = renderView(
+      createActionDetailsState(decision, action, [session], session),
+      pastDate,
+      createCurrentPlannedDay(),
+      {
+        openDayConflictState: {
+          status: 'ready',
+          snapshot: {
+            hasConflict: false,
+            openDays: [{ day: staleDay, hasUnfinishedSession: true }],
+            unfinishedSession: session,
+            unfinishedLifeAction: action,
+            unfinishedSessionDayId: staleDay.id,
+            hasOrphanedUnfinishedSession: false,
+          },
+        },
+      },
+    );
+
+    expect(markup).toContain('Разрешено лишь завершить незавершённую рабочую сессию');
+    expect(markup).toContain('Текущая сессия');
+    expect(markup).toContain('>Завершить</button>');
+    expect(markup).not.toContain('>Редактировать</button>');
+    expect(markup).not.toContain('>Перенести</button>');
+  });
+
+  it('прошедший день открывает действие только для просмотра', () => {
+    const decision = createPlannedDecision('read-only-action', DATE);
+    const action = createReadyLifeAction('read-only-action', DATE, { decisionId: decision.id });
+    const markup = renderView(
+      createActionDetailsState(decision, action),
+      DayDate.create('2026-08-01'),
+    );
+
+    expect(markup).toContain('Прошедший день доступен только для просмотра');
+    expect(markup).not.toContain('Начать выполнение');
+    expect(markup).not.toContain('>Редактировать<');
+    expect(markup).not.toContain('>Перенести<');
+    expect(markup).not.toContain('Отменить действие');
   });
 
   it('показывает редактирование только для ready-действия и заполняет форму текущими значениями', () => {
@@ -1177,7 +1649,7 @@ describe('TodayPage view and workflow', () => {
     const action = createReadyLifeAction('action-reschedule-error', DATE, {
       decisionId: decision.id,
     });
-    const form = { newPlannedDate: '2026-08-01' };
+    const form = { newPlannedDate: '2026-08-01', reason: 'Нужен дополнительный день' };
     const execute = vi
       .fn()
       .mockResolvedValue(
@@ -1444,6 +1916,23 @@ describe('TodayPage view and workflow', () => {
     );
   });
 
+  it('снимает признак сохранения после запуска с главной карточки без открытой панели', () => {
+    const action = markLifeActionInProgress(createReadyLifeAction('direct-card-start', DATE));
+    const session = createSession('direct-card-session', action.id);
+    const pending = todayPageReducer(INITIAL_TODAY_PAGE_STATE, {
+      type: 'session_operation_started',
+    });
+    const settled = todayPageReducer(pending, {
+      type: 'session_started',
+      lifeAction: action,
+      session,
+    });
+
+    expect(settled.actionDetails.status).toBe('closed');
+    expect(settled.isSessionMutating).toBe(false);
+    expect(settled.sessionError).toBeNull();
+  });
+
   it('blocks start for running and paused sessions that belong to another action', () => {
     const decision = createPlannedDecision('foreign-session', DATE);
     const action = createReadyLifeAction('blocked-action', DATE, { decisionId: decision.id });
@@ -1510,8 +1999,8 @@ describe('TodayPage view and workflow', () => {
     expect(markup).toContain('Сессия завершена');
     expect(markup).toContain('Работа прервана');
     expect(markup).toContain('Продолжить действие позже');
-    expect(markup).toContain('Завершить действие полностью');
-    expect(markup).not.toContain('Фактический результат *');
+    expect(markup).toContain('Подтвердить результат и завершить действие');
+    expect(markup).not.toContain('Фактический результат действия *');
     expect(opened.sessionCompletionForm.completionKind).toBe(SESSION_COMPLETION_KIND.completed);
     expect(opened.sessionCompletionForm.actionChoice).toBe(ACTION_COMPLETION_CHOICE.continueLater);
     expect(validateSessionCompletionForm(opened.sessionCompletionForm)).toBeNull();
@@ -1521,7 +2010,7 @@ describe('TodayPage view and workflow', () => {
     expect(renderView(cancelled)).not.toContain('Завершение работы');
   });
 
-  it('supports interrupted completion and requires an actual result only for the whole action', () => {
+  it('для подтверждения результата требует завершённую сессию, результат сессии и фактический результат действия', () => {
     const decision = createPlannedDecision('completion-fields', DATE);
     const action = markLifeActionInProgress(
       createReadyLifeAction('completion-fields-action', DATE, { decisionId: decision.id }),
@@ -1539,9 +2028,28 @@ describe('TodayPage view and workflow', () => {
       actionChoice: ACTION_COMPLETION_CHOICE.completeAction,
     });
 
-    expect(renderView(state)).toContain('Фактический результат *');
+    const verificationMarkup = renderView(state);
+    expect(verificationMarkup).toContain('Критерий проверки');
+    expect(verificationMarkup).toContain('Фактический результат действия *');
+    expect(verificationMarkup).toContain('Подтвердить результат');
     expect(validateSessionCompletionForm(state.sessionCompletionForm)).toBe(
-      'Укажите фактический результат',
+      'Чтобы подтвердить результат действия, завершите сессию как выполненную',
+    );
+
+    state = todayPageReducer(state, {
+      type: 'session_completion_kind_changed',
+      completionKind: SESSION_COMPLETION_KIND.completed,
+    });
+    expect(validateSessionCompletionForm(state.sessionCompletionForm)).toBe(
+      'Запишите, что сделано за эту сессию',
+    );
+
+    state = todayPageReducer(state, {
+      type: 'session_result_note_changed',
+      resultNote: 'Проверен конкретный результат сессии',
+    });
+    expect(validateSessionCompletionForm(state.sessionCompletionForm)).toBe(
+      'Укажите фактический результат действия',
     );
 
     state = todayPageReducer(state, {
@@ -1549,7 +2057,6 @@ describe('TodayPage view and workflow', () => {
       actualResult: 'Получен проверенный результат',
     });
     expect(validateSessionCompletionForm(state.sessionCompletionForm)).toBeNull();
-    expect(state.sessionCompletionForm.completionKind).toBe(SESSION_COMPLETION_KIND.interrupted);
   });
 
   it('completes only the session and leaves the action in progress', async () => {
@@ -1631,7 +2138,7 @@ describe('TodayPage view and workflow', () => {
     });
     const markup = renderView(state);
 
-    expect(markup).toContain('Действие завершено');
+    expect(markup).toContain('Результат действия подтверждён');
     expect(markup).toContain('Действие выполнено');
     expect(markup).toContain('Завершённых сессий');
     expect(markup).not.toContain('Начать выполнение');
@@ -1695,7 +2202,7 @@ describe('TodayPage view and workflow', () => {
     ).toBeNull();
     expect(failedState.sessionCompletionForm.actualResult).toBe('Результат не должен потеряться');
     expect(failedMarkup).toContain(ACTION_COMPLETION_FAILED_MESSAGE);
-    expect(failedMarkup).toContain('Повторить завершение действия');
+    expect(failedMarkup).toContain('Повторить подтверждение результата');
     expect(failedMarkup).not.toContain('Продолжить новой сессией');
 
     const retry = await retryLifeActionCompletion({
@@ -1785,11 +2292,50 @@ describe('TodayPage view and workflow', () => {
 
     expect(markup).toContain('Сначала завершите или приостановите текущую работу');
     expect(markup).not.toContain('session.unfinished_exists');
+    expect(startSessionErrorMessage('day.not_started')).toBe('Сначала начните текущий день');
+    expect(startSessionErrorMessage('action.not_scheduled_for_current_day')).toBe(
+      'Это действие запланировано на другую дату',
+    );
     expect(pauseSessionErrorMessage('session.not_found')).toBe('Сессия больше недоступна');
     expect(pauseSessionErrorMessage('unknown')).toBe('Не удалось поставить работу на паузу');
     expect(resumeSessionErrorMessage()).toBe('Не удалось продолжить работу');
     expect(completeSessionErrorMessage('session.not_found')).toBe('Сессия больше недоступна');
     expect(completeSessionErrorMessage('unknown')).toBe('Не удалось завершить сессию');
+  });
+
+  it('shows the complete decision overview with creation fields, time, results, and lifecycle', () => {
+    const decision = createDetailedDecision();
+    const action = completeLifeAction(
+      createReadyLifeAction('overview-action', DATE, { decisionId: decision.id }),
+    );
+    const session = completeSession(createSession('overview-session', action.id));
+    const state: TodayPageState = {
+      ...createReadyState([decision]),
+      details: {
+        status: 'ready',
+        decisionId: decision.id,
+        decision,
+        lifeActions: [action],
+        actionOverviews: [{ lifeAction: action, sessions: [session] }],
+      },
+    };
+
+    const markup = renderView(state);
+
+    expect(markup).toContain('Причина стратегического выбора');
+    expect(markup).toContain('Сфера развития');
+    expect(markup).toContain('Высокий');
+    expect(markup).toContain('Цена концентрации');
+    expect(markup).toContain('Отказ от отвлечений');
+    expect(markup).toContain('Проект LifeOS');
+    expect(markup).toContain('Затрачено времени');
+    expect(markup).toContain('5 мин');
+    expect(markup).toContain('Фактические результаты действий');
+    expect(markup).toContain('Действие выполнено');
+    expect(markup).toContain('История состояния');
+    expect(markup).toContain('Решение создано');
+    expect(markup).toContain('Решение запланировано');
+    expect(markup).toContain('Завершено сессий');
   });
 
   it('formats timers as MM:SS and HH:MM:SS', () => {
@@ -1814,6 +2360,32 @@ describe('TodayPage view and workflow', () => {
     }
   });
 });
+
+function createDetailedDecision(): Decision {
+  const decision = Decision.createDraft({
+    id: EntityId.create('detailed-decision'),
+    title: DecisionTitle.create('Подробное решение'),
+    kind: DECISION_KIND.main,
+    reason: 'Причина стратегического выбора',
+    expectedResult: ExpectedResult.create('Проверяемый итог решения'),
+    sphere: 'Сфера развития',
+    price: 'Цена концентрации',
+    sacrifices: 'Отказ от отвлечений',
+    priority: DECISION_PRIORITY.high,
+    projectReference: 'Проект LifeOS',
+    occurredAt: new Date('2026-08-02T07:00:00.000+09:00'),
+    eventId: EntityId.create('detailed-decision-created'),
+  });
+  decision.plan({
+    plannedDate: DATE,
+    kind: DECISION_KIND.main,
+    order: 1,
+    expectedResult: ExpectedResult.create('Проверяемый итог решения'),
+    occurredAt: new Date('2026-08-02T07:30:00.000+09:00'),
+    eventId: EntityId.create('detailed-decision-planned'),
+  });
+  return decision;
+}
 
 function createReadyState(
   decisions: readonly ReturnType<typeof createPlannedDecision>[],
@@ -1898,14 +2470,108 @@ function completeSession(
   return session;
 }
 
-function renderView(state: TodayPageState, selectedDate: DayDate = DATE): string {
+function createOpenDayForRecovery(dayId: string, date: DayDate): Day {
+  return Day.openCurrent({
+    id: EntityId.create(dayId),
+    currentDate: date,
+    occurredAt: new Date(`${date.toString()}T08:00:00.000+09:00`),
+    createdEventId: EntityId.create(`${dayId}-created`),
+    openedEventId: EntityId.create(`${dayId}-opened`),
+  });
+}
+
+function createCurrentPlannedDay(): Day {
+  const day = Day.createCurrentPlanned({
+    id: EntityId.create('today-page-current-day'),
+    currentDate: DATE,
+    occurredAt: new Date('2026-08-02T00:01:00.000+09:00'),
+    createdEventId: EntityId.create('today-page-current-day-created'),
+  });
+  expect(day.status).toBe(DAY_STATUS.planned);
+  return day;
+}
+
+function createCurrentOpenDay(): Day {
+  const day = Day.openCurrent({
+    id: EntityId.create('today-page-open-day'),
+    currentDate: DATE,
+    occurredAt: new Date('2026-08-02T08:00:00.000+09:00'),
+    createdEventId: EntityId.create('today-page-open-created'),
+    openedEventId: EntityId.create('today-page-opened'),
+  });
+  expect(day.status).toBe(DAY_STATUS.open);
+  return day;
+}
+
+function createCompletedCurrentDay(): Day {
+  const day = createCurrentOpenDay();
+  day.complete(
+    new Date('2026-08-02T21:00:00.000+09:00'),
+    EntityId.create('today-page-completed'),
+    'Итог контрольного дня',
+  );
+  expect(day.status).toBe(DAY_STATUS.completed);
+  return day;
+}
+
+function renderView(
+  state: TodayPageState,
+  selectedDate: DayDate = DATE,
+  currentDay: Day = createCurrentPlannedDay(),
+  options: {
+    readonly currentLifeActions?: readonly LifeAction[];
+    readonly unfinishedSession?: ActionSession | null;
+    readonly currentDaySessions?: readonly ActionSession[];
+    readonly recoveryStatus?: 'loading' | 'ready' | 'error';
+    readonly isEveningControlOpen?: boolean;
+    readonly preferredLifeActionId?: string | null;
+    readonly openDayConflictState?: Parameters<typeof TodayPageView>[0]['openDayConflictState'];
+  } = {},
+): string {
+  const todayScreenState = resolveTodayScreenState({
+    day: currentDay,
+    decisionsStatus: state.decisions.status,
+    decisions: state.decisions.status === 'ready' ? state.decisions.decisions : [],
+    recoveryStatus: options.recoveryStatus ?? 'ready',
+    lifeActions: options.currentLifeActions ?? [],
+    unfinishedSession: options.unfinishedSession ?? null,
+    isEveningControlOpen: options.isEveningControlOpen ?? false,
+    preferredLifeActionId: options.preferredLifeActionId ?? null,
+  });
+
   return renderToStaticMarkup(
     TodayPageView({
       currentDate: DATE,
+      todayScreenState,
+      isStartingDay: false,
+      startDayError: null,
+      openDayConflictState: options.openDayConflictState ?? {
+        status: 'ready',
+        snapshot: {
+          hasConflict: false,
+          openDays: [],
+          unfinishedSession: null,
+          unfinishedLifeAction: null,
+          unfinishedSessionDayId: null,
+          hasOrphanedUnfinishedSession: false,
+        },
+      },
+      selectedKeepOpenDayId: null,
+      isResolvingOpenDays: false,
+      openDayRecoveryError: null,
       selectedDate,
       clock: { now: () => new Date('2026-08-02T10:00:00.000+09:00') },
       state,
+      currentDaySessions: options.currentDaySessions ?? [],
+      isCurrentActionMutating: false,
+      currentActionError: null,
       onRetry: NOOP,
+      onRetryTodayRecovery: NOOP,
+      onStartDay: NOOP,
+      onRetryOpenDayConflict: NOOP,
+      onSelectKeepOpenDay: NOOP,
+      onResolveOpenDayConflict: NOOP,
+      onOpenEveningReview: NOOP,
       onOpenPreviousDay: NOOP,
       onOpenNextDay: NOOP,
       onOpenToday: NOOP,
@@ -1932,8 +2598,9 @@ function renderView(state: TodayPageState, selectedDate: DayDate = DATE): string
       onDecisionConfirmationSubmit: NOOP,
       onOpenDecisionEditForm: NOOP,
       onCloseDecisionEditForm: NOOP,
-      onDecisionEditTitleChange: NOOP,
-      onDecisionEditExpectedResultChange: NOOP,
+      onDecisionEditTextChange: NOOP,
+      onDecisionEditKindChange: NOOP,
+      onDecisionEditPriorityChange: NOOP,
       onDecisionEditSubmit: NOOP,
       onOpenDecisionCancellation: NOOP,
       onCloseDecisionCancellation: NOOP,
@@ -1941,8 +2608,16 @@ function renderView(state: TodayPageState, selectedDate: DayDate = DATE): string
       onOpenDecisionRescheduleForm: NOOP,
       onCloseDecisionRescheduleForm: NOOP,
       onDecisionRescheduleDateChange: NOOP,
+      onDecisionRescheduleReasonChange: NOOP,
       onDecisionRescheduleSubmit: NOOP,
       onOpenLifeAction: NOOP,
+      onStartCurrentAction: NOOP,
+      onPauseCurrentAction: NOOP,
+      onResumeCurrentAction: NOOP,
+      onCompleteCurrentActionSession: NOOP,
+      onRescheduleCurrentAction: NOOP,
+      onCancelCurrentAction: NOOP,
+      onSelectCurrentAction: NOOP,
       onBackToDecision: NOOP,
       onRetryLifeAction: NOOP,
       onStartSession: NOOP,

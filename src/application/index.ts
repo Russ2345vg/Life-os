@@ -1,3 +1,10 @@
+export {
+  CompleteCurrentDay,
+  type CompleteCurrentDayInput,
+  type CompleteCurrentDayResult,
+  type EveningLifeActionResolution,
+  type TomorrowDecisionDraft,
+} from './commands/CompleteCurrentDay';
 export { CreateDecisionDraft, type CreateDecisionDraftInput } from './commands/CreateDecisionDraft';
 export {
   CreateDecisionForDate,
@@ -14,10 +21,22 @@ export {
   type CancelDecisionSafelyInput,
 } from './commands/CancelDecisionSafely';
 export {
+  DeleteDecisionSafely,
+  type DeleteDecisionSafelyInput,
+} from './commands/DeleteDecisionSafely';
+export {
+  RestoreDeletedDecision,
+  type RestoreDeletedDecisionInput,
+} from './commands/RestoreDeletedDecision';
+export {
   CompleteActionSession,
   type CompleteActionSessionInput,
 } from './commands/CompleteActionSession';
 export { CompleteLifeAction, type CompleteLifeActionInput } from './commands/CompleteLifeAction';
+export {
+  VerifyLifeActionResult,
+  type VerifyLifeActionResultInput,
+} from './commands/VerifyLifeActionResult';
 export {
   ConfirmDecisionFromActions,
   type ConfirmDecisionFromActionsInput,
@@ -31,6 +50,12 @@ export {
   type CreateLifeActionForDecisionInput,
 } from './commands/CreateLifeActionForDecision';
 export { EnsureCurrentDay } from './commands/EnsureCurrentDay';
+export { StartCurrentDay, type StartCurrentDayResult } from './commands/StartCurrentDay';
+export {
+  ResolveOpenDayConflict,
+  type ResolveOpenDayConflictInput,
+  type ResolveOpenDayConflictResult,
+} from './commands/ResolveOpenDayConflict';
 export { MakeLifeActionReady, type MakeLifeActionReadyInput } from './commands/MakeLifeActionReady';
 export { PlanDecision, type PlanDecisionInput } from './commands/PlanDecision';
 export { PauseActionSession, type PauseActionSessionInput } from './commands/PauseActionSession';
@@ -65,16 +90,128 @@ export {
 } from './commands/StartLifeActionSession';
 export { MainDecisionLimitPolicy } from './decision/MainDecisionLimitPolicy';
 export { GetDecisionsForDate } from './queries/GetDecisionsForDate';
+export { GetDeletedDecisions } from './queries/GetDeletedDecisions';
+export {
+  GetEveningReview,
+  type EveningReviewSnapshot,
+  type EveningRoutineSummary,
+} from './queries/GetEveningReview';
 export { GetDecisionById } from './queries/GetDecisionById';
+export {
+  GetDecisionOverview,
+  type DecisionActionOverview,
+  type DecisionOverviewSnapshot,
+} from './queries/GetDecisionOverview';
 export { GetActionSessionById } from './queries/GetActionSessionById';
 export { GetActionSessionsForLifeAction } from './queries/GetActionSessionsForLifeAction';
 export { GetUnfinishedActionSession } from './queries/GetUnfinishedActionSession';
+export {
+  GetOpenDayConflict,
+  type OpenDayConflictItem,
+  type OpenDayConflictSnapshot,
+} from './queries/GetOpenDayConflict';
+export {
+  ACTION_LIST_GROUP,
+  GetActionListsForDate,
+  type ActionListGroup,
+  type ActionListItem,
+  type ActionListsForDateSnapshot,
+} from './queries/GetActionListsForDate';
 export { GetLifeActionsForDate } from './queries/GetLifeActionsForDate';
 export { GetLifeActionsForDecision } from './queries/GetLifeActionsForDecision';
+export {
+  GetHistoryForDateRange,
+  type GetHistoryForDateRangeInput,
+  type HistoryActionSession,
+  type HistoryDateRangeResult,
+} from './queries/GetHistoryForDateRange';
 export type { ActionSessionRepository } from './ports/ActionSessionRepository';
 export type { Clock } from './ports/Clock';
 export type { CurrentDateProvider } from './ports/CurrentDateProvider';
 export type { DayRepository } from './ports/DayRepository';
+export type {
+  CommitDayCompletionInput,
+  DayCompletionLifeActionChange,
+  DayCompletionUnitOfWork,
+} from './ports/DayCompletionUnitOfWork';
 export type { DecisionRepository } from './ports/DecisionRepository';
+export type {
+  CommitDecisionRescheduleInput,
+  DecisionRescheduleLifeActionChange,
+  DecisionRescheduleUnitOfWork,
+} from './ports/DecisionRescheduleUnitOfWork';
 export type { IdGenerator } from './ports/IdGenerator';
 export type { LifeActionRepository } from './ports/LifeActionRepository';
+export type { OpenDayConflictReader } from './ports/OpenDayConflictReader';
+export type { RoutineBlockRepository } from './ports/RoutineBlockRepository';
+export type { RoutineOccurrenceOverrideRepository } from './ports/RoutineOccurrenceOverrideRepository';
+export type {
+  RoutineOccurrenceExecutionRepository,
+  StartRoutineExecutionResult,
+} from './ports/RoutineOccurrenceExecutionRepository';
+export { CreateRoutineBlock, type CreateRoutineBlockInput } from './commands/CreateRoutineBlock';
+export { UpdateRoutineBlock, type UpdateRoutineBlockInput } from './commands/UpdateRoutineBlock';
+export { DeleteRoutineBlock, type DeleteRoutineBlockInput } from './commands/DeleteRoutineBlock';
+export { GetRoutineBlocksForDate } from './queries/GetRoutineBlocksForDate';
+export {
+  GetRoutinePlanFactForDate,
+  resolveRoutinePlanFactPresentation,
+  type RoutinePlanFactPresentation,
+  type RoutineTemporalState,
+} from './queries/GetRoutinePlanFactForDate';
+export { GetRoutineExecutionForOccurrence } from './queries/GetRoutineExecutionForOccurrence';
+export {
+  GetRunningRoutineOccurrence,
+  type RunningRoutineOccurrence,
+} from './queries/GetRunningRoutineOccurrence';
+export { StartRoutineOccurrence } from './commands/StartRoutineOccurrence';
+export {
+  CompleteRoutineOccurrence,
+  type CompleteRoutineOccurrenceInput,
+} from './commands/CompleteRoutineOccurrence';
+export {
+  AbandonRoutineOccurrence,
+  type AbandonRoutineOccurrenceInput,
+} from './commands/AbandonRoutineOccurrence';
+export type {
+  RoutineExecutionCommandDependencies,
+  RoutineExecutionOccurrenceInput,
+} from './commands/routineExecutionCommandSupport';
+export {
+  DelayRoutineOccurrence,
+  type DelayRoutineOccurrenceInput,
+} from './commands/DelayRoutineOccurrence';
+export { SkipRoutineOccurrence } from './commands/SkipRoutineOccurrence';
+export {
+  RescheduleRoutineOccurrence,
+  type RescheduleRoutineOccurrenceInput,
+} from './commands/RescheduleRoutineOccurrence';
+export {
+  ShortenRoutineOccurrence,
+  type ShortenRoutineOccurrenceInput,
+} from './commands/ShortenRoutineOccurrence';
+export {
+  ReplaceRoutineOccurrenceAction,
+  type ReplaceRoutineOccurrenceActionInput,
+} from './commands/ReplaceRoutineOccurrenceAction';
+export {
+  ClearRoutineOccurrenceOverride,
+  type ClearRoutineOccurrenceOverrideInput,
+} from './commands/ClearRoutineOccurrenceOverride';
+export type {
+  RoutineOccurrenceCommandDependencies,
+  RoutineOccurrenceCommandInput,
+} from './commands/routineOccurrenceCommandSupport';
+export {
+  GetRoutineActionOptions,
+  type RoutineActionOption,
+} from './queries/GetRoutineActionOptions';
+export {
+  GetRoutineActionDetails,
+  type RoutineActionDetails,
+} from './queries/GetRoutineActionDetails';
+export type {
+  CommitOpenDayRecoveryInput,
+  OpenDayRecoveryUnitOfWork,
+  OpenDayVersionExpectation,
+} from './ports/OpenDayRecoveryUnitOfWork';

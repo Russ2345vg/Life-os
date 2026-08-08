@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { Clock, DecisionRepository } from '../../application';
 import {
+  Day,
   DayDate,
   DECISION_KIND,
+  DECISION_PRIORITY,
   DECISION_STATUS,
   type Decision,
   type EntityId,
 } from '../../domain';
-import { InMemoryDecisionRepository } from '../../infrastructure';
+import { InMemoryDayRepository, InMemoryDecisionRepository } from '../../infrastructure';
 import type { Result } from '../../shared/result/Result';
 import {
   cancelDecision,
@@ -15,7 +17,7 @@ import {
   createPlannedDecision,
   markDecisionInProgress,
 } from '../../test/helpers/DecisionTestFactory';
-import { FakeIdGenerator } from '../../test/helpers/Fakes';
+import { FakeCurrentDateProvider, FakeIdGenerator } from '../../test/helpers/Fakes';
 import { MainDecisionLimitPolicy } from '../decision/MainDecisionLimitPolicy';
 import { CreateDecisionForDate } from './CreateDecisionForDate';
 
@@ -182,6 +184,80 @@ describe('CreateDecisionForDate', () => {
     expectFailureCode(result, 'decision_title.invalid');
     expect(context.repository.saveCount).toBe(0);
   });
+
+  it('сохраняет полные сведения этапа 11.1 в нормализованном виде', async () => {
+    const context = createContext();
+
+    const decision = unwrap(
+      await context.command.execute({
+        title: '  Выпустить этап 11.1  ',
+        kind: DECISION_KIND.main,
+        plannedDate: DATE,
+        expectedResult: '  Форма создания решения проверена  ',
+        reason: '  Нужен полный раздел решений  ',
+        sphere: '  Разработка  ',
+        price: '  Два часа сосредоточенной работы  ',
+        sacrifices: '  Отложить необязательные улучшения  ',
+        priority: DECISION_PRIORITY.high,
+        projectReference: '  LifeOS  ',
+      }),
+    );
+
+    expect(decision.title.toString()).toBe('Выпустить этап 11.1');
+    expect(decision.expectedResult?.toString()).toBe('Форма создания решения проверена');
+    expect(decision.reason).toBe('Нужен полный раздел решений');
+    expect(decision.sphere).toBe('Разработка');
+    expect(decision.price).toBe('Два часа сосредоточенной работы');
+    expect(decision.sacrifices).toBe('Отложить необязательные улучшения');
+    expect(decision.priority).toBe(DECISION_PRIORITY.high);
+    expect(decision.projectReference).toBe('LifeOS');
+  });
+
+  it('отклоняет создание на прошедшую дату до чтения решений и генерации идентификаторов', async () => {
+    const context = createContext();
+    context.currentDateProvider.setCurrentDate(DayDate.create('2026-08-03'));
+
+    const result = await context.command.execute(mainInput('Прошедшее решение'));
+
+    expectFailureCode(result, 'decision.planned_date_in_past');
+    expect(context.repository.saveCount).toBe(0);
+    expect(context.idGenerator.generatedCount).toBe(0);
+    expect(context.clock.callCount).toBe(0);
+  });
+
+  it('не изменяет завершённый день', async () => {
+    const context = createContext();
+    const day = Day.openCurrent({
+      id: context.idGenerator.generate(),
+      currentDate: DATE,
+      occurredAt: NOW,
+      createdEventId: context.idGenerator.generate(),
+      openedEventId: context.idGenerator.generate(),
+    });
+    day.complete(NOW, context.idGenerator.generate(), 'День закрыт');
+    await context.dayRepository.save(day);
+    const generatedBeforeCommand = context.idGenerator.generatedCount;
+
+    const result = await context.command.execute(mainInput('Позднее решение'));
+
+    expectFailureCode(result, 'decision.completed_day_is_immutable');
+    expect(context.repository.saveCount).toBe(0);
+    expect(context.idGenerator.generatedCount).toBe(generatedBeforeCommand);
+    expect(context.clock.callCount).toBe(0);
+  });
+
+  it('отклоняет повтор того же активного решения на одной дате', async () => {
+    const context = createContext();
+    await context.repository.save(createPlannedDecision('duplicate', DATE, DECISION_KIND.main, 1));
+    const saveCount = context.repository.saveCount;
+
+    const result = await context.command.execute(mainInput('Решение duplicate'));
+
+    expectFailureCode(result, 'decision.duplicate_for_date');
+    expect(context.repository.saveCount).toBe(saveCount);
+    expect(context.idGenerator.generatedCount).toBe(0);
+    expect(context.clock.callCount).toBe(0);
+  });
 });
 
 class CountingClock implements Clock {
@@ -221,18 +297,26 @@ class CountingDecisionRepository implements DecisionRepository {
 
 function createContext(): {
   readonly repository: CountingDecisionRepository;
+  readonly dayRepository: InMemoryDayRepository;
+  readonly currentDateProvider: FakeCurrentDateProvider;
   readonly command: CreateDecisionForDate;
   readonly clock: CountingClock;
   readonly idGenerator: FakeIdGenerator;
 } {
   const repository = new CountingDecisionRepository();
+  const dayRepository = new InMemoryDayRepository();
+  const currentDateProvider = new FakeCurrentDateProvider(DATE);
   const clock = new CountingClock();
   const idGenerator = new FakeIdGenerator('create-for-date');
   return {
     repository,
+    dayRepository,
+    currentDateProvider,
     command: new CreateDecisionForDate(
       repository,
+      dayRepository,
       new MainDecisionLimitPolicy(repository),
+      currentDateProvider,
       clock,
       idGenerator,
     ),

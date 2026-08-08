@@ -15,6 +15,13 @@ interface PlanDayInput {
   readonly createdEventId: EntityId;
 }
 
+interface CreateCurrentPlannedDayInput {
+  readonly id: EntityId;
+  readonly currentDate: DayDate;
+  readonly occurredAt: Date;
+  readonly createdEventId: EntityId;
+}
+
 interface CreateCurrentDayInput {
   readonly id: EntityId;
   readonly currentDate: DayDate;
@@ -89,6 +96,26 @@ export class Day extends Entity {
     return new Day(
       input.id,
       input.date,
+      DAY_STATUS.planned,
+      input.occurredAt,
+      input.occurredAt,
+      null,
+      [createdEvent],
+    );
+  }
+
+  public static createCurrentPlanned(input: CreateCurrentPlannedDayInput): Day {
+    const createdEvent = new DayCreated(
+      input.createdEventId,
+      input.id,
+      input.currentDate,
+      DAY_STATUS.planned,
+      input.occurredAt,
+    );
+
+    return new Day(
+      input.id,
+      input.currentDate,
       DAY_STATUS.planned,
       input.occurredAt,
       input.occurredAt,

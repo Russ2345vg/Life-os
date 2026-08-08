@@ -7,3 +7,5 @@ export { DecisionPlanned } from './DecisionPlanned';
 export { DecisionRescheduled } from './DecisionRescheduled';
 export { DecisionRestored } from './DecisionRestored';
 export { DecisionStarted } from './DecisionStarted';
+export { DecisionSoftDeleted } from './DecisionSoftDeleted';
+export { DecisionSoftDeleteRestored } from './DecisionSoftDeleteRestored';

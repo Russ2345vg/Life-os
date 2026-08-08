@@ -10,7 +10,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "test:alpha": "vitest run src/test/alpha/AlphaCycleGate.test.ts"
   },
   "dependencies": {
     "react": "19.2.8",

@@ -1,10 +1,12 @@
 import {
   ActualResultSummary,
+  DECISION_PRIORITY,
   Decision,
   DecisionCancelReason,
   DecisionTitle,
   ExpectedResult,
   type DecisionKind,
+  type DecisionPriority,
   type DecisionStatus,
 } from '../../../domain/decision';
 import type { DecisionRecord } from '../records/DecisionRecord';
@@ -13,12 +15,17 @@ import {
   createNullableValueObject,
   createValueObject,
   readEntityId,
+  readDayDate,
   readIsoDate,
   readNullableDayDate,
   readNullableIsoDate,
+  readOptionalNullableIsoDate,
   readNullableNumber,
   readNullableString,
   readNumber,
+  readOptionalNullableString,
+  readOptionalString,
+  readRecordArray,
   readString,
   readStringArray,
   toNullableIsoDate,
@@ -31,6 +38,11 @@ export class DecisionRecordMapper {
       id: entity.id.toString(),
       title: entity.title.toString(),
       reason: entity.reason,
+      sphere: entity.sphere,
+      price: entity.price,
+      sacrifices: entity.sacrifices,
+      priority: entity.priority,
+      projectReference: entity.projectReference,
       expectedResult: entity.expectedResult?.toString() ?? null,
       actualResultSummary: entity.actualResultSummary?.toString() ?? null,
       status: entity.status,
@@ -44,8 +56,18 @@ export class DecisionRecordMapper {
       cancelledAt: toNullableIsoDate(entity.cancelledAt),
       cancelReason: entity.cancelReason?.toString() ?? null,
       archivedAt: toNullableIsoDate(entity.archivedAt),
+      deletedAt: toNullableIsoDate(entity.deletedAt),
+      lastDeletedAt: toNullableIsoDate(entity.lastDeletedAt),
+      restoredFromTrashAt: toNullableIsoDate(entity.restoredFromTrashAt),
       evidenceIds: entity.evidenceIds.map(String),
       rescheduleCount: entity.rescheduleCount,
+      rescheduleHistory: entity.rescheduleHistory.map((entry) => ({
+        previousPlannedDate: entry.previousPlannedDate.toString(),
+        newPlannedDate: entry.newPlannedDate.toString(),
+        reason: entry.reason,
+        occurredAt: entry.occurredAt.toISOString(),
+        sequence: entry.sequence,
+      })),
       version: entity.version,
     };
   }
@@ -56,6 +78,15 @@ export class DecisionRecordMapper {
       id: readEntityId(record, 'id'),
       title: createValueObject(record, 'title', DecisionTitle.create),
       reason: readNullableString(record, 'reason'),
+      sphere: readOptionalNullableString(record, 'sphere'),
+      price: readOptionalNullableString(record, 'price'),
+      sacrifices: readOptionalNullableString(record, 'sacrifices'),
+      priority: readOptionalString(
+        record,
+        'priority',
+        DECISION_PRIORITY.normal,
+      ) as DecisionPriority,
+      projectReference: readOptionalNullableString(record, 'projectReference'),
       expectedResult: createNullableValueObject(record, 'expectedResult', ExpectedResult.create),
       actualResultSummary: createNullableValueObject(
         record,
@@ -73,11 +104,31 @@ export class DecisionRecordMapper {
       cancelledAt: readNullableIsoDate(record, 'cancelledAt'),
       cancelReason: createNullableValueObject(record, 'cancelReason', DecisionCancelReason.create),
       archivedAt: readNullableIsoDate(record, 'archivedAt'),
+      deletedAt: readOptionalNullableIsoDate(record, 'deletedAt'),
+      lastDeletedAt: readOptionalNullableIsoDate(record, 'lastDeletedAt'),
+      restoredFromTrashAt: readOptionalNullableIsoDate(record, 'restoredFromTrashAt'),
       evidenceIds: readStringArray(record, 'evidenceIds').map((value) =>
         readEntityId({ evidenceId: value }, 'evidenceId'),
       ),
       rescheduleCount: readNumber(record, 'rescheduleCount'),
+      rescheduleHistory: readRescheduleHistory(record),
       version: readNumber(record, 'version'),
     });
   }
+}
+
+function readRescheduleHistory(record: DecisionRecord) {
+  if (record.rescheduleHistory === undefined) {
+    return [];
+  }
+
+  return readRecordArray({ rescheduleHistory: record.rescheduleHistory }, 'rescheduleHistory').map(
+    (entry) => ({
+      previousPlannedDate: readDayDate(entry, 'previousPlannedDate'),
+      newPlannedDate: readDayDate(entry, 'newPlannedDate'),
+      reason: readString(entry, 'reason'),
+      occurredAt: readIsoDate(entry, 'occurredAt'),
+      sequence: readNumber(entry, 'sequence'),
+    }),
+  );
 }

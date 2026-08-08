@@ -20,6 +20,10 @@ export class InMemoryLifeActionRepository implements LifeActionRepository {
     );
   }
 
+  public async findAll(): Promise<readonly LifeAction[]> {
+    return [...this.#lifeActionsById.values()];
+  }
+
   public async save(lifeAction: LifeAction): Promise<void> {
     this.#lifeActionsById.set(lifeAction.id.toString(), lifeAction);
   }

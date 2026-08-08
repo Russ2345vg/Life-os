@@ -1,5 +1,5 @@
 import type { DayRepository } from '../../application';
-import type { Day, DayDate } from '../../domain';
+import { DAY_STATUS, type Day, type DayDate } from '../../domain';
 import { DomainError } from '../../shared/errors/DomainError';
 
 export class InMemoryDayRepository implements DayRepository {
@@ -7,6 +7,19 @@ export class InMemoryDayRepository implements DayRepository {
 
   public async findByDate(date: DayDate): Promise<Day | null> {
     return this.#daysByDate.get(date.toString()) ?? null;
+  }
+
+  public async findOpen(): Promise<Day | null> {
+    const openDays = [...this.#daysByDate.values()].filter((day) => day.status === DAY_STATUS.open);
+
+    if (openDays.length > 1) {
+      throw new DomainError(
+        'day.multiple_open_detected',
+        'Обнаружено несколько одновременно открытых дней.',
+      );
+    }
+
+    return openDays[0] ?? null;
   }
 
   public async save(day: Day): Promise<void> {

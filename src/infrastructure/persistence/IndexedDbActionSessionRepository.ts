@@ -41,6 +41,18 @@ export class IndexedDbActionSessionRepository implements ActionSessionRepository
     return mapRecords(storedRecords);
   }
 
+  public async findAll(): Promise<readonly ActionSession[]> {
+    const database = await this.#indexedDb.open();
+    const storedRecords = await executeIndexedDbRequest<unknown[]>(
+      database,
+      LIFE_OS_STORE.actionSessions,
+      'readonly',
+      (store) => store.getAll(),
+    );
+
+    return mapRecords(storedRecords);
+  }
+
   public async findUnfinished(): Promise<ActionSession | null> {
     const database = await this.#indexedDb.open();
     const storedRecords = await executeIndexedDbRequest<unknown[]>(

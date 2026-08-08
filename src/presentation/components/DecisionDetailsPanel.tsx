@@ -1,9 +1,14 @@
 import type { ChangeEvent, FormEvent } from 'react';
+import type { DecisionActionOverview } from '../../application';
 import {
+  ACTION_SESSION_STATUS,
   DECISION_KIND,
+  DECISION_PRIORITY,
   DECISION_STATUS,
   LIFE_ACTION_STATUS,
   type DayDate,
+  type DecisionKind,
+  type DecisionPriority,
   type DecisionStatus,
   type LifeAction,
   type LifeActionStatus,
@@ -11,15 +16,24 @@ import {
 import type {
   DecisionDetailsState,
   DecisionEditFormState,
+  DecisionEditTextField,
   DecisionRescheduleFormState,
   LifeActionFormState,
 } from '../pages/TodayPageState';
 import { isLifeActionActivationKey } from '../pages/TodayPageState';
+import {
+  createDecisionOverviewPresentation,
+  decisionOutcomeLabel,
+  type DecisionActionPresentation,
+} from '../decisionOverviewPresentation';
+import { decisionPriorityLabel } from '../entityPresentation';
+import { formatHistoryDuration } from '../historyPresentation';
 
 interface DecisionDetailsPanelProps {
   readonly details: DecisionDetailsState;
   readonly currentDate: DayDate;
   readonly readOnly: boolean;
+  readonly now: Date;
   readonly isFormOpen: boolean;
   readonly isSaving: boolean;
   readonly form: LifeActionFormState;
@@ -53,8 +67,9 @@ interface DecisionDetailsPanelProps {
   readonly onConfirmationSubmit: (event: FormEvent<HTMLFormElement>) => void;
   readonly onOpenEditForm: () => void;
   readonly onCloseEditForm: () => void;
-  readonly onEditTitleChange: (title: string) => void;
-  readonly onEditExpectedResultChange: (expectedResult: string) => void;
+  readonly onEditTextChange: (field: DecisionEditTextField, value: string) => void;
+  readonly onEditKindChange: (kind: DecisionKind) => void;
+  readonly onEditPriorityChange: (priority: DecisionPriority) => void;
   readonly onEditSubmit: (event: FormEvent<HTMLFormElement>) => void;
   readonly onOpenCancellation: () => void;
   readonly onCloseCancellation: () => void;
@@ -62,6 +77,7 @@ interface DecisionDetailsPanelProps {
   readonly onOpenRescheduleForm: () => void;
   readonly onCloseRescheduleForm: () => void;
   readonly onRescheduleDateChange: (newPlannedDate: string) => void;
+  readonly onRescheduleReasonChange: (reason: string) => void;
   readonly onRescheduleSubmit: (event: FormEvent<HTMLFormElement>) => void;
   readonly onOpenLifeAction: (lifeAction: LifeAction) => void;
 }
@@ -70,6 +86,7 @@ export function DecisionDetailsPanel({
   details,
   currentDate,
   readOnly,
+  now,
   isFormOpen,
   isSaving,
   form,
@@ -103,8 +120,9 @@ export function DecisionDetailsPanel({
   onConfirmationSubmit,
   onOpenEditForm,
   onCloseEditForm,
-  onEditTitleChange,
-  onEditExpectedResultChange,
+  onEditTextChange,
+  onEditKindChange,
+  onEditPriorityChange,
   onEditSubmit,
   onOpenCancellation,
   onCloseCancellation,
@@ -112,6 +130,7 @@ export function DecisionDetailsPanel({
   onOpenRescheduleForm,
   onCloseRescheduleForm,
   onRescheduleDateChange,
+  onRescheduleReasonChange,
   onRescheduleSubmit,
   onOpenLifeAction,
 }: DecisionDetailsPanelProps) {
@@ -120,6 +139,17 @@ export function DecisionDetailsPanel({
   }
 
   const lifeActions = details.status === 'ready' ? details.lifeActions : [];
+  const actionOverviews: readonly DecisionActionOverview[] =
+    details.status === 'ready'
+      ? (details.actionOverviews ?? lifeActions.map((lifeAction) => ({ lifeAction, sessions: [] })))
+      : [];
+  const overview =
+    details.status === 'ready'
+      ? createDecisionOverviewPresentation(
+          { decision: details.decision, actions: actionOverviews },
+          now,
+        )
+      : null;
   const completedActions = lifeActions.filter(
     (lifeAction) => lifeAction.status === LIFE_ACTION_STATUS.completed,
   );
@@ -132,13 +162,20 @@ export function DecisionDetailsPanel({
   const cancelledActions = lifeActions.filter(
     (lifeAction) => lifeAction.status === LIFE_ACTION_STATUS.cancelled,
   );
-  const readyActions = lifeActions.filter(
-    (lifeAction) => lifeAction.status === LIFE_ACTION_STATUS.ready,
-  );
-  const rescheduleBlockingActions = lifeActions.filter(
+  const movableActions = lifeActions.filter(
     (lifeAction) =>
-      lifeAction.status === LIFE_ACTION_STATUS.draft ||
+      lifeAction.status === LIFE_ACTION_STATUS.ready ||
       lifeAction.status === LIFE_ACTION_STATUS.inProgress,
+  );
+  const draftActions = lifeActions.filter(
+    (lifeAction) => lifeAction.status === LIFE_ACTION_STATUS.draft,
+  );
+  const hasBlockingSession = actionOverviews.some((entry) =>
+    entry.sessions.some(
+      (session) =>
+        session.status === ACTION_SESSION_STATUS.running ||
+        session.status === ACTION_SESSION_STATUS.paused,
+    ),
   );
 
   return (
@@ -184,39 +221,104 @@ export function DecisionDetailsPanel({
               <h2 id="decision-details-title">{details.decision.title.toString()}</h2>
             </header>
 
-            <dl className="decision-details-list">
-              <div>
-                <dt>Ожидаемый результат</dt>
-                <dd>{details.decision.expectedResult?.toString() ?? 'Не указан'}</dd>
-              </div>
-              <div>
-                <dt>Статус</dt>
-                <dd>{decisionStatusLabel(details.decision.status)}</dd>
-              </div>
-              <div>
-                <dt>Запланировано</dt>
-                <dd>{formatPlannedDate(details.decision.plannedDate)}</dd>
-              </div>
-              {details.decision.kind === DECISION_KIND.main ? (
-                <div>
-                  <dt>Позиция</dt>
-                  <dd>{details.decision.order ?? 'Не указана'}</dd>
-                </div>
-              ) : null}
-            </dl>
+            {details.decision.isDeleted() ? (
+              <section className="decision-deleted-banner" role="status">
+                <strong>Решение находится в корзине</strong>
+                <span>Удалено: {formatDateTime(details.decision.deletedAt!)}</span>
+                <p>Связанные действия, сессии и результаты сохранены без изменений.</p>
+              </section>
+            ) : null}
+
+            {overview === null ? null : (
+              <section className="decision-overview" aria-label="Сводка решения">
+                <dl className="decision-overview-metrics">
+                  <div>
+                    <dt>Связанных действий</dt>
+                    <dd>{overview.actionCount}</dd>
+                  </div>
+                  <div>
+                    <dt>Завершено действий</dt>
+                    <dd>{overview.completedActionCount}</dd>
+                  </div>
+                  <div>
+                    <dt>Рабочих сессий</dt>
+                    <dd>{overview.sessionCount}</dd>
+                  </div>
+                  <div>
+                    <dt>Затрачено времени</dt>
+                    <dd>{formatHistoryDuration(overview.workedDurationMs)}</dd>
+                  </div>
+                </dl>
+
+                <dl className="decision-details-list">
+                  <div>
+                    <dt>Статус</dt>
+                    <dd>{decisionStatusLabel(details.decision.status)}</dd>
+                  </div>
+                  <div>
+                    <dt>Дата решения</dt>
+                    <dd>{formatPlannedDate(details.decision.plannedDate)}</dd>
+                  </div>
+                  <div>
+                    <dt>Причина</dt>
+                    <dd>{details.decision.reason ?? 'Не указана'}</dd>
+                  </div>
+                  <div>
+                    <dt>Ожидаемый результат</dt>
+                    <dd>{details.decision.expectedResult?.toString() ?? 'Не указан'}</dd>
+                  </div>
+                  <div>
+                    <dt>Сфера</dt>
+                    <dd>{details.decision.sphere ?? 'Не указана'}</dd>
+                  </div>
+                  <div>
+                    <dt>Приоритет</dt>
+                    <dd>{decisionPriorityLabel(details.decision.priority)}</dd>
+                  </div>
+                  <div>
+                    <dt>Цена решения</dt>
+                    <dd>{details.decision.price ?? 'Не указана'}</dd>
+                  </div>
+                  <div>
+                    <dt>Жертвы</dt>
+                    <dd>{details.decision.sacrifices ?? 'Не указаны'}</dd>
+                  </div>
+                  <div>
+                    <dt>Связь с проектом</dt>
+                    <dd>{details.decision.projectReference ?? 'Не указана'}</dd>
+                  </div>
+                  <div>
+                    <dt>Создано</dt>
+                    <dd>{formatDateTime(details.decision.createdAt)}</dd>
+                  </div>
+                  {details.decision.kind === DECISION_KIND.main ? (
+                    <div>
+                      <dt>Позиция среди главных</dt>
+                      <dd>{details.decision.order ?? 'Не указана'}</dd>
+                    </div>
+                  ) : null}
+                  <div>
+                    <dt>Количество переносов</dt>
+                    <dd>{details.decision.rescheduleCount}</dd>
+                  </div>
+                </dl>
+              </section>
+            )}
 
             {!details.decision.isArchived() &&
+            !details.decision.isDeleted() &&
             (details.decision.status === DECISION_STATUS.planned ||
               details.decision.status === DECISION_STATUS.inProgress) ? (
               <section className="decision-management" aria-label="Управление решением">
                 {isEditFormOpen ? (
                   <DecisionEditForm
+                    decision={details.decision}
                     form={editForm}
                     isSaving={isEditing}
                     error={editError}
-                    isExpectedResultRequired={details.decision.kind === DECISION_KIND.main}
-                    onTitleChange={onEditTitleChange}
-                    onExpectedResultChange={onEditExpectedResultChange}
+                    onTextChange={onEditTextChange}
+                    onKindChange={onEditKindChange}
+                    onPriorityChange={onEditPriorityChange}
                     onClose={onCloseEditForm}
                     onSubmit={onEditSubmit}
                   />
@@ -236,14 +338,16 @@ export function DecisionDetailsPanel({
                     decision={details.decision}
                     currentDate={currentDate}
                     lifeActions={lifeActions}
-                    readyCount={readyActions.length}
+                    movableCount={movableActions.length}
+                    draftCount={draftActions.length}
                     completedCount={completedActions.length}
                     cancelledCount={cancelledActions.length}
-                    hasBlockingActions={rescheduleBlockingActions.length > 0}
+                    hasBlockingSession={hasBlockingSession}
                     form={rescheduleForm}
                     isSaving={isRescheduling}
                     error={rescheduleError}
                     onDateChange={onRescheduleDateChange}
+                    onReasonChange={onRescheduleReasonChange}
                     onClose={onCloseRescheduleForm}
                     onSubmit={onRescheduleSubmit}
                   />
@@ -251,25 +355,22 @@ export function DecisionDetailsPanel({
 
                 {!isEditFormOpen && !isCancellationOpen && !isRescheduleFormOpen ? (
                   <div className="decision-management-actions">
-                    {details.decision.status === DECISION_STATUS.planned ? (
-                      <>
-                        {readOnly ? null : (
-                          <button
-                            className="secondary-button"
-                            type="button"
-                            onClick={onOpenEditForm}
-                          >
-                            Редактировать
-                          </button>
-                        )}
-                        <button
-                          className="secondary-button"
-                          type="button"
-                          onClick={onOpenRescheduleForm}
-                        >
-                          Перенести
-                        </button>
-                      </>
+                    {readOnly ? null : (
+                      <button className="secondary-button" type="button" onClick={onOpenEditForm}>
+                        {details.decision.status === DECISION_STATUS.inProgress
+                          ? 'Уточнить решение'
+                          : 'Редактировать'}
+                      </button>
+                    )}
+                    {details.decision.status === DECISION_STATUS.planned ||
+                    details.decision.status === DECISION_STATUS.inProgress ? (
+                      <button
+                        className="secondary-button"
+                        type="button"
+                        onClick={onOpenRescheduleForm}
+                      >
+                        Перенести
+                      </button>
                     ) : null}
                     <button
                       className="secondary-button decision-cancel-button"
@@ -297,6 +398,27 @@ export function DecisionDetailsPanel({
                 </div>
               </div>
 
+              <div className="decision-outcome-summary" role="status">
+                <span>Зафиксированный итог</span>
+                <strong>{decisionOutcomeLabel(details.decision)}</strong>
+              </div>
+
+              {completedActions.some((lifeAction) => lifeAction.actualResult !== null) ? (
+                <div className="decision-action-results">
+                  <h4>Фактические результаты действий</h4>
+                  <ul>
+                    {completedActions.map((lifeAction) =>
+                      lifeAction.actualResult === null ? null : (
+                        <li key={lifeAction.id.toString()}>
+                          <strong>{lifeAction.title.toString()}</strong>
+                          <span>{lifeAction.actualResult.toString()}</span>
+                        </li>
+                      ),
+                    )}
+                  </ul>
+                </div>
+              ) : null}
+
               <dl className="decision-action-totals">
                 <div>
                   <dt>Завершено</dt>
@@ -321,15 +443,28 @@ export function DecisionDetailsPanel({
 
               {(details.decision.status === DECISION_STATUS.planned ||
                 details.decision.status === DECISION_STATUS.inProgress) &&
-              !details.decision.isArchived() ? (
+              !details.decision.isArchived() &&
+              !details.decision.isDeleted() ? (
                 <>
                   {unfinishedActions.length > 0 ? (
-                    <p className="decision-confirmation-note">Сначала завершите текущие действия</p>
+                    <p className="decision-confirmation-note">
+                      Решение остаётся активным: завершите все текущие действия, прежде чем
+                      подтверждать общий результат.
+                    </p>
                   ) : completedActions.length === 0 ? (
                     <p className="decision-confirmation-note">
-                      Чтобы подтвердить решение, завершите хотя бы одно действие
+                      Решение остаётся активным: для подтверждения нужен хотя бы один проверенный
+                      результат завершённого действия.
                     </p>
-                  ) : null}
+                  ) : (
+                    <p
+                      className="decision-confirmation-note decision-confirmation-ready"
+                      role="status"
+                    >
+                      Все связанные действия обработаны. Результаты готовы стать подтверждением
+                      решения после вашей итоговой проверки.
+                    </p>
+                  )}
 
                   {isConfirmationFormOpen ? (
                     <DecisionConfirmationForm
@@ -347,12 +482,65 @@ export function DecisionDetailsPanel({
                       disabled={completedActions.length === 0 || unfinishedActions.length > 0}
                       onClick={onOpenConfirmationForm}
                     >
-                      Подтвердить результат решения
+                      Подтвердить решение результатами действий
                     </button>
                   )}
                 </>
               ) : null}
             </section>
+
+            {overview === null ? null : (
+              <section
+                className="decision-lifecycle-section"
+                aria-labelledby="decision-lifecycle-title"
+              >
+                <div className="section-heading">
+                  <div>
+                    <p className="section-kicker">Хронология</p>
+                    <h3 id="decision-lifecycle-title">История состояния</h3>
+                  </div>
+                </div>
+                <ol className="decision-lifecycle-list">
+                  {overview.lifecycle.map((entry) => (
+                    <li key={entry.key}>
+                      <span className="decision-lifecycle-marker" aria-hidden="true" />
+                      <div>
+                        <strong>{entry.label}</strong>
+                        <time dateTime={entry.occurredAt.toISOString()}>
+                          {formatDateTime(entry.occurredAt)}
+                        </time>
+                        {entry.detail === null ? null : <p>{entry.detail}</p>}
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+                {details.decision.rescheduleHistory.length > 0 ? (
+                  <div className="decision-reschedule-history">
+                    <h4>История переносов</h4>
+                    <ol>
+                      {details.decision.rescheduleHistory.map((entry) => (
+                        <li key={`${entry.sequence}-${entry.occurredAt.toISOString()}`}>
+                          <strong>Перенос №{entry.sequence}</strong>
+                          <span>
+                            {formatPlannedDate(entry.previousPlannedDate)} →{' '}
+                            {formatPlannedDate(entry.newPlannedDate)}
+                          </span>
+                          <p>{entry.reason}</p>
+                          <time dateTime={entry.occurredAt.toISOString()}>
+                            {formatDateTime(entry.occurredAt)}
+                          </time>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                ) : details.decision.rescheduleCount > 0 ? (
+                  <p className="decision-lifecycle-note">
+                    Переносов решения: {details.decision.rescheduleCount}. Старые записи были
+                    созданы до появления подробной истории причин.
+                  </p>
+                ) : null}
+              </section>
+            )}
 
             <section className="linked-actions-section" aria-labelledby="linked-actions-title">
               <div className="section-heading linked-actions-heading">
@@ -363,6 +551,7 @@ export function DecisionDetailsPanel({
                 {isFormOpen ||
                 readOnly ||
                 details.decision.isArchived() ||
+                details.decision.isDeleted() ||
                 (details.decision.status !== DECISION_STATUS.draft &&
                   details.decision.status !== DECISION_STATUS.planned &&
                   details.decision.status !== DECISION_STATUS.inProgress) ? null : (
@@ -385,14 +574,14 @@ export function DecisionDetailsPanel({
                 />
               ) : null}
 
-              {details.lifeActions.length === 0 ? (
+              {overview === null || overview.actions.length === 0 ? (
                 <p className="empty-linked-actions">Для этого решения пока нет действий</p>
               ) : (
                 <div className="linked-actions-list">
-                  {details.lifeActions.map((lifeAction) => (
+                  {overview.actions.map((action) => (
                     <LifeActionSummary
-                      key={lifeAction.id.toString()}
-                      lifeAction={lifeAction}
+                      key={action.lifeAction.id.toString()}
+                      action={action}
                       onOpen={onOpenLifeAction}
                     />
                   ))}
@@ -410,14 +599,16 @@ interface DecisionRescheduleFormProps {
   readonly decision: Extract<DecisionDetailsState, { readonly status: 'ready' }>['decision'];
   readonly currentDate: DayDate;
   readonly lifeActions: readonly LifeAction[];
-  readonly readyCount: number;
+  readonly movableCount: number;
+  readonly draftCount: number;
   readonly completedCount: number;
   readonly cancelledCount: number;
-  readonly hasBlockingActions: boolean;
+  readonly hasBlockingSession: boolean;
   readonly form: DecisionRescheduleFormState;
   readonly isSaving: boolean;
   readonly error: string | null;
   readonly onDateChange: (newPlannedDate: string) => void;
+  readonly onReasonChange: (reason: string) => void;
   readonly onClose: () => void;
   readonly onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }
@@ -426,14 +617,16 @@ function DecisionRescheduleForm({
   decision,
   currentDate,
   lifeActions,
-  readyCount,
+  movableCount,
+  draftCount,
   completedCount,
   cancelledCount,
-  hasBlockingActions,
+  hasBlockingSession,
   form,
   isSaving,
   error,
   onDateChange,
+  onReasonChange,
   onClose,
   onSubmit,
 }: DecisionRescheduleFormProps) {
@@ -453,7 +646,7 @@ function DecisionRescheduleForm({
         <input
           type="date"
           value={form.newPlannedDate}
-          min={currentDate.toString()}
+          min={addDays(decision.plannedDate ?? currentDate, 1)}
           disabled={isSaving}
           aria-required="true"
           onChange={(event: ChangeEvent<HTMLInputElement>) => onDateChange(event.target.value)}
@@ -464,19 +657,32 @@ function DecisionRescheduleForm({
           className="secondary-button"
           type="button"
           disabled={isSaving}
-          onClick={() => onDateChange(addDays(currentDate, 1))}
+          onClick={() => onDateChange(addDays(decision.plannedDate ?? currentDate, 1))}
         >
-          Завтра
+          Следующий день
         </button>
         <button
           className="secondary-button"
           type="button"
           disabled={isSaving}
-          onClick={() => onDateChange(addDays(currentDate, 7))}
+          onClick={() => onDateChange(addDays(decision.plannedDate ?? currentDate, 7))}
         >
           Через неделю
         </button>
       </div>
+      <label>
+        <span>Причина переноса</span>
+        <textarea
+          value={form.reason}
+          maxLength={500}
+          rows={3}
+          disabled={isSaving}
+          aria-required="true"
+          placeholder="Почему решение переносится и что изменится на новой дате"
+          onChange={(event: ChangeEvent<HTMLTextAreaElement>) => onReasonChange(event.target.value)}
+        />
+        <small>{form.reason.trim().length} из 500 символов</small>
+      </label>
       {decision.kind === DECISION_KIND.main ? (
         <p className="decision-reschedule-position-note">
           На новой дате решение займёт свободную позицию автоматически
@@ -484,14 +690,18 @@ function DecisionRescheduleForm({
       ) : null}
       {lifeActions.length > 0 ? (
         <div className="decision-reschedule-actions-note">
-          <p>Связанные действия сохранят свои текущие даты</p>
+          <p>Незавершённая работа переносится вместе с решением одной операцией</p>
           <dl>
             <div>
-              <dt>Готово</dt>
-              <dd>{readyCount}</dd>
+              <dt>Будет перенесено</dt>
+              <dd>{movableCount}</dd>
             </div>
             <div>
-              <dt>Завершено</dt>
+              <dt>Черновики останутся связаны</dt>
+              <dd>{draftCount}</dd>
+            </div>
+            <div>
+              <dt>Завершено в истории</dt>
               <dd>{completedCount}</dd>
             </div>
             <div>
@@ -501,9 +711,9 @@ function DecisionRescheduleForm({
           </dl>
         </div>
       ) : null}
-      {hasBlockingActions ? (
+      {hasBlockingSession ? (
         <p className="decision-reschedule-blocked" role="alert">
-          Сначала завершите настройку или выполнение связанных действий
+          Сначала завершите активную или приостановленную рабочую сессию
         </p>
       ) : null}
       {error === null ? null : (
@@ -512,7 +722,7 @@ function DecisionRescheduleForm({
         </p>
       )}
       <div className="form-actions">
-        <button className="primary-button" type="submit" disabled={isSaving || hasBlockingActions}>
+        <button className="primary-button" type="submit" disabled={isSaving || hasBlockingSession}>
           {isSaving ? 'Переносим…' : 'Перенести'}
         </button>
         <button className="secondary-button" type="button" disabled={isSaving} onClick={onClose}>
@@ -533,55 +743,192 @@ interface DecisionConfirmationFormProps {
 }
 
 interface DecisionEditFormProps {
+  readonly decision: Extract<DecisionDetailsState, { readonly status: 'ready' }>['decision'];
   readonly form: DecisionEditFormState;
   readonly isSaving: boolean;
   readonly error: string | null;
-  readonly isExpectedResultRequired: boolean;
-  readonly onTitleChange: (title: string) => void;
-  readonly onExpectedResultChange: (expectedResult: string) => void;
+  readonly onTextChange: (field: DecisionEditTextField, value: string) => void;
+  readonly onKindChange: (kind: DecisionKind) => void;
+  readonly onPriorityChange: (priority: DecisionPriority) => void;
   readonly onClose: () => void;
   readonly onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }
 
 function DecisionEditForm({
+  decision,
   form,
   isSaving,
   error,
-  isExpectedResultRequired,
-  onTitleChange,
-  onExpectedResultChange,
+  onTextChange,
+  onKindChange,
+  onPriorityChange,
   onClose,
   onSubmit,
 }: DecisionEditFormProps) {
+  const started = decision.status === DECISION_STATUS.inProgress;
+  const kind = form.kind ?? decision.kind;
+  const priority = form.priority ?? decision.priority;
+  const titleError = error === 'Введите название решения' ? error : null;
+  const expectedResultError = error === 'Укажите ожидаемый результат' ? error : null;
+  const generalError = titleError !== null || expectedResultError !== null ? null : error;
+
   return (
     <form className="decision-edit-form" onSubmit={onSubmit} noValidate>
-      <h3>Редактирование решения</h3>
+      <div className="decision-edit-form-heading">
+        <div>
+          <h3>{started ? 'Уточнение решения' : 'Редактирование решения'}</h3>
+          <p>
+            Дата решения: <strong>{formatPlannedDate(decision.plannedDate)}</strong>. Перенос
+            выполняется отдельной командой.
+          </p>
+        </div>
+        <span className="decision-edit-version">
+          Версия {form.expectedVersion ?? decision.version}
+        </span>
+      </div>
+
+      {started ? (
+        <p className="decision-edit-policy-note" role="status">
+          День уже начат. Формулировка, вид, сфера, приоритет и проект зафиксированы. Можно уточнить
+          причину, ожидаемый результат, цену и жертвы.
+        </p>
+      ) : (
+        <p className="decision-edit-policy-note">
+          До начала дня можно изменить плановые сведения. Дата меняется только через перенос.
+        </p>
+      )}
+
+      <div className="decision-edit-grid">
+        <label>
+          <span>Вид решения</span>
+          <select
+            value={kind}
+            disabled={isSaving || started}
+            onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+              onKindChange(event.target.value as DecisionKind)
+            }
+          >
+            <option value={DECISION_KIND.main}>Главное</option>
+            <option value={DECISION_KIND.additional}>Дополнительное</option>
+          </select>
+        </label>
+
+        <label>
+          <span>Приоритет</span>
+          <select
+            value={priority}
+            disabled={isSaving || started}
+            onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+              onPriorityChange(event.target.value as DecisionPriority)
+            }
+          >
+            <option value={DECISION_PRIORITY.high}>Высокий</option>
+            <option value={DECISION_PRIORITY.normal}>Обычный</option>
+            <option value={DECISION_PRIORITY.low}>Низкий</option>
+          </select>
+        </label>
+      </div>
+
       <label>
-        <span>Название решения *</span>
+        <span>Формулировка решения *</span>
         <input
           value={form.title}
-          disabled={isSaving}
+          disabled={isSaving || started}
           maxLength={200}
           aria-required="true"
-          onChange={(event: ChangeEvent<HTMLInputElement>) => onTitleChange(event.target.value)}
+          aria-invalid={titleError !== null}
+          onChange={(event: ChangeEvent<HTMLInputElement>) =>
+            onTextChange('title', event.target.value)
+          }
+        />
+        {titleError === null ? null : <small className="field-error">{titleError}</small>}
+      </label>
+
+      <label>
+        <span>Причина</span>
+        <textarea
+          value={form.reason ?? ''}
+          disabled={isSaving}
+          maxLength={1000}
+          rows={3}
+          onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
+            onTextChange('reason', event.target.value)
+          }
         />
       </label>
+
       <label>
-        <span>Ожидаемый результат{isExpectedResultRequired ? ' *' : ''}</span>
+        <span>Ожидаемый результат{kind === DECISION_KIND.main ? ' *' : ''}</span>
         <textarea
           value={form.expectedResult}
           disabled={isSaving}
           maxLength={1000}
           rows={3}
-          aria-required={isExpectedResultRequired}
+          aria-required={kind === DECISION_KIND.main}
+          aria-invalid={expectedResultError !== null}
           onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
-            onExpectedResultChange(event.target.value)
+            onTextChange('expectedResult', event.target.value)
+          }
+        />
+        {expectedResultError === null ? null : (
+          <small className="field-error">{expectedResultError}</small>
+        )}
+      </label>
+
+      <div className="decision-edit-grid">
+        <label>
+          <span>Сфера</span>
+          <input
+            value={form.sphere ?? ''}
+            disabled={isSaving || started}
+            maxLength={120}
+            onChange={(event: ChangeEvent<HTMLInputElement>) =>
+              onTextChange('sphere', event.target.value)
+            }
+          />
+        </label>
+        <label>
+          <span>Связь с проектом</span>
+          <input
+            value={form.projectReference ?? ''}
+            disabled={isSaving || started}
+            maxLength={200}
+            onChange={(event: ChangeEvent<HTMLInputElement>) =>
+              onTextChange('projectReference', event.target.value)
+            }
+          />
+        </label>
+      </div>
+
+      <label>
+        <span>Цена решения</span>
+        <textarea
+          value={form.price ?? ''}
+          disabled={isSaving}
+          maxLength={500}
+          rows={2}
+          onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
+            onTextChange('price', event.target.value)
           }
         />
       </label>
-      {error === null ? null : (
+
+      <label>
+        <span>Жертвы</span>
+        <textarea
+          value={form.sacrifices ?? ''}
+          disabled={isSaving}
+          maxLength={1000}
+          rows={3}
+          onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
+            onTextChange('sacrifices', event.target.value)
+          }
+        />
+      </label>
+
+      {generalError === null ? null : (
         <p className="form-error" role="alert">
-          {error}
+          {generalError}
         </p>
       )}
       <div className="form-actions">
@@ -660,7 +1007,8 @@ function DecisionConfirmationForm({
         />
       </label>
       <p className="decision-confirmation-help">
-        Завершённые действия будут использованы как подтверждение результата
+        Проверьте общий итог. Завершённые действия будут зафиксированы как доказательства результата
+        решения.
       </p>
       {error === null ? null : (
         <p className="form-error" role="alert">
@@ -793,15 +1141,17 @@ function LifeActionForm({
 }
 
 function LifeActionSummary({
-  lifeAction,
+  action,
   onOpen,
 }: {
-  readonly lifeAction: LifeAction;
+  readonly action: DecisionActionPresentation;
   readonly onOpen: (lifeAction: LifeAction) => void;
 }) {
+  const { lifeAction } = action;
+
   return (
     <button
-      className="linked-action-card linked-action-card-button"
+      className="linked-action-card linked-action-card-button linked-action-overview-card"
       type="button"
       aria-label={`Открыть действие «${lifeAction.title.toString()}»`}
       onClick={() => onOpen(lifeAction)}
@@ -819,6 +1169,25 @@ function LifeActionSummary({
         </span>
       </div>
       <p>{lifeAction.expectedResult?.toString() ?? 'Ожидаемый результат не указан'}</p>
+      {lifeAction.actualResult === null ? null : (
+        <p className="linked-action-actual-result">
+          <strong>Фактический результат:</strong> {lifeAction.actualResult.toString()}
+        </p>
+      )}
+      <dl className="linked-action-metrics">
+        <div>
+          <dt>Сессий</dt>
+          <dd>{action.sessionCount}</dd>
+        </div>
+        <div>
+          <dt>Завершено сессий</dt>
+          <dd>{action.completedSessionCount}</dd>
+        </div>
+        <div>
+          <dt>Время</dt>
+          <dd>{formatHistoryDuration(action.workedDurationMs)}</dd>
+        </div>
+      </dl>
       <time>{formatPlannedDate(lifeAction.plannedDate)}</time>
       <span className="decision-open-hint" aria-hidden="true">
         Открыть <span>→</span>

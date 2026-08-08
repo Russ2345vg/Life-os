@@ -1,13 +1,16 @@
 import { DomainError } from '../../../shared/errors/DomainError';
 
 export const LIFE_OS_DATABASE_NAME = 'lifeos';
-export const LIFE_OS_DATABASE_VERSION = 1;
+export const LIFE_OS_DATABASE_VERSION = 4;
 
 export const LIFE_OS_STORE = {
   days: 'days',
   decisions: 'decisions',
   lifeActions: 'lifeActions',
   actionSessions: 'actionSessions',
+  routineBlocks: 'routineBlocks',
+  routineOccurrenceOverrides: 'routineOccurrenceOverrides',
+  routineOccurrenceExecutions: 'routineOccurrenceExecutions',
 } as const;
 
 export class LifeOsIndexedDb {
@@ -64,9 +67,13 @@ export class LifeOsIndexedDb {
         return;
       }
 
-      request.addEventListener('upgradeneeded', () => {
+      request.addEventListener('upgradeneeded', (event) => {
         try {
-          createVersionOneSchema(request.result);
+          const oldVersion = (event as IDBVersionChangeEvent).oldVersion;
+          if (oldVersion < 1) createVersionOneSchema(request.result);
+          if (oldVersion < 2) createVersionTwoSchema(request.result);
+          if (oldVersion < 3) createVersionThreeSchema(request.result);
+          if (oldVersion < 4) createVersionFourSchema(request.result);
         } catch (error: unknown) {
           upgradeError = error;
           request.transaction?.abort();
@@ -107,6 +114,27 @@ export class LifeOsIndexedDb {
       });
     });
   }
+}
+
+function createVersionFourSchema(database: IDBDatabase): void {
+  const executions = database.createObjectStore(LIFE_OS_STORE.routineOccurrenceExecutions, {
+    keyPath: 'id',
+  });
+  executions.createIndex('byOccurrence', 'occurrenceKey', { unique: true });
+  executions.createIndex('byStatus', 'status', { unique: false });
+}
+
+function createVersionThreeSchema(database: IDBDatabase): void {
+  const overrides = database.createObjectStore(LIFE_OS_STORE.routineOccurrenceOverrides, {
+    keyPath: 'id',
+  });
+  overrides.createIndex('byOccurrence', 'occurrenceKey', { unique: true });
+  overrides.createIndex('byTargetDate', 'targetDate', { unique: false });
+}
+
+function createVersionTwoSchema(database: IDBDatabase): void {
+  const routineBlocks = database.createObjectStore(LIFE_OS_STORE.routineBlocks, { keyPath: 'id' });
+  routineBlocks.createIndex('byAnchorDate', 'anchorDate', { unique: false });
 }
 
 function createVersionOneSchema(database: IDBDatabase): void {

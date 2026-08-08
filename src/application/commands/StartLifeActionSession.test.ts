@@ -3,6 +3,7 @@ import {
   ACTION_SESSION_STATUS,
   ActionSession,
   ActionSessionStarted,
+  Day,
   DayDate,
   EntityId,
   LIFE_ACTION_STATUS,
@@ -13,7 +14,12 @@ import {
 import { InMemoryLifeActionRepository } from '../../infrastructure';
 import { DomainError } from '../../shared/errors/DomainError';
 import type { Result } from '../../shared/result/Result';
-import { FakeClock, FakeIdGenerator } from '../../test/helpers/Fakes';
+import {
+  FakeClock,
+  FakeCurrentDateProvider,
+  FakeDayRepository,
+  FakeIdGenerator,
+} from '../../test/helpers/Fakes';
 import {
   archiveLifeAction,
   cancelLifeAction,
@@ -53,6 +59,8 @@ describe('StartLifeActionSession', () => {
       await new StartLifeActionSession(
         lifeActionRepository,
         actionSessionRepository,
+        createOpenDayRepository(),
+        new FakeCurrentDateProvider(DATE),
         clock,
         idGenerator,
       ).execute({ lifeActionId: lifeAction.id }),
@@ -124,6 +132,8 @@ describe('StartLifeActionSession', () => {
       await new StartLifeActionSession(
         lifeActionRepository,
         actionSessionRepository,
+        createOpenDayRepository(),
+        new FakeCurrentDateProvider(DATE),
         clock,
         idGenerator,
       ).execute({ lifeActionId: lifeAction.id }),
@@ -164,6 +174,8 @@ describe('StartLifeActionSession', () => {
     const result = await new StartLifeActionSession(
       lifeActionRepository,
       actionSessionRepository,
+      createOpenDayRepository(),
+      new FakeCurrentDateProvider(DATE),
       clock,
       idGenerator,
     ).execute({ lifeActionId: EntityId.create('missing-action') });
@@ -198,6 +210,8 @@ describe('StartLifeActionSession', () => {
       const result = await new StartLifeActionSession(
         lifeActionRepository,
         actionSessionRepository,
+        createOpenDayRepository(),
+        new FakeCurrentDateProvider(DATE),
         clock,
         idGenerator,
       ).execute({ lifeActionId: lifeAction.id });
@@ -230,6 +244,8 @@ describe('StartLifeActionSession', () => {
     const result = await new StartLifeActionSession(
       lifeActionRepository,
       actionSessionRepository,
+      createOpenDayRepository(),
+      new FakeCurrentDateProvider(DATE),
       clock,
       idGenerator,
     ).execute({ lifeActionId: lifeAction.id });
@@ -265,6 +281,8 @@ describe('StartLifeActionSession', () => {
     const result = await new StartLifeActionSession(
       lifeActionRepository,
       actionSessionRepository,
+      createOpenDayRepository(),
+      new FakeCurrentDateProvider(DATE),
       clock,
       idGenerator,
     ).execute({ lifeActionId: lifeAction.id });
@@ -294,6 +312,8 @@ describe('StartLifeActionSession', () => {
       await new StartLifeActionSession(
         lifeActionRepository,
         actionSessionRepository,
+        createOpenDayRepository(),
+        new FakeCurrentDateProvider(DATE),
         new FakeClock(NOW),
         new FakeIdGenerator('after-completed'),
       ).execute({ lifeActionId: lifeAction.id }),
@@ -324,6 +344,8 @@ describe('StartLifeActionSession', () => {
     const result = await new StartLifeActionSession(
       lifeActionRepository,
       actionSessionRepository,
+      createOpenDayRepository(),
+      new FakeCurrentDateProvider(DATE),
       clock,
       idGenerator,
     ).execute({ lifeActionId: lifeAction.id });
@@ -338,7 +360,64 @@ describe('StartLifeActionSession', () => {
     expect(lifeActionSave).not.toHaveBeenCalled();
     expect(sessionSave).not.toHaveBeenCalled();
   });
+
+  it('запрещает запуск сессии до начала дня', async () => {
+    const lifeAction = createReadyLifeAction('ready-before-day-start', DATE);
+    const lifeActionRepository = await lifeActionRepositoryWith(lifeAction);
+    const actionSessionRepository = new FakeActionSessionRepository();
+    const dayRepository = new FakeDayRepository();
+    dayRepository.seed(
+      Day.createCurrentPlanned({
+        id: EntityId.create('planned-day'),
+        currentDate: DATE,
+        occurredAt: NOW,
+        createdEventId: EntityId.create('planned-day-created'),
+      }),
+    );
+
+    const result = await new StartLifeActionSession(
+      lifeActionRepository,
+      actionSessionRepository,
+      dayRepository,
+      new FakeCurrentDateProvider(DATE),
+      new FakeClock(NOW),
+      new FakeIdGenerator('unused'),
+    ).execute({ lifeActionId: lifeAction.id });
+
+    expectFailureCode(result, 'day.not_started');
+  });
+
+  it('запрещает запуск действия, запланированного не на текущую дату', async () => {
+    const otherDate = DayDate.create('2026-08-03');
+    const lifeAction = createReadyLifeAction('future-action', otherDate);
+    const lifeActionRepository = await lifeActionRepositoryWith(lifeAction);
+
+    const result = await new StartLifeActionSession(
+      lifeActionRepository,
+      new FakeActionSessionRepository(),
+      createOpenDayRepository(),
+      new FakeCurrentDateProvider(DATE),
+      new FakeClock(NOW),
+      new FakeIdGenerator('unused'),
+    ).execute({ lifeActionId: lifeAction.id });
+
+    expectFailureCode(result, 'action.not_scheduled_for_current_day');
+  });
 });
+
+function createOpenDayRepository(): FakeDayRepository {
+  const repository = new FakeDayRepository();
+  repository.seed(
+    Day.openCurrent({
+      id: EntityId.create('current-open-day'),
+      currentDate: DATE,
+      occurredAt: NOW,
+      createdEventId: EntityId.create('current-day-created'),
+      openedEventId: EntityId.create('current-day-opened'),
+    }),
+  );
+  return repository;
+}
 
 async function lifeActionRepositoryWith(
   lifeAction: LifeAction,

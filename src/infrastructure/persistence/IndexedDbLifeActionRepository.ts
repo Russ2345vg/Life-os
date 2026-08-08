@@ -36,6 +36,20 @@ export class IndexedDbLifeActionRepository implements LifeActionRepository {
     return this.findByIndex('byDecisionId', decisionId.toString());
   }
 
+  public async findAll(): Promise<readonly LifeAction[]> {
+    const database = await this.#indexedDb.open();
+    const storedRecords = await executeIndexedDbRequest<unknown[]>(
+      database,
+      LIFE_OS_STORE.lifeActions,
+      'readonly',
+      (store) => store.getAll(),
+    );
+
+    return storedRecords.map((record) =>
+      LifeActionRecordMapper.fromRecord(record as LifeActionRecord),
+    );
+  }
+
   public async save(lifeAction: LifeAction): Promise<void> {
     const database = await this.#indexedDb.open();
     const record = LifeActionRecordMapper.toRecord(lifeAction);

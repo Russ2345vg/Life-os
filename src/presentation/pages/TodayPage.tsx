@@ -13,28 +13,39 @@ import type {
   Clock,
   CompleteActionSession,
   CompleteLifeAction,
+  CompleteCurrentDay,
+  GetEveningReview,
   ConfirmDecisionFromActions,
   CreateDecisionForDate,
   CreateLifeActionForDecision,
   GetActionSessionsForLifeAction,
   GetDecisionById,
   GetDecisionsForDate,
+  GetLifeActionsForDate,
   GetLifeActionsForDecision,
   GetUnfinishedActionSession,
+  GetOpenDayConflict,
+  ResolveOpenDayConflict,
+  OpenDayConflictSnapshot,
   PauseActionSession,
   ResumeActionSession,
   RescheduleDecisionSafely,
   RescheduleLifeActionSafely,
+  StartCurrentDay,
   StartLifeActionSession,
   UpdateDecisionDetails,
   UpdateLifeActionDetails,
+  CompleteCurrentDayResult,
 } from '../../application';
 import {
+  DAY_STATUS,
   DECISION_KIND,
   DECISION_STATUS,
   DayDate,
+  type Day,
   type Decision,
   type DecisionKind,
+  type DecisionPriority,
   type DecisionStatus,
   type EntityId,
   type ActionSession,
@@ -43,6 +54,21 @@ import {
 } from '../../domain';
 import { DecisionDetailsPanel } from '../components/DecisionDetailsPanel';
 import { LifeActionDetailsPanel } from '../components/LifeActionDetailsPanel';
+import { EveningReviewPanel } from './EveningReviewPanel';
+import { OpenDayRecoveryPanel } from './OpenDayRecoveryPanel';
+import { CurrentActionCard } from './CurrentActionCard';
+import { NextActionCard } from './NextActionCard';
+import { TodayActionNavigator } from './TodayActionNavigator';
+import type { TodayActionSelectionStore } from './TodayActionSelectionStore';
+import { resolveCurrentActionCardState } from './CurrentActionCardState';
+import { resolveNextActionCardState } from './NextActionCardState';
+import {
+  TODAY_SCREEN_STATE,
+  resolveTodayScreenState,
+  selectAvailableLifeActions,
+  type TodayRecoveryStatus,
+  type TodayScreenState,
+} from './TodayScreenState';
 import {
   addDays,
   formatSelectedDateTitle,
@@ -78,13 +104,29 @@ import {
   validateDecisionEditForm,
   validateSessionCompletionForm,
   type ActionCompletionChoice,
+  type DecisionEditTextField,
   type DecisionFormState,
   type TodayPageState,
 } from './TodayPageState';
 
+type OpenDayConflictLoadState =
+  | { readonly status: 'loading' }
+  | { readonly status: 'ready'; readonly snapshot: OpenDayConflictSnapshot }
+  | { readonly status: 'error' };
+
 interface TodayPageProps {
   readonly currentDate: DayDate;
+  readonly currentDay: Day;
+  readonly onCurrentDayChange: (day: Day) => void;
+  readonly selectedDate: DayDate;
+  readonly onSelectedDateChange: (date: DayDate) => void;
+  readonly openCreateRequested: boolean;
+  readonly onOpenCreateRequestHandled: () => void;
+  readonly startCurrentDay: Pick<StartCurrentDay, 'execute'>;
+  readonly getEveningReview: Pick<GetEveningReview, 'execute'>;
+  readonly completeCurrentDay: Pick<CompleteCurrentDay, 'execute'>;
   readonly getDecisionsForDate: Pick<GetDecisionsForDate, 'execute'>;
+  readonly getLifeActionsForDate: Pick<GetLifeActionsForDate, 'execute'>;
   readonly createDecisionForDate: Pick<CreateDecisionForDate, 'execute'>;
   readonly getDecisionById: Pick<GetDecisionById, 'execute'>;
   readonly getLifeActionsForDecision: Pick<GetLifeActionsForDecision, 'execute'>;
@@ -103,12 +145,25 @@ interface TodayPageProps {
   readonly rescheduleLifeActionSafely: Pick<RescheduleLifeActionSafely, 'execute'>;
   readonly getActionSessionsForLifeAction: Pick<GetActionSessionsForLifeAction, 'execute'>;
   readonly getUnfinishedActionSession: Pick<GetUnfinishedActionSession, 'execute'>;
+  readonly getOpenDayConflict: Pick<GetOpenDayConflict, 'execute'>;
+  readonly resolveOpenDayConflict: Pick<ResolveOpenDayConflict, 'execute'>;
   readonly clock: Pick<Clock, 'now'>;
+  readonly todayActionSelectionStore: Pick<TodayActionSelectionStore, 'load' | 'save' | 'clear'>;
 }
 
 export function TodayPage({
   currentDate,
+  currentDay,
+  onCurrentDayChange,
+  selectedDate,
+  onSelectedDateChange,
+  openCreateRequested,
+  onOpenCreateRequestHandled,
+  startCurrentDay,
+  getEveningReview,
+  completeCurrentDay,
   getDecisionsForDate,
+  getLifeActionsForDate,
   createDecisionForDate,
   getDecisionById,
   getLifeActionsForDecision,
@@ -127,12 +182,16 @@ export function TodayPage({
   rescheduleLifeActionSafely,
   getActionSessionsForLifeAction,
   getUnfinishedActionSession,
+  getOpenDayConflict,
+  resolveOpenDayConflict,
   clock,
+  todayActionSelectionStore,
 }: TodayPageProps) {
   const [state, dispatch] = useReducer(todayPageReducer, INITIAL_TODAY_PAGE_STATE);
-  const [selectedDate, setSelectedDate] = useState(currentDate);
-  const selectedDateRef = useRef(currentDate);
+  const selectedDateRef = useRef(selectedDate);
   const loadGenerationRef = useRef(0);
+  const todayRecoveryGenerationRef = useRef(0);
+  const openDayConflictGenerationRef = useRef(0);
   const savingRef = useRef(false);
   const lifeActionSavingRef = useRef(false);
   const sessionMutationRef = useRef(false);
@@ -143,6 +202,125 @@ export function TodayPage({
   const lifeActionEditRef = useRef(false);
   const lifeActionCancellationRef = useRef(false);
   const lifeActionRescheduleRef = useRef(false);
+  const [currentLifeActions, setCurrentLifeActions] = useState<readonly LifeAction[]>([]);
+  const [currentDaySessions, setCurrentDaySessions] = useState<readonly ActionSession[]>([]);
+  const [unfinishedSession, setUnfinishedSession] = useState<ActionSession | null>(null);
+  const [isCurrentActionMutating, setIsCurrentActionMutating] = useState(false);
+  const [currentActionError, setCurrentActionError] = useState<string | null>(null);
+  const [todayRecoveryStatus, setTodayRecoveryStatus] = useState<TodayRecoveryStatus>('loading');
+  const [isStartingDay, setIsStartingDay] = useState(false);
+  const [startDayError, setStartDayError] = useState<string | null>(null);
+  const [openDayConflictState, setOpenDayConflictState] = useState<OpenDayConflictLoadState>({
+    status: 'loading',
+  });
+  const [selectedKeepOpenDayId, setSelectedKeepOpenDayId] = useState<string | null>(null);
+  const [isResolvingOpenDays, setIsResolvingOpenDays] = useState(false);
+  const [openDayRecoveryError, setOpenDayRecoveryError] = useState<string | null>(null);
+  const [isEveningReviewOpen, setIsEveningReviewOpen] = useState(false);
+  const [preferredLifeActionId, setPreferredLifeActionId] = useState<string | null>(() =>
+    todayActionSelectionStore.load(currentDate),
+  );
+  const preferredLifeActionIdRef = useRef(preferredLifeActionId);
+
+  const loadOpenDayConflict = useCallback(async () => {
+    const generation = ++openDayConflictGenerationRef.current;
+    setOpenDayConflictState({ status: 'loading' });
+    setOpenDayRecoveryError(null);
+
+    try {
+      const snapshot = await getOpenDayConflict.execute();
+      if (generation !== openDayConflictGenerationRef.current) {
+        return;
+      }
+
+      setOpenDayConflictState({ status: 'ready', snapshot });
+      const sessionDayId = snapshot.unfinishedSessionDayId?.toString() ?? null;
+      const currentOpenDay = snapshot.openDays.find((item) => item.day.date.equals(currentDate));
+      setSelectedKeepOpenDayId(sessionDayId ?? currentOpenDay?.day.id.toString() ?? null);
+    } catch {
+      if (generation !== openDayConflictGenerationRef.current) {
+        return;
+      }
+      setOpenDayConflictState({ status: 'error' });
+    }
+  }, [currentDate, getOpenDayConflict]);
+
+  useEffect(() => {
+    void Promise.resolve().then(loadOpenDayConflict);
+
+    return () => {
+      openDayConflictGenerationRef.current += 1;
+    };
+  }, [loadOpenDayConflict]);
+
+  const loadTodayRecovery = useCallback(async () => {
+    const generation = ++todayRecoveryGenerationRef.current;
+    setTodayRecoveryStatus('loading');
+
+    try {
+      const [lifeActions, recoveredSession] = await Promise.all([
+        getLifeActionsForDate.execute(currentDate),
+        getUnfinishedActionSession.execute(),
+      ]);
+      const sessions = (
+        await Promise.all(
+          lifeActions.map((lifeAction) => getActionSessionsForLifeAction.execute(lifeAction.id)),
+        )
+      ).flat();
+
+      if (generation !== todayRecoveryGenerationRef.current) {
+        return;
+      }
+
+      setCurrentLifeActions(lifeActions);
+      setCurrentDaySessions(sessions);
+      setUnfinishedSession(recoveredSession);
+
+      const availableLifeActions = selectAvailableLifeActions(lifeActions, currentDay);
+      const recoveredLifeActionId = recoveredSession?.lifeActionId.toString() ?? null;
+      const storedLifeAction = availableLifeActions.find(
+        (lifeAction) => lifeAction.id.toString() === preferredLifeActionIdRef.current,
+      );
+      const resolvedLifeActionId =
+        recoveredLifeActionId ??
+        storedLifeAction?.id.toString() ??
+        availableLifeActions[0]?.id.toString() ??
+        null;
+
+      preferredLifeActionIdRef.current = resolvedLifeActionId;
+      setPreferredLifeActionId(resolvedLifeActionId);
+      if (resolvedLifeActionId === null) {
+        todayActionSelectionStore.clear(currentDate);
+      } else {
+        todayActionSelectionStore.save(currentDate, resolvedLifeActionId);
+      }
+      setTodayRecoveryStatus('ready');
+    } catch {
+      if (generation !== todayRecoveryGenerationRef.current) {
+        return;
+      }
+
+      setCurrentLifeActions([]);
+      setCurrentDaySessions([]);
+      setUnfinishedSession(null);
+      setTodayRecoveryStatus('error');
+    }
+  }, [
+    currentDate,
+    currentDay,
+    getActionSessionsForLifeAction,
+    getLifeActionsForDate,
+    getUnfinishedActionSession,
+    todayActionSelectionStore,
+  ]);
+
+  useEffect(() => {
+    void Promise.resolve().then(loadTodayRecovery);
+
+    return () => {
+      todayRecoveryGenerationRef.current += 1;
+    };
+  }, [loadTodayRecovery]);
 
   const loadDecisions = useCallback(
     async (date: DayDate) => {
@@ -168,12 +346,31 @@ export function TodayPage({
     void loadDecisions(selectedDate);
   }, [loadDecisions, selectedDate]);
 
+  useEffect(() => {
+    if (selectedDateRef.current.equals(selectedDate)) {
+      return;
+    }
+
+    loadGenerationRef.current += 1;
+    selectedDateRef.current = selectedDate;
+    dispatch({ type: 'selected_date_changed' });
+  }, [selectedDate]);
+
+  useEffect(() => {
+    if (!openCreateRequested) {
+      return;
+    }
+
+    dispatch({ type: 'open_form' });
+    onOpenCreateRequestHandled();
+  }, [onOpenCreateRequestHandled, openCreateRequested]);
+
   function selectDate(date: DayDate, openForm = false): void {
     if (!date.equals(selectedDateRef.current)) {
       loadGenerationRef.current += 1;
       selectedDateRef.current = date;
       dispatch({ type: 'selected_date_changed' });
-      setSelectedDate(date);
+      onSelectedDateChange(date);
     }
 
     if (openForm) {
@@ -195,18 +392,149 @@ export function TodayPage({
           return;
         }
 
+        const actionOverviews = await Promise.all(
+          lifeActions.map(async (lifeAction) => ({
+            lifeAction,
+            sessions: await getActionSessionsForLifeAction.execute(lifeAction.id),
+          })),
+        );
+
         dispatch({
           type: 'details_load_succeeded',
           decisionId,
           decision: decisionResult.value,
           lifeActions,
+          actionOverviews,
         });
       } catch {
         dispatch({ type: 'details_load_failed', decisionId });
       }
     },
-    [getDecisionById, getLifeActionsForDecision],
+    [getActionSessionsForLifeAction, getDecisionById, getLifeActionsForDecision],
   );
+
+  function replaceCurrentLifeAction(lifeAction: LifeAction): void {
+    setCurrentLifeActions((current) => {
+      const exists = current.some((item) => item.id.equals(lifeAction.id));
+
+      if (!exists) {
+        return [...current, lifeAction];
+      }
+
+      return current.map((item) => (item.id.equals(lifeAction.id) ? lifeAction : item));
+    });
+  }
+
+  function replaceCurrentDaySession(session: ActionSession): void {
+    setCurrentDaySessions((current) => {
+      const exists = current.some((item) => item.id.equals(session.id));
+
+      if (!exists) {
+        return [...current, session];
+      }
+
+      return current.map((item) => (item.id.equals(session.id) ? session : item));
+    });
+  }
+
+  async function handleStartDay(): Promise<void> {
+    if (isStartingDay || currentDay.status !== DAY_STATUS.planned) {
+      return;
+    }
+
+    if (openDayConflictState.status !== 'ready') {
+      setStartDayError('Сначала дождитесь проверки целостности активных дней');
+      return;
+    }
+
+    if (openDayConflictState.snapshot.hasConflict) {
+      setStartDayError('Сначала восстановите конфликт активных дней');
+      return;
+    }
+
+    setIsStartingDay(true);
+    setStartDayError(null);
+
+    try {
+      const result = await startCurrentDay.execute();
+
+      if (!result.ok) {
+        setStartDayError(startDayErrorMessage(result.error.code));
+        if (result.error.code === 'day.multiple_open_detected') {
+          await loadOpenDayConflict();
+        }
+        return;
+      }
+
+      onCurrentDayChange(result.value.day);
+
+      if (result.value.firstLifeAction !== null) {
+        replaceCurrentLifeAction(result.value.firstLifeAction);
+      }
+    } catch {
+      setStartDayError('Не удалось начать день');
+    } finally {
+      setIsStartingDay(false);
+    }
+  }
+
+  async function handleResolveOpenDayConflict(): Promise<void> {
+    if (isResolvingOpenDays || openDayConflictState.status !== 'ready') {
+      return;
+    }
+
+    const snapshot = openDayConflictState.snapshot;
+    if (!snapshot.hasConflict) {
+      await loadOpenDayConflict();
+      return;
+    }
+
+    const keepOpenDay =
+      selectedKeepOpenDayId === null
+        ? null
+        : (snapshot.openDays.find((item) => item.day.id.toString() === selectedKeepOpenDayId)
+            ?.day ?? null);
+
+    if (selectedKeepOpenDayId !== null && keepOpenDay === null) {
+      setOpenDayRecoveryError('Выбранный день больше не найден. Проверьте состояние снова.');
+      return;
+    }
+
+    setIsResolvingOpenDays(true);
+    setOpenDayRecoveryError(null);
+
+    try {
+      const result = await resolveOpenDayConflict.execute({
+        expectedOpenDays: snapshot.openDays.map(({ day }) => ({
+          dayId: day.id,
+          version: day.version,
+        })),
+        keepOpenDayId: keepOpenDay?.id ?? null,
+      });
+
+      if (!result.ok) {
+        const message = openDayRecoveryErrorMessage(result.error.code);
+        await loadOpenDayConflict();
+        setOpenDayRecoveryError(message);
+        return;
+      }
+
+      const updatedCurrentDay =
+        result.value.completedDays.find((day) => day.id.equals(currentDay.id)) ??
+        (result.value.keptOpenDay?.id.equals(currentDay.id) ? result.value.keptOpenDay : null);
+
+      if (updatedCurrentDay !== null) {
+        onCurrentDayChange(updatedCurrentDay);
+      }
+
+      setStartDayError(null);
+      await Promise.all([loadOpenDayConflict(), loadTodayRecovery()]);
+    } catch {
+      setOpenDayRecoveryError('Не удалось восстановить активные дни. Данные не изменены.');
+    } finally {
+      setIsResolvingOpenDays(false);
+    }
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -243,6 +571,9 @@ export function TodayPage({
 
       dispatch({ type: 'save_succeeded' });
       dispatch({ type: 'load_succeeded', decisions: result.decisions });
+      if (submissionDate.equals(currentDate)) {
+        setStartDayError(null);
+      }
     } catch {
       dispatch({ type: 'save_failed', message: 'Не удалось создать решение' });
     } finally {
@@ -285,6 +616,10 @@ export function TodayPage({
         decisionId,
         lifeActions: result.lifeActions,
       });
+
+      if (selectedDate.equals(currentDate)) {
+        await loadTodayRecovery();
+      }
     } catch {
       dispatch({ type: 'life_action_save_failed', message: 'Не удалось создать действие' });
     } finally {
@@ -413,6 +748,7 @@ export function TodayPage({
     try {
       const result = await rescheduleDecisionResult({
         decisionId: state.details.decisionId,
+        expectedVersion: state.details.decision.version,
         form: state.decisionRescheduleForm,
         rescheduleDecisionSafely,
       });
@@ -473,6 +809,7 @@ export function TodayPage({
       }
 
       dispatch({ type: 'life_action_edit_succeeded', lifeAction: result.lifeAction });
+      replaceCurrentLifeAction(result.lifeAction);
     } catch {
       dispatch({ type: 'life_action_edit_failed', message: 'Не удалось сохранить изменения' });
     } finally {
@@ -499,6 +836,8 @@ export function TodayPage({
       }
 
       dispatch({ type: 'life_action_cancellation_succeeded', lifeAction: result.lifeAction });
+      replaceCurrentLifeAction(result.lifeAction);
+      void loadTodayRecovery();
     } catch {
       dispatch({
         type: 'life_action_cancellation_failed',
@@ -537,6 +876,8 @@ export function TodayPage({
       }
 
       dispatch({ type: 'life_action_reschedule_succeeded', lifeAction: result.lifeAction });
+      replaceCurrentLifeAction(result.lifeAction);
+      void loadTodayRecovery();
     } catch {
       dispatch({
         type: 'life_action_reschedule_failed',
@@ -548,7 +889,7 @@ export function TodayPage({
   }
 
   const loadLifeActionDetails = useCallback(
-    async (lifeAction: LifeAction) => {
+    async (lifeAction: LifeAction): Promise<boolean> => {
       dispatch({ type: 'action_details_load_started', lifeAction });
       try {
         const [sessions, unfinishedSession] = await Promise.all([
@@ -561,30 +902,58 @@ export function TodayPage({
           sessions,
           unfinishedSession,
         });
+        return true;
       } catch {
         dispatch({ type: 'action_details_load_failed', lifeActionId: lifeAction.id });
+        return false;
       }
     },
     [getActionSessionsForLifeAction, getUnfinishedActionSession],
   );
 
-  async function handleStartSession(): Promise<void> {
-    if (sessionMutationRef.current || state.actionDetails.status !== 'ready') {
+  async function handleOpenCurrentActionCompletion(lifeAction: LifeAction): Promise<void> {
+    const loaded = await loadLifeActionDetails(lifeAction);
+    if (loaded) {
+      dispatch({ type: 'session_completion_form_opened' });
+    }
+  }
+
+  async function handleOpenCurrentActionReschedule(lifeAction: LifeAction): Promise<void> {
+    const loaded = await loadLifeActionDetails(lifeAction);
+    if (loaded) {
+      dispatch({ type: 'life_action_reschedule_form_opened' });
+    }
+  }
+
+  async function handleOpenCurrentActionCancellation(lifeAction: LifeAction): Promise<void> {
+    const loaded = await loadLifeActionDetails(lifeAction);
+    if (loaded) {
+      dispatch({ type: 'life_action_cancellation_opened' });
+    }
+  }
+
+  async function handleStartSession(lifeAction?: LifeAction): Promise<void> {
+    const targetLifeAction =
+      lifeAction ??
+      (state.actionDetails.status === 'ready' ? state.actionDetails.lifeAction : null);
+
+    if (sessionMutationRef.current || targetLifeAction === null) {
       return;
     }
 
     sessionMutationRef.current = true;
+    setIsCurrentActionMutating(true);
+    setCurrentActionError(null);
     dispatch({ type: 'session_operation_started' });
     try {
       const result = await startLifeActionSession.execute({
-        lifeActionId: state.actionDetails.lifeAction.id,
+        lifeActionId: targetLifeAction.id,
       });
 
       if (!result.ok) {
-        dispatch({
-          type: 'session_operation_failed',
-          message: startSessionErrorMessage(result.error.code),
-        });
+        const message = startSessionErrorMessage(result.error.code);
+        dispatch({ type: 'session_operation_failed', message });
+        setCurrentActionError(message);
         return;
       }
 
@@ -593,10 +962,20 @@ export function TodayPage({
         lifeAction: result.value.lifeAction,
         session: result.value.session,
       });
+      replaceCurrentLifeAction(result.value.lifeAction);
+      preferredLifeActionIdRef.current = result.value.lifeAction.id.toString();
+      setPreferredLifeActionId(result.value.lifeAction.id.toString());
+      todayActionSelectionStore.save(currentDate, result.value.lifeAction.id.toString());
+      replaceCurrentDaySession(result.value.session);
+      setUnfinishedSession(result.value.session);
+      setTodayRecoveryStatus('ready');
     } catch {
-      dispatch({ type: 'session_operation_failed', message: 'Не удалось начать выполнение' });
+      const message = 'Не удалось начать выполнение';
+      dispatch({ type: 'session_operation_failed', message });
+      setCurrentActionError(message);
     } finally {
       sessionMutationRef.current = false;
+      setIsCurrentActionMutating(false);
     }
   }
 
@@ -606,26 +985,30 @@ export function TodayPage({
     }
 
     sessionMutationRef.current = true;
+    setIsCurrentActionMutating(true);
+    setCurrentActionError(null);
     dispatch({ type: 'session_operation_started' });
     try {
       const result = await pauseActionSession.execute({ sessionId: session.id });
 
       if (!result.ok) {
-        dispatch({
-          type: 'session_operation_failed',
-          message: pauseSessionErrorMessage(result.error.code),
-        });
+        const message = pauseSessionErrorMessage(result.error.code);
+        dispatch({ type: 'session_operation_failed', message });
+        setCurrentActionError(message);
         return;
       }
 
       dispatch({ type: 'session_updated', session: result.value });
+      replaceCurrentDaySession(result.value);
+      setUnfinishedSession(result.value);
+      setTodayRecoveryStatus('ready');
     } catch {
-      dispatch({
-        type: 'session_operation_failed',
-        message: 'Не удалось поставить работу на паузу',
-      });
+      const message = 'Не удалось поставить работу на паузу';
+      dispatch({ type: 'session_operation_failed', message });
+      setCurrentActionError(message);
     } finally {
       sessionMutationRef.current = false;
+      setIsCurrentActionMutating(false);
     }
   }
 
@@ -635,23 +1018,30 @@ export function TodayPage({
     }
 
     sessionMutationRef.current = true;
+    setIsCurrentActionMutating(true);
+    setCurrentActionError(null);
     dispatch({ type: 'session_operation_started' });
     try {
       const result = await resumeActionSession.execute({ sessionId: session.id });
 
       if (!result.ok) {
-        dispatch({
-          type: 'session_operation_failed',
-          message: resumeSessionErrorMessage(),
-        });
+        const message = resumeSessionErrorMessage();
+        dispatch({ type: 'session_operation_failed', message });
+        setCurrentActionError(message);
         return;
       }
 
       dispatch({ type: 'session_updated', session: result.value });
+      replaceCurrentDaySession(result.value);
+      setUnfinishedSession(result.value);
+      setTodayRecoveryStatus('ready');
     } catch {
-      dispatch({ type: 'session_operation_failed', message: resumeSessionErrorMessage() });
+      const message = resumeSessionErrorMessage();
+      dispatch({ type: 'session_operation_failed', message });
+      setCurrentActionError(message);
     } finally {
       sessionMutationRef.current = false;
+      setIsCurrentActionMutating(false);
     }
   }
 
@@ -683,6 +1073,9 @@ export function TodayPage({
           break;
         case 'session_completed':
           dispatch({ type: 'session_completed', session: result.session });
+          replaceCurrentDaySession(result.session);
+          setUnfinishedSession(null);
+          setTodayRecoveryStatus('ready');
           break;
         case 'action_failed':
           dispatch({
@@ -690,6 +1083,9 @@ export function TodayPage({
             session: result.session,
             message: result.message,
           });
+          replaceCurrentDaySession(result.session);
+          setUnfinishedSession(null);
+          setTodayRecoveryStatus('ready');
           break;
         case 'action_completed':
           dispatch({
@@ -697,7 +1093,15 @@ export function TodayPage({
             lifeAction: result.lifeAction,
             session: result.session,
           });
+          replaceCurrentDaySession(result.session);
+          replaceCurrentLifeAction(result.lifeAction);
+          setUnfinishedSession(null);
+          setTodayRecoveryStatus('ready');
           break;
+      }
+
+      if (result.status !== 'session_failed') {
+        void loadTodayRecovery();
       }
     } catch {
       dispatch({ type: 'session_operation_failed', message: 'Не удалось завершить сессию' });
@@ -726,6 +1130,8 @@ export function TodayPage({
       }
 
       dispatch({ type: 'life_action_completed', lifeAction: result.lifeAction });
+      replaceCurrentLifeAction(result.lifeAction);
+      void loadTodayRecovery();
     } catch {
       dispatch({
         type: 'session_operation_failed',
@@ -736,130 +1142,268 @@ export function TodayPage({
     }
   }
 
+  function handleSelectCurrentLifeAction(lifeAction: LifeAction): void {
+    if (unfinishedSession !== null || isCurrentActionMutating) {
+      return;
+    }
+
+    const lifeActionId = lifeAction.id.toString();
+    setCurrentActionError(null);
+    preferredLifeActionIdRef.current = lifeActionId;
+    setPreferredLifeActionId(lifeActionId);
+    todayActionSelectionStore.save(currentDate, lifeActionId);
+  }
+
+  function handleDayCompleted(result: CompleteCurrentDayResult): void {
+    const completedCurrentDay = result.day.date.equals(currentDate);
+
+    if (completedCurrentDay) {
+      onCurrentDayChange(result.day);
+      setCurrentLifeActions((current) => {
+        const byId = new Map(current.map((lifeAction) => [lifeAction.id.toString(), lifeAction]));
+        for (const lifeAction of result.resolvedLifeActions) {
+          byId.set(lifeAction.id.toString(), lifeAction);
+        }
+        return [...byId.values()];
+      });
+      setUnfinishedSession(null);
+      setTodayRecoveryStatus('ready');
+    }
+
+    dispatch({ type: 'details_closed' });
+    setIsEveningReviewOpen(false);
+    void Promise.all([loadOpenDayConflict(), loadTodayRecovery()]);
+
+    if (!completedCurrentDay) {
+      selectDate(currentDate);
+    }
+  }
+
+  const todayScreenState = resolveTodayScreenState({
+    day: currentDay,
+    decisionsStatus: state.decisions.status,
+    decisions: state.decisions.status === 'ready' ? state.decisions.decisions : [],
+    recoveryStatus: todayRecoveryStatus,
+    lifeActions: currentLifeActions,
+    unfinishedSession,
+    isEveningControlOpen: isEveningReviewOpen,
+    preferredLifeActionId,
+  });
+
+  const resolvedCurrentLifeAction =
+    todayScreenState.kind === TODAY_SCREEN_STATE.dayStarted ||
+    todayScreenState.kind === TODAY_SCREEN_STATE.activeSession ||
+    todayScreenState.kind === TODAY_SCREEN_STATE.pausedSession
+      ? todayScreenState.currentLifeAction
+      : null;
+  const resolvedCurrentLifeActionId = resolvedCurrentLifeAction?.id.toString() ?? null;
+
+  useEffect(() => {
+    if (currentDay.status !== DAY_STATUS.open || todayRecoveryStatus !== 'ready') {
+      return;
+    }
+
+    if (todayScreenState.kind === TODAY_SCREEN_STATE.noCurrentAction) {
+      todayActionSelectionStore.clear(currentDate);
+      return;
+    }
+
+    if (resolvedCurrentLifeActionId !== null) {
+      todayActionSelectionStore.save(currentDate, resolvedCurrentLifeActionId);
+    }
+  }, [
+    currentDate,
+    currentDay.status,
+    resolvedCurrentLifeActionId,
+    todayActionSelectionStore,
+    todayRecoveryStatus,
+    todayScreenState.kind,
+  ]);
+
   return (
-    <TodayPageView
-      currentDate={currentDate}
-      selectedDate={selectedDate}
-      clock={clock}
-      state={state}
-      onRetry={() => void loadDecisions(selectedDate)}
-      onOpenPreviousDay={() => selectDate(addDays(selectedDateRef.current, -1))}
-      onOpenNextDay={() => selectDate(addDays(selectedDateRef.current, 1))}
-      onOpenToday={() => selectDate(currentDate)}
-      onDateChange={(date) => selectDate(date)}
-      onPlanTomorrow={() => selectDate(addDays(currentDate, 1), true)}
-      onOpenForm={() => dispatch({ type: 'open_form' })}
-      onCloseForm={() => dispatch({ type: 'close_form' })}
-      onKindChange={(kind) => dispatch({ type: 'kind_changed', kind })}
-      onTitleChange={(title) => dispatch({ type: 'title_changed', title })}
-      onExpectedResultChange={(expectedResult) =>
-        dispatch({ type: 'expected_result_changed', expectedResult })
-      }
-      onSubmit={(event) => void handleSubmit(event)}
-      onOpenDecision={(decisionId) => void loadDecisionDetails(decisionId)}
-      onCloseDecision={() => dispatch({ type: 'details_closed' })}
-      onRetryDecision={() => {
-        if (state.details.status !== 'closed') {
-          void loadDecisionDetails(state.details.decisionId);
+    <>
+      <TodayPageView
+        currentDate={currentDate}
+        todayScreenState={todayScreenState}
+        isStartingDay={isStartingDay}
+        startDayError={startDayError}
+        openDayConflictState={openDayConflictState}
+        selectedKeepOpenDayId={selectedKeepOpenDayId}
+        isResolvingOpenDays={isResolvingOpenDays}
+        openDayRecoveryError={openDayRecoveryError}
+        selectedDate={selectedDate}
+        clock={clock}
+        state={state}
+        currentDaySessions={currentDaySessions}
+        isCurrentActionMutating={isCurrentActionMutating}
+        currentActionError={currentActionError}
+        onRetry={() => void loadDecisions(selectedDate)}
+        onRetryTodayRecovery={() => void loadTodayRecovery()}
+        onStartDay={() => void handleStartDay()}
+        onRetryOpenDayConflict={() => void loadOpenDayConflict()}
+        onSelectKeepOpenDay={setSelectedKeepOpenDayId}
+        onResolveOpenDayConflict={() => void handleResolveOpenDayConflict()}
+        onOpenEveningReview={() => setIsEveningReviewOpen(true)}
+        onOpenPreviousDay={() => selectDate(addDays(selectedDateRef.current, -1))}
+        onOpenNextDay={() => selectDate(addDays(selectedDateRef.current, 1))}
+        onOpenToday={() => selectDate(currentDate)}
+        onDateChange={(date) => selectDate(date)}
+        onPlanTomorrow={() => selectDate(addDays(currentDate, 1), true)}
+        onOpenForm={() => dispatch({ type: 'open_form' })}
+        onCloseForm={() => dispatch({ type: 'close_form' })}
+        onKindChange={(kind) => dispatch({ type: 'kind_changed', kind })}
+        onTitleChange={(title) => dispatch({ type: 'title_changed', title })}
+        onExpectedResultChange={(expectedResult) =>
+          dispatch({ type: 'expected_result_changed', expectedResult })
         }
-      }}
-      onOpenLifeActionForm={() => dispatch({ type: 'life_action_form_opened' })}
-      onCloseLifeActionForm={() => dispatch({ type: 'life_action_form_closed' })}
-      onLifeActionTitleChange={(title) => dispatch({ type: 'life_action_title_changed', title })}
-      onLifeActionExpectedResultChange={(expectedResult) =>
-        dispatch({ type: 'life_action_expected_result_changed', expectedResult })
-      }
-      onLifeActionDescriptionChange={(description) =>
-        dispatch({ type: 'life_action_description_changed', description })
-      }
-      onLifeActionSubmit={(event) => void handleLifeActionSubmit(event)}
-      onOpenDecisionConfirmationForm={() => dispatch({ type: 'decision_confirmation_form_opened' })}
-      onCloseDecisionConfirmationForm={() =>
-        dispatch({ type: 'decision_confirmation_form_closed' })
-      }
-      onDecisionActualResultChange={(actualResult) =>
-        dispatch({ type: 'decision_actual_result_changed', actualResult })
-      }
-      onDecisionConfirmationSubmit={(event) => void handleDecisionConfirmation(event)}
-      onOpenDecisionEditForm={() => dispatch({ type: 'decision_edit_form_opened' })}
-      onCloseDecisionEditForm={() => dispatch({ type: 'decision_edit_form_closed' })}
-      onDecisionEditTitleChange={(title) =>
-        dispatch({ type: 'decision_edit_title_changed', title })
-      }
-      onDecisionEditExpectedResultChange={(expectedResult) =>
-        dispatch({ type: 'decision_edit_expected_result_changed', expectedResult })
-      }
-      onDecisionEditSubmit={(event) => void handleDecisionEdit(event)}
-      onOpenDecisionCancellation={() => dispatch({ type: 'decision_cancellation_opened' })}
-      onCloseDecisionCancellation={() => dispatch({ type: 'decision_cancellation_closed' })}
-      onConfirmDecisionCancellation={() => void handleDecisionCancellation()}
-      onOpenDecisionRescheduleForm={() => dispatch({ type: 'decision_reschedule_form_opened' })}
-      onCloseDecisionRescheduleForm={() => dispatch({ type: 'decision_reschedule_form_closed' })}
-      onDecisionRescheduleDateChange={(newPlannedDate) =>
-        dispatch({ type: 'decision_reschedule_date_changed', newPlannedDate })
-      }
-      onDecisionRescheduleSubmit={(event) => void handleDecisionReschedule(event)}
-      onOpenLifeAction={(lifeAction) => void loadLifeActionDetails(lifeAction)}
-      onBackToDecision={() => dispatch({ type: 'action_details_closed' })}
-      onRetryLifeAction={() => {
-        if (state.actionDetails.status !== 'closed') {
-          void loadLifeActionDetails(state.actionDetails.lifeAction);
+        onSubmit={(event) => void handleSubmit(event)}
+        onOpenDecision={(decisionId) => void loadDecisionDetails(decisionId)}
+        onCloseDecision={() => dispatch({ type: 'details_closed' })}
+        onRetryDecision={() => {
+          if (state.details.status !== 'closed') {
+            void loadDecisionDetails(state.details.decisionId);
+          }
+        }}
+        onOpenLifeActionForm={() => dispatch({ type: 'life_action_form_opened' })}
+        onCloseLifeActionForm={() => dispatch({ type: 'life_action_form_closed' })}
+        onLifeActionTitleChange={(title) => dispatch({ type: 'life_action_title_changed', title })}
+        onLifeActionExpectedResultChange={(expectedResult) =>
+          dispatch({ type: 'life_action_expected_result_changed', expectedResult })
         }
-      }}
-      onStartSession={() => void handleStartSession()}
-      onPauseSession={(session) => void handlePauseSession(session)}
-      onResumeSession={(session) => void handleResumeSession(session)}
-      onOpenSessionCompletionForm={() => dispatch({ type: 'session_completion_form_opened' })}
-      onCloseSessionCompletionForm={() => dispatch({ type: 'session_completion_form_closed' })}
-      onSessionResultNoteChange={(resultNote) =>
-        dispatch({ type: 'session_result_note_changed', resultNote })
-      }
-      onSessionCompletionKindChange={(completionKind) =>
-        dispatch({ type: 'session_completion_kind_changed', completionKind })
-      }
-      onActionCompletionChoiceChange={(actionChoice) =>
-        dispatch({ type: 'action_completion_choice_changed', actionChoice })
-      }
-      onActionActualResultChange={(actualResult) =>
-        dispatch({ type: 'action_actual_result_changed', actualResult })
-      }
-      onCompleteSession={(session) => void handleCompleteSession(session)}
-      onRetryLifeActionCompletion={() => void handleRetryLifeActionCompletion()}
-      onOpenLifeActionEditForm={() => dispatch({ type: 'life_action_edit_form_opened' })}
-      onCloseLifeActionEditForm={() => dispatch({ type: 'life_action_edit_form_closed' })}
-      onLifeActionEditTitleChange={(title) =>
-        dispatch({ type: 'life_action_edit_title_changed', title })
-      }
-      onLifeActionEditDescriptionChange={(description) =>
-        dispatch({ type: 'life_action_edit_description_changed', description })
-      }
-      onLifeActionEditExpectedResultChange={(expectedResult) =>
-        dispatch({ type: 'life_action_edit_expected_result_changed', expectedResult })
-      }
-      onLifeActionEditSubmit={(event) => void handleLifeActionEdit(event)}
-      onOpenLifeActionCancellation={() => dispatch({ type: 'life_action_cancellation_opened' })}
-      onCloseLifeActionCancellation={() => dispatch({ type: 'life_action_cancellation_closed' })}
-      onConfirmLifeActionCancellation={() => void handleLifeActionCancellation()}
-      onOpenLifeActionRescheduleForm={() =>
-        dispatch({ type: 'life_action_reschedule_form_opened' })
-      }
-      onCloseLifeActionRescheduleForm={() =>
-        dispatch({ type: 'life_action_reschedule_form_closed' })
-      }
-      onLifeActionRescheduleDateChange={(newPlannedDate) =>
-        dispatch({ type: 'life_action_reschedule_date_changed', newPlannedDate })
-      }
-      onLifeActionRescheduleSubmit={(event) => void handleLifeActionReschedule(event)}
-    />
+        onLifeActionDescriptionChange={(description) =>
+          dispatch({ type: 'life_action_description_changed', description })
+        }
+        onLifeActionSubmit={(event) => void handleLifeActionSubmit(event)}
+        onOpenDecisionConfirmationForm={() =>
+          dispatch({ type: 'decision_confirmation_form_opened' })
+        }
+        onCloseDecisionConfirmationForm={() =>
+          dispatch({ type: 'decision_confirmation_form_closed' })
+        }
+        onDecisionActualResultChange={(actualResult) =>
+          dispatch({ type: 'decision_actual_result_changed', actualResult })
+        }
+        onDecisionConfirmationSubmit={(event) => void handleDecisionConfirmation(event)}
+        onOpenDecisionEditForm={() => dispatch({ type: 'decision_edit_form_opened' })}
+        onCloseDecisionEditForm={() => dispatch({ type: 'decision_edit_form_closed' })}
+        onDecisionEditTextChange={(field, value) =>
+          dispatch({ type: 'decision_edit_text_changed', field, value })
+        }
+        onDecisionEditKindChange={(kind) => dispatch({ type: 'decision_edit_kind_changed', kind })}
+        onDecisionEditPriorityChange={(priority) =>
+          dispatch({ type: 'decision_edit_priority_changed', priority })
+        }
+        onDecisionEditSubmit={(event) => void handleDecisionEdit(event)}
+        onOpenDecisionCancellation={() => dispatch({ type: 'decision_cancellation_opened' })}
+        onCloseDecisionCancellation={() => dispatch({ type: 'decision_cancellation_closed' })}
+        onConfirmDecisionCancellation={() => void handleDecisionCancellation()}
+        onOpenDecisionRescheduleForm={() => dispatch({ type: 'decision_reschedule_form_opened' })}
+        onCloseDecisionRescheduleForm={() => dispatch({ type: 'decision_reschedule_form_closed' })}
+        onDecisionRescheduleDateChange={(newPlannedDate) =>
+          dispatch({ type: 'decision_reschedule_date_changed', newPlannedDate })
+        }
+        onDecisionRescheduleReasonChange={(reason) =>
+          dispatch({ type: 'decision_reschedule_reason_changed', reason })
+        }
+        onDecisionRescheduleSubmit={(event) => void handleDecisionReschedule(event)}
+        onOpenLifeAction={(lifeAction) => void loadLifeActionDetails(lifeAction)}
+        onStartCurrentAction={(lifeAction) => void handleStartSession(lifeAction)}
+        onPauseCurrentAction={(session) => void handlePauseSession(session)}
+        onResumeCurrentAction={(session) => void handleResumeSession(session)}
+        onCompleteCurrentActionSession={(lifeAction) =>
+          void handleOpenCurrentActionCompletion(lifeAction)
+        }
+        onRescheduleCurrentAction={(lifeAction) =>
+          void handleOpenCurrentActionReschedule(lifeAction)
+        }
+        onCancelCurrentAction={(lifeAction) => void handleOpenCurrentActionCancellation(lifeAction)}
+        onSelectCurrentAction={handleSelectCurrentLifeAction}
+        onBackToDecision={() => dispatch({ type: 'action_details_closed' })}
+        onRetryLifeAction={() => {
+          if (state.actionDetails.status !== 'closed') {
+            void loadLifeActionDetails(state.actionDetails.lifeAction);
+          }
+        }}
+        onStartSession={() => void handleStartSession()}
+        onPauseSession={(session) => void handlePauseSession(session)}
+        onResumeSession={(session) => void handleResumeSession(session)}
+        onOpenSessionCompletionForm={() => dispatch({ type: 'session_completion_form_opened' })}
+        onCloseSessionCompletionForm={() => dispatch({ type: 'session_completion_form_closed' })}
+        onSessionResultNoteChange={(resultNote) =>
+          dispatch({ type: 'session_result_note_changed', resultNote })
+        }
+        onSessionCompletionKindChange={(completionKind) =>
+          dispatch({ type: 'session_completion_kind_changed', completionKind })
+        }
+        onActionCompletionChoiceChange={(actionChoice) =>
+          dispatch({ type: 'action_completion_choice_changed', actionChoice })
+        }
+        onActionActualResultChange={(actualResult) =>
+          dispatch({ type: 'action_actual_result_changed', actualResult })
+        }
+        onCompleteSession={(session) => void handleCompleteSession(session)}
+        onRetryLifeActionCompletion={() => void handleRetryLifeActionCompletion()}
+        onOpenLifeActionEditForm={() => dispatch({ type: 'life_action_edit_form_opened' })}
+        onCloseLifeActionEditForm={() => dispatch({ type: 'life_action_edit_form_closed' })}
+        onLifeActionEditTitleChange={(title) =>
+          dispatch({ type: 'life_action_edit_title_changed', title })
+        }
+        onLifeActionEditDescriptionChange={(description) =>
+          dispatch({ type: 'life_action_edit_description_changed', description })
+        }
+        onLifeActionEditExpectedResultChange={(expectedResult) =>
+          dispatch({ type: 'life_action_edit_expected_result_changed', expectedResult })
+        }
+        onLifeActionEditSubmit={(event) => void handleLifeActionEdit(event)}
+        onOpenLifeActionCancellation={() => dispatch({ type: 'life_action_cancellation_opened' })}
+        onCloseLifeActionCancellation={() => dispatch({ type: 'life_action_cancellation_closed' })}
+        onConfirmLifeActionCancellation={() => void handleLifeActionCancellation()}
+        onOpenLifeActionRescheduleForm={() =>
+          dispatch({ type: 'life_action_reschedule_form_opened' })
+        }
+        onCloseLifeActionRescheduleForm={() =>
+          dispatch({ type: 'life_action_reschedule_form_closed' })
+        }
+        onLifeActionRescheduleDateChange={(newPlannedDate) =>
+          dispatch({ type: 'life_action_reschedule_date_changed', newPlannedDate })
+        }
+        onLifeActionRescheduleSubmit={(event) => void handleLifeActionReschedule(event)}
+      />
+      {isEveningReviewOpen ? (
+        <EveningReviewPanel
+          getEveningReview={getEveningReview}
+          completeCurrentDay={completeCurrentDay}
+          reviewDate={selectedDate}
+          onClose={() => setIsEveningReviewOpen(false)}
+          onCompleted={handleDayCompleted}
+        />
+      ) : null}
+    </>
   );
 }
 
 interface TodayPageViewProps {
   readonly currentDate: DayDate;
+  readonly todayScreenState: TodayScreenState;
+  readonly isStartingDay: boolean;
+  readonly startDayError: string | null;
+  readonly openDayConflictState: OpenDayConflictLoadState;
+  readonly selectedKeepOpenDayId: string | null;
+  readonly isResolvingOpenDays: boolean;
+  readonly openDayRecoveryError: string | null;
   readonly selectedDate: DayDate;
   readonly clock: Pick<Clock, 'now'>;
   readonly state: TodayPageState;
+  readonly currentDaySessions: readonly ActionSession[];
+  readonly isCurrentActionMutating: boolean;
+  readonly currentActionError: string | null;
   readonly onRetry: () => void;
+  readonly onRetryTodayRecovery: () => void;
+  readonly onStartDay: () => void;
+  readonly onRetryOpenDayConflict: () => void;
+  readonly onSelectKeepOpenDay: (dayId: string | null) => void;
+  readonly onResolveOpenDayConflict: () => void;
+  readonly onOpenEveningReview: () => void;
   readonly onOpenPreviousDay: () => void;
   readonly onOpenNextDay: () => void;
   readonly onOpenToday: () => void;
@@ -886,8 +1430,9 @@ interface TodayPageViewProps {
   readonly onDecisionConfirmationSubmit: (event: FormEvent<HTMLFormElement>) => void;
   readonly onOpenDecisionEditForm: () => void;
   readonly onCloseDecisionEditForm: () => void;
-  readonly onDecisionEditTitleChange: (title: string) => void;
-  readonly onDecisionEditExpectedResultChange: (expectedResult: string) => void;
+  readonly onDecisionEditTextChange: (field: DecisionEditTextField, value: string) => void;
+  readonly onDecisionEditKindChange: (kind: DecisionKind) => void;
+  readonly onDecisionEditPriorityChange: (priority: DecisionPriority) => void;
   readonly onDecisionEditSubmit: (event: FormEvent<HTMLFormElement>) => void;
   readonly onOpenDecisionCancellation: () => void;
   readonly onCloseDecisionCancellation: () => void;
@@ -895,8 +1440,16 @@ interface TodayPageViewProps {
   readonly onOpenDecisionRescheduleForm: () => void;
   readonly onCloseDecisionRescheduleForm: () => void;
   readonly onDecisionRescheduleDateChange: (newPlannedDate: string) => void;
+  readonly onDecisionRescheduleReasonChange: (reason: string) => void;
   readonly onDecisionRescheduleSubmit: (event: FormEvent<HTMLFormElement>) => void;
   readonly onOpenLifeAction: (lifeAction: LifeAction) => void;
+  readonly onStartCurrentAction: (lifeAction: LifeAction) => void;
+  readonly onPauseCurrentAction: (session: ActionSession) => void;
+  readonly onResumeCurrentAction: (session: ActionSession) => void;
+  readonly onCompleteCurrentActionSession: (lifeAction: LifeAction) => void;
+  readonly onRescheduleCurrentAction: (lifeAction: LifeAction) => void;
+  readonly onCancelCurrentAction: (lifeAction: LifeAction) => void;
+  readonly onSelectCurrentAction: (lifeAction: LifeAction) => void;
   readonly onBackToDecision: () => void;
   readonly onRetryLifeAction: () => void;
   readonly onStartSession: () => void;
@@ -927,10 +1480,26 @@ interface TodayPageViewProps {
 
 export function TodayPageView({
   currentDate,
+  todayScreenState,
+  isStartingDay,
+  startDayError,
+  openDayConflictState,
+  selectedKeepOpenDayId,
+  isResolvingOpenDays,
+  openDayRecoveryError,
   selectedDate,
   clock,
   state,
+  currentDaySessions,
+  isCurrentActionMutating,
+  currentActionError,
   onRetry,
+  onRetryTodayRecovery,
+  onStartDay,
+  onRetryOpenDayConflict,
+  onSelectKeepOpenDay,
+  onResolveOpenDayConflict,
+  onOpenEveningReview,
   onOpenPreviousDay,
   onOpenNextDay,
   onOpenToday,
@@ -957,8 +1526,9 @@ export function TodayPageView({
   onDecisionConfirmationSubmit,
   onOpenDecisionEditForm,
   onCloseDecisionEditForm,
-  onDecisionEditTitleChange,
-  onDecisionEditExpectedResultChange,
+  onDecisionEditTextChange,
+  onDecisionEditKindChange,
+  onDecisionEditPriorityChange,
   onDecisionEditSubmit,
   onOpenDecisionCancellation,
   onCloseDecisionCancellation,
@@ -966,8 +1536,16 @@ export function TodayPageView({
   onOpenDecisionRescheduleForm,
   onCloseDecisionRescheduleForm,
   onDecisionRescheduleDateChange,
+  onDecisionRescheduleReasonChange,
   onDecisionRescheduleSubmit,
   onOpenLifeAction,
+  onStartCurrentAction,
+  onPauseCurrentAction,
+  onResumeCurrentAction,
+  onCompleteCurrentActionSession,
+  onRescheduleCurrentAction,
+  onCancelCurrentAction,
+  onSelectCurrentAction,
   onBackToDecision,
   onRetryLifeAction,
   onStartSession,
@@ -997,6 +1575,30 @@ export function TodayPageView({
 }: TodayPageViewProps) {
   const pastDate = isPastDate(selectedDate, currentDate);
   const selectedDateTitle = formatSelectedDateTitle(selectedDate, currentDate);
+  const tomorrowDate = addDays(currentDate, 1);
+  const tomorrowPlanLabel = formatPlanDate(tomorrowDate);
+  const singlePastOpenDay =
+    openDayConflictState.status === 'ready' && !openDayConflictState.snapshot.hasConflict
+      ? (openDayConflictState.snapshot.openDays.find((item) =>
+          item.day.date.isBefore(currentDate),
+        ) ?? null)
+      : null;
+  const selectedPastOpenDay =
+    openDayConflictState.status === 'ready' && !openDayConflictState.snapshot.hasConflict
+      ? (openDayConflictState.snapshot.openDays.find((item) =>
+          item.day.date.equals(selectedDate),
+        ) ?? null)
+      : null;
+  const startDayBlockedMessage =
+    openDayConflictState.status === 'loading'
+      ? 'Проверяем целостность активных дней…'
+      : openDayConflictState.status === 'error'
+        ? 'Не удалось проверить активные дни. Повторите проверку перед запуском.'
+        : openDayConflictState.snapshot.hasConflict
+          ? 'Сначала восстановите конфликт активных дней.'
+          : singlePastOpenDay !== null
+            ? `Сначала завершите день ${formatOpenDayDate(singlePastOpenDay.day.date)}.`
+            : null;
 
   return (
     <>
@@ -1011,7 +1613,6 @@ export function TodayPageView({
             >
               ←
             </button>
-            <p className="date-navigation-value">{selectedDate.toString()}</p>
             <button
               className="date-arrow-button"
               type="button"
@@ -1044,15 +1645,79 @@ export function TodayPageView({
         </section>
 
         <header className="today-header">
-          <p className="today-brand">LifeOS</p>
-          <div>
+          <div className="today-header-copy">
+            <p className="today-brand">План дня</p>
             <h1>{selectedDateTitle}</h1>
             <p className="today-date">
               {formatSelectedDateWeekday(selectedDate)} · {formatRussianDate(selectedDate)}
             </p>
           </div>
-          <p className="today-storage-note">Данные сохраняются на этом устройстве</p>
         </header>
+
+        {isToday(selectedDate, currentDate) ? (
+          <TodayStateCard
+            state={todayScreenState}
+            isStarting={isStartingDay}
+            error={startDayError}
+            startBlockedMessage={startDayBlockedMessage}
+            onRetryRecovery={onRetryTodayRecovery}
+            onStart={onStartDay}
+            decisions={state.decisions.status === 'ready' ? state.decisions.decisions : []}
+            currentDaySessions={currentDaySessions}
+            isCurrentActionMutating={isCurrentActionMutating}
+            currentActionError={currentActionError}
+            clock={clock}
+            onOpenEveningReview={onOpenEveningReview}
+            onOpenLifeAction={onOpenLifeAction}
+            onStartCurrentAction={onStartCurrentAction}
+            onPauseCurrentAction={onPauseCurrentAction}
+            onResumeCurrentAction={onResumeCurrentAction}
+            onCompleteCurrentActionSession={onCompleteCurrentActionSession}
+            onRescheduleCurrentAction={onRescheduleCurrentAction}
+            onCancelCurrentAction={onCancelCurrentAction}
+            onSelectCurrentAction={onSelectCurrentAction}
+          />
+        ) : null}
+
+        {isToday(selectedDate, currentDate) &&
+        openDayConflictState.status === 'ready' &&
+        openDayConflictState.snapshot.hasConflict ? (
+          <OpenDayRecoveryPanel
+            currentDate={currentDate}
+            snapshot={openDayConflictState.snapshot}
+            selectedKeepOpenDayId={selectedKeepOpenDayId}
+            isResolving={isResolvingOpenDays}
+            error={openDayRecoveryError}
+            onSelectKeepOpenDay={onSelectKeepOpenDay}
+            onResolve={onResolveOpenDayConflict}
+            onRetry={onRetryOpenDayConflict}
+          />
+        ) : isToday(selectedDate, currentDate) && openDayConflictState.status === 'error' ? (
+          <section className="open-day-recovery open-day-recovery-error" role="alert">
+            <p className="section-kicker danger">Проверка целостности</p>
+            <h2>Не удалось проверить активные дни</h2>
+            <p>Запуск дня временно заблокирован, чтобы не создать конфликт в данных.</p>
+            <button className="secondary-button" type="button" onClick={onRetryOpenDayConflict}>
+              Проверить снова
+            </button>
+          </section>
+        ) : null}
+
+        {isToday(selectedDate, currentDate) && singlePastOpenDay !== null ? (
+          <PastOpenDayRecoveryCard
+            day={singlePastOpenDay.day}
+            hasUnfinishedSession={singlePastOpenDay.hasUnfinishedSession}
+            mode="redirect"
+            onOpen={() => onDateChange(singlePastOpenDay.day.date)}
+          />
+        ) : pastDate && selectedPastOpenDay !== null ? (
+          <PastOpenDayRecoveryCard
+            day={selectedPastOpenDay.day}
+            hasUnfinishedSession={selectedPastOpenDay.hasUnfinishedSession}
+            mode="complete"
+            onOpen={onOpenEveningReview}
+          />
+        ) : null}
 
         <div className="today-actions">
           {pastDate ? null : (
@@ -1061,12 +1726,17 @@ export function TodayPageView({
             </button>
           )}
           <button className="secondary-button" type="button" onClick={onPlanTomorrow}>
-            Планировать завтра
+            Планировать {tomorrowPlanLabel}
           </button>
         </div>
 
-        {pastDate ? (
+        {pastDate && selectedPastOpenDay === null ? (
           <p className="past-date-note">Прошедший день доступен только для просмотра</p>
+        ) : pastDate ? (
+          <p className="past-date-note">
+            Обычное редактирование прошлого дня заблокировано. Доступно только безопасное
+            завершение.
+          </p>
         ) : null}
 
         {state.decisionRescheduleNotice === null ? null : (
@@ -1105,11 +1775,29 @@ export function TodayPageView({
 
         {state.decisions.status === 'ready' ? (
           state.decisions.decisions.length === 0 && !isToday(selectedDate, currentDate) ? (
-            <p className="page-message">
-              {pastDate
-                ? 'На этот день решений не было'
-                : 'На этот день решения ещё не запланированы'}
-            </p>
+            <section className="empty-day-state" aria-labelledby="empty-day-title">
+              <div className="empty-day-summary">
+                <span className="empty-day-count" aria-label="Количество решений: 0">
+                  0
+                </span>
+                <div>
+                  <p className="section-kicker">Решения</p>
+                  <h2 id="empty-day-title">
+                    {pastDate
+                      ? 'На этот день решений не было'
+                      : 'На этот день решения ещё не запланированы'}
+                  </h2>
+                </div>
+              </div>
+              <div className="empty-day-actions">
+                <button className="secondary-button" type="button" onClick={onOpenNextDay}>
+                  Следующий день
+                </button>
+                <button className="secondary-button" type="button" onClick={onOpenToday}>
+                  Вернуться к сегодня
+                </button>
+              </div>
+            </section>
           ) : (
             <DecisionSections
               decisions={state.decisions.decisions}
@@ -1124,6 +1812,7 @@ export function TodayPageView({
           details={state.details}
           currentDate={currentDate}
           readOnly={pastDate}
+          now={clock.now()}
           isFormOpen={state.isLifeActionFormOpen}
           isSaving={state.isLifeActionSaving}
           form={state.lifeActionForm}
@@ -1157,8 +1846,9 @@ export function TodayPageView({
           onConfirmationSubmit={onDecisionConfirmationSubmit}
           onOpenEditForm={onOpenDecisionEditForm}
           onCloseEditForm={onCloseDecisionEditForm}
-          onEditTitleChange={onDecisionEditTitleChange}
-          onEditExpectedResultChange={onDecisionEditExpectedResultChange}
+          onEditTextChange={onDecisionEditTextChange}
+          onEditKindChange={onDecisionEditKindChange}
+          onEditPriorityChange={onDecisionEditPriorityChange}
           onEditSubmit={onDecisionEditSubmit}
           onOpenCancellation={onOpenDecisionCancellation}
           onCloseCancellation={onCloseDecisionCancellation}
@@ -1166,6 +1856,7 @@ export function TodayPageView({
           onOpenRescheduleForm={onOpenDecisionRescheduleForm}
           onCloseRescheduleForm={onCloseDecisionRescheduleForm}
           onRescheduleDateChange={onDecisionRescheduleDateChange}
+          onRescheduleReasonChange={onDecisionRescheduleReasonChange}
           onRescheduleSubmit={onDecisionRescheduleSubmit}
           onOpenLifeAction={onOpenLifeAction}
         />
@@ -1174,6 +1865,7 @@ export function TodayPageView({
           details={state.actionDetails}
           currentDate={currentDate}
           readOnly={pastDate}
+          sessionRecoveryMode={pastDate && selectedPastOpenDay !== null}
           decisionTitle={
             state.details.status === 'ready' ? state.details.decision.title.toString() : null
           }
@@ -1227,6 +1919,470 @@ export function TodayPageView({
         />
       )}
     </>
+  );
+}
+
+function PastOpenDayRecoveryCard({
+  day,
+  hasUnfinishedSession,
+  mode,
+  onOpen,
+}: {
+  readonly day: Day;
+  readonly hasUnfinishedSession: boolean;
+  readonly mode: 'redirect' | 'complete';
+  readonly onOpen: () => void;
+}) {
+  const dateLabel = formatOpenDayDate(day.date);
+
+  return (
+    <section className="past-open-day-recovery" aria-labelledby="past-open-day-recovery-title">
+      <div>
+        <p className="section-kicker danger">Незавершённый день</p>
+        <h2 id="past-open-day-recovery-title">День {dateLabel} всё ещё открыт</h2>
+        <p>
+          {mode === 'redirect'
+            ? 'Новый день нельзя начать, пока предыдущий рабочий цикл не завершён.'
+            : 'Этот прошлый день не переводится в обычный режим редактирования. Завершите его через вечерний контроль.'}
+        </p>
+        {hasUnfinishedSession ? (
+          <p className="past-open-day-recovery-warning">
+            В этом дне есть активная или приостановленная сессия. Сначала завершите её.
+          </p>
+        ) : null}
+      </div>
+      <button className="primary-button" type="button" onClick={onOpen}>
+        {mode === 'redirect' ? 'Открыть активный день' : 'Открыть вечерний контроль'}
+      </button>
+    </section>
+  );
+}
+
+function formatOpenDayDate(date: DayDate): string {
+  const [year, month, day] = date.toString().split('-').map(Number);
+  return new Intl.DateTimeFormat('ru-RU', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(Date.UTC(year!, month! - 1, day)));
+}
+
+interface TodayStateCardProps {
+  readonly state: TodayScreenState;
+  readonly decisions: readonly Decision[];
+  readonly currentDaySessions: readonly ActionSession[];
+  readonly isCurrentActionMutating: boolean;
+  readonly currentActionError: string | null;
+  readonly clock: Pick<Clock, 'now'>;
+  readonly isStarting: boolean;
+  readonly error: string | null;
+  readonly startBlockedMessage: string | null;
+  readonly onRetryRecovery: () => void;
+  readonly onStart: () => void;
+  readonly onOpenEveningReview: () => void;
+  readonly onOpenLifeAction: (lifeAction: LifeAction) => void;
+  readonly onStartCurrentAction: (lifeAction: LifeAction) => void;
+  readonly onPauseCurrentAction: (session: ActionSession) => void;
+  readonly onResumeCurrentAction: (session: ActionSession) => void;
+  readonly onCompleteCurrentActionSession: (lifeAction: LifeAction) => void;
+  readonly onRescheduleCurrentAction: (lifeAction: LifeAction) => void;
+  readonly onCancelCurrentAction: (lifeAction: LifeAction) => void;
+  readonly onSelectCurrentAction: (lifeAction: LifeAction) => void;
+}
+
+function TodayStateCard({
+  state,
+  decisions,
+  currentDaySessions,
+  isCurrentActionMutating,
+  currentActionError,
+  clock,
+  isStarting,
+  error,
+  startBlockedMessage,
+  onRetryRecovery,
+  onStart,
+  onOpenEveningReview,
+  onOpenLifeAction,
+  onStartCurrentAction,
+  onPauseCurrentAction,
+  onResumeCurrentAction,
+  onCompleteCurrentActionSession,
+  onRescheduleCurrentAction,
+  onCancelCurrentAction,
+  onSelectCurrentAction,
+}: TodayStateCardProps) {
+  switch (state.kind) {
+    case TODAY_SCREEN_STATE.loading:
+      return (
+        <section className="day-start-card today-state-card" aria-labelledby="day-state-title">
+          <div className="day-start-header">
+            <div>
+              <p className="section-kicker">Восстановление</p>
+              <h2 id="day-state-title">Восстанавливаем состояние дня…</h2>
+              <p>Проверяем решения, действия и незавершённую рабочую сессию.</p>
+            </div>
+            <span className="day-start-status">Загрузка</span>
+          </div>
+        </section>
+      );
+
+    case TODAY_SCREEN_STATE.recoveryError:
+      return (
+        <section
+          className="day-start-card today-state-card today-state-card-error"
+          aria-labelledby="day-state-title"
+        >
+          <div className="day-start-header">
+            <div>
+              <p className="section-kicker danger">Требуется внимание</p>
+              <h2 id="day-state-title">Не удалось восстановить состояние дня</h2>
+              <p>{state.message}</p>
+            </div>
+            <span className="day-start-status day-start-status-error">Ошибка</span>
+          </div>
+          <p className="today-state-recovery-note">
+            Данные не изменены. Повторите чтение перед продолжением работы.
+          </p>
+          <button className="secondary-button" type="button" onClick={onRetryRecovery}>
+            Повторить восстановление
+          </button>
+        </section>
+      );
+
+    case TODAY_SCREEN_STATE.dayCompleted:
+      return (
+        <section
+          className="day-start-card day-start-card-completed today-state-card"
+          aria-labelledby="day-state-title"
+        >
+          <div className="day-start-header">
+            <div>
+              <p className="section-kicker green">Цикл закрыт</p>
+              <h2 id="day-state-title">День завершён</h2>
+              <p>Итог сохранён. Повторное завершение и запуск недоступны.</p>
+            </div>
+            <span className="day-start-status day-start-status-open">Завершён</span>
+          </div>
+          {state.day.summary === null ? null : (
+            <blockquote className="day-completed-summary">{state.day.summary}</blockquote>
+          )}
+        </section>
+      );
+
+    case TODAY_SCREEN_STATE.dayNotPlanned:
+      return (
+        <section
+          className="day-start-card day-start-card-unplanned today-state-card"
+          aria-labelledby="day-state-title"
+        >
+          <div className="day-start-header">
+            <div>
+              <p className="section-kicker">Подготовка</p>
+              <h2 id="day-state-title">День не запланирован</h2>
+              <p>Добавьте хотя бы одно главное решение, чтобы определить направление дня.</p>
+            </div>
+            <span className="day-start-status day-start-status-neutral">Нет плана</span>
+          </div>
+          <div className="day-start-main-count">
+            <span>Главных решений</span>
+            <strong>0 из 3</strong>
+          </div>
+          <p className="day-start-guidance">
+            После подготовки главного решения появится доступная команда «Начать день».
+          </p>
+          {error === null ? null : (
+            <p className="form-error" role="alert">
+              {error}
+            </p>
+          )}
+          <button className="primary-button" type="button" disabled>
+            Начать день
+          </button>
+        </section>
+      );
+
+    case TODAY_SCREEN_STATE.dayPlanned:
+      return (
+        <section
+          className="day-start-card day-start-card-planned today-state-card"
+          aria-labelledby="day-state-title"
+        >
+          <div className="day-start-header">
+            <div>
+              <p className="section-kicker gold">План готов</p>
+              <h2 id="day-state-title">День запланирован</h2>
+              <p>Проверьте главные решения и зафиксируйте начало рабочего цикла.</p>
+            </div>
+            <span className="day-start-status">Запланирован</span>
+          </div>
+          <div className="day-start-main-count">
+            <span>Главных решений</span>
+            <strong>{state.mainDecisionCount} из 3</strong>
+          </div>
+          {error === null ? null : (
+            <p className="form-error" role="alert">
+              {error}
+            </p>
+          )}
+          {error !== null || startBlockedMessage === null ? null : (
+            <p className="today-state-recovery-note">{startBlockedMessage}</p>
+          )}
+          <button
+            className="primary-button"
+            type="button"
+            disabled={isStarting || startBlockedMessage !== null}
+            onClick={onStart}
+          >
+            {isStarting ? 'Начинаем…' : 'Начать день'}
+          </button>
+        </section>
+      );
+
+    case TODAY_SCREEN_STATE.eveningControl:
+      return (
+        <section
+          className="day-start-card today-state-card today-state-card-evening"
+          aria-labelledby="day-state-title"
+        >
+          <div className="day-start-header">
+            <div>
+              <p className="section-kicker gold">Шаг завершения</p>
+              <h2 id="day-state-title">Вечерний контроль</h2>
+              <p>Проверка дня открыта. Обработайте остатки, итог и решения на завтра.</p>
+            </div>
+            <span className="day-start-status">Открыт</span>
+          </div>
+        </section>
+      );
+
+    case TODAY_SCREEN_STATE.activeSession:
+      return (
+        <OpenDayStateCard
+          title="Рабочая сессия идёт"
+          description={`Начата в ${formatTime(state.session.startedAt)}. Таймер восстановлен из сохранённого времени.`}
+          statusLabel="Сессия идёт"
+          statusClassName="day-start-status-open"
+          lifeAction={state.currentLifeAction}
+          nextLifeAction={state.nextLifeAction}
+          availableLifeActions={state.availableLifeActions}
+          currentLifeActionIndex={state.currentLifeActionIndex}
+          unfinishedSession={state.session}
+          decisions={decisions}
+          currentDaySessions={currentDaySessions}
+          isCurrentActionMutating={isCurrentActionMutating}
+          currentActionError={currentActionError}
+          clock={clock}
+          onOpenLifeAction={onOpenLifeAction}
+          onStartCurrentAction={onStartCurrentAction}
+          onPauseCurrentAction={onPauseCurrentAction}
+          onResumeCurrentAction={onResumeCurrentAction}
+          onCompleteCurrentActionSession={onCompleteCurrentActionSession}
+          onRescheduleCurrentAction={onRescheduleCurrentAction}
+          onCancelCurrentAction={onCancelCurrentAction}
+          onSelectCurrentAction={onSelectCurrentAction}
+          onOpenEveningReview={onOpenEveningReview}
+        />
+      );
+
+    case TODAY_SCREEN_STATE.pausedSession:
+      return (
+        <OpenDayStateCard
+          title="Рабочая сессия на паузе"
+          description="Сессия сохранена и ожидает продолжения или завершения."
+          statusLabel="Пауза"
+          statusClassName="day-start-status-paused"
+          lifeAction={state.currentLifeAction}
+          nextLifeAction={state.nextLifeAction}
+          availableLifeActions={state.availableLifeActions}
+          currentLifeActionIndex={state.currentLifeActionIndex}
+          unfinishedSession={state.session}
+          decisions={decisions}
+          currentDaySessions={currentDaySessions}
+          isCurrentActionMutating={isCurrentActionMutating}
+          currentActionError={currentActionError}
+          clock={clock}
+          onOpenLifeAction={onOpenLifeAction}
+          onStartCurrentAction={onStartCurrentAction}
+          onPauseCurrentAction={onPauseCurrentAction}
+          onResumeCurrentAction={onResumeCurrentAction}
+          onCompleteCurrentActionSession={onCompleteCurrentActionSession}
+          onRescheduleCurrentAction={onRescheduleCurrentAction}
+          onCancelCurrentAction={onCancelCurrentAction}
+          onSelectCurrentAction={onSelectCurrentAction}
+          onOpenEveningReview={onOpenEveningReview}
+        />
+      );
+
+    case TODAY_SCREEN_STATE.noCurrentAction:
+      return (
+        <section
+          className="day-start-card day-start-card-open today-state-card"
+          aria-labelledby="day-state-title"
+        >
+          <div className="day-start-header">
+            <div>
+              <p className="section-kicker green">День начат</p>
+              <h2 id="day-state-title">Нет текущего действия</h2>
+              <p>Создайте готовое действие внутри решения или завершите вечерний контроль.</p>
+            </div>
+            <span className="day-start-status day-start-status-neutral">Нет действия</span>
+          </div>
+          <p className="day-current-action-empty">
+            Главный экран не подменяет отсутствие действия случайной карточкой.
+          </p>
+          <EveningControlEntry onOpen={onOpenEveningReview} />
+        </section>
+      );
+
+    case TODAY_SCREEN_STATE.dayStarted:
+      return (
+        <OpenDayStateCard
+          title="День начат"
+          description={
+            state.day.openedAt === null
+              ? 'Состояние начала синхронизировано.'
+              : `Начало в ${formatTime(state.day.openedAt)}`
+          }
+          statusLabel="Идёт"
+          statusClassName="day-start-status-open"
+          lifeAction={state.currentLifeAction}
+          nextLifeAction={state.nextLifeAction}
+          availableLifeActions={state.availableLifeActions}
+          currentLifeActionIndex={state.currentLifeActionIndex}
+          unfinishedSession={null}
+          decisions={decisions}
+          currentDaySessions={currentDaySessions}
+          isCurrentActionMutating={isCurrentActionMutating}
+          currentActionError={currentActionError}
+          clock={clock}
+          onOpenLifeAction={onOpenLifeAction}
+          onStartCurrentAction={onStartCurrentAction}
+          onPauseCurrentAction={onPauseCurrentAction}
+          onResumeCurrentAction={onResumeCurrentAction}
+          onCompleteCurrentActionSession={onCompleteCurrentActionSession}
+          onRescheduleCurrentAction={onRescheduleCurrentAction}
+          onCancelCurrentAction={onCancelCurrentAction}
+          onSelectCurrentAction={onSelectCurrentAction}
+          onOpenEveningReview={onOpenEveningReview}
+        />
+      );
+  }
+}
+
+interface OpenDayStateCardProps {
+  readonly title: string;
+  readonly description: string;
+  readonly statusLabel: string;
+  readonly statusClassName: string;
+  readonly lifeAction: LifeAction;
+  readonly nextLifeAction: LifeAction | null;
+  readonly availableLifeActions: readonly LifeAction[];
+  readonly currentLifeActionIndex: number;
+  readonly unfinishedSession: ActionSession | null;
+  readonly decisions: readonly Decision[];
+  readonly currentDaySessions: readonly ActionSession[];
+  readonly isCurrentActionMutating: boolean;
+  readonly currentActionError: string | null;
+  readonly clock: Pick<Clock, 'now'>;
+  readonly onOpenLifeAction: (lifeAction: LifeAction) => void;
+  readonly onStartCurrentAction: (lifeAction: LifeAction) => void;
+  readonly onPauseCurrentAction: (session: ActionSession) => void;
+  readonly onResumeCurrentAction: (session: ActionSession) => void;
+  readonly onCompleteCurrentActionSession: (lifeAction: LifeAction) => void;
+  readonly onRescheduleCurrentAction: (lifeAction: LifeAction) => void;
+  readonly onCancelCurrentAction: (lifeAction: LifeAction) => void;
+  readonly onSelectCurrentAction: (lifeAction: LifeAction) => void;
+  readonly onOpenEveningReview: () => void;
+}
+
+function OpenDayStateCard({
+  title,
+  description,
+  statusLabel,
+  statusClassName,
+  lifeAction,
+  nextLifeAction,
+  availableLifeActions,
+  currentLifeActionIndex,
+  unfinishedSession,
+  decisions,
+  currentDaySessions,
+  isCurrentActionMutating,
+  currentActionError,
+  clock,
+  onOpenLifeAction,
+  onStartCurrentAction,
+  onPauseCurrentAction,
+  onResumeCurrentAction,
+  onCompleteCurrentActionSession,
+  onRescheduleCurrentAction,
+  onCancelCurrentAction,
+  onSelectCurrentAction,
+  onOpenEveningReview,
+}: OpenDayStateCardProps) {
+  const cardState = resolveCurrentActionCardState({
+    lifeAction,
+    decisions,
+    sessions: currentDaySessions,
+    unfinishedSession,
+  });
+  const nextCardState =
+    nextLifeAction === null
+      ? null
+      : resolveNextActionCardState({ lifeAction: nextLifeAction, decisions });
+
+  return (
+    <section
+      className="day-start-card day-start-card-open today-state-card"
+      aria-labelledby="day-state-title"
+    >
+      <div className="day-start-header">
+        <div>
+          <p className="section-kicker green">Рабочий цикл</p>
+          <h2 id="day-state-title">{title}</h2>
+          <p>{description}</p>
+        </div>
+        <span className={`day-start-status ${statusClassName}`}>{statusLabel}</span>
+      </div>
+      <TodayActionNavigator
+        lifeActions={availableLifeActions}
+        currentLifeActionIndex={currentLifeActionIndex}
+        isLockedBySession={unfinishedSession !== null}
+        isMutating={isCurrentActionMutating}
+        onSelect={onSelectCurrentAction}
+      />
+      <CurrentActionCard
+        state={cardState}
+        clock={clock}
+        isMutating={isCurrentActionMutating}
+        error={currentActionError}
+        onStart={onStartCurrentAction}
+        onPause={onPauseCurrentAction}
+        onResume={onResumeCurrentAction}
+        onCompleteSession={onCompleteCurrentActionSession}
+        onOpen={onOpenLifeAction}
+        onReschedule={onRescheduleCurrentAction}
+        onCancel={onCancelCurrentAction}
+      />
+      <NextActionCard state={nextCardState} />
+      <EveningControlEntry onOpen={onOpenEveningReview} />
+    </section>
+  );
+}
+
+function EveningControlEntry({ onOpen }: { readonly onOpen: () => void }) {
+  return (
+    <div className="day-evening-control">
+      <div>
+        <strong>День подходит к завершению?</strong>
+        <p>Проверьте остатки, запишите итог и подготовьте завтра.</p>
+      </div>
+      <button className="secondary-button" type="button" onClick={onOpen}>
+        Вечерний контроль
+      </button>
+    </div>
   );
 }
 
@@ -1458,12 +2614,61 @@ function decisionStatusLabel(status: DecisionStatus): string {
   }
 }
 
+function openDayRecoveryErrorMessage(code: string): string {
+  switch (code) {
+    case 'day.recovery_conflict':
+      return 'Активные дни изменились в другой вкладке. Проверьте состояние снова.';
+    case 'day.recovery_session_blocked':
+      return 'Нельзя закрыть день с активной или приостановленной сессией.';
+    case 'day.recovery_orphaned_session':
+      return 'Незавершённая сессия не связана с найденными активными днями. Сначала восстановите сессию.';
+    case 'day.recovery_not_required':
+      return 'Конфликт уже устранён. Обновите состояние.';
+    case 'day.recovery_invalid_keep_day':
+      return 'Выбранный активный день изменился. Проверьте состояние снова.';
+    default:
+      return 'Не удалось восстановить активные дни. Данные не изменены.';
+  }
+}
+
+function startDayErrorMessage(code: string): string {
+  switch (code) {
+    case 'day.main_decision_required':
+      return 'Чтобы начать день, добавьте хотя бы одно главное решение';
+    case 'day.another_open_exists':
+      return 'Сначала завершите ранее начатый день';
+    case 'day.multiple_open_detected':
+      return 'Обнаружено несколько активных дней. Требуется восстановление данных';
+    case 'day.cannot_start':
+    case 'day.already_completed':
+      return 'Этот день уже нельзя начать';
+    default:
+      return 'Не удалось начать день';
+  }
+}
+
+function formatTime(date: Date): string {
+  return new Intl.DateTimeFormat('ru-RU', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+}
+
 function formatRussianDate(date: DayDate): string {
   const [year, month, day] = date.toString().split('-').map(Number);
   return new Intl.DateTimeFormat('ru-RU', {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(Date.UTC(year!, month! - 1, day)));
+}
+
+function formatPlanDate(date: DayDate): string {
+  const [year, month, day] = date.toString().split('-').map(Number);
+  return new Intl.DateTimeFormat('ru-RU', {
+    day: 'numeric',
+    month: 'long',
     timeZone: 'UTC',
   }).format(new Date(Date.UTC(year!, month! - 1, day)));
 }

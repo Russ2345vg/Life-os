@@ -1,6 +1,6 @@
 import { StartupPage } from '../presentation/pages/StartupPage';
-import { TodayPage } from '../presentation/pages/TodayPage';
-import { LifeOsApplicationProvider, useLifeOsApplication } from './providers';
+import { ApplicationShell } from './ApplicationShell';
+import { LifeOsApplicationProvider } from './providers';
 
 export function App() {
   return (
@@ -8,37 +8,7 @@ export function App() {
       loadingFallback={<StartupPage status="loading" />}
       errorFallback={() => <StartupPage status="error" />}
     >
-      <ReadyTodayPage />
+      <ApplicationShell />
     </LifeOsApplicationProvider>
-  );
-}
-
-function ReadyTodayPage() {
-  const application = useLifeOsApplication();
-
-  return (
-    <TodayPage
-      currentDate={application.currentDate}
-      getDecisionsForDate={application.getDecisionsForDate}
-      createDecisionForDate={application.createDecisionForDate}
-      getDecisionById={application.getDecisionById}
-      getLifeActionsForDecision={application.getLifeActionsForDecision}
-      createLifeActionForDecision={application.createLifeActionForDecision}
-      startLifeActionSession={application.startLifeActionSession}
-      pauseActionSession={application.pauseActionSession}
-      resumeActionSession={application.resumeActionSession}
-      completeActionSession={application.completeActionSession}
-      completeLifeAction={application.completeLifeAction}
-      confirmDecisionFromActions={application.confirmDecisionFromActions}
-      updateDecisionDetails={application.updateDecisionDetails}
-      cancelDecisionSafely={application.cancelDecisionSafely}
-      updateLifeActionDetails={application.updateLifeActionDetails}
-      cancelLifeActionSafely={application.cancelLifeActionSafely}
-      rescheduleDecisionSafely={application.rescheduleDecisionSafely}
-      rescheduleLifeActionSafely={application.rescheduleLifeActionSafely}
-      getActionSessionsForLifeAction={application.getActionSessionsForLifeAction}
-      getUnfinishedActionSession={application.getUnfinishedActionSession}
-      clock={application.clock}
-    />
   );
 }

@@ -16,6 +16,7 @@ import { decisionNotFound, domainFailure } from './decisionCommandResult';
 export interface RescheduleDecisionInput {
   readonly decisionId: EntityId;
   readonly newDate: DayDate;
+  readonly reason: string;
 }
 
 export class RescheduleDecision {
@@ -58,7 +59,12 @@ export class RescheduleDecision {
     }
 
     try {
-      decision.reschedule(input.newDate, this.#clock.now(), this.#idGenerator.generate());
+      decision.reschedule(
+        input.newDate,
+        input.reason,
+        this.#clock.now(),
+        this.#idGenerator.generate(),
+      );
       await this.#repository.save(decision);
       return success(decision);
     } catch (error: unknown) {

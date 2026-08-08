@@ -195,7 +195,11 @@ describe('RescheduleDecision', () => {
     const decision = createPlannedDecision('candidate', DATE);
     await context.repository.save(decision);
 
-    const result = await context.reschedule.execute({ decisionId: decision.id, newDate: NEW_DATE });
+    const result = await context.reschedule.execute({
+      decisionId: decision.id,
+      newDate: NEW_DATE,
+      reason: 'Причина переноса',
+    });
 
     expect(unwrap(result)).toBe(decision);
     expect(decision.plannedDate?.equals(NEW_DATE)).toBe(true);
@@ -209,7 +213,11 @@ describe('RescheduleDecision', () => {
     await context.repository.save(decision);
     await seedThreeMainDecisions(context.repository, NEW_DATE);
 
-    const result = await context.reschedule.execute({ decisionId: decision.id, newDate: NEW_DATE });
+    const result = await context.reschedule.execute({
+      decisionId: decision.id,
+      newDate: NEW_DATE,
+      reason: 'Причина переноса',
+    });
 
     expectFailureCode(result, 'decision.main_limit_reached');
     expect(decision.plannedDate?.equals(DATE)).toBe(true);
@@ -222,7 +230,11 @@ describe('RescheduleDecision', () => {
     await context.repository.save(decision);
     await seedThreeMainDecisions(context.repository, NEW_DATE);
 
-    const result = await context.reschedule.execute({ decisionId: decision.id, newDate: NEW_DATE });
+    const result = await context.reschedule.execute({
+      decisionId: decision.id,
+      newDate: NEW_DATE,
+      reason: 'Причина переноса',
+    });
 
     expect(result.ok).toBe(true);
     expect(decision.plannedDate?.equals(NEW_DATE)).toBe(true);

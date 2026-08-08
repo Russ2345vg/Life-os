@@ -15,6 +15,10 @@ export class InMemoryActionSessionRepository implements ActionSessionRepository 
     );
   }
 
+  public async findAll(): Promise<readonly ActionSession[]> {
+    return [...this.#sessionsById.values()];
+  }
+
   public async findUnfinished(): Promise<ActionSession | null> {
     const unfinishedSessions = [...this.#sessionsById.values()].filter(
       (session) => session.isRunning() || session.isPaused(),

@@ -7,6 +7,7 @@ import type {
   CreateDecisionForDate,
   CreateLifeActionForDecision,
   GetDecisionsForDate,
+  DecisionActionOverview,
   GetLifeActionsForDecision,
   RescheduleDecisionSafely,
   RescheduleLifeActionSafely,
@@ -21,6 +22,7 @@ import {
   type DayDate,
   type Decision,
   type DecisionKind,
+  type DecisionPriority,
   type EntityId,
   type LifeAction,
   type SessionCompletionKind,
@@ -47,13 +49,25 @@ export interface DecisionConfirmationFormState {
   readonly actualResult: string;
 }
 
+export type DecisionEditTextField =
+  'title' | 'reason' | 'expectedResult' | 'sphere' | 'price' | 'sacrifices' | 'projectReference';
+
 export interface DecisionEditFormState {
   readonly title: string;
   readonly expectedResult: string;
+  readonly reason?: string;
+  readonly sphere?: string;
+  readonly price?: string;
+  readonly sacrifices?: string;
+  readonly projectReference?: string;
+  readonly kind?: DecisionKind;
+  readonly priority?: DecisionPriority;
+  readonly expectedVersion?: number;
 }
 
 export interface DecisionRescheduleFormState {
   readonly newPlannedDate: string;
+  readonly reason: string;
 }
 
 export interface LifeActionEditFormState {
@@ -90,6 +104,7 @@ export type DecisionDetailsState =
       readonly decisionId: EntityId;
       readonly decision: Decision;
       readonly lifeActions: readonly LifeAction[];
+      readonly actionOverviews?: readonly DecisionActionOverview[];
     };
 
 export type LifeActionDetailsState =
@@ -108,7 +123,11 @@ type DecisionSubmissionResult =
   | { readonly ok: false; readonly message: string };
 
 type LifeActionSubmissionResult =
-  | { readonly ok: true; readonly lifeActions: readonly LifeAction[] }
+  | {
+      readonly ok: true;
+      readonly lifeAction: LifeAction;
+      readonly lifeActions: readonly LifeAction[];
+    }
   | { readonly ok: false; readonly message: string };
 
 export type SelectedDateLoadResult =
@@ -181,6 +200,7 @@ export type TodayPageAction =
       readonly decisionId: EntityId;
       readonly decision: Decision;
       readonly lifeActions: readonly LifeAction[];
+      readonly actionOverviews?: readonly DecisionActionOverview[];
     }
   | { readonly type: 'details_load_failed'; readonly decisionId: EntityId }
   | { readonly type: 'details_closed' }
@@ -207,11 +227,13 @@ export type TodayPageAction =
   | { readonly type: 'decision_confirmation_succeeded'; readonly decision: Decision }
   | { readonly type: 'decision_edit_form_opened' }
   | { readonly type: 'decision_edit_form_closed' }
-  | { readonly type: 'decision_edit_title_changed'; readonly title: string }
   | {
-      readonly type: 'decision_edit_expected_result_changed';
-      readonly expectedResult: string;
+      readonly type: 'decision_edit_text_changed';
+      readonly field: DecisionEditTextField;
+      readonly value: string;
     }
+  | { readonly type: 'decision_edit_kind_changed'; readonly kind: DecisionKind }
+  | { readonly type: 'decision_edit_priority_changed'; readonly priority: DecisionPriority }
   | { readonly type: 'decision_edit_started' }
   | { readonly type: 'decision_edit_failed'; readonly message: string }
   | { readonly type: 'decision_edit_succeeded'; readonly decision: Decision }
@@ -223,6 +245,7 @@ export type TodayPageAction =
   | { readonly type: 'decision_reschedule_form_opened' }
   | { readonly type: 'decision_reschedule_form_closed' }
   | { readonly type: 'decision_reschedule_date_changed'; readonly newPlannedDate: string }
+  | { readonly type: 'decision_reschedule_reason_changed'; readonly reason: string }
   | { readonly type: 'decision_reschedule_started' }
   | { readonly type: 'decision_reschedule_failed'; readonly message: string }
   | {
@@ -416,6 +439,9 @@ export function todayPageReducer(state: TodayPageState, action: TodayPageAction)
           decisionId: action.decisionId,
           decision: action.decision,
           lifeActions: action.lifeActions,
+          ...(action.actionOverviews === undefined
+            ? {}
+            : { actionOverviews: action.actionOverviews }),
         },
       };
     case 'details_load_failed':
@@ -483,7 +509,11 @@ export function todayPageReducer(state: TodayPageState, action: TodayPageAction)
       }
       return {
         ...state,
-        details: { ...state.details, lifeActions: action.lifeActions },
+        details: {
+          ...state.details,
+          lifeActions: action.lifeActions,
+          actionOverviews: mergeActionOverviews(state.details.actionOverviews, action.lifeActions),
+        },
         isLifeActionFormOpen: false,
         isLifeActionSaving: false,
         lifeActionForm: createEmptyLifeActionForm(),
@@ -544,7 +574,15 @@ export function todayPageReducer(state: TodayPageState, action: TodayPageAction)
         isDecisionEditFormOpen: true,
         decisionEditForm: {
           title: state.details.decision.title.toString(),
+          reason: state.details.decision.reason ?? '',
           expectedResult: state.details.decision.expectedResult?.toString() ?? '',
+          sphere: state.details.decision.sphere ?? '',
+          price: state.details.decision.price ?? '',
+          sacrifices: state.details.decision.sacrifices ?? '',
+          projectReference: state.details.decision.projectReference ?? '',
+          kind: state.details.decision.kind,
+          priority: state.details.decision.priority,
+          expectedVersion: state.details.decision.version,
         },
         decisionEditError: null,
         isDecisionRescheduleFormOpen: false,
@@ -560,19 +598,22 @@ export function todayPageReducer(state: TodayPageState, action: TodayPageAction)
         isDecisionRescheduleFormOpen: false,
         decisionRescheduleError: null,
       };
-    case 'decision_edit_title_changed':
+    case 'decision_edit_text_changed':
       return {
         ...state,
-        decisionEditForm: { ...state.decisionEditForm, title: action.title },
+        decisionEditForm: { ...state.decisionEditForm, [action.field]: action.value },
         decisionEditError: null,
       };
-    case 'decision_edit_expected_result_changed':
+    case 'decision_edit_kind_changed':
       return {
         ...state,
-        decisionEditForm: {
-          ...state.decisionEditForm,
-          expectedResult: action.expectedResult,
-        },
+        decisionEditForm: { ...state.decisionEditForm, kind: action.kind },
+        decisionEditError: null,
+      };
+    case 'decision_edit_priority_changed':
+      return {
+        ...state,
+        decisionEditForm: { ...state.decisionEditForm, priority: action.priority },
         decisionEditError: null,
       };
     case 'decision_edit_started':
@@ -660,6 +701,15 @@ export function todayPageReducer(state: TodayPageState, action: TodayPageAction)
         decisionRescheduleForm: {
           ...state.decisionRescheduleForm,
           newPlannedDate: action.newPlannedDate,
+        },
+        decisionRescheduleError: null,
+      };
+    case 'decision_reschedule_reason_changed':
+      return {
+        ...state,
+        decisionRescheduleForm: {
+          ...state.decisionRescheduleForm,
+          reason: action.reason,
         },
         decisionRescheduleError: null,
       };
@@ -800,7 +850,7 @@ export function todayPageReducer(state: TodayPageState, action: TodayPageAction)
         state.actionDetails.status !== 'ready' ||
         !state.actionDetails.lifeAction.id.equals(action.lifeAction.id)
       ) {
-        return state;
+        return { ...state, isSessionMutating: false, sessionError: null };
       }
       return {
         ...state,
@@ -922,7 +972,7 @@ export function todayPageReducer(state: TodayPageState, action: TodayPageAction)
         state.actionDetails.status !== 'ready' ||
         !state.actionDetails.lifeAction.id.equals(action.lifeAction.id)
       ) {
-        return state;
+        return { ...state, isSessionMutating: false, sessionError: null };
       }
       return {
         ...state,
@@ -941,7 +991,7 @@ export function todayPageReducer(state: TodayPageState, action: TodayPageAction)
         state.actionDetails.status !== 'ready' ||
         !state.actionDetails.lifeAction.id.equals(action.session.lifeActionId)
       ) {
-        return state;
+        return { ...state, isSessionMutating: false, sessionError: null };
       }
       return {
         ...state,
@@ -1128,12 +1178,22 @@ export function validateLifeActionForm(form: LifeActionFormState): string | null
 }
 
 export function validateDecisionRescheduleForm(form: DecisionRescheduleFormState): string | null {
-  return form.newPlannedDate.trim().length === 0 ? 'Выберите новую дату' : null;
+  if (form.newPlannedDate.trim().length === 0) {
+    return 'Выберите новую дату';
+  }
+  if (form.reason.trim().length === 0) {
+    return 'Укажите причину переноса';
+  }
+  if (form.reason.trim().length > 500) {
+    return 'Причина переноса не должна превышать 500 символов';
+  }
+  return null;
 }
 
 export async function rescheduleDecisionResult(input: {
   readonly decisionId: EntityId;
   readonly form: DecisionRescheduleFormState;
+  readonly expectedVersion: number;
   readonly rescheduleDecisionSafely: Pick<RescheduleDecisionSafely, 'execute'>;
 }): Promise<
   | { readonly ok: true; readonly decision: Decision }
@@ -1141,7 +1201,9 @@ export async function rescheduleDecisionResult(input: {
 > {
   const result = await input.rescheduleDecisionSafely.execute({
     decisionId: input.decisionId,
+    expectedVersion: input.expectedVersion,
     newPlannedDate: input.form.newPlannedDate,
+    reason: input.form.reason,
   });
 
   return result.ok
@@ -1155,10 +1217,21 @@ export function decisionRescheduleErrorMessage(code: string): string {
       return 'Выберите новую дату';
     case 'decision.planned_date_in_past':
       return 'Нельзя перенести решение на прошедшую дату';
+    case 'decision.reschedule_date_must_be_later':
+      return 'Новая дата должна быть позже текущей даты решения';
+    case 'decision.reschedule_reason_required':
+      return 'Укажите причину переноса';
+    case 'decision.reschedule_reason_too_long':
+      return 'Причина переноса не должна превышать 500 символов';
     case 'decision.main_limit_reached':
       return 'На выбранную дату уже назначены три главных решения';
-    case 'decision.actions_block_reschedule':
-      return 'Сначала завершите настройку или выполнение связанных действий';
+    case 'decision.session_unfinished':
+      return 'Сначала завершите активную или приостановленную рабочую сессию';
+    case 'decision.actions_date_mismatch':
+      return 'Одно из незавершённых действий уже относится к другой дате';
+    case 'decision.reschedule_conflict':
+    case 'decision.action_reschedule_conflict':
+      return 'Данные изменились в другой вкладке. Обновите карточку и повторите перенос';
     case 'decision.cannot_reschedule':
       return 'Это решение уже нельзя переносить';
     default:
@@ -1306,12 +1379,13 @@ export async function confirmDecisionResult(input: {
 
 export function validateDecisionEditForm(
   form: DecisionEditFormState,
-  kind: DecisionKind,
+  fallbackKind: DecisionKind,
 ): string | null {
   if (form.title.trim().length === 0) {
     return 'Введите название решения';
   }
 
+  const kind = form.kind ?? fallbackKind;
   if (kind === DECISION_KIND.main && form.expectedResult.trim().length === 0) {
     return 'Укажите ожидаемый результат';
   }
@@ -1329,8 +1403,20 @@ export async function updateDecisionDetailsResult(input: {
 > {
   const result = await input.updateDecisionDetails.execute({
     decisionId: input.decisionId,
+    ...(input.form.expectedVersion === undefined
+      ? {}
+      : { expectedVersion: input.form.expectedVersion }),
     title: input.form.title,
     expectedResult: input.form.expectedResult,
+    ...(input.form.reason === undefined ? {} : { reason: input.form.reason }),
+    ...(input.form.sphere === undefined ? {} : { sphere: input.form.sphere }),
+    ...(input.form.price === undefined ? {} : { price: input.form.price }),
+    ...(input.form.sacrifices === undefined ? {} : { sacrifices: input.form.sacrifices }),
+    ...(input.form.projectReference === undefined
+      ? {}
+      : { projectReference: input.form.projectReference }),
+    ...(input.form.kind === undefined ? {} : { kind: input.form.kind }),
+    ...(input.form.priority === undefined ? {} : { priority: input.form.priority }),
   });
 
   return result.ok
@@ -1349,6 +1435,14 @@ export function decisionEditErrorMessage(code: string): string {
       return 'Укажите ожидаемый результат';
     case 'decision.cannot_edit':
       return 'Это решение уже нельзя редактировать';
+    case 'decision.started_fields_locked':
+      return 'После начала дня можно уточнять только причину, результат, цену и жертвы';
+    case 'decision.edit_conflict':
+      return 'Решение изменилось в другой вкладке. Обновите карточку и повторите попытку';
+    case 'decision.duplicate_for_date':
+      return 'Такое решение уже существует на эту дату';
+    case 'decision.main_limit_reached':
+      return 'На эту дату уже назначены три главных решения';
     default:
       return 'Не удалось сохранить изменения';
   }
@@ -1382,9 +1476,9 @@ export function decisionConfirmationErrorMessage(code: string): string {
     case 'actual_result_summary.invalid':
       return 'Укажите фактический результат решения';
     case 'decision.no_completed_actions':
-      return 'Сначала завершите хотя бы одно действие';
+      return 'Для подтверждения нужен хотя бы один проверенный результат завершённого действия';
     case 'decision.actions_unfinished':
-      return 'Сначала завершите текущие действия';
+      return 'Завершите все текущие действия, прежде чем подтверждать общий результат';
     case 'decision.cannot_confirm':
       return 'Это решение больше нельзя подтвердить';
     default:
@@ -1405,6 +1499,14 @@ export function startSessionErrorMessage(code: string): string {
     return 'Сначала завершите или приостановите текущую работу';
   }
 
+  if (code === 'day.not_started') {
+    return 'Сначала начните текущий день';
+  }
+
+  if (code === 'action.not_scheduled_for_current_day') {
+    return 'Это действие запланировано на другую дату';
+  }
+
   return 'Не удалось начать выполнение';
 }
 
@@ -1421,11 +1523,20 @@ export function resumeSessionErrorMessage(): string {
 }
 
 export function validateSessionCompletionForm(form: SessionCompletionFormState): string | null {
-  if (
-    form.actionChoice === ACTION_COMPLETION_CHOICE.completeAction &&
-    form.actualResult.trim().length === 0
-  ) {
-    return 'Укажите фактический результат';
+  if (form.actionChoice !== ACTION_COMPLETION_CHOICE.completeAction) {
+    return null;
+  }
+
+  if (form.completionKind !== SESSION_COMPLETION_KIND.completed) {
+    return 'Чтобы подтвердить результат действия, завершите сессию как выполненную';
+  }
+
+  if (form.resultNote.trim().length === 0) {
+    return 'Запишите, что сделано за эту сессию';
+  }
+
+  if (form.actualResult.trim().length === 0) {
+    return 'Укажите фактический результат действия';
   }
 
   return null;
@@ -1440,7 +1551,7 @@ export function completeSessionErrorMessage(code: string): string {
 }
 
 export const ACTION_COMPLETION_FAILED_MESSAGE =
-  'Сессия завершена, но действие не удалось завершить';
+  'Сессия завершена, но результат действия не удалось подтвердить';
 
 export type SessionCompletionWorkflowResult =
   | { readonly status: 'session_failed'; readonly message: string }
@@ -1557,6 +1668,7 @@ export async function createLifeActionAndReload(input: {
 
   return {
     ok: true,
+    lifeAction: result.value,
     lifeActions: await input.getLifeActionsForDecision.execute(input.decisionId),
   };
 }
@@ -1600,7 +1712,7 @@ function createEmptyLifeActionEditForm(): LifeActionEditFormState {
 }
 
 function createEmptyDecisionRescheduleForm(): DecisionRescheduleFormState {
-  return { newPlannedDate: '' };
+  return { newPlannedDate: '', reason: '' };
 }
 
 function closedDecisionRescheduleState(): Pick<
@@ -1726,4 +1838,14 @@ function removeDecisionFromDecisionsState(
     status: 'ready',
     decisions: state.decisions.filter((decision) => !decision.id.equals(decisionId)),
   };
+}
+
+function mergeActionOverviews(
+  existing: readonly DecisionActionOverview[] | undefined,
+  lifeActions: readonly LifeAction[],
+): readonly DecisionActionOverview[] {
+  return lifeActions.map((lifeAction) => ({
+    lifeAction,
+    sessions: existing?.find((entry) => entry.lifeAction.id.equals(lifeAction.id))?.sessions ?? [],
+  }));
 }

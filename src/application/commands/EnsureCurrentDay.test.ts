@@ -13,24 +13,23 @@ const YESTERDAY = DayDate.create('2026-07-31');
 const NOW = new Date('2026-08-01T08:00:00.000+09:00');
 
 describe('EnsureCurrentDay', () => {
-  it('создаёт и сохраняет один открытый день, если день отсутствует', async () => {
+  it('создаёт и сохраняет текущий запланированный день, если день отсутствует', async () => {
     const context = createContext();
 
     const day = await context.command.execute();
 
     expect(day.date.equals(TODAY)).toBe(true);
-    expect(day.status).toBe(DAY_STATUS.open);
+    expect(day.status).toBe(DAY_STATUS.planned);
     expect(day.createdAt).toEqual(NOW);
-    expect(day.openedAt).toEqual(NOW);
+    expect(day.plannedAt).toEqual(NOW);
+    expect(day.openedAt).toBeNull();
     expect(context.repository.size).toBe(1);
     expect(context.repository.saveCount).toBe(1);
-    expect(day.getUncommittedEvents().map((event) => event.eventType)).toEqual([
-      'day.created',
-      'day.opened',
-    ]);
+    expect(context.idGenerator.generatedCount).toBe(2);
+    expect(day.getUncommittedEvents().map((event) => event.eventType)).toEqual(['day.created']);
   });
 
-  it('открывает и сохраняет существующий запланированный день', async () => {
+  it('возвращает существующий запланированный день без автоматического открытия', async () => {
     const context = createContext();
     const plannedDay = Day.plan({
       id: EntityId.create('planned-day'),
@@ -45,10 +44,11 @@ describe('EnsureCurrentDay', () => {
     const result = await context.command.execute();
 
     expect(result).toBe(plannedDay);
-    expect(result.status).toBe(DAY_STATUS.open);
-    expect(result.openedAt).toEqual(NOW);
-    expect(result.getUncommittedEvents().map((event) => event.eventType)).toEqual(['day.opened']);
-    expect(context.repository.saveCount).toBe(1);
+    expect(result.status).toBe(DAY_STATUS.planned);
+    expect(result.openedAt).toBeNull();
+    expect(result.getUncommittedEvents()).toHaveLength(0);
+    expect(context.repository.saveCount).toBe(0);
+    expect(context.idGenerator.generatedCount).toBe(0);
   });
 
   it('возвращает уже открытый день без изменений', async () => {
@@ -93,22 +93,8 @@ describe('EnsureCurrentDay', () => {
     expect(secondResult.id.equals(firstResult.id)).toBe(true);
     expect(context.repository.size).toBe(1);
     expect(context.repository.saveCount).toBe(1);
-    expect(context.idGenerator.generatedCount).toBe(3);
-  });
-
-  it('повторный вызов не создаёт повторные события', async () => {
-    const context = createContext();
-    const firstResult = await context.command.execute();
-    const eventIdsBefore = firstResult
-      .getUncommittedEvents()
-      .map((event) => event.eventId.toString());
-
-    const secondResult = await context.command.execute();
-
-    expect(secondResult.getUncommittedEvents().map((event) => event.eventId.toString())).toEqual(
-      eventIdsBefore,
-    );
-    expect(secondResult.getUncommittedEvents()).toHaveLength(2);
+    expect(context.idGenerator.generatedCount).toBe(2);
+    expect(secondResult.getUncommittedEvents()).toHaveLength(1);
   });
 });
 

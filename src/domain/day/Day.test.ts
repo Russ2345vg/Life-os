@@ -33,6 +33,21 @@ describe('Day', () => {
       expect(() => createPlannedDay(YESTERDAY)).toThrow(DomainError);
     });
 
+    it('создаёт текущий день запланированным до явного запуска', () => {
+      const day = Day.createCurrentPlanned({
+        id: id('current-planned-day'),
+        currentDate: TODAY,
+        occurredAt: CREATED_AT,
+        createdEventId: id('current-planned-created'),
+      });
+
+      expect(day.status).toBe(DAY_STATUS.planned);
+      expect(day.date.equals(TODAY)).toBe(true);
+      expect(day.plannedAt).toEqual(CREATED_AT);
+      expect(day.openedAt).toBeNull();
+      expect(day.getUncommittedEvents().map((event) => event.eventType)).toEqual(['day.created']);
+    });
+
     it('создаёт один текущий открытый день с двумя событиями', () => {
       const day = createOpenDay();
 

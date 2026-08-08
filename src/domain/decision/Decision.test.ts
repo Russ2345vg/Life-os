@@ -6,6 +6,7 @@ import { ActualResultSummary } from './ActualResultSummary';
 import { Decision } from './Decision';
 import { DecisionCancelReason } from './DecisionCancelReason';
 import { DECISION_KIND, type DecisionKind } from './DecisionKind';
+import { DECISION_PRIORITY } from './DecisionPriority';
 import { DECISION_STATUS } from './DecisionStatus';
 import { DecisionTitle } from './DecisionTitle';
 import { ExpectedResult } from './ExpectedResult';
@@ -257,17 +258,76 @@ describe('Decision', () => {
       expect(eventTypes(decision)).toEqual([]);
     });
 
-    it('запрещает редактирование после начала реализации', () => {
+    it('изменяет все плановые сведения planned-решения одной версией', () => {
+      const decision = createPlannedAdditional();
+      const version = decision.version;
+      decision.clearUncommittedEvents();
+
+      const changed = decision.updateDetails({
+        title: DecisionTitle.create('Главное обновлённое решение'),
+        reason: 'Новая причина',
+        expectedResult: ExpectedResult.create('Измеримый результат'),
+        sphere: 'Разработка',
+        price: 'Два часа',
+        sacrifices: 'Не переключаться',
+        priority: DECISION_PRIORITY.high,
+        projectReference: 'LifeOS',
+        kind: DECISION_KIND.main,
+        order: 2,
+        occurredAt: CHANGED_AT,
+        eventId: id('details-full-event'),
+      });
+
+      expect(changed).toBe(true);
+      expect(decision.title.toString()).toBe('Главное обновлённое решение');
+      expect(decision.reason).toBe('Новая причина');
+      expect(decision.expectedResult?.toString()).toBe('Измеримый результат');
+      expect(decision.sphere).toBe('Разработка');
+      expect(decision.price).toBe('Два часа');
+      expect(decision.sacrifices).toBe('Не переключаться');
+      expect(decision.priority).toBe(DECISION_PRIORITY.high);
+      expect(decision.projectReference).toBe('LifeOS');
+      expect(decision.kind).toBe(DECISION_KIND.main);
+      expect(decision.order).toBe(2);
+      expect(decision.version).toBe(version + 1);
+      expect(eventTypes(decision)).toEqual(['decision.details_updated']);
+    });
+
+    it('после начала разрешает уточнить причину, ожидаемый результат, цену и жертвы', () => {
+      const decision = createInProgress();
+      const title = decision.title;
+      const version = decision.version;
+      decision.clearUncommittedEvents();
+
+      const changed = decision.updateDetails({
+        reason: 'Уточнённая причина',
+        expectedResult: ExpectedResult.create('Уточнённый результат'),
+        price: 'Ещё тридцать минут',
+        sacrifices: 'Отложить второстепенное',
+        occurredAt: CHANGED_AT,
+        eventId: id('details-clarified-event'),
+      });
+
+      expect(changed).toBe(true);
+      expect(decision.title.equals(title)).toBe(true);
+      expect(decision.reason).toBe('Уточнённая причина');
+      expect(decision.expectedResult?.toString()).toBe('Уточнённый результат');
+      expect(decision.price).toBe('Ещё тридцать минут');
+      expect(decision.sacrifices).toBe('Отложить второстепенное');
+      expect(decision.version).toBe(version + 1);
+      expect(eventTypes(decision)).toEqual(['decision.details_updated']);
+    });
+
+    it('после начала блокирует изменение плановых полей', () => {
       const decision = createInProgress();
 
       expect(() =>
         decision.updateDetails({
           title: DecisionTitle.create('Недопустимое изменение'),
-          expectedResult: null,
           occurredAt: CHANGED_AT,
           eventId: id('details-updated-event'),
         }),
-      ).toThrowError(expect.objectContaining({ code: 'decision.cannot_edit' }));
+      ).toThrowError(expect.objectContaining({ code: 'decision.started_fields_locked' }));
     });
   });
 
@@ -276,7 +336,7 @@ describe('Decision', () => {
       const decision = createPlannedAdditional();
       decision.clearUncommittedEvents();
 
-      decision.reschedule(TOMORROW, CHANGED_AT, id('rescheduled-event'));
+      decision.reschedule(TOMORROW, 'Причина переноса', CHANGED_AT, id('rescheduled-event'));
 
       expect(decision.status).toBe(DECISION_STATUS.planned);
       expect(decision.plannedDate?.equals(TOMORROW)).toBe(true);
@@ -300,7 +360,9 @@ describe('Decision', () => {
       const decision = createPlannedMain();
       decision.clearUncommittedEvents();
 
-      expect(decision.reschedule(TOMORROW, CHANGED_AT, id('rescheduled-event'), 3)).toBe(true);
+      expect(
+        decision.reschedule(TOMORROW, 'Причина переноса', CHANGED_AT, id('rescheduled-event'), 3),
+      ).toBe(true);
 
       expect(decision.order).toBe(3);
       const event = decision.getUncommittedEvents()[0];
@@ -316,7 +378,7 @@ describe('Decision', () => {
       const decision = createInProgress();
       const sameDecision = decision;
 
-      decision.reschedule(TOMORROW, CHANGED_AT, id('rescheduled-event'));
+      decision.reschedule(TOMORROW, 'Причина переноса', CHANGED_AT, id('rescheduled-event'));
 
       expect(decision).toBe(sameDecision);
       expect(decision.status).toBe(DECISION_STATUS.inProgress);
@@ -328,7 +390,9 @@ describe('Decision', () => {
       decision.clearUncommittedEvents();
       const version = decision.version;
 
-      expect(decision.reschedule(TODAY, CHANGED_AT, id('rescheduled-event'))).toBe(false);
+      expect(
+        decision.reschedule(TODAY, 'Причина переноса', CHANGED_AT, id('rescheduled-event')),
+      ).toBe(false);
       expect(decision.version).toBe(version);
       expect(decision.getUncommittedEvents()).toHaveLength(0);
     });
@@ -336,18 +400,18 @@ describe('Decision', () => {
     it('запрещает перенос confirmed', () => {
       const decision = createConfirmed();
 
-      expect(() => decision.reschedule(TOMORROW, CHANGED_AT, id('rescheduled-event'))).toThrowError(
-        expect.objectContaining({ code: 'decision.reschedule_not_allowed' }),
-      );
+      expect(() =>
+        decision.reschedule(TOMORROW, 'Причина переноса', CHANGED_AT, id('rescheduled-event')),
+      ).toThrowError(expect.objectContaining({ code: 'decision.reschedule_not_allowed' }));
     });
 
     it('запрещает перенос cancelled', () => {
       const decision = createPlannedAdditional();
       decision.cancel(CHANGED_AT, id('cancelled-event'));
 
-      expect(() => decision.reschedule(TOMORROW, CHANGED_AT, id('rescheduled-event'))).toThrowError(
-        expect.objectContaining({ code: 'decision.reschedule_not_allowed' }),
-      );
+      expect(() =>
+        decision.reschedule(TOMORROW, 'Причина переноса', CHANGED_AT, id('rescheduled-event')),
+      ).toThrowError(expect.objectContaining({ code: 'decision.reschedule_not_allowed' }));
     });
   });
 

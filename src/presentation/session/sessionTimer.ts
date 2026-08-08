@@ -1,6 +1,32 @@
+import type { ActionSession } from '../../domain';
+
 export function scheduleSessionTimer(onTick: () => void): () => void {
   const timerId = globalThis.setInterval(onTick, 1_000);
   return () => globalThis.clearInterval(timerId);
+}
+
+export function resolveSafeSessionNow(
+  session: ActionSession | null,
+  ...candidates: readonly Date[]
+): Date {
+  const candidateTimestamp = candidates.reduce(
+    (latest, candidate) => Math.max(latest, candidate.getTime()),
+    Number.NEGATIVE_INFINITY,
+  );
+
+  if (session === null) {
+    return new Date(candidateTimestamp);
+  }
+
+  const lastPauseEndedAt = session.pauseIntervals.at(-1)?.endedAt ?? null;
+  const minimumTimestamp = Math.max(
+    session.startedAt.getTime(),
+    session.pausedAt?.getTime() ?? Number.NEGATIVE_INFINITY,
+    lastPauseEndedAt?.getTime() ?? Number.NEGATIVE_INFINITY,
+    session.completedAt?.getTime() ?? Number.NEGATIVE_INFINITY,
+  );
+
+  return new Date(Math.max(candidateTimestamp, minimumTimestamp));
 }
 
 export function formatDuration(durationMilliseconds: number): string {

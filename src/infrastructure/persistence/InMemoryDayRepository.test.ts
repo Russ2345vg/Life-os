@@ -29,6 +29,19 @@ describe('InMemoryDayRepository', () => {
     expect(storedDay?.firstActivityAt).toEqual(NOW);
   });
 
+  it('находит единственный открытый день и обнаруживает несколько открытых дней', async () => {
+    const repository = new InMemoryDayRepository();
+    const first = createDay('open-1', DATE);
+    await repository.save(first);
+
+    await expect(repository.findOpen()).resolves.toBe(first);
+
+    await repository.save(createDay('open-2', DayDate.create('2026-08-02')));
+    await expect(repository.findOpen()).rejects.toMatchObject({
+      code: 'day.multiple_open_detected',
+    });
+  });
+
   it('не допускает другой день на ту же календарную дату', async () => {
     const repository = new InMemoryDayRepository();
     await repository.save(createDay('day-1'));
@@ -40,10 +53,10 @@ describe('InMemoryDayRepository', () => {
   });
 });
 
-function createDay(id: string): Day {
+function createDay(id: string, date: DayDate = DATE): Day {
   return Day.openCurrent({
     id: EntityId.create(id),
-    currentDate: DATE,
+    currentDate: date,
     occurredAt: NOW,
     createdEventId: EntityId.create(`${id}-created-event`),
     openedEventId: EntityId.create(`${id}-opened-event`),

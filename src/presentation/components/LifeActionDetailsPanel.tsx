@@ -16,12 +16,18 @@ import {
   type LifeActionRescheduleFormState,
   type SessionCompletionFormState,
 } from '../pages/TodayPageState';
-import { formatDuration, scheduleSessionTimer } from '../session/sessionTimer';
+import { ActionSessionOverviewPanel } from './ActionSessionOverviewPanel';
+import {
+  formatDuration,
+  resolveSafeSessionNow,
+  scheduleSessionTimer,
+} from '../session/sessionTimer';
 
 interface LifeActionDetailsPanelProps {
   readonly details: LifeActionDetailsState;
   readonly currentDate: DayDate;
   readonly readOnly: boolean;
+  readonly sessionRecoveryMode?: boolean;
   readonly decisionTitle: string | null;
   readonly decisionPlannedDate: DayDate | null;
   readonly clock: Pick<Clock, 'now'>;
@@ -30,6 +36,7 @@ interface LifeActionDetailsPanelProps {
   readonly isCompletionFormOpen: boolean;
   readonly completionForm: SessionCompletionFormState;
   readonly hasPendingActionCompletion: boolean;
+  readonly backLabel?: string;
   readonly onClose: () => void;
   readonly onBack: () => void;
   readonly onRetry: () => void;
@@ -74,6 +81,7 @@ export function LifeActionDetailsPanel({
   details,
   currentDate,
   readOnly,
+  sessionRecoveryMode = false,
   decisionTitle,
   decisionPlannedDate,
   clock,
@@ -82,6 +90,7 @@ export function LifeActionDetailsPanel({
   isCompletionFormOpen,
   completionForm,
   hasPendingActionCompletion,
+  backLabel = 'Назад к решению',
   onClose,
   onBack,
   onRetry,
@@ -137,7 +146,7 @@ export function LifeActionDetailsPanel({
       >
         <div className="life-action-panel-navigation">
           <button className="back-button" type="button" onClick={onBack}>
-            <span aria-hidden="true">←</span> Назад к решению
+            <span aria-hidden="true">←</span> {backLabel}
           </button>
           <button
             className="decision-details-close"
@@ -197,6 +206,14 @@ export function LifeActionDetailsPanel({
               </div>
             </dl>
 
+            {readOnly ? (
+              <p className="life-action-read-only-note" role="status">
+                {sessionRecoveryMode
+                  ? 'Прошлый день остаётся только для просмотра. Разрешено лишь завершить незавершённую рабочую сессию.'
+                  : 'Прошедший день доступен только для просмотра'}
+              </p>
+            ) : null}
+
             <LifeActionManagement
               details={details}
               readOnly={readOnly}
@@ -233,7 +250,12 @@ export function LifeActionDetailsPanel({
               <CompletedActionSummary details={details} />
             ) : details.lifeAction.status === LIFE_ACTION_STATUS.cancelled ? (
               <CancelledActionSummary details={details} />
-            ) : (
+            ) : readOnly &&
+              !(
+                sessionRecoveryMode &&
+                details.unfinishedSession !== null &&
+                details.unfinishedSession.lifeActionId.equals(details.lifeAction.id)
+              ) ? null : (
               <SessionControls
                 details={details}
                 now={timerNow}
@@ -264,7 +286,7 @@ export function LifeActionDetailsPanel({
               />
             )}
 
-            <SessionHistory sessions={details.sessions} />
+            <ActionSessionOverviewPanel sessions={details.sessions} now={timerNow} />
           </div>
         ) : null}
       </aside>
@@ -338,7 +360,7 @@ function LifeActionManagement({
     details.lifeAction.status === LIFE_ACTION_STATUS.ready ||
     details.lifeAction.status === LIFE_ACTION_STATUS.inProgress;
 
-  if (!canEdit && !canCancel) {
+  if (readOnly || (!canEdit && !canCancel)) {
     return null;
   }
 
@@ -346,7 +368,7 @@ function LifeActionManagement({
     <section className="life-action-management" aria-label="Управление действием">
       {!isEditFormOpen && !isCancellationOpen && !isRescheduleFormOpen ? (
         <div className="life-action-management-actions">
-          {canEdit && !readOnly ? (
+          {canEdit ? (
             <button
               className="secondary-button"
               type="button"
@@ -603,6 +625,7 @@ function SessionControls({
       ) : (
         <ActiveSession
           session={activeSession}
+          expectedResult={details.lifeAction.expectedResult?.toString() ?? 'Не указан'}
           now={now}
           isMutating={isMutating}
           onPause={onPause}
@@ -621,14 +644,14 @@ function SessionControls({
 
       {hasPendingActionCompletion ? (
         <div className="action-completion-retry" role="alert">
-          <p>Сессия завершена, но действие не удалось завершить</p>
+          <p>Сессия завершена, но результат действия не удалось подтвердить</p>
           <button
             className="primary-button"
             type="button"
             disabled={isMutating}
             onClick={onRetryActionCompletion}
           >
-            Повторить завершение действия
+            Повторить подтверждение результата
           </button>
         </div>
       ) : null}
@@ -650,6 +673,7 @@ function SessionControls({
 
 function ActiveSession({
   session,
+  expectedResult,
   now,
   isMutating,
   onPause,
@@ -665,6 +689,7 @@ function ActiveSession({
   onComplete,
 }: {
   readonly session: ActionSession;
+  readonly expectedResult: string;
   readonly now: Date;
   readonly isMutating: boolean;
   readonly onPause: (session: ActionSession) => void;
@@ -739,6 +764,7 @@ function ActiveSession({
       {isCompletionFormOpen ? (
         <SessionCompletionForm
           session={session}
+          expectedResult={expectedResult}
           form={completionForm}
           isSaving={isMutating}
           onClose={onCloseCompletionForm}
@@ -755,6 +781,7 @@ function ActiveSession({
 
 function SessionCompletionForm({
   session,
+  expectedResult,
   form,
   isSaving,
   onClose,
@@ -765,6 +792,7 @@ function SessionCompletionForm({
   onComplete,
 }: {
   readonly session: ActionSession;
+  readonly expectedResult: string;
   readonly form: SessionCompletionFormState;
   readonly isSaving: boolean;
   readonly onClose: () => void;
@@ -840,27 +868,38 @@ function SessionCompletionForm({
             disabled={isSaving}
             onChange={() => onActionChoiceChange(ACTION_COMPLETION_CHOICE.completeAction)}
           />
-          <span>Завершить действие полностью</span>
+          <span>Подтвердить результат и завершить действие</span>
         </label>
       </fieldset>
 
       {completesAction ? (
-        <label>
-          <span>Фактический результат *</span>
-          <textarea
-            value={form.actualResult}
-            rows={4}
-            maxLength={2000}
-            aria-required="true"
-            disabled={isSaving}
-            onChange={(event) => onActualResultChange(event.target.value)}
-          />
-        </label>
+        <div className="action-result-verification">
+          <div className="action-result-verification-criterion" role="status">
+            <span>Критерий проверки</span>
+            <strong>Сравните фактический результат с ожидаемым</strong>
+            <p>{expectedResult}</p>
+          </div>
+          <label>
+            <span>Фактический результат действия *</span>
+            <textarea
+              value={form.actualResult}
+              rows={4}
+              maxLength={2000}
+              aria-required="true"
+              disabled={isSaving}
+              onChange={(event) => onActualResultChange(event.target.value)}
+            />
+          </label>
+          <p className="action-result-verification-help">
+            Подтверждение завершит действие. Связанное решение подтверждается отдельно только после
+            проверки всех его действий.
+          </p>
+        </div>
       ) : null}
 
       <div className="form-actions">
         <button className="primary-button" type="submit" disabled={isSaving}>
-          {isSaving ? 'Сохраняем…' : 'Сохранить'}
+          {isSaving ? 'Сохраняем…' : completesAction ? 'Подтвердить результат' : 'Сохранить сессию'}
         </button>
         <button className="secondary-button" type="button" disabled={isSaving} onClick={onClose}>
           Отмена
@@ -887,9 +926,12 @@ function CompletedActionSummary({
 
   return (
     <section className="completed-action-summary" aria-labelledby="completed-action-title">
-      <p className="section-kicker action-kicker">Итог</p>
-      <h3 id="completed-action-title">Действие завершено</h3>
+      <p className="section-kicker action-kicker">Проверка результата</p>
+      <h3 id="completed-action-title">Результат действия подтверждён</h3>
       <p className="completed-action-result">{details.lifeAction.actualResult?.toString()}</p>
+      <p className="completed-action-verification-note">
+        Подтверждено пользователем на основании завершённой рабочей сессии с записанным результатом.
+      </p>
       <dl>
         <div>
           <dt>Завершённых сессий</dt>
@@ -941,52 +983,6 @@ function CancelledActionSummary({
   );
 }
 
-function SessionHistory({ sessions }: { readonly sessions: readonly ActionSession[] }) {
-  const completedSessions = sessions
-    .filter((session) => session.isCompleted())
-    .sort((left, right) => right.startedAt.getTime() - left.startedAt.getTime());
-
-  return (
-    <section className="session-history" aria-labelledby="session-history-title">
-      <div className="section-heading">
-        <div>
-          <p className="section-kicker">История</p>
-          <h3 id="session-history-title">Завершённые сессии</h3>
-        </div>
-      </div>
-
-      {completedSessions.length === 0 ? (
-        <p className="empty-session-history">Завершённых сессий пока нет</p>
-      ) : (
-        <div className="session-history-list">
-          {completedSessions.map((session) => (
-            <article
-              className={`session-history-card${session.isInterrupted() ? ' session-history-interrupted' : ''}`}
-              key={session.id.toString()}
-            >
-              <div>
-                <time>{formatSessionStart(session.startedAt)}</time>
-                <span>{session.isInterrupted() ? 'Прервана' : 'Завершена'}</span>
-              </div>
-              <dl className="session-history-durations">
-                <div>
-                  <dt>Работа</dt>
-                  <dd>{formatDuration(session.workedDurationAt(completionTime(session)))}</dd>
-                </div>
-                <div>
-                  <dt>Паузы</dt>
-                  <dd>{formatDuration(session.pausedDurationAt(completionTime(session)))}</dd>
-                </div>
-              </dl>
-              {session.resultNote === null ? null : <p>{session.resultNote.toString()}</p>}
-            </article>
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
 function completionTime(session: ActionSession): Date {
   return session.completedAt ?? session.startedAt;
 }
@@ -1006,13 +1002,13 @@ function useSessionTimer(details: LifeActionDetailsState, clock: Pick<Clock, 'no
     return scheduleSessionTimer(() => setNow(clock.now()));
   }, [clock, runningSession]);
 
+  const currentClockTime = clock.now();
+
   if (runningSession === null) {
-    return clock.now();
+    return currentClockTime;
   }
 
-  const lastResumeAt = runningSession.pauseIntervals.at(-1)?.endedAt ?? runningSession.startedAt;
-  const safeTimestamp = Math.max(now.getTime(), clock.now().getTime(), lastResumeAt.getTime());
-  return new Date(safeTimestamp);
+  return resolveSafeSessionNow(runningSession, now, currentClockTime);
 }
 
 function lifeActionStatusLabel(status: LifeActionStatus): string {

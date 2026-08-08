@@ -131,6 +131,20 @@ describe('IndexedDbLifeActionRepository', () => {
     database.close();
   });
 
+  it('читает все действия для построения истории независимо от plannedDate', async () => {
+    const { database, repository } = createContext();
+    await repository.save(createLifeActionDraft('draft-all'));
+    await repository.save(createReadyLifeAction('ready-all', DATE));
+
+    const first = await repository.findAll();
+    const second = await repository.findAll();
+
+    expect(first.map((action) => action.id.toString())).toEqual(['draft-all', 'ready-all']);
+    expect(second).not.toBe(first);
+    expect(second[0]).not.toBe(first[0]);
+    database.close();
+  });
+
   it('не маскирует ошибку mapper для повреждённой записи', async () => {
     const { database, repository } = createContext();
     const connection = await database.open();

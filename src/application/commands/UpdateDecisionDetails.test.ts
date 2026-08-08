@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { DayDate, DECISION_KIND, DECISION_STATUS, EntityId, type Decision } from '../../domain';
-import type { DecisionRepository } from '../ports/DecisionRepository';
+import {
+  DayDate,
+  DECISION_KIND,
+  DECISION_PRIORITY,
+  DECISION_STATUS,
+  EntityId,
+  type Decision,
+} from '../../domain';
 import { DomainError } from '../../shared/errors/DomainError';
 import {
   archiveDecision,
@@ -11,45 +17,77 @@ import {
   markDecisionInProgress,
 } from '../../test/helpers/DecisionTestFactory';
 import { FakeClock, FakeIdGenerator } from '../../test/helpers/Fakes';
+import type { DecisionRepository } from '../ports/DecisionRepository';
 import { UpdateDecisionDetails } from './UpdateDecisionDetails';
 
 const DATE = DayDate.create('2026-08-02');
 const NOW = new Date('2026-08-02T12:00:00.000+09:00');
 
 describe('UpdateDecisionDetails', () => {
-  it('редактирует planned Decision и сохраняет только изменяемые сведения', async () => {
+  it('редактирует все разрешённые сведения planned-решения и не мутирует загруженный снимок', async () => {
     const decision = createPlannedDecision('editable', DATE, DECISION_KIND.main, 2);
-    const context = createContext(decision);
-    const before = snapshotStableFields(decision);
-    const version = decision.version;
+    decision.clearUncommittedEvents();
+    const context = createContext([decision]);
+    const originalVersion = decision.version;
 
     const result = await context.command.execute({
       decisionId: decision.id,
+      expectedVersion: originalVersion,
       title: '  Новое название  ',
+      reason: '  Новая причина  ',
       expectedResult: '  Новый ожидаемый результат  ',
+      sphere: '  Разработка  ',
+      price: '  Два часа  ',
+      sacrifices: '  Не переключаться  ',
+      priority: DECISION_PRIORITY.high,
+      projectReference: '  LifeOS  ',
+      kind: DECISION_KIND.main,
     });
 
     expect(result.ok).toBe(true);
-    expect(decision.title.toString()).toBe('Новое название');
-    expect(decision.expectedResult?.toString()).toBe('Новый ожидаемый результат');
-    expect(snapshotStableFields(decision)).toEqual(before);
-    expect(decision.status).toBe(DECISION_STATUS.planned);
-    expect(decision.version).toBe(version + 1);
+    if (!result.ok) {
+      throw result.error;
+    }
+
+    expect(result.value).not.toBe(decision);
+    expect(result.value.title.toString()).toBe('Новое название');
+    expect(result.value.reason).toBe('Новая причина');
+    expect(result.value.expectedResult?.toString()).toBe('Новый ожидаемый результат');
+    expect(result.value.sphere).toBe('Разработка');
+    expect(result.value.price).toBe('Два часа');
+    expect(result.value.sacrifices).toBe('Не переключаться');
+    expect(result.value.priority).toBe(DECISION_PRIORITY.high);
+    expect(result.value.projectReference).toBe('LifeOS');
+    expect(result.value.kind).toBe(DECISION_KIND.main);
+    expect(result.value.order).toBe(2);
+    expect(result.value.plannedDate?.equals(DATE)).toBe(true);
+    expect(result.value.status).toBe(DECISION_STATUS.planned);
+    expect(result.value.version).toBe(originalVersion + 1);
+    expect(decision.title.toString()).toBe('Решение editable');
+    expect(decision.version).toBe(originalVersion);
     expect(context.repository.saveCount).toBe(1);
+    expect((await context.repository.findById(decision.id))?.title.toString()).toBe(
+      'Новое название',
+    );
   });
 
   it('создаёт одно событие с временем Clock и id из IdGenerator', async () => {
     const decision = createPlannedDecision('event', DATE);
     decision.clearUncommittedEvents();
-    const context = createContext(decision);
+    const context = createContext([decision]);
 
-    await context.command.execute({
+    const result = await context.command.execute({
       decisionId: decision.id,
       title: 'Изменённое решение',
       expectedResult: 'Изменённый результат',
     });
 
-    const events = decision.getUncommittedEvents();
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      throw result.error;
+    }
+
+    const events = result.value.getUncommittedEvents();
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({
       eventType: 'decision.details_updated',
@@ -61,7 +99,7 @@ describe('UpdateDecisionDetails', () => {
 
   it('разрешает очистить ожидаемый результат дополнительного решения', async () => {
     const decision = createPlannedDecision('additional', DATE, DECISION_KIND.additional);
-    const context = createContext(decision);
+    const context = createContext([decision]);
 
     const result = await context.command.execute({
       decisionId: decision.id,
@@ -70,17 +108,21 @@ describe('UpdateDecisionDetails', () => {
     });
 
     expect(result.ok).toBe(true);
-    expect(decision.expectedResult).toBeNull();
+    if (!result.ok) {
+      throw result.error;
+    }
+    expect(result.value.expectedResult).toBeNull();
   });
 
   it('одинаковые нормализованные данные идемпотентны и не используют сохранение', async () => {
     const decision = createPlannedDecision('same', DATE);
-    const context = createContext(decision);
+    const context = createContext([decision]);
     decision.clearUncommittedEvents();
     const version = decision.version;
 
     const result = await context.command.execute({
       decisionId: decision.id,
+      expectedVersion: version,
       title: `  ${decision.title.toString()}  `,
       expectedResult: `  ${decision.expectedResult!.toString()}  `,
     });
@@ -93,7 +135,7 @@ describe('UpdateDecisionDetails', () => {
   });
 
   it('возвращает decision.not_found', async () => {
-    const context = createContext(null);
+    const context = createContext([]);
     const result = await context.command.execute({
       decisionId: EntityId.create('missing'),
       title: 'Название',
@@ -105,12 +147,11 @@ describe('UpdateDecisionDetails', () => {
 
   it.each([
     ['draft', createDecisionDraft('draft')],
-    ['in_progress', markDecisionInProgress(createPlannedDecision('progress', DATE))],
     ['confirmed', confirmDecision(createPlannedDecision('confirmed', DATE))],
     ['cancelled', cancelDecision(createPlannedDecision('cancelled', DATE))],
     ['archived', archiveDecision(confirmDecision(createPlannedDecision('archived', DATE)))],
   ])('запрещает редактирование %s Decision', async (_label, decision) => {
-    const context = createContext(decision);
+    const context = createContext([decision]);
     const result = await context.command.execute({
       decisionId: decision.id,
       title: 'Новое название',
@@ -121,9 +162,143 @@ describe('UpdateDecisionDetails', () => {
     expect(context.repository.saveCount).toBe(0);
   });
 
+  it('после начала разрешает уточнить причину, результат, цену и жертвы', async () => {
+    const decision = markDecisionInProgress(createPlannedDecision('progress', DATE));
+    const context = createContext([decision]);
+
+    const result = await context.command.execute({
+      decisionId: decision.id,
+      expectedVersion: decision.version,
+      title: decision.title.toString(),
+      expectedResult: 'Уточнённый ожидаемый результат',
+      reason: 'Уточнённая причина',
+      price: 'Ещё 30 минут',
+      sacrifices: 'Отложить второстепенное',
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      throw result.error;
+    }
+    expect(result.value.status).toBe(DECISION_STATUS.inProgress);
+    expect(result.value.reason).toBe('Уточнённая причина');
+    expect(result.value.expectedResult?.toString()).toBe('Уточнённый ожидаемый результат');
+    expect(result.value.price).toBe('Ещё 30 минут');
+    expect(result.value.sacrifices).toBe('Отложить второстепенное');
+    expect(context.repository.saveCount).toBe(1);
+  });
+
+  it('после начала блокирует изменение плановых полей', async () => {
+    const decision = markDecisionInProgress(createPlannedDecision('locked', DATE));
+    const context = createContext([decision]);
+
+    const result = await context.command.execute({
+      decisionId: decision.id,
+      expectedVersion: decision.version,
+      title: 'Другое название',
+      expectedResult: decision.expectedResult!.toString(),
+    });
+
+    expectFailure(result, 'decision.started_fields_locked');
+    expect(context.repository.saveCount).toBe(0);
+  });
+
+  it('преобразует дополнительное решение в главное и назначает свободный порядок', async () => {
+    const editable = createPlannedDecision('convert', DATE, DECISION_KIND.additional);
+    const first = createPlannedDecision('main-1', DATE, DECISION_KIND.main, 1);
+    const third = createPlannedDecision('main-3', DATE, DECISION_KIND.main, 3);
+    const context = createContext([editable, first, third]);
+
+    const result = await context.command.execute({
+      decisionId: editable.id,
+      expectedVersion: editable.version,
+      title: editable.title.toString(),
+      expectedResult: 'Измеримый результат',
+      kind: DECISION_KIND.main,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      throw result.error;
+    }
+    expect(result.value.kind).toBe(DECISION_KIND.main);
+    expect(result.value.order).toBe(2);
+  });
+
+  it('запрещает преобразование в четвёртое главное решение', async () => {
+    const editable = createPlannedDecision('fourth', DATE, DECISION_KIND.additional);
+    const context = createContext([
+      editable,
+      createPlannedDecision('main-1', DATE, DECISION_KIND.main, 1),
+      createPlannedDecision('main-2', DATE, DECISION_KIND.main, 2),
+      createPlannedDecision('main-3', DATE, DECISION_KIND.main, 3),
+    ]);
+
+    const result = await context.command.execute({
+      decisionId: editable.id,
+      title: editable.title.toString(),
+      expectedResult: 'Результат',
+      kind: DECISION_KIND.main,
+    });
+
+    expectFailure(result, 'decision.main_limit_reached');
+    expect(context.repository.saveCount).toBe(0);
+  });
+
+  it('не создаёт дубликат решения того же вида на ту же дату', async () => {
+    const editable = createPlannedDecision('editable-duplicate', DATE, DECISION_KIND.main, 1);
+    const existing = createPlannedDecision('existing-duplicate', DATE, DECISION_KIND.main, 2);
+    const context = createContext([editable, existing]);
+
+    const result = await context.command.execute({
+      decisionId: editable.id,
+      title: existing.title.toString(),
+      expectedResult: 'Результат',
+      kind: DECISION_KIND.main,
+    });
+
+    expectFailure(result, 'decision.duplicate_for_date');
+    expect(context.repository.saveCount).toBe(0);
+  });
+
+  it('отклоняет устаревшую версию до изменения данных', async () => {
+    const decision = createPlannedDecision('stale', DATE);
+    const context = createContext([decision]);
+
+    const result = await context.command.execute({
+      decisionId: decision.id,
+      expectedVersion: decision.version - 1,
+      title: 'Новое название',
+      expectedResult: 'Новый результат',
+    });
+
+    expectFailure(result, 'decision.edit_conflict');
+    expect(context.repository.saveCount).toBe(0);
+    expect(context.idGenerator.generatedCount).toBe(0);
+  });
+
+  it('не перезаписывает данные при конфликте атомарного сохранения', async () => {
+    const decision = createPlannedDecision('atomic-conflict', DATE);
+    const context = createContext([decision]);
+    context.repository.forceVersionConflict = true;
+
+    const result = await context.command.execute({
+      decisionId: decision.id,
+      expectedVersion: decision.version,
+      title: 'Конфликтующее название',
+      expectedResult: 'Конфликтующий результат',
+    });
+
+    expectFailure(result, 'decision.edit_conflict');
+    expect(context.repository.saveCount).toBe(0);
+    const stored = await context.repository.findById(decision.id);
+    expect(stored?.title.toString()).toBe('Решение atomic-conflict');
+    expect(stored?.version).toBe(decision.version);
+  });
+
   it('запрещает пустое название точным кодом и не сохраняет Decision', async () => {
     const decision = createPlannedDecision('empty-title', DATE);
-    const context = createContext(decision);
+    const context = createContext([decision]);
     const result = await context.command.execute({
       decisionId: decision.id,
       title: '   ',
@@ -136,7 +311,7 @@ describe('UpdateDecisionDetails', () => {
 
   it('запрещает пустой результат главного решения точным кодом', async () => {
     const decision = createPlannedDecision('empty-result', DATE);
-    const context = createContext(decision);
+    const context = createContext([decision]);
     const result = await context.command.execute({
       decisionId: decision.id,
       title: 'Название',
@@ -149,7 +324,7 @@ describe('UpdateDecisionDetails', () => {
 
   it('не сохраняет Decision при ошибке value object', async () => {
     const decision = createPlannedDecision('invalid', DATE);
-    const context = createContext(decision);
+    const context = createContext([decision]);
     const version = decision.version;
     const result = await context.command.execute({
       decisionId: decision.id,
@@ -163,17 +338,8 @@ describe('UpdateDecisionDetails', () => {
   });
 });
 
-function snapshotStableFields(decision: Decision) {
-  return {
-    kind: decision.kind,
-    order: decision.order,
-    plannedDate: decision.plannedDate?.toString() ?? null,
-    status: decision.status,
-  } as const;
-}
-
-function createContext(decision: Decision | null) {
-  const repository = new TrackingDecisionRepository(decision);
+function createContext(decisions: readonly Decision[]) {
+  const repository = new TrackingDecisionRepository(decisions);
   const idGenerator = new FakeIdGenerator('details-event');
   return {
     repository,
@@ -183,23 +349,38 @@ function createContext(decision: Decision | null) {
 }
 
 class TrackingDecisionRepository implements DecisionRepository {
-  readonly #decision: Decision | null;
+  readonly #decisions = new Map<string, Decision>();
   public saveCount = 0;
+  public forceVersionConflict = false;
 
-  public constructor(decision: Decision | null) {
-    this.#decision = decision;
+  public constructor(decisions: readonly Decision[]) {
+    for (const decision of decisions) {
+      this.#decisions.set(decision.id.toString(), decision);
+    }
   }
 
   public async findById(id: EntityId): Promise<Decision | null> {
-    return this.#decision?.id.equals(id) ? this.#decision : null;
+    return this.#decisions.get(id.toString()) ?? null;
   }
 
-  public async findByDate(): Promise<readonly Decision[]> {
-    return this.#decision === null ? [] : [this.#decision];
+  public async findByDate(date: DayDate): Promise<readonly Decision[]> {
+    return [...this.#decisions.values()].filter((decision) => decision.isScheduledFor(date));
   }
 
-  public async save(): Promise<void> {
+  public async save(decision: Decision): Promise<void> {
+    this.#decisions.set(decision.id.toString(), decision);
     this.saveCount += 1;
+  }
+
+  public async saveIfVersionMatches(decision: Decision, expectedVersion: number): Promise<boolean> {
+    const current = this.#decisions.get(decision.id.toString());
+    if (this.forceVersionConflict || current === undefined || current.version !== expectedVersion) {
+      return false;
+    }
+
+    this.#decisions.set(decision.id.toString(), decision);
+    this.saveCount += 1;
+    return true;
   }
 }
 

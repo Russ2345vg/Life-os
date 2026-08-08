@@ -47,6 +47,7 @@ export class ConfirmDecisionFromActions {
 
     if (
       decision.isArchived() ||
+      decision.isDeleted() ||
       (decision.status !== DECISION_STATUS.planned &&
         decision.status !== DECISION_STATUS.inProgress)
     ) {

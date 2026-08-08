@@ -58,7 +58,7 @@ export class CreateLifeActionForDecision {
       decision.status === DECISION_STATUS.planned ||
       decision.status === DECISION_STATUS.inProgress;
 
-    if (decision.isArchived() || !statusAllowsNewLifeAction) {
+    if (decision.isArchived() || decision.isDeleted() || !statusAllowsNewLifeAction) {
       return decisionUnavailableForLifeAction();
     }
 

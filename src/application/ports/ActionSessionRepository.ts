@@ -4,5 +4,6 @@ export interface ActionSessionRepository {
   findById(id: EntityId): Promise<ActionSession | null>;
   findByLifeActionId(lifeActionId: EntityId): Promise<readonly ActionSession[]>;
   findUnfinished(): Promise<ActionSession | null>;
+  findAll?(): Promise<readonly ActionSession[]>;
   save(session: ActionSession): Promise<void>;
 }

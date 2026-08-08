@@ -6,6 +6,7 @@ import {
   DAY_STATUS,
   DayDate,
   DECISION_KIND,
+  DECISION_PRIORITY,
   DECISION_STATUS,
   EntityId,
   LIFE_ACTION_STATUS,
@@ -20,6 +21,10 @@ import { IndexedDbDecisionRepository } from '../../infrastructure/persistence/In
 import { IndexedDbLifeActionRepository } from '../../infrastructure/persistence/IndexedDbLifeActionRepository';
 import { LifeOsIndexedDb } from '../../infrastructure/persistence/indexed-db/LifeOsIndexedDb';
 import { FakeClock, FakeCurrentDateProvider, FakeIdGenerator } from '../../test/helpers/Fakes';
+import {
+  TODAY_SCREEN_STATE,
+  resolveTodayScreenState,
+} from '../../presentation/pages/TodayScreenState';
 import { LifeOsApplicationInitializationError } from './LifeOsApplicationInitializationError';
 import { createLifeOsApplication } from './createLifeOsApplication';
 
@@ -41,16 +46,25 @@ describe('createLifeOsApplication', () => {
     expect(application.idGenerator).toBeInstanceOf(CryptoIdGenerator);
     expect(application.currentDate).toBeInstanceOf(DayDate);
     expect(application.getDecisionById).toBeDefined();
+    expect(application.getDecisionOverview).toBeDefined();
+    expect(application.getDeletedDecisions).toBeDefined();
+    expect(application.getLifeActionsForDate).toBeDefined();
     expect(application.getLifeActionsForDecision).toBeDefined();
     expect(application.createLifeActionForDecision).toBeDefined();
+    expect(application.startCurrentDay).toBeDefined();
+    expect(application.getEveningReview).toBeDefined();
+    expect(application.completeCurrentDay).toBeDefined();
     expect(application.startLifeActionSession).toBeDefined();
     expect(application.pauseActionSession).toBeDefined();
     expect(application.resumeActionSession).toBeDefined();
     expect(application.completeActionSession).toBeDefined();
     expect(application.completeLifeAction).toBeDefined();
+    expect(application.verifyLifeActionResult).toBeDefined();
     expect(application.confirmDecisionFromActions).toBeDefined();
     expect(application.updateDecisionDetails).toBeDefined();
     expect(application.cancelDecisionSafely).toBeDefined();
+    expect(application.deleteDecisionSafely).toBeDefined();
+    expect(application.restoreDeletedDecision).toBeDefined();
     expect(application.updateLifeActionDetails).toBeDefined();
     expect(application.cancelLifeActionSafely).toBeDefined();
     expect(application.rescheduleDecisionSafely).toBeDefined();
@@ -70,8 +84,8 @@ describe('createLifeOsApplication', () => {
     const firstApplication = await createTestApplication(indexedDbFactory, firstIds);
     const firstDay = await firstApplication.dayRepository.findByDate(TODAY);
 
-    expect(firstDay?.status).toBe(DAY_STATUS.open);
-    expect(firstIds.generatedCount).toBe(3);
+    expect(firstDay?.status).toBe(DAY_STATUS.planned);
+    expect(firstIds.generatedCount).toBe(2);
     firstApplication.close();
 
     const secondIds = new FakeIdGenerator('second-start');
@@ -84,6 +98,233 @@ describe('createLifeOsApplication', () => {
     secondApplication.close();
   });
 
+  it('явно начинает день и восстанавливает открытое состояние после перезапуска', async () => {
+    const indexedDbFactory = new IDBFactory();
+    const firstApplication = await createTestApplication(
+      indexedDbFactory,
+      new FakeIdGenerator('explicit-start'),
+    );
+    await firstApplication.createDecisionForDate.execute({
+      title: 'Главное решение дня',
+      kind: DECISION_KIND.main,
+      plannedDate: TODAY,
+      expectedResult: 'Проверить явное начало дня',
+    });
+
+    const started = await firstApplication.startCurrentDay.execute();
+
+    expect(started.ok).toBe(true);
+    if (started.ok) {
+      expect(started.value.day.status).toBe(DAY_STATUS.open);
+      expect(started.value.day.openedAt).toEqual(NOW);
+    }
+    firstApplication.close();
+
+    const secondApplication = await createTestApplication(
+      indexedDbFactory,
+      new FakeIdGenerator('explicit-start-reload'),
+    );
+    const restoredDay = await secondApplication.dayRepository.findByDate(TODAY);
+
+    expect(restoredDay?.status).toBe(DAY_STATUS.open);
+    expect(restoredDay?.openedAt).toEqual(NOW);
+    secondApplication.close();
+  });
+
+  it('проводит полный вечерний цикл атомарно и восстанавливает его после F5', async () => {
+    const indexedDbFactory = new IDBFactory();
+    const clock = new FakeClock(NOW);
+    const firstApplication = await createLifeOsApplication({
+      database: new LifeOsIndexedDb(indexedDbFactory),
+      clock,
+      currentDateProvider: new FakeCurrentDateProvider(TODAY),
+      idGenerator: new FakeIdGenerator('evening-cycle'),
+    });
+    const decisionResult = await firstApplication.createDecisionForDate.execute({
+      title: 'Главное решение текущего дня',
+      kind: DECISION_KIND.main,
+      plannedDate: TODAY,
+      expectedResult: 'Проверить полный вечерний цикл',
+    });
+    expect(decisionResult.ok).toBe(true);
+    if (!decisionResult.ok) return;
+    expect((await firstApplication.startCurrentDay.execute()).ok).toBe(true);
+
+    const completingResult = await firstApplication.createLifeActionForDecision.execute({
+      decisionId: decisionResult.value.id,
+      title: 'Действие для завершения',
+      expectedResult: 'Получен проверенный результат',
+      plannedDate: TODAY,
+    });
+    const movingResult = await firstApplication.createLifeActionForDecision.execute({
+      decisionId: decisionResult.value.id,
+      title: 'Действие для переноса',
+      expectedResult: 'Продолжить завтра',
+      plannedDate: TODAY,
+    });
+    expect(completingResult.ok).toBe(true);
+    expect(movingResult.ok).toBe(true);
+    if (!completingResult.ok || !movingResult.ok) return;
+
+    clock.setTime(new Date('2026-08-02T09:00:00.000+09:00'));
+    const sessionResult = await firstApplication.startLifeActionSession.execute({
+      lifeActionId: completingResult.value.id,
+    });
+    expect(sessionResult.ok).toBe(true);
+    if (!sessionResult.ok) return;
+    clock.setTime(new Date('2026-08-02T10:00:00.000+09:00'));
+    expect(
+      (
+        await firstApplication.completeActionSession.execute({
+          sessionId: sessionResult.value.session.id,
+          completionKind: SESSION_COMPLETION_KIND.completed,
+          resultNote: 'Рабочая сессия завершена',
+        })
+      ).ok,
+    ).toBe(true);
+
+    clock.setTime(new Date('2026-08-02T20:30:00.000+09:00'));
+    const completion = await firstApplication.completeCurrentDay.execute({
+      summary: 'Полный цикл завершён без ручного изменения данных',
+      actionResolutions: [
+        {
+          kind: 'complete',
+          lifeActionId: completingResult.value.id,
+          actualResult: 'Вечерний цикл проверен',
+        },
+        {
+          kind: 'reschedule',
+          lifeActionId: movingResult.value.id,
+          newPlannedDate: '2026-08-03',
+        },
+      ],
+      tomorrowDecisions: [
+        {
+          kind: DECISION_KIND.main,
+          title: 'Проверить следующий день',
+          expectedResult: 'Решение доступно после перезагрузки',
+        },
+      ],
+    });
+
+    expect(completion.ok).toBe(true);
+    if (!completion.ok) return;
+    expect(completion.value.day.status).toBe(DAY_STATUS.completed);
+    firstApplication.close();
+
+    const restoredApplication = await createLifeOsApplication({
+      database: new LifeOsIndexedDb(indexedDbFactory),
+      clock: new FakeClock(new Date('2026-08-02T21:00:00.000+09:00')),
+      currentDateProvider: new FakeCurrentDateProvider(TODAY),
+      idGenerator: new FakeIdGenerator('evening-cycle-reload'),
+    });
+    const tomorrow = DayDate.create('2026-08-03');
+    const [restoredDay, restoredTodayActions, restoredTomorrowActions, tomorrowDecisions] =
+      await Promise.all([
+        restoredApplication.dayRepository.findByDate(TODAY),
+        restoredApplication.getLifeActionsForDate.execute(TODAY),
+        restoredApplication.getLifeActionsForDate.execute(tomorrow),
+        restoredApplication.getDecisionsForDate.execute(tomorrow),
+      ]);
+
+    expect(restoredDay?.status).toBe(DAY_STATUS.completed);
+    expect(restoredDay?.summary).toBe('Полный цикл завершён без ручного изменения данных');
+    expect(restoredTodayActions).toHaveLength(1);
+    expect(restoredTodayActions[0]?.status).toBe(LIFE_ACTION_STATUS.completed);
+    expect(restoredTomorrowActions.map((action) => action.id.toString())).toEqual([
+      movingResult.value.id.toString(),
+    ]);
+    expect(tomorrowDecisions.map((decision) => decision.title.toString())).toEqual([
+      'Проверить следующий день',
+    ]);
+    const repeated = await restoredApplication.completeCurrentDay.execute({
+      summary: 'Повтор',
+      actionResolutions: [],
+      tomorrowDecisions: [],
+    });
+    expect(repeated.ok ? null : repeated.error.code).toBe('day.already_completed');
+    restoredApplication.close();
+  });
+
+  it('завершает ранее открытый день через вечерний контроль и сохраняет сегодняшний день запланированным после F5', async () => {
+    const indexedDbFactory = new IDBFactory();
+    const staleDate = DayDate.create('2026-08-07');
+    const currentDate = DayDate.create('2026-08-08');
+    const staleClock = new FakeClock(new Date('2026-08-07T08:00:00.000+09:00'));
+    const staleApplication = await createLifeOsApplication({
+      database: new LifeOsIndexedDb(indexedDbFactory),
+      clock: staleClock,
+      currentDateProvider: new FakeCurrentDateProvider(staleDate),
+      idGenerator: new FakeIdGenerator('past-open-day'),
+    });
+    const staleDecision = await staleApplication.createDecisionForDate.execute({
+      title: 'Решение незавершённого прошлого дня',
+      kind: DECISION_KIND.main,
+      plannedDate: staleDate,
+      expectedResult: 'Прошлый день можно безопасно завершить позже',
+    });
+    expect(staleDecision.ok).toBe(true);
+    expect((await staleApplication.startCurrentDay.execute()).ok).toBe(true);
+    staleApplication.close();
+
+    const recoveryClock = new FakeClock(new Date('2026-08-08T09:00:00.000+09:00'));
+    const recoveryApplication = await createLifeOsApplication({
+      database: new LifeOsIndexedDb(indexedDbFactory),
+      clock: recoveryClock,
+      currentDateProvider: new FakeCurrentDateProvider(currentDate),
+      idGenerator: new FakeIdGenerator('past-open-day-recovery'),
+    });
+    const currentDecision = await recoveryApplication.createDecisionForDate.execute({
+      title: 'Главное решение сегодняшнего дня',
+      kind: DECISION_KIND.main,
+      plannedDate: currentDate,
+      expectedResult: 'Сегодняшний день остаётся готовым к старту',
+    });
+    expect(currentDecision.ok).toBe(true);
+
+    const review = await recoveryApplication.getEveningReview.execute(staleDate);
+    expect(review.isRecoveryReview).toBe(true);
+    expect(review.currentDate.equals(staleDate)).toBe(true);
+    expect(review.tomorrowDate.equals(currentDate)).toBe(true);
+    expect(review.tomorrowDecisions.map((decision) => decision.title.toString())).toContain(
+      'Главное решение сегодняшнего дня',
+    );
+
+    const completion = await recoveryApplication.completeCurrentDay.execute(
+      {
+        summary: 'Прошлый день завершён через безопасное восстановление',
+        actionResolutions: [],
+        tomorrowDecisions: [],
+      },
+      staleDate,
+    );
+    expect(completion.ok).toBe(true);
+    recoveryApplication.close();
+
+    const restoredApplication = await createLifeOsApplication({
+      database: new LifeOsIndexedDb(indexedDbFactory),
+      clock: recoveryClock,
+      currentDateProvider: new FakeCurrentDateProvider(currentDate),
+      idGenerator: new FakeIdGenerator('past-open-day-recovery-reload'),
+    });
+    const [restoredStaleDay, restoredCurrentDay, openDayConflict] = await Promise.all([
+      restoredApplication.dayRepository.findByDate(staleDate),
+      restoredApplication.dayRepository.findByDate(currentDate),
+      restoredApplication.getOpenDayConflict.execute(),
+    ]);
+
+    expect(restoredStaleDay?.status).toBe(DAY_STATUS.completed);
+    expect(restoredStaleDay?.summary).toBe('Прошлый день завершён через безопасное восстановление');
+    expect(restoredCurrentDay?.status).toBe(DAY_STATUS.planned);
+    expect(openDayConflict.openDays).toHaveLength(0);
+    expect(
+      (await restoredApplication.getDecisionsForDate.execute(currentDate)).map((decision) =>
+        decision.title.toString(),
+      ),
+    ).toContain('Главное решение сегодняшнего дня');
+    restoredApplication.close();
+  });
+
   it('не открывает повторно завершённый сегодняшний день', async () => {
     const indexedDbFactory = new IDBFactory();
     const firstApplication = await createTestApplication(
@@ -91,6 +332,7 @@ describe('createLifeOsApplication', () => {
       new FakeIdGenerator('first-start'),
     );
     const completedDay = await firstApplication.dayRepository.findByDate(TODAY);
+    completedDay!.open(TODAY, NOW, EntityId.create('opened-event'));
     completedDay!.complete(NOW, EntityId.create('completed-event'));
     await firstApplication.dayRepository.save(completedDay!);
     firstApplication.close();
@@ -225,8 +467,16 @@ describe('createLifeOsApplication', () => {
 
     const updated = await firstApplication.updateDecisionDetails.execute({
       decisionId: created.value.id,
+      expectedVersion: created.value.version,
       title: 'Отредактированное решение',
+      reason: 'Сохранённая причина',
       expectedResult: 'Отредактированный результат',
+      sphere: 'Разработка',
+      price: 'Два часа',
+      sacrifices: 'Не переключаться',
+      priority: DECISION_PRIORITY.high,
+      projectReference: 'LifeOS',
+      kind: DECISION_KIND.main,
     });
     expect(updated.ok).toBe(true);
 
@@ -243,7 +493,13 @@ describe('createLifeOsApplication', () => {
     const restored = await secondApplication.decisionRepository.findById(created.value.id);
 
     expect(restored?.title.toString()).toBe('Отредактированное решение');
+    expect(restored?.reason).toBe('Сохранённая причина');
     expect(restored?.expectedResult?.toString()).toBe('Отредактированный результат');
+    expect(restored?.sphere).toBe('Разработка');
+    expect(restored?.price).toBe('Два часа');
+    expect(restored?.sacrifices).toBe('Не переключаться');
+    expect(restored?.priority).toBe(DECISION_PRIORITY.high);
+    expect(restored?.projectReference).toBe('LifeOS');
     expect(restored?.status).toBe(DECISION_STATUS.cancelled);
     expect(restored?.cancelReason?.toString()).toBe('Отменено пользователем');
     expect(restored?.getUncommittedEvents()).toHaveLength(0);
@@ -350,7 +606,7 @@ describe('createLifeOsApplication', () => {
     reloaded.close();
   });
 
-  it('сохраняет перенос Decision, не перенося и не дублируя связанное действие', async () => {
+  it('атомарно сохраняет перенос Decision и связанного незавершённого действия', async () => {
     const indexedDbFactory = new IDBFactory();
     const newDate = DayDate.create('2026-08-10');
     const firstApplication = await createTestApplication(
@@ -382,7 +638,9 @@ describe('createLifeOsApplication', () => {
 
     const rescheduled = await firstApplication.rescheduleDecisionSafely.execute({
       decisionId: decision.value.id,
+      expectedVersion: decision.value.version,
       newPlannedDate: newDate.toString(),
+      reason: 'Нужно выделить отдельный день',
     });
 
     expect(rescheduled.ok).toBe(true);
@@ -404,10 +662,11 @@ describe('createLifeOsApplication', () => {
     expect(restoredDecision?.status).toBe(DECISION_STATUS.planned);
     expect(restoredDecision?.title.toString()).toBe('Переносимое главное решение');
     expect(restoredDecision?.expectedResult?.toString()).toBe('Решение сохранит свои сведения');
+    expect(restoredDecision?.rescheduleHistory[0]?.reason).toBe('Нужно выделить отдельный день');
     expect(oldDateDecisions.some((item) => item.id.equals(decision.value.id))).toBe(false);
     expect(newDateDecisions.filter((item) => item.id.equals(decision.value.id))).toHaveLength(1);
     expect(restoredAction?.decisionId?.equals(decision.value.id)).toBe(true);
-    expect(restoredAction?.plannedDate?.equals(TODAY)).toBe(true);
+    expect(restoredAction?.plannedDate?.equals(newDate)).toBe(true);
     expect(restoredAction?.status).toBe(LIFE_ACTION_STATUS.ready);
     expect(linkedActions.filter((item) => item.id.equals(action.value.id))).toHaveLength(1);
     expect(restoredDecision?.getUncommittedEvents()).toHaveLength(0);
@@ -554,6 +813,9 @@ describe('createLifeOsApplication', () => {
       throw actionResult.error;
     }
 
+    const dayStartResult = await firstApplication.startCurrentDay.execute();
+    expect(dayStartResult.ok).toBe(true);
+
     const startResult = await firstApplication.startLifeActionSession.execute({
       lifeActionId: actionResult.value.id,
     });
@@ -628,6 +890,9 @@ describe('createLifeOsApplication', () => {
     if (!actionResult.ok) {
       throw actionResult.error;
     }
+    const dayStartResult = await firstApplication.startCurrentDay.execute();
+    expect(dayStartResult.ok).toBe(true);
+
     const startResult = await firstApplication.startLifeActionSession.execute({
       lifeActionId: actionResult.value.id,
     });
@@ -693,6 +958,9 @@ describe('createLifeOsApplication', () => {
     if (!actionResult.ok) {
       throw actionResult.error;
     }
+    const dayStartResult = await firstApplication.startCurrentDay.execute();
+    expect(dayStartResult.ok).toBe(true);
+
     const startResult = await firstApplication.startLifeActionSession.execute({
       lifeActionId: actionResult.value.id,
     });
@@ -760,6 +1028,9 @@ describe('createLifeOsApplication', () => {
     if (!actionResult.ok) {
       throw actionResult.error;
     }
+    const dayStartResult = await firstApplication.startCurrentDay.execute();
+    expect(dayStartResult.ok).toBe(true);
+
     const startResult = await firstApplication.startLifeActionSession.execute({
       lifeActionId: actionResult.value.id,
     });
@@ -818,6 +1089,185 @@ describe('createLifeOsApplication', () => {
     });
     expect(repeatedConfirmation.ok).toBe(false);
     expect(newAction.ok).toBe(false);
+    reloaded.close();
+  });
+
+  it('восстанавливает данные карточки текущего действия и паузу после F5', async () => {
+    const indexedDbFactory = new IDBFactory();
+    const clock = new FakeClock(NOW);
+    const firstApplication = await createLifeOsApplication({
+      database: new LifeOsIndexedDb(indexedDbFactory),
+      clock,
+      currentDateProvider: new FakeCurrentDateProvider(TODAY),
+      idGenerator: new FakeIdGenerator('current-action-card'),
+    });
+    const decision = await firstApplication.createDecisionForDate.execute({
+      title: 'Решение для текущего действия',
+      kind: DECISION_KIND.main,
+      plannedDate: TODAY,
+      expectedResult: 'Карточка восстановлена',
+    });
+    expect(decision.ok).toBe(true);
+    if (!decision.ok) throw decision.error;
+    const action = await firstApplication.createLifeActionForDecision.execute({
+      decisionId: decision.value.id,
+      title: 'Текущее действие после F5',
+      expectedResult: 'Сессия и связь восстановлены',
+      plannedDate: TODAY,
+    });
+    expect(action.ok).toBe(true);
+    if (!action.ok) throw action.error;
+    expect((await firstApplication.startCurrentDay.execute()).ok).toBe(true);
+    clock.setTime(new Date('2026-08-02T09:00:00.000+09:00'));
+    const started = await firstApplication.startLifeActionSession.execute({
+      lifeActionId: action.value.id,
+    });
+    expect(started.ok).toBe(true);
+    if (!started.ok) throw started.error;
+    clock.setTime(new Date('2026-08-02T09:25:00.000+09:00'));
+    expect(
+      (await firstApplication.pauseActionSession.execute({ sessionId: started.value.session.id }))
+        .ok,
+    ).toBe(true);
+    firstApplication.close();
+
+    const reloaded = await createLifeOsApplication({
+      database: new LifeOsIndexedDb(indexedDbFactory),
+      clock,
+      currentDateProvider: new FakeCurrentDateProvider(TODAY),
+      idGenerator: new FakeIdGenerator('current-action-card-reload'),
+    });
+    const [actions, sessions, unfinished, restoredDecision] = await Promise.all([
+      reloaded.getLifeActionsForDate.execute(TODAY),
+      reloaded.getActionSessionsForLifeAction.execute(action.value.id),
+      reloaded.getUnfinishedActionSession.execute(),
+      reloaded.getDecisionById.execute(decision.value.id),
+    ]);
+
+    expect(actions).toHaveLength(1);
+    expect(actions[0]?.status).toBe(LIFE_ACTION_STATUS.inProgress);
+    expect(actions[0]?.expectedResult?.toString()).toBe('Сессия и связь восстановлены');
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]?.status).toBe(ACTION_SESSION_STATUS.paused);
+    expect(sessions[0]?.workedDurationAt(clock.now())).toBe(25 * 60 * 1_000);
+    expect(unfinished?.id.equals(started.value.session.id)).toBe(true);
+    expect(restoredDecision.ok).toBe(true);
+    if (restoredDecision.ok) {
+      expect(restoredDecision.value.title.toString()).toBe('Решение для текущего действия');
+    }
+    reloaded.close();
+  });
+
+  it('восстанавливает текущее и следующее действие из IndexedDB после F5', async () => {
+    const indexedDbFactory = new IDBFactory();
+    const clock = new FakeClock(NOW);
+    const firstApplication = await createLifeOsApplication({
+      database: new LifeOsIndexedDb(indexedDbFactory),
+      clock,
+      currentDateProvider: new FakeCurrentDateProvider(TODAY),
+      idGenerator: new FakeIdGenerator('next-action-recovery'),
+    });
+    const decision = await firstApplication.createDecisionForDate.execute({
+      title: 'Решение с последовательностью действий',
+      kind: DECISION_KIND.main,
+      plannedDate: TODAY,
+      expectedResult: 'Два действия восстановлены в правильном порядке',
+    });
+    expect(decision.ok).toBe(true);
+    if (!decision.ok) throw decision.error;
+
+    clock.setTime(new Date('2026-08-02T08:10:00.000+09:00'));
+    const firstAction = await firstApplication.createLifeActionForDecision.execute({
+      decisionId: decision.value.id,
+      title: 'Первое действие после F5',
+      expectedResult: 'Показано текущим',
+      plannedDate: TODAY,
+    });
+    expect(firstAction.ok).toBe(true);
+    if (!firstAction.ok) throw firstAction.error;
+
+    clock.setTime(new Date('2026-08-02T08:20:00.000+09:00'));
+    const secondAction = await firstApplication.createLifeActionForDecision.execute({
+      decisionId: decision.value.id,
+      title: 'Второе действие после F5',
+      expectedResult: 'Показано следующим',
+      plannedDate: TODAY,
+    });
+    expect(secondAction.ok).toBe(true);
+    expect((await firstApplication.startCurrentDay.execute()).ok).toBe(true);
+    firstApplication.close();
+
+    const reloaded = await createLifeOsApplication({
+      database: new LifeOsIndexedDb(indexedDbFactory),
+      clock,
+      currentDateProvider: new FakeCurrentDateProvider(TODAY),
+      idGenerator: new FakeIdGenerator('next-action-recovery-reload'),
+    });
+    const [day, decisions, lifeActions, unfinishedSession] = await Promise.all([
+      reloaded.dayRepository.findByDate(TODAY),
+      reloaded.getDecisionsForDate.execute(TODAY),
+      reloaded.getLifeActionsForDate.execute(TODAY),
+      reloaded.getUnfinishedActionSession.execute(),
+    ]);
+    expect(day).not.toBeNull();
+    if (day === null) throw new Error('Текущий день не восстановлен');
+
+    const screenState = resolveTodayScreenState({
+      day,
+      decisionsStatus: 'ready',
+      decisions,
+      recoveryStatus: 'ready',
+      lifeActions,
+      unfinishedSession,
+      isEveningControlOpen: false,
+    });
+
+    expect(screenState.kind).toBe(TODAY_SCREEN_STATE.dayStarted);
+    if (screenState.kind === TODAY_SCREEN_STATE.dayStarted) {
+      expect(screenState.currentLifeAction.title.toString()).toBe('Первое действие после F5');
+      expect(screenState.nextLifeAction?.title.toString()).toBe('Второе действие после F5');
+    }
+    reloaded.close();
+  });
+
+  it('восстанавливает корзину решений после F5 через собранное приложение', async () => {
+    const indexedDbFactory = new IDBFactory();
+    const firstApplication = await createTestApplication(
+      indexedDbFactory,
+      new FakeIdGenerator('decision-trash'),
+    );
+    const created = await firstApplication.createDecisionForDate.execute({
+      title: 'Решение для проверки корзины',
+      kind: DECISION_KIND.additional,
+      plannedDate: TODAY,
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) throw created.error;
+
+    const deleted = await firstApplication.deleteDecisionSafely.execute({
+      decisionId: created.value.id,
+      expectedVersion: created.value.version,
+    });
+    expect(deleted.ok).toBe(true);
+    expect(await firstApplication.getDecisionsForDate.execute(TODAY)).toHaveLength(0);
+    expect(await firstApplication.getDeletedDecisions.execute()).toHaveLength(1);
+    firstApplication.close();
+
+    const reloaded = await createTestApplication(
+      indexedDbFactory,
+      new FakeIdGenerator('decision-trash-reload'),
+    );
+    const trash = await reloaded.getDeletedDecisions.execute();
+    expect(trash).toHaveLength(1);
+    expect(trash[0]?.title.toString()).toBe('Решение для проверки корзины');
+
+    const restored = await reloaded.restoreDeletedDecision.execute({
+      decisionId: trash[0]!.id,
+      expectedVersion: trash[0]!.version,
+    });
+    expect(restored.ok).toBe(true);
+    expect(await reloaded.getDeletedDecisions.execute()).toHaveLength(0);
+    expect(await reloaded.getDecisionsForDate.execute(TODAY)).toHaveLength(1);
     reloaded.close();
   });
 

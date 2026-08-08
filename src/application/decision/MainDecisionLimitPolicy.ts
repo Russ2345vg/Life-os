@@ -38,6 +38,7 @@ export class MainDecisionLimitPolicy {
         (excludedDecisionId === undefined || !decision.id.equals(excludedDecisionId)) &&
         decision.kind === DECISION_KIND.main &&
         !decision.isArchived() &&
+        !decision.isDeleted() &&
         (decision.status === DECISION_STATUS.planned ||
           decision.status === DECISION_STATUS.inProgress),
     );

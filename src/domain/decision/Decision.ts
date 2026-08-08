@@ -7,6 +7,11 @@ import { copyDate, copyOptionalDate } from '../shared/dateCopy';
 import { ActualResultSummary } from './ActualResultSummary';
 import { DecisionCancelReason } from './DecisionCancelReason';
 import { DECISION_KIND, type DecisionKind } from './DecisionKind';
+import {
+  DECISION_PRIORITY,
+  assertDecisionPriority,
+  type DecisionPriority,
+} from './DecisionPriority';
 import { DECISION_STATUS, type DecisionStatus } from './DecisionStatus';
 import { DecisionTitle } from './DecisionTitle';
 import { ExpectedResult } from './ExpectedResult';
@@ -15,6 +20,8 @@ import {
   DecisionCancelled,
   DecisionConfirmed,
   DecisionDetailsUpdated,
+  DecisionSoftDeleted,
+  DecisionSoftDeleteRestored,
   DecisionDraftCreated,
   DecisionPlanned,
   DecisionRescheduled,
@@ -28,6 +35,11 @@ export interface DecisionDraftInput {
   readonly kind: DecisionKind;
   readonly reason?: string;
   readonly expectedResult?: ExpectedResult;
+  readonly sphere?: string;
+  readonly price?: string;
+  readonly sacrifices?: string;
+  readonly priority?: DecisionPriority;
+  readonly projectReference?: string;
   readonly occurredAt: Date;
   readonly eventId: EntityId;
 }
@@ -50,16 +62,37 @@ export interface DecisionRestoreInput {
 }
 
 export interface DecisionDetailsUpdateInput {
-  readonly title: DecisionTitle;
-  readonly expectedResult: ExpectedResult | null;
+  readonly title?: DecisionTitle;
+  readonly reason?: string | null;
+  readonly expectedResult?: ExpectedResult | null;
+  readonly sphere?: string | null;
+  readonly price?: string | null;
+  readonly sacrifices?: string | null;
+  readonly priority?: DecisionPriority;
+  readonly projectReference?: string | null;
+  readonly kind?: DecisionKind;
+  readonly order?: number | null;
   readonly occurredAt: Date;
   readonly eventId: EntityId;
+}
+
+export interface DecisionRescheduleHistoryEntry {
+  readonly previousPlannedDate: DayDate;
+  readonly newPlannedDate: DayDate;
+  readonly reason: string;
+  readonly occurredAt: Date;
+  readonly sequence: number;
 }
 
 export interface DecisionRehydrationData {
   readonly id: EntityId;
   readonly title: DecisionTitle;
   readonly reason: string | null;
+  readonly sphere?: string | null;
+  readonly price?: string | null;
+  readonly sacrifices?: string | null;
+  readonly priority?: DecisionPriority;
+  readonly projectReference?: string | null;
   readonly expectedResult: ExpectedResult | null;
   readonly actualResultSummary: ActualResultSummary | null;
   readonly status: DecisionStatus;
@@ -73,8 +106,12 @@ export interface DecisionRehydrationData {
   readonly cancelledAt: Date | null;
   readonly cancelReason: DecisionCancelReason | null;
   readonly archivedAt: Date | null;
+  readonly deletedAt?: Date | null;
+  readonly lastDeletedAt?: Date | null;
+  readonly restoredFromTrashAt?: Date | null;
   readonly evidenceIds: readonly EntityId[];
   readonly rescheduleCount: number;
+  readonly rescheduleHistory?: readonly DecisionRescheduleHistoryEntry[];
   readonly version: number;
 }
 
@@ -83,6 +120,11 @@ export class Decision extends Entity {
   readonly #createdAt: Date;
   readonly #domainEvents: DomainEvent[];
   #reason: string | null;
+  #sphere: string | null;
+  #price: string | null;
+  #sacrifices: string | null;
+  #priority: DecisionPriority;
+  #projectReference: string | null;
   #expectedResult: ExpectedResult | null;
   #actualResultSummary: ActualResultSummary | null;
   #status: DecisionStatus;
@@ -95,14 +137,49 @@ export class Decision extends Entity {
   #cancelledAt: Date | null;
   #cancelReason: DecisionCancelReason | null;
   #archivedAt: Date | null;
+  #deletedAt: Date | null;
+  #lastDeletedAt: Date | null;
+  #restoredFromTrashAt: Date | null;
   #evidenceIds: readonly EntityId[];
   #rescheduleCount: number;
+  #rescheduleHistory: readonly DecisionRescheduleHistoryEntry[];
   #version: number;
 
   private constructor(data: DecisionRehydrationData, domainEvents: DomainEvent[]) {
     super(data.id);
     this.#title = data.title;
-    this.#reason = normalizeOptionalReason(data.reason);
+    this.#reason = normalizeOptionalDecisionField(
+      data.reason,
+      'Причина решения',
+      1_000,
+      'decision.invalid_reason',
+    );
+    this.#sphere = normalizeOptionalDecisionField(
+      data.sphere ?? null,
+      'Сфера решения',
+      120,
+      'decision.invalid_sphere',
+    );
+    this.#price = normalizeOptionalDecisionField(
+      data.price ?? null,
+      'Цена решения',
+      500,
+      'decision.invalid_price',
+    );
+    this.#sacrifices = normalizeOptionalDecisionField(
+      data.sacrifices ?? null,
+      'Жертвы решения',
+      1_000,
+      'decision.invalid_sacrifices',
+    );
+    this.#priority = data.priority ?? DECISION_PRIORITY.normal;
+    assertDecisionPriority(this.#priority);
+    this.#projectReference = normalizeOptionalDecisionField(
+      data.projectReference ?? null,
+      'Связь с проектом',
+      200,
+      'decision.invalid_project_reference',
+    );
     this.#expectedResult = data.expectedResult;
     this.#actualResultSummary = data.actualResultSummary;
     this.#status = data.status;
@@ -116,8 +193,12 @@ export class Decision extends Entity {
     this.#cancelledAt = copyOptionalDate(data.cancelledAt);
     this.#cancelReason = data.cancelReason;
     this.#archivedAt = copyOptionalDate(data.archivedAt);
+    this.#deletedAt = copyOptionalDate(data.deletedAt ?? null);
+    this.#lastDeletedAt = copyOptionalDate(data.lastDeletedAt ?? data.deletedAt ?? null);
+    this.#restoredFromTrashAt = copyOptionalDate(data.restoredFromTrashAt ?? null);
     this.#evidenceIds = [...data.evidenceIds];
     this.#rescheduleCount = data.rescheduleCount;
+    this.#rescheduleHistory = normalizeRescheduleHistory(data.rescheduleHistory ?? []);
     this.#version = data.version;
     this.#domainEvents = domainEvents;
   }
@@ -132,6 +213,11 @@ export class Decision extends Entity {
         id: input.id,
         title: input.title,
         reason: input.reason ?? null,
+        sphere: input.sphere ?? null,
+        price: input.price ?? null,
+        sacrifices: input.sacrifices ?? null,
+        priority: input.priority ?? DECISION_PRIORITY.normal,
+        projectReference: input.projectReference ?? null,
         expectedResult: input.expectedResult ?? null,
         actualResultSummary: null,
         status: DECISION_STATUS.draft,
@@ -145,8 +231,12 @@ export class Decision extends Entity {
         cancelledAt: null,
         cancelReason: null,
         archivedAt: null,
+        deletedAt: null,
+        lastDeletedAt: null,
+        restoredFromTrashAt: null,
         evidenceIds: [],
         rescheduleCount: 0,
+        rescheduleHistory: [],
         version: 1,
       },
       [],
@@ -158,6 +248,12 @@ export class Decision extends Entity {
         decision.id,
         decision.#title,
         decision.#kind,
+        decision.#reason,
+        decision.#sphere,
+        decision.#price,
+        decision.#sacrifices,
+        decision.#priority,
+        decision.#projectReference,
         input.occurredAt,
       ),
     );
@@ -183,6 +279,26 @@ export class Decision extends Entity {
 
   public get reason(): string | null {
     return this.#reason;
+  }
+
+  public get sphere(): string | null {
+    return this.#sphere;
+  }
+
+  public get price(): string | null {
+    return this.#price;
+  }
+
+  public get sacrifices(): string | null {
+    return this.#sacrifices;
+  }
+
+  public get priority(): DecisionPriority {
+    return this.#priority;
+  }
+
+  public get projectReference(): string | null {
+    return this.#projectReference;
   }
 
   public get expectedResult(): ExpectedResult | null {
@@ -237,12 +353,34 @@ export class Decision extends Entity {
     return copyOptionalDate(this.#archivedAt);
   }
 
+  public get deletedAt(): Date | null {
+    return copyOptionalDate(this.#deletedAt);
+  }
+
+  public get lastDeletedAt(): Date | null {
+    return copyOptionalDate(this.#lastDeletedAt);
+  }
+
+  public get restoredFromTrashAt(): Date | null {
+    return copyOptionalDate(this.#restoredFromTrashAt);
+  }
+
   public get evidenceIds(): readonly EntityId[] {
     return [...this.#evidenceIds];
   }
 
   public get rescheduleCount(): number {
     return this.#rescheduleCount;
+  }
+
+  public get rescheduleHistory(): readonly DecisionRescheduleHistoryEntry[] {
+    return this.#rescheduleHistory.map((entry) => ({
+      previousPlannedDate: entry.previousPlannedDate,
+      newPlannedDate: entry.newPlannedDate,
+      reason: entry.reason,
+      occurredAt: copyDate(entry.occurredAt),
+      sequence: entry.sequence,
+    }));
   }
 
   public get version(): number {
@@ -307,43 +445,110 @@ export class Decision extends Entity {
   public updateDetails(input: DecisionDetailsUpdateInput): boolean {
     this.assertNotArchived();
 
-    if (this.#status !== DECISION_STATUS.planned) {
+    if (this.#status !== DECISION_STATUS.planned && this.#status !== DECISION_STATUS.inProgress) {
       throw new DomainError(
         'decision.cannot_edit',
-        'Редактировать можно только запланированное решение.',
+        'Редактировать можно только запланированное или выполняемое решение.',
       );
     }
 
-    assertDecisionTitle(input.title);
-    assertPlanningDetails(this.#kind, input.expectedResult, this.#order);
+    const title = input.title ?? this.#title;
+    const reason = normalizeOptionalDecisionField(
+      input.reason === undefined ? this.#reason : input.reason,
+      'Причина решения',
+      1_000,
+      'decision.invalid_reason',
+    );
+    const expectedResult =
+      input.expectedResult === undefined ? this.#expectedResult : input.expectedResult;
+    const sphere = normalizeOptionalDecisionField(
+      input.sphere === undefined ? this.#sphere : input.sphere,
+      'Сфера решения',
+      120,
+      'decision.invalid_sphere',
+    );
+    const price = normalizeOptionalDecisionField(
+      input.price === undefined ? this.#price : input.price,
+      'Цена решения',
+      500,
+      'decision.invalid_price',
+    );
+    const sacrifices = normalizeOptionalDecisionField(
+      input.sacrifices === undefined ? this.#sacrifices : input.sacrifices,
+      'Жертвы решения',
+      1_000,
+      'decision.invalid_sacrifices',
+    );
+    const priority = input.priority ?? this.#priority;
+    const projectReference = normalizeOptionalDecisionField(
+      input.projectReference === undefined ? this.#projectReference : input.projectReference,
+      'Связь с проектом',
+      200,
+      'decision.invalid_project_reference',
+    );
+    const kind = input.kind ?? this.#kind;
+    const order = input.order === undefined ? this.#order : input.order;
 
-    const hasSameExpectedResult =
-      this.#expectedResult === null
-        ? input.expectedResult === null
-        : input.expectedResult !== null && this.#expectedResult.equals(input.expectedResult);
+    assertDecisionTitle(title);
+    assertDecisionKind(kind);
+    assertDecisionPriority(priority);
+    assertPlanningDetails(kind, expectedResult, order);
 
-    if (this.#title.equals(input.title) && hasSameExpectedResult) {
+    if (this.#status === DECISION_STATUS.inProgress) {
+      const changedLockedField =
+        !this.#title.equals(title) ||
+        this.#kind !== kind ||
+        this.#order !== order ||
+        this.#sphere !== sphere ||
+        this.#priority !== priority ||
+        this.#projectReference !== projectReference;
+
+      if (changedLockedField) {
+        throw new DomainError(
+          'decision.started_fields_locked',
+          'После начала дня можно уточнять только причину, ожидаемый результат, цену и жертвы.',
+        );
+      }
+    }
+
+    const hasSameExpectedResult = sameExpectedResult(this.#expectedResult, expectedResult);
+    const unchanged =
+      this.#title.equals(title) &&
+      this.#reason === reason &&
+      hasSameExpectedResult &&
+      this.#sphere === sphere &&
+      this.#price === price &&
+      this.#sacrifices === sacrifices &&
+      this.#priority === priority &&
+      this.#projectReference === projectReference &&
+      this.#kind === kind &&
+      this.#order === order;
+
+    if (unchanged) {
       return false;
     }
 
     assertValidDate(input.occurredAt, 'Время изменения решения');
-    this.#title = input.title;
-    this.#expectedResult = input.expectedResult;
+    this.#title = title;
+    this.#reason = reason;
+    this.#expectedResult = expectedResult;
+    this.#sphere = sphere;
+    this.#price = price;
+    this.#sacrifices = sacrifices;
+    this.#priority = priority;
+    this.#projectReference = projectReference;
+    this.#kind = kind;
+    this.#order = order;
     this.#version += 1;
     this.#domainEvents.push(
-      new DecisionDetailsUpdated(
-        input.eventId,
-        this.id,
-        input.title,
-        input.expectedResult,
-        input.occurredAt,
-      ),
+      new DecisionDetailsUpdated(input.eventId, this.id, title, expectedResult, input.occurredAt),
     );
     return true;
   }
 
   public reschedule(
     newDate: DayDate,
+    reason: string,
     occurredAt: Date,
     eventId: EntityId,
     newOrder?: number | null,
@@ -365,6 +570,7 @@ export class Decision extends Entity {
       return false;
     }
 
+    const normalizedReason = normalizeRescheduleReason(reason);
     assertValidDate(occurredAt, 'Время переноса решения');
     const previousDate = this.#plannedDate;
     const previousOrder = this.#order;
@@ -373,6 +579,16 @@ export class Decision extends Entity {
     this.#plannedDate = newDate;
     this.#order = resolvedOrder;
     this.#rescheduleCount += 1;
+    this.#rescheduleHistory = [
+      ...this.#rescheduleHistory,
+      {
+        previousPlannedDate: previousDate,
+        newPlannedDate: newDate,
+        reason: normalizedReason,
+        occurredAt: copyDate(occurredAt),
+        sequence: this.#rescheduleCount,
+      },
+    ];
     this.#version += 1;
     this.#domainEvents.push(
       new DecisionRescheduled(
@@ -383,6 +599,7 @@ export class Decision extends Entity {
         previousOrder,
         resolvedOrder,
         this.#rescheduleCount,
+        normalizedReason,
         occurredAt,
       ),
     );
@@ -522,6 +739,44 @@ export class Decision extends Entity {
     this.#domainEvents.push(new DecisionArchived(eventId, this.id, this.#status, occurredAt));
   }
 
+  public softDelete(occurredAt: Date, eventId: EntityId): void {
+    if (this.#deletedAt !== null) {
+      throw new DomainError('decision.already_deleted', 'Решение уже находится в корзине.');
+    }
+
+    if (this.#archivedAt !== null) {
+      throw new DomainError(
+        'decision.archived_cannot_be_deleted',
+        'Архивированное решение нельзя переместить в корзину.',
+      );
+    }
+
+    assertValidDate(occurredAt, 'Время удаления решения');
+    this.#deletedAt = copyDate(occurredAt);
+    this.#lastDeletedAt = copyDate(occurredAt);
+    this.#version += 1;
+    this.#domainEvents.push(new DecisionSoftDeleted(eventId, this.id, occurredAt));
+  }
+
+  public restoreFromTrash(occurredAt: Date, eventId: EntityId): void {
+    if (this.#deletedAt === null) {
+      throw new DomainError(
+        'decision.restore_requires_deleted',
+        'Восстановить можно только решение из корзины.',
+      );
+    }
+
+    assertValidDate(occurredAt, 'Время восстановления решения из корзины');
+    this.#deletedAt = null;
+    this.#restoredFromTrashAt = copyDate(occurredAt);
+    this.#version += 1;
+    this.#domainEvents.push(new DecisionSoftDeleteRestored(eventId, this.id, occurredAt));
+  }
+
+  public isDeleted(): boolean {
+    return this.#deletedAt !== null;
+  }
+
   public isScheduledFor(date: DayDate): boolean {
     return this.#plannedDate?.equals(date) ?? false;
   }
@@ -529,6 +784,7 @@ export class Decision extends Entity {
   public isOverdue(currentDate: DayDate): boolean {
     return (
       this.#archivedAt === null &&
+      this.#deletedAt === null &&
       this.#plannedDate !== null &&
       this.#plannedDate.isBefore(currentDate) &&
       (this.#status === DECISION_STATUS.planned || this.#status === DECISION_STATUS.inProgress)
@@ -552,6 +808,13 @@ export class Decision extends Entity {
   }
 
   private assertNotArchived(): void {
+    if (this.#deletedAt !== null) {
+      throw new DomainError(
+        'decision.deleted_is_immutable',
+        'Решение в корзине нельзя изменять. Сначала восстановите его.',
+      );
+    }
+
     if (this.#archivedAt !== null) {
       throw new DomainError(
         'decision.archived_is_immutable',
@@ -559,6 +822,52 @@ export class Decision extends Entity {
       );
     }
   }
+}
+
+function normalizeRescheduleReason(value: string): string {
+  const normalized = value.trim();
+
+  if (normalized.length === 0) {
+    throw new DomainError('decision.reschedule_reason_required', 'Укажите причину переноса.');
+  }
+
+  if (normalized.length > 500) {
+    throw new DomainError(
+      'decision.reschedule_reason_too_long',
+      'Причина переноса не должна превышать 500 символов.',
+    );
+  }
+
+  return normalized;
+}
+
+function normalizeRescheduleHistory(
+  entries: readonly DecisionRescheduleHistoryEntry[],
+): readonly DecisionRescheduleHistoryEntry[] {
+  return entries.map((entry, index) => {
+    assertDayDate(entry.previousPlannedDate);
+    assertDayDate(entry.newPlannedDate);
+    assertValidDate(entry.occurredAt, 'Время переноса решения');
+    const reason = normalizeRescheduleReason(entry.reason);
+    const sequence = entry.sequence;
+    if (!Number.isInteger(sequence) || sequence < 1 || sequence <= index) {
+      throw new DomainError(
+        'decision.invalid_reschedule_history',
+        'История переносов решения содержит неверную последовательность.',
+      );
+    }
+    return {
+      previousPlannedDate: entry.previousPlannedDate,
+      newPlannedDate: entry.newPlannedDate,
+      reason,
+      occurredAt: copyDate(entry.occurredAt),
+      sequence,
+    };
+  });
+}
+
+function sameExpectedResult(left: ExpectedResult | null, right: ExpectedResult | null): boolean {
+  return left === null ? right === null : right !== null && left.equals(right);
 }
 
 function assertPlanningDetails(
@@ -606,6 +915,14 @@ function assertRehydrationInvariants(data: DecisionRehydrationData): void {
     throw new DomainError(
       'decision.invalid_reschedule_count',
       'Количество переносов не может быть отрицательным.',
+    );
+  }
+
+  const history = normalizeRescheduleHistory(data.rescheduleHistory ?? []);
+  if (history.some((entry) => entry.sequence > data.rescheduleCount)) {
+    throw new DomainError(
+      'decision.invalid_reschedule_history',
+      'История переносов не может превышать количество переносов.',
     );
   }
 
@@ -698,6 +1015,9 @@ function assertRehydrationInvariants(data: DecisionRehydrationData): void {
     data.confirmedAt,
     data.cancelledAt,
     data.archivedAt,
+    data.deletedAt ?? null,
+    data.lastDeletedAt ?? data.deletedAt ?? null,
+    data.restoredFromTrashAt ?? null,
   ]) {
     if (date !== null) {
       assertValidDate(date, 'Временное поле решения');
@@ -751,11 +1071,27 @@ function uniqueEntityIds(values: readonly EntityId[]): readonly EntityId[] {
   return [...uniqueValues.values()];
 }
 
-function normalizeOptionalReason(value: string | null): string | null {
+function normalizeOptionalDecisionField(
+  value: string | null,
+  fieldName: string,
+  maximumLength: number,
+  errorCode: string,
+): string | null {
   if (value === null) {
     return null;
   }
 
   const normalizedValue = value.trim();
-  return normalizedValue.length === 0 ? null : normalizedValue;
+  if (normalizedValue.length === 0) {
+    return null;
+  }
+
+  if (normalizedValue.length > maximumLength) {
+    throw new DomainError(
+      errorCode,
+      `${fieldName} не может быть длиннее ${maximumLength} символов.`,
+    );
+  }
+
+  return normalizedValue;
 }

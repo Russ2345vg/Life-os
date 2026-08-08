@@ -129,6 +129,23 @@ describe('IndexedDbActionSessionRepository', () => {
     database.close();
   });
 
+  it('читает все сессии для построения истории независимо от статуса', async () => {
+    const { database, repository } = createContext();
+    await repository.save(createRunningSession('running-all', 'action-1'));
+    await repository.save(createCompletedSession('completed-all', 'action-2'));
+
+    const first = await repository.findAll();
+    const second = await repository.findAll();
+
+    expect(first.map((session) => session.id.toString()).sort()).toEqual([
+      'completed-all',
+      'running-all',
+    ]);
+    expect(second).not.toBe(first);
+    expect(second[0]).not.toBe(first[0]);
+    database.close();
+  });
+
   it('не маскирует ошибку mapper для повреждённой записи', async () => {
     const { database, repository } = createContext();
     const connection = await database.open();

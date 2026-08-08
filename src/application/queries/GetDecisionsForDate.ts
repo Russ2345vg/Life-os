@@ -11,16 +11,18 @@ export class GetDecisionsForDate {
   public async execute(date: DayDate): Promise<readonly Decision[]> {
     const decisions = await this.#repository.findByDate(date);
 
-    return [...decisions].sort((left, right) => {
-      if (left.kind !== right.kind) {
-        return left.kind === DECISION_KIND.main ? -1 : 1;
-      }
+    return decisions
+      .filter((decision) => !decision.isDeleted())
+      .sort((left, right) => {
+        if (left.kind !== right.kind) {
+          return left.kind === DECISION_KIND.main ? -1 : 1;
+        }
 
-      if (left.kind === DECISION_KIND.main) {
-        return (left.order ?? Number.MAX_SAFE_INTEGER) - (right.order ?? Number.MAX_SAFE_INTEGER);
-      }
+        if (left.kind === DECISION_KIND.main) {
+          return (left.order ?? Number.MAX_SAFE_INTEGER) - (right.order ?? Number.MAX_SAFE_INTEGER);
+        }
 
-      return 0;
-    });
+        return 0;
+      });
   }
 }

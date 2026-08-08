@@ -11,6 +11,7 @@ export class DecisionRescheduled extends DecisionEvent<'decision.rescheduled'> {
   public readonly previousOrder: number | null;
   public readonly newOrder: number | null;
   public readonly rescheduleNumber: number;
+  public readonly reason: string;
 
   public constructor(
     eventId: EntityId,
@@ -20,6 +21,7 @@ export class DecisionRescheduled extends DecisionEvent<'decision.rescheduled'> {
     previousOrder: number | null,
     newOrder: number | null,
     rescheduleNumber: number,
+    reason: string,
     occurredAt: Date,
   ) {
     super(eventId, decisionId, occurredAt);
@@ -30,5 +32,6 @@ export class DecisionRescheduled extends DecisionEvent<'decision.rescheduled'> {
     this.previousOrder = previousOrder;
     this.newOrder = newOrder;
     this.rescheduleNumber = rescheduleNumber;
+    this.reason = reason;
   }
 }

@@ -1,8 +1,16 @@
-import { ActionSession, LIFE_ACTION_STATUS, type EntityId, type LifeAction } from '../../domain';
+import {
+  ActionSession,
+  DAY_STATUS,
+  LIFE_ACTION_STATUS,
+  type EntityId,
+  type LifeAction,
+} from '../../domain';
 import { DomainError } from '../../shared/errors/DomainError';
 import { failure, success, type Result } from '../../shared/result/Result';
 import type { ActionSessionRepository } from '../ports/ActionSessionRepository';
 import type { Clock } from '../ports/Clock';
+import type { CurrentDateProvider } from '../ports/CurrentDateProvider';
+import type { DayRepository } from '../ports/DayRepository';
 import type { IdGenerator } from '../ports/IdGenerator';
 import type { LifeActionRepository } from '../ports/LifeActionRepository';
 import { lifeActionNotFound } from './lifeActionCommandResult';
@@ -19,17 +27,23 @@ export type StartLifeActionSessionResult = Readonly<{
 export class StartLifeActionSession {
   readonly #lifeActionRepository: LifeActionRepository;
   readonly #actionSessionRepository: ActionSessionRepository;
+  readonly #dayRepository: DayRepository;
+  readonly #currentDateProvider: CurrentDateProvider;
   readonly #clock: Clock;
   readonly #idGenerator: IdGenerator;
 
   public constructor(
     lifeActionRepository: LifeActionRepository,
     actionSessionRepository: ActionSessionRepository,
+    dayRepository: DayRepository,
+    currentDateProvider: CurrentDateProvider,
     clock: Clock,
     idGenerator: IdGenerator,
   ) {
     this.#lifeActionRepository = lifeActionRepository;
     this.#actionSessionRepository = actionSessionRepository;
+    this.#dayRepository = dayRepository;
+    this.#currentDateProvider = currentDateProvider;
     this.#clock = clock;
     this.#idGenerator = idGenerator;
   }
@@ -59,6 +73,23 @@ export class StartLifeActionSession {
           'Сессию можно начать только для готового или выполняемого действия.',
         ),
       );
+    }
+
+    const currentDate = this.#currentDateProvider.getCurrentDate();
+
+    if (!lifeAction.isScheduledFor(currentDate)) {
+      return failure(
+        new DomainError(
+          'action.not_scheduled_for_current_day',
+          'Запустить можно только действие текущего дня.',
+        ),
+      );
+    }
+
+    const currentDay = await this.#dayRepository.findByDate(currentDate);
+
+    if (currentDay === null || currentDay.status !== DAY_STATUS.open) {
+      return failure(new DomainError('day.not_started', 'Сначала начните текущий день.'));
     }
 
     let unfinishedSession: ActionSession | null;

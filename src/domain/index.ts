@@ -28,6 +28,7 @@ export {
   DecisionDraftCreated,
   DecisionDetailsUpdated,
   DECISION_KIND,
+  DECISION_PRIORITY,
   DecisionPlanned,
   DecisionRescheduled,
   DecisionRestored,
@@ -38,8 +39,10 @@ export {
   type DecisionDraftInput,
   type DecisionDetailsUpdateInput,
   type DecisionKind,
+  type DecisionPriority,
   type DecisionPlanInput,
   type DecisionRehydrationData,
+  type DecisionRescheduleHistoryEntry,
   type DecisionRestoreInput,
   type DecisionStatus,
 } from './decision';
@@ -67,3 +70,43 @@ export {
 export type { DomainEvent } from './shared/DomainEvent';
 export { Entity } from './shared/Entity';
 export { EntityId } from './shared/EntityId';
+export {
+  ROUTINE_BLOCK_CATEGORY,
+  ROUTINE_BLOCK_ASSIGNMENT,
+  ROUTINE_BLOCK_RECURRENCE,
+  RoutineBlock,
+  RoutineBlockRecurrence,
+  createRoutineBlockAssignment,
+  isRoutineBlockCategory,
+  isRoutineBlockRecurrenceKind,
+  isRoutineBlockAssignmentKind,
+  type IsoWeekday,
+  type RoutineBlockCategory,
+  type RoutineBlockAssignment,
+  type RoutineBlockAssignmentKind,
+  type RoutineBlockCreationData,
+  type RoutineBlockDetails,
+  type RoutineBlockRecurrenceData,
+  type RoutineBlockRecurrenceKind,
+  type RoutineBlockRehydrationData,
+} from './routine-block';
+export {
+  ROUTINE_OCCURRENCE_OVERRIDE_TYPE,
+  RoutineOccurrenceOverride,
+  addMinutes,
+  durationMinutes,
+  resolveRoutineOccurrencesForDate,
+  timeToMinutes,
+  type EffectiveRoutineOccurrence,
+  type RoutineOccurrenceOverrideCreationData,
+  type RoutineOccurrenceOverrideDetails,
+  type RoutineOccurrenceOverrideRehydrationData,
+  type RoutineOccurrenceOverrideType,
+} from './routine-occurrence';
+export {
+  ROUTINE_EXECUTION_STATUS,
+  RoutineOccurrenceExecution,
+  type RoutineExecutionStatus,
+  type RoutineOccurrenceExecutionRehydrationData,
+  type StartRoutineOccurrenceExecutionData,
+} from './routine-execution';

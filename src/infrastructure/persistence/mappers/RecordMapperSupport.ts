@@ -44,6 +44,26 @@ export function readNullableString(record: UnknownRecord, field: string): string
   return value;
 }
 
+export function readOptionalNullableString(
+  record: UnknownRecord,
+  field: string,
+  fallback: string | null = null,
+): string | null {
+  if (!Object.hasOwn(record, field)) {
+    return fallback;
+  }
+
+  return readNullableString(record, field);
+}
+
+export function readOptionalString(record: UnknownRecord, field: string, fallback: string): string {
+  if (!Object.hasOwn(record, field)) {
+    return fallback;
+  }
+
+  return readString(record, field);
+}
+
 export function readNumber(record: UnknownRecord, field: string): number {
   const value = readRequired(record, field);
   if (typeof value !== 'number' || !Number.isFinite(value)) {
@@ -134,6 +154,18 @@ export function readNullableIsoDate(record: UnknownRecord, field: string): Date 
     throw invalidDate(field);
   }
   return parseIsoDate(value, field);
+}
+
+export function readOptionalNullableIsoDate(
+  record: UnknownRecord,
+  field: string,
+  fallback: Date | null = null,
+): Date | null {
+  if (!Object.hasOwn(record, field)) {
+    return fallback;
+  }
+
+  return readNullableIsoDate(record, field);
 }
 
 export function readDayDate(record: UnknownRecord, field: string): DayDate {

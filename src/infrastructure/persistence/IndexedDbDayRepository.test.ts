@@ -47,6 +47,21 @@ describe('IndexedDbDayRepository', () => {
     database.close();
   });
 
+  it('находит единственный открытый день и обнаруживает несколько открытых записей', async () => {
+    const { database, repository } = createContext();
+    const first = createDay('open-1', DATE);
+    await repository.save(first);
+
+    const restored = await repository.findOpen();
+    expect(restored?.id.equals(first.id)).toBe(true);
+
+    await repository.save(createDay('open-2', DayDate.create('2026-08-03')));
+    await expect(repository.findOpen()).rejects.toMatchObject({
+      code: 'day.multiple_open_detected',
+    });
+    database.close();
+  });
+
   it('не допускает два разных дня одной даты', async () => {
     const { database, repository } = createContext();
     await repository.save(createDay('day-1'));
@@ -84,10 +99,10 @@ function createContext(): {
   return { database, repository: new IndexedDbDayRepository(database) };
 }
 
-function createDay(dayId: string): Day {
+function createDay(dayId: string, date: DayDate = DATE): Day {
   return Day.openCurrent({
     id: id(dayId),
-    currentDate: DATE,
+    currentDate: date,
     occurredAt: OPENED_AT,
     createdEventId: id(`${dayId}-created-event`),
     openedEventId: id(`${dayId}-opened-event`),

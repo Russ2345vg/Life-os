@@ -3,6 +3,7 @@ import { DayDate, DECISION_KIND } from '../../domain';
 import { InMemoryDecisionRepository } from '../../infrastructure';
 import {
   cancelDecision,
+  decisionId,
   confirmDecision,
   createPlannedDecision,
 } from '../../test/helpers/DecisionTestFactory';
@@ -58,5 +59,18 @@ describe('GetDecisionsForDate', () => {
     const result = await new GetDecisionsForDate(repository).execute(DATE);
 
     expect(result).toEqual([confirmed, cancelled]);
+  });
+
+  it('скрывает мягко удалённые решения из рабочего списка', async () => {
+    const repository = new InMemoryDecisionRepository();
+    const active = createPlannedDecision('active', DATE);
+    const deleted = createPlannedDecision('deleted', DATE, DECISION_KIND.additional);
+    deleted.softDelete(new Date('2026-08-01T20:00:00.000+09:00'), decisionId('deleted-event'));
+    await repository.save(active);
+    await repository.save(deleted);
+
+    const result = await new GetDecisionsForDate(repository).execute(DATE);
+
+    expect(result).toEqual([active]);
   });
 });

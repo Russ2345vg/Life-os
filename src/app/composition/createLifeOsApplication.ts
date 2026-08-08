@@ -1,34 +1,72 @@
 import type { Clock, CurrentDateProvider, IdGenerator } from '../../application';
 import {
+  CompleteCurrentDay,
   CreateDecisionForDate,
   CreateLifeActionForDecision,
   CompleteActionSession,
   CompleteLifeAction,
+  VerifyLifeActionResult,
   CancelDecisionSafely,
+  DeleteDecisionSafely,
+  RestoreDeletedDecision,
   CancelLifeActionSafely,
   ConfirmDecisionFromActions,
   EnsureCurrentDay,
   GetDecisionsForDate,
+  GetDeletedDecisions,
+  GetEveningReview,
   GetDecisionById,
+  GetDecisionOverview,
+  GetActionListsForDate,
+  GetLifeActionsForDate,
   GetLifeActionsForDecision,
+  GetHistoryForDateRange,
   GetActionSessionsForLifeAction,
   GetUnfinishedActionSession,
+  GetOpenDayConflict,
+  ResolveOpenDayConflict,
   MainDecisionLimitPolicy,
   PauseActionSession,
   ResumeActionSession,
   RescheduleDecisionSafely,
   RescheduleLifeActionSafely,
+  StartCurrentDay,
   StartLifeActionSession,
   UpdateDecisionDetails,
   UpdateLifeActionDetails,
+  CreateRoutineBlock,
+  UpdateRoutineBlock,
+  DeleteRoutineBlock,
+  GetRoutineBlocksForDate,
+  GetRoutineActionOptions,
+  GetRoutineActionDetails,
+  DelayRoutineOccurrence,
+  SkipRoutineOccurrence,
+  RescheduleRoutineOccurrence,
+  ShortenRoutineOccurrence,
+  ReplaceRoutineOccurrenceAction,
+  ClearRoutineOccurrenceOverride,
+  GetRoutinePlanFactForDate,
+  GetRoutineExecutionForOccurrence,
+  GetRunningRoutineOccurrence,
+  StartRoutineOccurrence,
+  CompleteRoutineOccurrence,
+  AbandonRoutineOccurrence,
 } from '../../application';
 import { SystemClock } from '../../infrastructure/clock/SystemClock';
 import { SystemCurrentDateProvider } from '../../infrastructure/clock/SystemCurrentDateProvider';
 import { CryptoIdGenerator } from '../../infrastructure/ids/CryptoIdGenerator';
 import { IndexedDbActionSessionRepository } from '../../infrastructure/persistence/IndexedDbActionSessionRepository';
+import { IndexedDbDayCompletionUnitOfWork } from '../../infrastructure/persistence/IndexedDbDayCompletionUnitOfWork';
 import { IndexedDbDayRepository } from '../../infrastructure/persistence/IndexedDbDayRepository';
 import { IndexedDbDecisionRepository } from '../../infrastructure/persistence/IndexedDbDecisionRepository';
+import { IndexedDbDecisionRescheduleUnitOfWork } from '../../infrastructure/persistence/IndexedDbDecisionRescheduleUnitOfWork';
 import { IndexedDbLifeActionRepository } from '../../infrastructure/persistence/IndexedDbLifeActionRepository';
+import { IndexedDbRoutineBlockRepository } from '../../infrastructure/persistence/IndexedDbRoutineBlockRepository';
+import { IndexedDbRoutineOccurrenceOverrideRepository } from '../../infrastructure/persistence/IndexedDbRoutineOccurrenceOverrideRepository';
+import { IndexedDbRoutineOccurrenceExecutionRepository } from '../../infrastructure/persistence/IndexedDbRoutineOccurrenceExecutionRepository';
+import { IndexedDbOpenDayConflictReader } from '../../infrastructure/persistence/IndexedDbOpenDayConflictReader';
+import { IndexedDbOpenDayRecoveryUnitOfWork } from '../../infrastructure/persistence/IndexedDbOpenDayRecoveryUnitOfWork';
 import { LifeOsIndexedDb } from '../../infrastructure/persistence/indexed-db/LifeOsIndexedDb';
 import { LifeOsApplication } from './LifeOsApplication';
 import { LifeOsApplicationInitializationError } from './LifeOsApplicationInitializationError';
@@ -52,6 +90,15 @@ export async function createLifeOsApplication(
     const decisionRepository = new IndexedDbDecisionRepository(database);
     const lifeActionRepository = new IndexedDbLifeActionRepository(database);
     const actionSessionRepository = new IndexedDbActionSessionRepository(database);
+    const routineBlockRepository = new IndexedDbRoutineBlockRepository(database);
+    const routineOccurrenceOverrideRepository = new IndexedDbRoutineOccurrenceOverrideRepository(
+      database,
+    );
+    const routineOccurrenceExecutionRepository = new IndexedDbRoutineOccurrenceExecutionRepository(
+      database,
+    );
+    const openDayConflictReader = new IndexedDbOpenDayConflictReader(database);
+    const openDayRecoveryUnitOfWork = new IndexedDbOpenDayRecoveryUnitOfWork(database);
     const clock = dependencies.clock ?? new SystemClock();
     const currentDateProvider =
       dependencies.currentDateProvider ?? new SystemCurrentDateProvider(clock);
@@ -63,16 +110,61 @@ export async function createLifeOsApplication(
       idGenerator,
     );
     const currentDay = await ensureCurrentDay.execute();
+    const startCurrentDay = new StartCurrentDay(
+      dayRepository,
+      decisionRepository,
+      lifeActionRepository,
+      currentDateProvider,
+      clock,
+      idGenerator,
+    );
+    const getEveningReview = new GetEveningReview(
+      dayRepository,
+      decisionRepository,
+      lifeActionRepository,
+      actionSessionRepository,
+      currentDateProvider,
+      routineBlockRepository,
+      routineOccurrenceOverrideRepository,
+      routineOccurrenceExecutionRepository,
+    );
+    const dayCompletionUnitOfWork = new IndexedDbDayCompletionUnitOfWork(database);
+    const completeCurrentDay = new CompleteCurrentDay(
+      getEveningReview,
+      dayCompletionUnitOfWork,
+      clock,
+      idGenerator,
+    );
     const mainDecisionLimitPolicy = new MainDecisionLimitPolicy(decisionRepository);
     const createDecisionForDate = new CreateDecisionForDate(
       decisionRepository,
+      dayRepository,
       mainDecisionLimitPolicy,
+      currentDateProvider,
       clock,
       idGenerator,
     );
     const getDecisionsForDate = new GetDecisionsForDate(decisionRepository);
+    const getDeletedDecisions = new GetDeletedDecisions(decisionRepository);
     const getDecisionById = new GetDecisionById(decisionRepository);
+    const getDecisionOverview = new GetDecisionOverview(
+      decisionRepository,
+      lifeActionRepository,
+      actionSessionRepository,
+    );
+    const getActionListsForDate = new GetActionListsForDate(
+      lifeActionRepository,
+      decisionRepository,
+      actionSessionRepository,
+      clock,
+    );
+    const getLifeActionsForDate = new GetLifeActionsForDate(lifeActionRepository);
     const getLifeActionsForDecision = new GetLifeActionsForDecision(lifeActionRepository);
+    const getHistoryForDateRange = new GetHistoryForDateRange(
+      decisionRepository,
+      lifeActionRepository,
+      actionSessionRepository,
+    );
     const createLifeActionForDecision = new CreateLifeActionForDecision(
       decisionRepository,
       lifeActionRepository,
@@ -82,6 +174,8 @@ export async function createLifeOsApplication(
     const startLifeActionSession = new StartLifeActionSession(
       lifeActionRepository,
       actionSessionRepository,
+      dayRepository,
+      currentDateProvider,
       clock,
       idGenerator,
     );
@@ -97,6 +191,12 @@ export async function createLifeOsApplication(
       idGenerator,
     );
     const completeLifeAction = new CompleteLifeAction(lifeActionRepository, clock, idGenerator);
+    const verifyLifeActionResult = new VerifyLifeActionResult(
+      lifeActionRepository,
+      actionSessionRepository,
+      clock,
+      idGenerator,
+    );
     const confirmDecisionFromActions = new ConfirmDecisionFromActions(
       decisionRepository,
       lifeActionRepository,
@@ -104,6 +204,19 @@ export async function createLifeOsApplication(
       idGenerator,
     );
     const updateDecisionDetails = new UpdateDecisionDetails(decisionRepository, clock, idGenerator);
+    const deleteDecisionSafely = new DeleteDecisionSafely(
+      decisionRepository,
+      lifeActionRepository,
+      actionSessionRepository,
+      clock,
+      idGenerator,
+    );
+    const restoreDeletedDecision = new RestoreDeletedDecision(
+      decisionRepository,
+      mainDecisionLimitPolicy,
+      clock,
+      idGenerator,
+    );
     const cancelDecisionSafely = new CancelDecisionSafely(
       decisionRepository,
       lifeActionRepository,
@@ -121,9 +234,12 @@ export async function createLifeOsApplication(
       clock,
       idGenerator,
     );
+    const decisionRescheduleUnitOfWork = new IndexedDbDecisionRescheduleUnitOfWork(database);
     const rescheduleDecisionSafely = new RescheduleDecisionSafely(
       decisionRepository,
       lifeActionRepository,
+      actionSessionRepository,
+      decisionRescheduleUnitOfWork,
       currentDateProvider,
       clock,
       idGenerator,
@@ -139,35 +255,153 @@ export async function createLifeOsApplication(
       actionSessionRepository,
     );
     const getUnfinishedActionSession = new GetUnfinishedActionSession(actionSessionRepository);
+    const getOpenDayConflict = new GetOpenDayConflict(
+      openDayConflictReader,
+      actionSessionRepository,
+      lifeActionRepository,
+    );
+    const resolveOpenDayConflict = new ResolveOpenDayConflict(
+      openDayConflictReader,
+      actionSessionRepository,
+      lifeActionRepository,
+      openDayRecoveryUnitOfWork,
+      clock,
+      idGenerator,
+    );
+    const createRoutineBlock = new CreateRoutineBlock(routineBlockRepository, clock, idGenerator);
+    const updateRoutineBlock = new UpdateRoutineBlock(
+      routineBlockRepository,
+      clock,
+      routineOccurrenceExecutionRepository,
+    );
+    const deleteRoutineBlock = new DeleteRoutineBlock(
+      routineBlockRepository,
+      routineOccurrenceExecutionRepository,
+    );
+    const getRoutineBlocksForDate = new GetRoutineBlocksForDate(
+      routineBlockRepository,
+      routineOccurrenceOverrideRepository,
+    );
+    const getRoutinePlanFactForDate = new GetRoutinePlanFactForDate(
+      getRoutineBlocksForDate,
+      routineOccurrenceExecutionRepository,
+      clock,
+    );
+    const getRoutineExecutionForOccurrence = new GetRoutineExecutionForOccurrence(
+      routineOccurrenceExecutionRepository,
+    );
+    const getRunningRoutineOccurrence = new GetRunningRoutineOccurrence(
+      routineOccurrenceExecutionRepository,
+      routineBlockRepository,
+      routineOccurrenceOverrideRepository,
+    );
+    const getRoutineActionOptions = new GetRoutineActionOptions(
+      lifeActionRepository,
+      decisionRepository,
+    );
+    const getRoutineActionDetails = new GetRoutineActionDetails(
+      lifeActionRepository,
+      decisionRepository,
+    );
+    const routineOccurrenceDependencies = {
+      routineBlockRepository,
+      overrideRepository: routineOccurrenceOverrideRepository,
+      dayRepository,
+      actionSessionRepository,
+      lifeActionRepository,
+      currentDateProvider,
+      clock,
+      idGenerator,
+      executionRepository: routineOccurrenceExecutionRepository,
+    };
+    const delayRoutineOccurrence = new DelayRoutineOccurrence(routineOccurrenceDependencies);
+    const skipRoutineOccurrence = new SkipRoutineOccurrence(routineOccurrenceDependencies);
+    const rescheduleRoutineOccurrence = new RescheduleRoutineOccurrence(
+      routineOccurrenceDependencies,
+    );
+    const shortenRoutineOccurrence = new ShortenRoutineOccurrence(routineOccurrenceDependencies);
+    const replaceRoutineOccurrenceAction = new ReplaceRoutineOccurrenceAction(
+      routineOccurrenceDependencies,
+    );
+    const clearRoutineOccurrenceOverride = new ClearRoutineOccurrenceOverride(
+      routineOccurrenceDependencies,
+    );
+    const routineExecutionDependencies = {
+      routineBlockRepository,
+      overrideRepository: routineOccurrenceOverrideRepository,
+      executionRepository: routineOccurrenceExecutionRepository,
+      dayRepository,
+      currentDateProvider,
+      clock,
+      idGenerator,
+    };
+    const startRoutineOccurrence = new StartRoutineOccurrence(routineExecutionDependencies);
+    const completeRoutineOccurrence = new CompleteRoutineOccurrence(routineExecutionDependencies);
+    const abandonRoutineOccurrence = new AbandonRoutineOccurrence(routineExecutionDependencies);
     const application = new LifeOsApplication({
       dayRepository,
       decisionRepository,
       lifeActionRepository,
       actionSessionRepository,
+      routineBlockRepository,
+      routineOccurrenceOverrideRepository,
+      routineOccurrenceExecutionRepository,
       clock,
       currentDateProvider,
       idGenerator,
       ensureCurrentDay,
+      currentDay,
       currentDate: currentDay.date,
+      startCurrentDay,
+      getEveningReview,
+      completeCurrentDay,
       createDecisionForDate,
       getDecisionsForDate,
+      getDeletedDecisions,
       getDecisionById,
+      getDecisionOverview,
+      getActionListsForDate,
+      getLifeActionsForDate,
       getLifeActionsForDecision,
+      getHistoryForDateRange,
       createLifeActionForDecision,
       startLifeActionSession,
       pauseActionSession,
       resumeActionSession,
       completeActionSession,
       completeLifeAction,
+      verifyLifeActionResult,
       confirmDecisionFromActions,
       updateDecisionDetails,
       cancelDecisionSafely,
+      deleteDecisionSafely,
+      restoreDeletedDecision,
       updateLifeActionDetails,
       cancelLifeActionSafely,
       rescheduleDecisionSafely,
       rescheduleLifeActionSafely,
       getActionSessionsForLifeAction,
       getUnfinishedActionSession,
+      getOpenDayConflict,
+      resolveOpenDayConflict,
+      createRoutineBlock,
+      updateRoutineBlock,
+      deleteRoutineBlock,
+      getRoutineBlocksForDate,
+      getRoutineActionOptions,
+      getRoutineActionDetails,
+      delayRoutineOccurrence,
+      skipRoutineOccurrence,
+      rescheduleRoutineOccurrence,
+      shortenRoutineOccurrence,
+      replaceRoutineOccurrenceAction,
+      clearRoutineOccurrenceOverride,
+      getRoutinePlanFactForDate,
+      getRoutineExecutionForOccurrence,
+      getRunningRoutineOccurrence,
+      startRoutineOccurrence,
+      completeRoutineOccurrence,
+      abandonRoutineOccurrence,
       closeDatabase: () => database.close(),
     });
 
