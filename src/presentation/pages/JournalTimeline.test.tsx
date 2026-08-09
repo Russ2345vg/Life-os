@@ -9,7 +9,8 @@ import {
   JournalEntry,
 } from '../../domain';
 import type { JournalTimelineItem, JournalTimelineResult } from '../../application';
-import { JournalTimelineContent, groupJournalItems } from './HistoryPage';
+import { groupJournalItems } from '../journalTimelineFilters';
+import { JournalTimelineContent } from './HistoryPage';
 
 describe('Journal timeline presentation', () => {
   it('groups dates newest first and events inside a day chronologically', () => {

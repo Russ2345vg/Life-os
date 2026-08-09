@@ -3214,6 +3214,94 @@ button.more-section-card.available:hover {
 }
 
 /* History timeline */
+.journal-filter-panel {
+  display: grid;
+  gap: var(--space-6);
+  margin-top: var(--space-6);
+  padding: clamp(var(--space-4), 3vw, var(--space-6));
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-medium);
+  background: var(--color-surface);
+}
+
+.journal-filter-heading {
+  display: flex;
+  gap: var(--space-4);
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.journal-filter-heading h2 {
+  margin: var(--space-2) 0 0;
+  font-size: 1.05rem;
+}
+
+.journal-filter-fields {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.journal-filter-fields label {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.journal-filter-search {
+  grid-column: span 2;
+}
+
+.journal-filter-fields input,
+.journal-filter-fields select {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-small);
+  background: #101412;
+  font: inherit;
+  font-weight: 500;
+}
+
+.journal-filter-fields input:focus,
+.journal-filter-fields select:focus {
+  border-color: #8b7740;
+  outline: 2px solid rgb(215 193 120 / 24%);
+  outline-offset: 1px;
+}
+
+.journal-result-count {
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+  text-align: right;
+}
+
+.journal-filter-empty {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+  padding: clamp(var(--space-4), 4vw, var(--space-8));
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-medium);
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+}
+
+.journal-filter-empty strong {
+  color: var(--color-text);
+}
+
+.journal-filter-empty p {
+  margin: 0;
+}
+
 .journal-timeline {
   display: grid;
   gap: var(--space-5);
@@ -3559,6 +3647,10 @@ button.more-section-card.available:hover {
 }
 
 @media (max-width: 48rem) {
+  .journal-filter-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .history-range-panel {
     align-items: stretch;
     flex-direction: column;
@@ -3570,6 +3662,23 @@ button.more-section-card.available:hover {
 }
 
 @media (max-width: 30rem) {
+  .journal-filter-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .journal-filter-heading > button {
+    width: 100%;
+  }
+
+  .journal-filter-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .journal-filter-search {
+    grid-column: auto;
+  }
+
   .journal-day {
     padding-inline: var(--space-3);
   }

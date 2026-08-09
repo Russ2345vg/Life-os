@@ -59,6 +59,18 @@ import {
 } from '../entityPresentation';
 import { SectionError, SectionMessage } from './DecisionsPage';
 import { useSpheres } from '../components/sphereReferenceModel';
+import {
+  DEFAULT_JOURNAL_TIMELINE_FILTERS,
+  JOURNAL_STATE_FILTER,
+  JOURNAL_TYPE_FILTER,
+  createJournalSphereFilterOptions,
+  filterJournalTimelineItems,
+  groupJournalItems,
+  hasActiveJournalTimelineFilters,
+  type JournalStateFilter,
+  type JournalTimelineFilters,
+  type JournalTypeFilter,
+} from '../journalTimelineFilters';
 
 const EMPTY_GET_SPHERES: Pick<GetSpheres, 'execute'> = {
   execute: async () => ({ active: [], archived: [] }),
@@ -119,6 +131,9 @@ export function HistoryPage({
 }: HistoryPageProps) {
   const spheres = useSpheres(getSpheres ?? EMPTY_GET_SPHERES);
   const [range, setRange] = useState<HistoryRange>(HISTORY_RANGE.day);
+  const [journalFilters, setJournalFilters] = useState<JournalTimelineFilters>(
+    DEFAULT_JOURNAL_TIMELINE_FILTERS,
+  );
   const [selectedDecision, setSelectedDecision] = useState<Decision | null>(null);
   const [selectedAction, setSelectedAction] = useState<LifeAction | null>(null);
   const historyQuery = useMemo(
@@ -140,12 +155,19 @@ export function HistoryPage({
 
   function handleDateChange(date: DayDate): void {
     closeDetails();
+    setJournalFilters(DEFAULT_JOURNAL_TIMELINE_FILTERS);
     onDateChange(date);
   }
 
   function handleRangeChange(nextRange: HistoryRange): void {
     closeDetails();
+    setJournalFilters(DEFAULT_JOURNAL_TIMELINE_FILTERS);
     setRange(nextRange);
+  }
+
+  function handleJournalFiltersChange(filters: JournalTimelineFilters): void {
+    closeDetails();
+    setJournalFilters(filters);
   }
 
   return (
@@ -171,6 +193,8 @@ export function HistoryPage({
       {state.status === 'ready' ? (
         <JournalTimelineContent
           data={state.value}
+          filters={journalFilters}
+          onFiltersChange={handleJournalFiltersChange}
           onOpenDecision={(decision) => {
             setSelectedAction(null);
             setSelectedDecision(decision);
@@ -238,40 +262,184 @@ export function HistoryPage({
 
 interface JournalTimelineContentProps {
   readonly data: JournalTimelineResult;
+  readonly filters?: JournalTimelineFilters;
+  readonly onFiltersChange?: (filters: JournalTimelineFilters) => void;
   readonly onOpenDecision?: (decision: Decision) => void;
   readonly onOpenAction?: (lifeAction: LifeAction) => void;
 }
 
 export function JournalTimelineContent({
   data,
+  filters = DEFAULT_JOURNAL_TIMELINE_FILTERS,
+  onFiltersChange = () => undefined,
   onOpenDecision = () => undefined,
   onOpenAction = () => undefined,
 }: JournalTimelineContentProps) {
-  const groups = groupJournalItems(data.items);
-  if (groups.length === 0) {
-    return <SectionMessage>В выбранном диапазоне событий журнала пока нет</SectionMessage>;
-  }
+  const filteredItems = filterJournalTimelineItems(data.items, filters);
+  const groups = groupJournalItems(filteredItems);
+  const filtersAreActive = hasActiveJournalTimelineFilters(filters);
 
   return (
-    <section className="journal-timeline" aria-label="Хронология событий">
-      {groups.map((group) => (
-        <section className="journal-day" key={group.date}>
-          <h2>{formatJournalDate(group.date)}</h2>
-          <ol className="journal-event-list">
-            {group.items.map((item) => (
-              <JournalTimelineRow
-                item={item}
-                key={item.entry.id.toString()}
-                onOpenDecision={onOpenDecision}
-                onOpenAction={onOpenAction}
-              />
-            ))}
-          </ol>
+    <>
+      <JournalTimelineFilterPanel data={data} filters={filters} onChange={onFiltersChange} />
+      {data.items.length === 0 ? (
+        <SectionMessage>В выбранном диапазоне событий журнала пока нет</SectionMessage>
+      ) : groups.length === 0 ? (
+        <section className="journal-filter-empty" aria-live="polite">
+          <strong>По заданным условиям событий нет</strong>
+          <p>Измените поиск или сбросьте фильтры, чтобы снова увидеть хронологию.</p>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => onFiltersChange(DEFAULT_JOURNAL_TIMELINE_FILTERS)}
+          >
+            Сбросить фильтры
+          </button>
         </section>
-      ))}
+      ) : (
+        <section className="journal-timeline" aria-label="Хронология событий">
+          <div className="journal-result-count" aria-live="polite">
+            {filtersAreActive
+              ? `Показано ${filteredItems.length} из ${data.items.length} событий`
+              : `Всего событий: ${data.items.length}`}
+          </div>
+          {groups.map((group) => (
+            <section className="journal-day" key={group.date}>
+              <h2>{formatJournalDate(group.date)}</h2>
+              <ol className="journal-event-list">
+                {group.items.map((item) => (
+                  <JournalTimelineRow
+                    item={item}
+                    key={item.entry.id.toString()}
+                    onOpenDecision={onOpenDecision}
+                    onOpenAction={onOpenAction}
+                  />
+                ))}
+              </ol>
+            </section>
+          ))}
+        </section>
+      )}
+    </>
+  );
+}
+
+function JournalTimelineFilterPanel({
+  data,
+  filters,
+  onChange,
+}: {
+  readonly data: JournalTimelineResult;
+  readonly filters: JournalTimelineFilters;
+  readonly onChange: (filters: JournalTimelineFilters) => void;
+}) {
+  const sphereOptions = createJournalSphereFilterOptions(data.items);
+  const filtersAreActive = hasActiveJournalTimelineFilters(filters);
+
+  return (
+    <section className="journal-filter-panel" aria-labelledby="journal-filter-title">
+      <div className="journal-filter-heading">
+        <div>
+          <p className="section-page-eyebrow">Поиск и фильтры</p>
+          <h2 id="journal-filter-title">Найти событие</h2>
+        </div>
+        <button
+          type="button"
+          className="secondary-button"
+          disabled={!filtersAreActive}
+          onClick={() => onChange(DEFAULT_JOURNAL_TIMELINE_FILTERS)}
+        >
+          Сбросить
+        </button>
+      </div>
+
+      <div className="journal-filter-fields">
+        <label className="journal-filter-search">
+          <span>Название</span>
+          <input
+            type="search"
+            value={filters.query}
+            placeholder="Название решения или действия"
+            onChange={(event) => onChange({ ...filters, query: event.currentTarget.value })}
+          />
+        </label>
+        <label>
+          <span>Дата</span>
+          <input
+            type="date"
+            min={data.startDate.toString()}
+            max={data.endDate.toString()}
+            value={filters.date}
+            onChange={(event) => onChange({ ...filters, date: event.currentTarget.value })}
+          />
+        </label>
+        <label>
+          <span>Сфера</span>
+          <select
+            value={filters.sphere}
+            onChange={(event) => onChange({ ...filters, sphere: event.currentTarget.value })}
+          >
+            {sphereOptions.map((option) => (
+              <option value={option.value} key={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>Тип</span>
+          <select
+            value={filters.type}
+            onChange={(event) =>
+              onChange({ ...filters, type: event.currentTarget.value as JournalTypeFilter })
+            }
+          >
+            {JOURNAL_TYPE_OPTIONS.map((option) => (
+              <option value={option.value} key={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>Состояние</span>
+          <select
+            value={filters.state}
+            onChange={(event) =>
+              onChange({ ...filters, state: event.currentTarget.value as JournalStateFilter })
+            }
+          >
+            {JOURNAL_STATE_OPTIONS.map((option) => (
+              <option value={option.value} key={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
     </section>
   );
 }
+
+const JOURNAL_TYPE_OPTIONS: readonly FilterOption<JournalTypeFilter>[] = [
+  { value: JOURNAL_TYPE_FILTER.all, label: 'Все типы' },
+  { value: JOURNAL_TYPE_FILTER.day, label: 'День' },
+  { value: JOURNAL_TYPE_FILTER.decision, label: 'Решение' },
+  { value: JOURNAL_TYPE_FILTER.lifeAction, label: 'Действие' },
+  { value: JOURNAL_TYPE_FILTER.workSession, label: 'Рабочая сессия' },
+];
+
+const JOURNAL_STATE_OPTIONS: readonly FilterOption<JournalStateFilter>[] = [
+  { value: JOURNAL_STATE_FILTER.all, label: 'Все состояния' },
+  { value: JOURNAL_STATE_FILTER.created, label: 'Создано' },
+  { value: JOURNAL_STATE_FILTER.started, label: 'Начато' },
+  { value: JOURNAL_STATE_FILTER.paused, label: 'На паузе' },
+  { value: JOURNAL_STATE_FILTER.resumed, label: 'Продолжено' },
+  { value: JOURNAL_STATE_FILTER.completed, label: 'Завершено' },
+  { value: JOURNAL_STATE_FILTER.interrupted, label: 'Прервано' },
+  { value: JOURNAL_STATE_FILTER.rescheduled, label: 'Перенесено' },
+  { value: JOURNAL_STATE_FILTER.cancelled, label: 'Отменено' },
+];
 
 function JournalTimelineRow({
   item,
@@ -325,33 +493,6 @@ const JOURNAL_EVENT_LABELS: Readonly<Record<JournalEntryType, string>> = {
   [JOURNAL_ENTRY_TYPE.actionCancelled]: 'Действие отменено',
   [JOURNAL_ENTRY_TYPE.dayCompleted]: 'Вечерний контроль завершён',
 };
-
-interface JournalDayGroup {
-  readonly date: string;
-  readonly items: readonly JournalTimelineItem[];
-}
-
-export function groupJournalItems(
-  items: readonly JournalTimelineItem[],
-): readonly JournalDayGroup[] {
-  const byDate = new Map<string, JournalTimelineItem[]>();
-  for (const item of items) {
-    const date = item.entry.effectiveDate.toString();
-    const group = byDate.get(date) ?? [];
-    group.push(item);
-    byDate.set(date, group);
-  }
-  return [...byDate.entries()]
-    .sort(([left], [right]) => right.localeCompare(left))
-    .map(([date, group]) => ({
-      date,
-      items: group.sort(
-        (left, right) =>
-          left.entry.occurredAt.getTime() - right.entry.occurredAt.getTime() ||
-          left.entry.id.toString().localeCompare(right.entry.id.toString()),
-      ),
-    }));
-}
 
 function journalContext(item: JournalTimelineItem): string | null {
   const metadata = item.entry.metadata;
