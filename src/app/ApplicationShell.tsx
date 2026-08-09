@@ -13,6 +13,7 @@ import { APP_SECTION, type AppSection } from '../presentation/navigation/AppSect
 import { useLifeOsApplication } from './providers';
 import { BrowserActionListFiltersStore } from './settings/BrowserActionListFiltersStore';
 import { BrowserLocalSettingsStore } from './settings/BrowserLocalSettingsStore';
+import { BrowserSidebarPreferenceStore } from './settings/BrowserSidebarPreferenceStore';
 import { BrowserTodayActionSelectionStore } from './settings/BrowserTodayActionSelectionStore';
 import {
   copyLocalSettings,
@@ -24,6 +25,7 @@ export function ApplicationShell() {
   const application = useLifeOsApplication();
   const [todayActionSelectionStore] = useState(() => new BrowserTodayActionSelectionStore());
   const [actionListFiltersStore] = useState(() => new BrowserActionListFiltersStore());
+  const [sidebarPreferenceStore] = useState(() => new BrowserSidebarPreferenceStore());
   const [settingsRuntime] = useState(() => {
     const store = new BrowserLocalSettingsStore();
     return { store, initial: store.load() };
@@ -32,6 +34,7 @@ export function ApplicationShell() {
     copyLocalSettings(settingsRuntime.initial.settings),
   );
   const [activeSection, setActiveSection] = useState<AppSection>(settings.defaultSection);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => sidebarPreferenceStore.load());
   const [currentDay, setCurrentDay] = useState<Day>(application.currentDay);
   const [selectedDate, setSelectedDate] = useState<DayDate>(application.currentDate);
   const [openCreateRequested, setOpenCreateRequested] = useState(false);
@@ -74,6 +77,14 @@ export function ApplicationShell() {
     setActiveSection(APP_SECTION.today);
   }
 
+  function toggleSidebar(): void {
+    setSidebarCollapsed((collapsed) => {
+      const nextCollapsed = !collapsed;
+      sidebarPreferenceStore.save(nextCollapsed);
+      return nextCollapsed;
+    });
+  }
+
   function saveSettings(nextSettings: LocalSettings): boolean {
     if (!settingsRuntime.store.save(nextSettings)) {
       return false;
@@ -111,6 +122,8 @@ export function ApplicationShell() {
       interfaceDensity={settings.interfaceDensity}
       reduceMotion={settings.reduceMotion}
       showMobileWeekday={settings.showMobileWeekday}
+      sidebarCollapsed={sidebarCollapsed}
+      onToggleSidebar={toggleSidebar}
     >
       {activeSection === APP_SECTION.today ? (
         <TodayPage

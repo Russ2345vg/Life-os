@@ -14,6 +14,7 @@ body {
   min-width: 20rem;
   min-height: 100vh;
   margin: 0;
+  overflow-x: clip;
   color: var(--color-text);
   background: var(--color-background);
   font-family:
@@ -2103,12 +2104,22 @@ select:focus-visible {
 }
 
 .application-shell {
+  --application-sidebar-width: 16.5rem;
+
   display: grid;
-  grid-template-columns: 16.5rem minmax(0, 1fr);
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: var(--application-sidebar-width) minmax(0, 1fr);
   min-height: 100vh;
+  overflow-x: clip;
   background:
     radial-gradient(circle at 84% 8%, rgb(111 158 123 / 7%), transparent 26rem),
     var(--color-background);
+  transition: grid-template-columns 180ms ease;
+}
+
+.application-shell.application-sidebar-collapsed {
+  --application-sidebar-width: 4.25rem;
 }
 
 .application-sidebar {
@@ -2122,6 +2133,7 @@ select:focus-visible {
   padding: var(--space-6) var(--space-4);
   border-right: 1px solid var(--color-border);
   background: #101412;
+  transition: padding 180ms ease;
 }
 
 .application-brand-block {
@@ -2130,6 +2142,11 @@ select:focus-visible {
   align-items: center;
   padding: 0 var(--space-2) var(--space-6);
   border-bottom: 1px solid var(--color-border);
+}
+
+.application-brand-copy {
+  min-width: 0;
+  flex: 1;
 }
 
 .application-brand-mark {
@@ -2163,6 +2180,28 @@ select:focus-visible {
   line-height: 1.35;
 }
 
+.application-sidebar-toggle,
+.application-mobile-menu-button {
+  display: grid;
+  width: 2.75rem;
+  min-width: 2.75rem;
+  height: 2.75rem;
+  min-height: 2.75rem;
+  flex: 0 0 2.75rem;
+  place-items: center;
+  padding: 0;
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+  background: #151a18;
+}
+
+.application-sidebar-toggle:hover:not(:disabled),
+.application-mobile-menu-button:hover:not(:disabled) {
+  color: var(--color-accent-gold);
+  border-color: #655a38;
+  background: #1b1b14;
+}
+
 .application-navigation {
   display: grid;
   gap: var(--space-2);
@@ -2177,8 +2216,10 @@ select:focus-visible {
 }
 
 .application-navigation-link {
+  position: relative;
   display: flex;
   width: 100%;
+  min-height: 2.75rem;
   gap: var(--space-3);
   align-items: center;
   justify-content: flex-start;
@@ -2186,6 +2227,11 @@ select:focus-visible {
   border: 1px solid transparent;
   font-weight: 700;
   text-align: left;
+}
+
+.application-navigation-link svg {
+  flex: 0 0 auto;
+  font-size: 1.2rem;
 }
 
 .application-navigation-link:hover:not(:disabled) {
@@ -2202,6 +2248,64 @@ select:focus-visible {
 
 .application-navigation-link[aria-current='page'] svg {
   color: var(--color-accent-gold);
+}
+
+.application-sidebar-collapsed .application-desktop-sidebar {
+  padding-right: var(--space-3);
+  padding-left: var(--space-3);
+}
+
+.application-sidebar-collapsed .application-desktop-sidebar .application-brand-block {
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-right: 0;
+  padding-left: 0;
+}
+
+.application-sidebar-collapsed .application-desktop-sidebar .application-brand-copy,
+.application-sidebar-collapsed .application-desktop-sidebar .application-navigation-label,
+.application-sidebar-collapsed .application-desktop-sidebar .application-status-copy {
+  display: none;
+}
+
+.application-sidebar-collapsed .application-desktop-sidebar .application-navigation-link {
+  width: 2.75rem;
+  min-height: 2.75rem;
+  justify-content: center;
+  padding: 0;
+}
+
+.application-sidebar-collapsed .application-desktop-sidebar .application-navigation-link::after {
+  position: absolute;
+  z-index: 30;
+  top: 50%;
+  left: calc(100% + 0.7rem);
+  padding: 0.45rem 0.65rem;
+  color: var(--color-text);
+  border: 1px solid #50482f;
+  border-radius: var(--radius-small);
+  background: #181a16;
+  box-shadow: 0 0.75rem 2rem rgb(0 0 0 / 32%);
+  content: attr(data-tooltip);
+  font-size: 0.78rem;
+  font-weight: 700;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(0.25rem, -50%);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
+  white-space: nowrap;
+}
+
+.application-sidebar-collapsed
+  .application-desktop-sidebar
+  .application-navigation-link:hover::after,
+.application-sidebar-collapsed
+  .application-desktop-sidebar
+  .application-navigation-link:focus-visible::after {
+  opacity: 1;
+  transform: translate(0, -50%);
 }
 
 .application-day-status {
@@ -2264,11 +2368,26 @@ select:focus-visible {
   display: flex;
   gap: var(--space-3);
   align-items: flex-start;
-  margin-top: auto;
+  margin-top: 0;
   padding: var(--space-4);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-small);
   background: #0d110f;
+}
+
+.application-sidebar-collapsed .application-desktop-sidebar .application-day-status,
+.application-sidebar-collapsed .application-desktop-sidebar .application-sidebar-status {
+  width: 2.75rem;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 0;
+}
+
+.application-sidebar-collapsed .application-desktop-sidebar .application-day-status-dot,
+.application-sidebar-collapsed .application-desktop-sidebar .application-status-dot {
+  margin-top: 0;
 }
 
 .application-status-dot {
@@ -2298,7 +2417,9 @@ select:focus-visible {
 }
 
 .application-stage {
+  width: 100%;
   min-width: 0;
+  transition: width 180ms ease;
 }
 
 .application-content {
@@ -2307,7 +2428,8 @@ select:focus-visible {
 }
 
 .application-mobile-header,
-.application-bottom-navigation {
+.application-bottom-navigation,
+.application-mobile-menu-backdrop {
   display: none;
 }
 
@@ -2746,7 +2868,7 @@ button.more-section-card.available:hover {
     display: block;
   }
 
-  .application-sidebar {
+  .application-desktop-sidebar {
     display: none;
   }
 
@@ -2759,8 +2881,9 @@ button.more-section-card.available:hover {
     position: sticky;
     z-index: 9;
     top: 0;
-    display: flex;
-    gap: var(--space-4);
+    display: grid;
+    grid-template-columns: 2.75rem minmax(0, 1fr) minmax(6.5rem, auto);
+    gap: var(--space-3);
     align-items: center;
     justify-content: space-between;
     min-height: 4.25rem;
@@ -2768,6 +2891,14 @@ button.more-section-card.available:hover {
     border-bottom: 1px solid var(--color-border);
     background: rgb(13 16 15 / 92%);
     backdrop-filter: blur(0.8rem);
+  }
+
+  .application-mobile-heading {
+    min-width: 0;
+  }
+
+  .application-mobile-menu-button {
+    align-self: center;
   }
 
   .application-mobile-brand,
@@ -2788,7 +2919,10 @@ button.more-section-card.available:hover {
 
   .application-mobile-section {
     margin-top: var(--space-1);
+    overflow: hidden;
     font-weight: 750;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .application-mobile-day-status {
@@ -2815,7 +2949,55 @@ button.more-section-card.available:hover {
 
   .application-mobile-date {
     min-width: 0;
+    max-width: 10rem;
     text-align: right;
+  }
+
+  .application-mobile-menu-backdrop {
+    position: fixed;
+    z-index: 50;
+    inset: 0;
+    display: block;
+    overflow: hidden;
+    background: rgb(4 6 5 / 70%);
+    backdrop-filter: blur(0.35rem);
+    animation: application-backdrop-in 160ms ease-out;
+  }
+
+  .application-mobile-menu {
+    display: flex;
+    width: min(20rem, calc(100vw - 3rem));
+    max-width: 100%;
+    height: 100dvh;
+    min-width: 0;
+    flex-direction: column;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: var(--space-4);
+    border-right: 1px solid #50482f;
+    background: #101412;
+    box-shadow: 1.25rem 0 3rem rgb(0 0 0 / 38%);
+    animation: application-menu-in 180ms ease-out;
+  }
+
+  .application-mobile-menu .application-brand-block {
+    padding: 0 0 var(--space-4);
+  }
+
+  .application-mobile-menu .application-navigation {
+    margin-top: var(--space-4);
+  }
+
+  @keyframes application-backdrop-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes application-menu-in {
+    from {
+      transform: translateX(-1rem);
+    }
   }
 
   .application-mobile-date strong {
@@ -2892,6 +3074,19 @@ button.more-section-card.available:hover {
   .application-content .today-page,
   .section-page {
     padding-top: var(--space-6);
+  }
+}
+
+@media (max-width: 26rem) {
+  .application-mobile-header {
+    grid-template-columns: 2.75rem minmax(0, 1fr) minmax(5.5rem, auto);
+    gap: var(--space-2);
+    padding-right: var(--space-3);
+    padding-left: var(--space-3);
+  }
+
+  .application-mobile-date > span:last-child:not(.application-mobile-day-status) {
+    display: none;
   }
 }
 
@@ -4050,7 +4245,11 @@ button.more-section-card.available:hover {
 }
 
 .application-density-compact {
-  grid-template-columns: 15rem minmax(0, 1fr);
+  --application-sidebar-width: 15rem;
+}
+
+.application-density-compact.application-sidebar-collapsed {
+  --application-sidebar-width: 4.25rem;
 }
 
 .application-density-compact .application-sidebar {

@@ -11,7 +11,11 @@ export type AppIconName =
   | 'walks'
   | 'statistics'
   | 'spheres'
-  | 'settings';
+  | 'settings'
+  | 'collapse'
+  | 'expand'
+  | 'menu'
+  | 'close';
 
 interface AppIconProps extends SVGProps<SVGSVGElement> {
   readonly name: AppIconName;
@@ -111,5 +115,23 @@ function iconPath(name: AppIconName) {
           <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z" />
         </>
       );
+    case 'collapse':
+      return (
+        <>
+          <rect x="3" y="4" width="18" height="16" rx="2" />
+          <path d="M9 4v16M16 9l-3 3 3 3" />
+        </>
+      );
+    case 'expand':
+      return (
+        <>
+          <rect x="3" y="4" width="18" height="16" rx="2" />
+          <path d="M9 4v16M14 9l3 3-3 3" />
+        </>
+      );
+    case 'menu':
+      return <path d="M4 7h16M4 12h16M4 17h16" />;
+    case 'close':
+      return <path d="m6 6 12 12M18 6 6 18" />;
   }
 }

@@ -5,11 +5,11 @@ import { DAY_STATUS, DayDate } from '../../domain';
 import { APP_SECTION } from '../navigation/AppSection';
 import type { AppSection } from '../navigation/AppSection';
 import { INTERFACE_DENSITY } from '../settings/localSettings';
-import { ApplicationShellView } from './ApplicationShellView';
+import { ApplicationMobileMenu, ApplicationShellView } from './ApplicationShellView';
 
 const CURRENT_DATE = DayDate.create('2026-08-04');
 
-function renderShell(activeSection: AppSection = APP_SECTION.today) {
+function renderShell(activeSection: AppSection = APP_SECTION.today, sidebarCollapsed = false) {
   return renderToStaticMarkup(
     createElement(ApplicationShellView, {
       activeSection,
@@ -21,6 +21,8 @@ function renderShell(activeSection: AppSection = APP_SECTION.today) {
       interfaceDensity: INTERFACE_DENSITY.comfortable,
       reduceMotion: false,
       showMobileWeekday: true,
+      sidebarCollapsed,
+      onToggleSidebar: vi.fn(),
       children: createElement('main', null, 'Содержимое раздела'),
     }),
   );
@@ -47,7 +49,27 @@ describe('ApplicationShellView', () => {
     const markup = renderShell(APP_SECTION.actions);
 
     expect(markup).toContain('aria-current="page"');
-    expect(markup).toMatch(/aria-current="page"[^>]*><svg[^>]*>[\s\S]*?<span>Действия<\/span>/);
+    expect(markup).toMatch(
+      /aria-current="page"[^>]*>[\s\S]*?<span class="application-navigation-label">Действия<\/span>/,
+    );
+  });
+
+  it('сворачивает панель до режима иконок, сохраняя подписи и кнопку разворачивания', () => {
+    const markup = renderShell(APP_SECTION.actions, true);
+
+    expect(markup).toContain('application-sidebar-collapsed');
+    expect(markup).toContain('aria-label="Развернуть боковое меню"');
+    expect(markup).toContain('data-tooltip="Действия"');
+    expect(markup).toContain('title="Локальный режим"');
+    expect(markup).toContain('aria-current="page"');
+  });
+
+  it('в развёрнутом состоянии показывает названия и доступную кнопку сворачивания', () => {
+    const markup = renderShell(APP_SECTION.today, false);
+
+    expect(markup).not.toContain('application-sidebar-collapsed');
+    expect(markup).toContain('aria-label="Свернуть боковое меню"');
+    expect(markup).toContain('<span class="application-navigation-label">День</span>');
   });
 
   it('показывает мобильную навигацию и отдельную кнопку создания', () => {
@@ -71,6 +93,8 @@ describe('ApplicationShellView', () => {
         interfaceDensity: INTERFACE_DENSITY.compact,
         reduceMotion: true,
         showMobileWeekday: false,
+        sidebarCollapsed: false,
+        onToggleSidebar: vi.fn(),
         children: createElement('main', null, 'Содержимое раздела'),
       }),
     );
@@ -92,9 +116,31 @@ describe('ApplicationShellView', () => {
   it('показывает сферы в настольной навигации, сохраняя мобильный доступ через «Ещё»', () => {
     const markup = renderShell(APP_SECTION.spheres);
 
-    expect(markup).toMatch(/aria-current="page"[^>]*><svg[^>]*>[\s\S]*?<span>Сферы<\/span>/);
+    expect(markup).toMatch(
+      /aria-current="page"[^>]*>[\s\S]*?<span class="application-navigation-label">Сферы<\/span>/,
+    );
     const mobileNavigation = markup.slice(markup.indexOf('Мобильная навигация'));
-    expect(mobileNavigation).toContain('<span>Ещё</span>');
-    expect(mobileNavigation).not.toContain('<span>Сферы</span>');
+    expect(mobileNavigation).toContain('<span class="application-navigation-label">Ещё</span>');
+    expect(mobileNavigation).not.toContain(
+      '<span class="application-navigation-label">Сферы</span>',
+    );
+  });
+
+  it('готовит мобильное меню поверх страницы с управлением закрытием', () => {
+    const markup = renderToStaticMarkup(
+      createElement(ApplicationMobileMenu, {
+        activeSection: APP_SECTION.decisions,
+        currentDayStatus: DAY_STATUS.open,
+        onOpenSection: vi.fn(),
+        onClose: vi.fn(),
+      }),
+    );
+
+    expect(markup).toContain('application-mobile-menu-backdrop');
+    expect(markup).toContain('role="dialog"');
+    expect(markup).toContain('aria-modal="true"');
+    expect(markup).toContain('aria-label="Закрыть меню"');
+    expect(markup).toContain('aria-current="page"');
+    expect(markup).toContain('<span class="application-navigation-label">Решения</span>');
   });
 });
