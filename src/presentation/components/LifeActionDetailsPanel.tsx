@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import type { Clock } from '../../application';
+import type { Clock, SpheresSnapshot } from '../../application';
 import {
   LIFE_ACTION_STATUS,
   SESSION_COMPLETION_KIND,
@@ -17,6 +17,7 @@ import {
   type SessionCompletionFormState,
 } from '../pages/TodayPageState';
 import { ActionSessionOverviewPanel } from './ActionSessionOverviewPanel';
+import { SphereBadge, SphereSelect } from './SphereReference';
 import {
   formatDuration,
   resolveSafeSessionNow,
@@ -27,6 +28,7 @@ interface LifeActionDetailsPanelProps {
   readonly details: LifeActionDetailsState;
   readonly currentDate: DayDate;
   readonly readOnly: boolean;
+  readonly spheres: SpheresSnapshot;
   readonly sessionRecoveryMode?: boolean;
   readonly decisionTitle: string | null;
   readonly decisionPlannedDate: DayDate | null;
@@ -63,6 +65,7 @@ interface LifeActionDetailsPanelProps {
   readonly onEditTitleChange: (title: string) => void;
   readonly onEditDescriptionChange: (description: string) => void;
   readonly onEditExpectedResultChange: (expectedResult: string) => void;
+  readonly onEditSphereChange: (sphereId: string) => void;
   readonly onEditSubmit: (event: FormEvent<HTMLFormElement>) => void;
   readonly onOpenCancellation: () => void;
   readonly onCloseCancellation: () => void;
@@ -81,6 +84,7 @@ export function LifeActionDetailsPanel({
   details,
   currentDate,
   readOnly,
+  spheres,
   sessionRecoveryMode = false,
   decisionTitle,
   decisionPlannedDate,
@@ -117,6 +121,7 @@ export function LifeActionDetailsPanel({
   onEditTitleChange,
   onEditDescriptionChange,
   onEditExpectedResultChange,
+  onEditSphereChange,
   onEditSubmit,
   onOpenCancellation,
   onCloseCancellation,
@@ -204,6 +209,15 @@ export function LifeActionDetailsPanel({
                   {decisionTitle === null ? 'Без связанного решения' : `Решение «${decisionTitle}»`}
                 </dd>
               </div>
+              <div>
+                <dt>Сфера</dt>
+                <dd>
+                  <SphereBadge
+                    sphereId={details.lifeAction.sphereId?.toString() ?? null}
+                    snapshot={spheres}
+                  />
+                </dd>
+              </div>
             </dl>
 
             {readOnly ? (
@@ -220,6 +234,7 @@ export function LifeActionDetailsPanel({
               isEditFormOpen={isEditFormOpen}
               isEditing={isEditing}
               editForm={editForm}
+              spheres={spheres}
               editError={editError}
               isCancellationOpen={isCancellationOpen}
               isCancelling={isCancelling}
@@ -236,6 +251,7 @@ export function LifeActionDetailsPanel({
               onEditTitleChange={onEditTitleChange}
               onEditDescriptionChange={onEditDescriptionChange}
               onEditExpectedResultChange={onEditExpectedResultChange}
+              onEditSphereChange={onEditSphereChange}
               onEditSubmit={onEditSubmit}
               onOpenCancellation={onOpenCancellation}
               onCloseCancellation={onCloseCancellation}
@@ -300,6 +316,7 @@ function LifeActionManagement({
   isEditFormOpen,
   isEditing,
   editForm,
+  spheres,
   editError,
   isCancellationOpen,
   isCancelling,
@@ -316,6 +333,7 @@ function LifeActionManagement({
   onEditTitleChange,
   onEditDescriptionChange,
   onEditExpectedResultChange,
+  onEditSphereChange,
   onEditSubmit,
   onOpenCancellation,
   onCloseCancellation,
@@ -330,6 +348,7 @@ function LifeActionManagement({
   readonly isEditFormOpen: boolean;
   readonly isEditing: boolean;
   readonly editForm: LifeActionEditFormState;
+  readonly spheres: SpheresSnapshot;
   readonly editError: string | null;
   readonly isCancellationOpen: boolean;
   readonly isCancelling: boolean;
@@ -346,6 +365,7 @@ function LifeActionManagement({
   readonly onEditTitleChange: (title: string) => void;
   readonly onEditDescriptionChange: (description: string) => void;
   readonly onEditExpectedResultChange: (expectedResult: string) => void;
+  readonly onEditSphereChange: (sphereId: string) => void;
   readonly onEditSubmit: (event: FormEvent<HTMLFormElement>) => void;
   readonly onOpenCancellation: () => void;
   readonly onCloseCancellation: () => void;
@@ -496,6 +516,15 @@ function LifeActionManagement({
               disabled={isEditing}
               aria-required="true"
               onChange={(event) => onEditExpectedResultChange(event.target.value)}
+            />
+          </label>
+          <label>
+            <span>Сфера</span>
+            <SphereSelect
+              value={editForm.sphereId || null}
+              snapshot={spheres}
+              disabled={isEditing}
+              onChange={(sphereId) => onEditSphereChange(sphereId ?? '')}
             />
           </label>
           {editError === null ? null : (

@@ -36,7 +36,7 @@ describe('UpdateDecisionDetails', () => {
       title: '  Новое название  ',
       reason: '  Новая причина  ',
       expectedResult: '  Новый ожидаемый результат  ',
-      sphere: '  Разработка  ',
+      sphereId: EntityId.create('sphere-development'),
       price: '  Два часа  ',
       sacrifices: '  Не переключаться  ',
       priority: DECISION_PRIORITY.high,
@@ -53,7 +53,7 @@ describe('UpdateDecisionDetails', () => {
     expect(result.value.title.toString()).toBe('Новое название');
     expect(result.value.reason).toBe('Новая причина');
     expect(result.value.expectedResult?.toString()).toBe('Новый ожидаемый результат');
-    expect(result.value.sphere).toBe('Разработка');
+    expect(result.value.sphereId?.toString()).toBe('sphere-development');
     expect(result.value.price).toBe('Два часа');
     expect(result.value.sacrifices).toBe('Не переключаться');
     expect(result.value.priority).toBe(DECISION_PRIORITY.high);

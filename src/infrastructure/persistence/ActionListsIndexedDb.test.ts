@@ -33,12 +33,15 @@ describe('action lists IndexedDB integration', () => {
     const firstSessionRepository = new IndexedDbActionSessionRepository(firstDatabase);
     const decision = createPlannedDecision('persisted-list', DATE);
     decision.updateDetails({
-      sphere: 'Работа',
+      sphereId: EntityId.create('sphere-work'),
       occurredAt: at('07:30'),
       eventId: EntityId.create('persisted-list-sphere-updated'),
     });
     const pausedAction = markLifeActionInProgress(
-      createReadyLifeAction('persisted-paused', DATE, { decisionId: decision.id }),
+      createReadyLifeAction('persisted-paused', DATE, {
+        decisionId: decision.id,
+        sphereId: EntityId.create('sphere-work'),
+      }),
     );
     const completedAction = completeLifeAction(createReadyLifeAction('persisted-completed', DATE));
     const pausedSession = ActionSession.start({
@@ -84,7 +87,7 @@ describe('action lists IndexedDB integration', () => {
     expect(snapshot.items[0]?.lifeAction.id.equals(pausedAction.id)).toBe(true);
     expect(snapshot.items[0]?.group).toBe(ACTION_LIST_GROUP.paused);
     expect(snapshot.items[0]?.decisionTitle).toBe('Решение persisted-list');
-    expect(snapshot.items[0]?.decisionSphere).toBe('Работа');
+    expect(snapshot.items[0]?.sphereId).toBe('sphere-work');
     expect(snapshot.items[0]?.totalWorkedDurationMs).toBe(30 * 60_000);
     expect(snapshot.items[1]?.lifeAction.id.equals(completedAction.id)).toBe(true);
     expect(snapshot.items[1]?.group).toBe(ACTION_LIST_GROUP.completed);

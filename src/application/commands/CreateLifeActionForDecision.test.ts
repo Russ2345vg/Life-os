@@ -27,6 +27,26 @@ const DATE = DayDate.create('2026-08-02');
 const NOW = new Date('2026-08-02T08:00:00.000+09:00');
 
 describe('CreateLifeActionForDecision', () => {
+  it('inherits the decision sphere only as the initial action value', async () => {
+    const decision = createPlannedDecision('sphere-source', DATE);
+    decision.updateDetails({
+      sphereId: EntityId.create('sphere-work'),
+      occurredAt: NOW,
+      eventId: EntityId.create('decision-sphere-assigned'),
+    });
+    const context = await createContext(decision);
+
+    const action = unwrap(await context.command.execute(validInput(decision)));
+    decision.updateDetails({
+      sphereId: EntityId.create('sphere-health'),
+      occurredAt: new Date(NOW.getTime() + 1_000),
+      eventId: EntityId.create('decision-sphere-changed'),
+    });
+
+    expect(action.sphereId?.toString()).toBe('sphere-work');
+    expect(decision.sphereId?.toString()).toBe('sphere-health');
+  });
+
   it.each([
     ['planned', () => createPlannedDecision('decision', DATE)],
     ['in_progress', () => markDecisionInProgress(createPlannedDecision('decision', DATE))],

@@ -40,6 +40,7 @@ export interface DayRehydrationData {
   readonly firstActivityAt: Date | null;
   readonly completedAt: Date | null;
   readonly summary: string | null;
+  readonly sphereId?: EntityId | null;
   readonly version: number;
 }
 
@@ -53,6 +54,7 @@ export class Day extends Entity {
   #firstActivityAt: Date | null;
   #completedAt: Date | null;
   #summary: string | null;
+  #sphereId: EntityId | null;
   #version: number;
 
   private constructor(
@@ -73,6 +75,7 @@ export class Day extends Entity {
     this.#firstActivityAt = null;
     this.#completedAt = null;
     this.#summary = null;
+    this.#sphereId = null;
     this.#version = 1;
     this.#domainEvents = domainEvents;
   }
@@ -165,6 +168,7 @@ export class Day extends Entity {
     day.#firstActivityAt = copyOptionalDate(data.firstActivityAt);
     day.#completedAt = copyOptionalDate(data.completedAt);
     day.#summary = data.summary;
+    day.#sphereId = data.sphereId ?? null;
     day.#version = data.version;
     return day;
   }
@@ -199,6 +203,10 @@ export class Day extends Entity {
 
   public get summary(): string | null {
     return this.#summary;
+  }
+
+  public get sphereId(): EntityId | null {
+    return this.#sphereId;
   }
 
   public get version(): number {
@@ -241,7 +249,12 @@ export class Day extends Entity {
     this.#domainEvents.push(new DayFirstActivityRecorded(eventId, this.id, this.#date, occurredAt));
   }
 
-  public complete(occurredAt: Date, eventId: EntityId, summary?: string): void {
+  public complete(
+    occurredAt: Date,
+    eventId: EntityId,
+    summary?: string,
+    sphereId: EntityId | null = null,
+  ): void {
     if (this.#status !== DAY_STATUS.open) {
       throw new DomainError(
         'day.completion_requires_open_day',
@@ -252,10 +265,23 @@ export class Day extends Entity {
     this.#status = DAY_STATUS.completed;
     this.#completedAt = copyDate(occurredAt);
     this.#summary = summary ?? null;
+    this.#sphereId = sphereId;
     this.#version += 1;
     this.#domainEvents.push(
-      new DayCompleted(eventId, this.id, this.#date, this.#summary, occurredAt),
+      new DayCompleted(eventId, this.id, this.#date, this.#summary, this.#sphereId, occurredAt),
     );
+  }
+
+  public changeResultSphere(sphereId: EntityId | null): void {
+    if (this.#status !== DAY_STATUS.completed) {
+      throw new DomainError(
+        'day.result_sphere_requires_completed_day',
+        'Сферу результата можно изменить только после завершения дня.',
+      );
+    }
+    if (sameOptionalEntityId(this.#sphereId, sphereId)) return;
+    this.#sphereId = sphereId;
+    this.#version += 1;
   }
 
   public isCurrent(currentDate: DayDate): boolean {
@@ -277,6 +303,11 @@ export class Day extends Entity {
   public clearUncommittedEvents(): void {
     this.#domainEvents.length = 0;
   }
+}
+
+function sameOptionalEntityId(left: EntityId | null, right: EntityId | null): boolean {
+  if (left === null || right === null) return left === right;
+  return left.equals(right);
 }
 
 function assertRehydrationInvariants(data: DayRehydrationData): void {

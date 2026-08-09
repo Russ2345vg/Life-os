@@ -15,6 +15,7 @@ export interface CreateLifeActionDraftInput {
   readonly title: LifeActionTitle;
   readonly description?: string;
   readonly decisionId?: EntityId;
+  readonly sphereId?: EntityId | null;
 }
 
 export class CreateLifeActionDraft {
@@ -38,6 +39,7 @@ export class CreateLifeActionDraft {
   public async execute(
     input: CreateLifeActionDraftInput,
   ): Promise<Result<LifeAction, DomainError>> {
+    let inheritedSphereId: EntityId | null = null;
     if (input.decisionId !== undefined) {
       const decision = await this.#decisionRepository.findById(input.decisionId);
 
@@ -53,6 +55,7 @@ export class CreateLifeActionDraft {
       if (decision.isArchived() || decision.isDeleted() || !statusAllowsNewLifeAction) {
         return decisionUnavailableForLifeAction();
       }
+      inheritedSphereId = decision.sphereId;
     }
 
     try {
@@ -61,6 +64,7 @@ export class CreateLifeActionDraft {
         title: input.title,
         ...(input.description === undefined ? {} : { description: input.description }),
         ...(input.decisionId === undefined ? {} : { decisionId: input.decisionId }),
+        sphereId: input.sphereId === undefined ? inheritedSphereId : input.sphereId,
         createdAt: this.#clock.now(),
         eventId: this.#idGenerator.generate(),
       });

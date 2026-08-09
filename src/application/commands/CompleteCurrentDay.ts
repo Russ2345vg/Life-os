@@ -47,6 +47,7 @@ export interface TomorrowDecisionDraft {
 
 export interface CompleteCurrentDayInput {
   readonly summary: string;
+  readonly sphereId?: EntityId | null;
   readonly actionResolutions: readonly EveningLifeActionResolution[];
   readonly tomorrowDecisions: readonly TomorrowDecisionDraft[];
 }
@@ -106,7 +107,12 @@ export class CompleteCurrentDay {
       );
       const completedDay = cloneDay(snapshot.day);
       const expectedDayVersion = completedDay.version;
-      completedDay.complete(occurredAt, this.#idGenerator.generate(), summary);
+      completedDay.complete(
+        occurredAt,
+        this.#idGenerator.generate(),
+        summary,
+        input.sphereId ?? null,
+      );
 
       await this.#unitOfWork.commit({
         day: completedDay,
@@ -394,6 +400,7 @@ function cloneDay(day: Day): Day {
     firstActivityAt: day.firstActivityAt,
     completedAt: day.completedAt,
     summary: day.summary,
+    sphereId: day.sphereId,
     version: day.version,
   });
 }
@@ -407,6 +414,7 @@ function cloneLifeAction(lifeAction: LifeAction): LifeAction {
     actualResult: lifeAction.actualResult,
     status: lifeAction.status,
     decisionId: lifeAction.decisionId,
+    sphereId: lifeAction.sphereId,
     plannedDate: lifeAction.plannedDate,
     createdAt: lifeAction.createdAt,
     readyAt: lifeAction.readyAt,

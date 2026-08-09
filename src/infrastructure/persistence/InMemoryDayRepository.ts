@@ -32,4 +32,13 @@ export class InMemoryDayRepository implements DayRepository {
 
     this.#daysByDate.set(key, day);
   }
+
+  public async saveIfVersionMatches(day: Day, expectedVersion: number): Promise<boolean> {
+    const stored = this.#daysByDate.get(day.date.toString());
+    if (stored === undefined || !stored.id.equals(day.id) || stored.version !== expectedVersion) {
+      return false;
+    }
+    this.#daysByDate.set(day.date.toString(), day);
+    return true;
+  }
 }

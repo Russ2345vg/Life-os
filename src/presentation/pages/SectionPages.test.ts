@@ -32,7 +32,7 @@ function createActionListItem(
   return {
     lifeAction,
     decisionTitle: null,
-    decisionSphere: null,
+    sphereId: null,
     sessions: [],
     unfinishedSession: null,
     group,

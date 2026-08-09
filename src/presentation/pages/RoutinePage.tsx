@@ -38,6 +38,7 @@ import type {
   ClearRoutineOccurrenceOverride,
   GetRoutinePlanFactForDate,
   GetRunningRoutineOccurrence,
+  GetSpheres,
   RunningRoutineOccurrence,
   StartRoutineOccurrence,
   CompleteRoutineOccurrence,
@@ -88,6 +89,11 @@ import { RoutineSubmissionGuard } from '../routine/RoutineSubmissionGuard';
 import { openRoutineAssignmentSection } from '../routine/RoutineAssignmentNavigation';
 import { findRoutineBlockOverlaps } from '../routine/RoutineBlockOverlaps';
 import { EveningReviewPanel } from './EveningReviewPanel';
+import { useSpheres } from '../components/sphereReferenceModel';
+
+const EMPTY_GET_SPHERES: Pick<GetSpheres, 'execute'> = {
+  execute: async () => ({ active: [], archived: [] }),
+};
 
 interface RoutinePageProps {
   readonly currentDate: DayDate;
@@ -119,6 +125,7 @@ export interface RoutinePageWorkflowServices {
   readonly getDecisionsForDate: Pick<GetDecisionsForDate, 'execute'>;
   readonly getEveningReview: Pick<GetEveningReview, 'execute'>;
   readonly completeCurrentDay: Pick<CompleteCurrentDay, 'execute'>;
+  readonly getSpheres?: Pick<GetSpheres, 'execute'>;
   readonly getDecisionById: Pick<GetDecisionById, 'execute'>;
   readonly getDecisionOverview: Pick<GetDecisionOverview, 'execute'>;
   readonly getLifeActionsForDecision: Pick<GetLifeActionsForDecision, 'execute'>;
@@ -151,6 +158,7 @@ type RunningRoutineState =
   | { readonly status: 'error'; readonly message: string };
 
 export function RoutinePage(props: RoutinePageProps) {
+  const spheres = useSpheres(props.workflow?.getSpheres ?? EMPTY_GET_SPHERES);
   const workflow = props.workflow;
   const [blocks, setBlocks] = useState<readonly EffectiveRoutineOccurrence[]>([]);
   const [planFacts, setPlanFacts] = useState<ReadonlyMap<string, RoutinePlanFactPresentation>>(
@@ -1068,6 +1076,7 @@ export function RoutinePage(props: RoutinePageProps) {
       )}
       {workflow === undefined ? null : (
         <DecisionDetailsController
+          spheres={spheres}
           decision={creationDecision}
           currentDate={props.currentDate}
           selectedDate={props.selectedDate}
@@ -1131,6 +1140,7 @@ export function RoutinePage(props: RoutinePageProps) {
       )}
       {selectedAction === null || workflow === undefined ? null : (
         <LifeActionDetailsController
+          spheres={spheres}
           lifeAction={selectedAction}
           currentDate={props.currentDate}
           readOnly={selectedAction.plannedDate?.isBefore(props.currentDate) ?? false}
@@ -1157,6 +1167,7 @@ export function RoutinePage(props: RoutinePageProps) {
       {eveningReviewDate === null || workflow === undefined ? null : (
         <EveningReviewPanel
           getEveningReview={workflow.getEveningReview}
+          {...(workflow.getSpheres === undefined ? {} : { getSpheres: workflow.getSpheres })}
           completeCurrentDay={workflow.completeCurrentDay}
           reviewDate={eveningReviewDate}
           onClose={() => setEveningReviewDate(null)}

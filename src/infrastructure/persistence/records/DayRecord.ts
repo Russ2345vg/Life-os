@@ -9,5 +9,6 @@ export interface DayRecord {
   readonly firstActivityAt: string | null;
   readonly completedAt: string | null;
   readonly summary: string | null;
+  readonly sphereId?: string | null;
   readonly version: number;
 }

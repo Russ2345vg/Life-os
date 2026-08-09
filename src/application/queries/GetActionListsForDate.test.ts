@@ -42,12 +42,16 @@ describe('GetActionListsForDate', () => {
     const context = createQuery();
     const decision = createPlannedDecision('main', DATE, DECISION_KIND.main, 1);
     decision.updateDetails({
-      sphere: 'Работа',
+      sphereId: EntityId.create('sphere-work'),
       occurredAt: at('08:05'),
       eventId: EntityId.create('main-sphere-updated'),
     });
     const active = markLifeActionInProgress(
-      createReadyLifeAction('active', DATE, { decisionId: decision.id, createdAt: at('08:00') }),
+      createReadyLifeAction('active', DATE, {
+        decisionId: decision.id,
+        sphereId: EntityId.create('sphere-work'),
+        createdAt: at('08:00'),
+      }),
     );
     const paused = markLifeActionInProgress(
       createReadyLifeAction('paused', DATE, { createdAt: at('08:30') }),
@@ -100,7 +104,7 @@ describe('GetActionListsForDate', () => {
       ['cancelled', ACTION_LIST_GROUP.cancelled],
     ]);
     expect(snapshot.items[0]?.decisionTitle).toBe('Решение main');
-    expect(snapshot.items[0]?.decisionSphere).toBe('Работа');
+    expect(snapshot.items[0]?.sphereId).toBe('sphere-work');
     expect(snapshot.items[1]?.unfinishedSession).toBe(pausedSession);
     expect(snapshot.items[1]?.totalWorkedDurationMs).toBe(30 * 60_000);
     expect(snapshot.items[3]?.completedSessionCount).toBe(1);

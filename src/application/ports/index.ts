@@ -18,6 +18,11 @@ export type { LifeActionRepository } from './LifeActionRepository';
 export type { RoutineBlockRepository } from './RoutineBlockRepository';
 export type { RoutineOccurrenceOverrideRepository } from './RoutineOccurrenceOverrideRepository';
 export type { StartWalkPersistenceResult, WalkRepository } from './WalkRepository';
+export type {
+  CreateSpherePersistenceResult,
+  SphereRepository,
+  UpdateSpherePersistenceResult,
+} from './SphereRepository';
 
 export type { OpenDayConflictReader } from './OpenDayConflictReader';
 export type {

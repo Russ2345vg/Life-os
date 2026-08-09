@@ -10,6 +10,7 @@ import {
   LIFE_ACTION_STATUS,
   SESSION_COMPLETION_KIND,
   type DecisionKind,
+  EntityId,
   type LifeAction,
 } from '../../domain';
 import type { EveningReviewSnapshot } from '../../application';
@@ -236,6 +237,7 @@ export function buildCompleteCurrentDayInput(
   summary: string,
   actionForms: EveningActionForms,
   tomorrowForms: readonly TomorrowDecisionForm[],
+  sphereId: EntityId | null = null,
 ): CompleteCurrentDayInput {
   const actionResolutions = snapshot.lifeActions
     .filter(isUnfinishedAction)
@@ -276,6 +278,7 @@ export function buildCompleteCurrentDayInput(
 
   return {
     summary,
+    sphereId,
     actionResolutions,
     tomorrowDecisions,
   };

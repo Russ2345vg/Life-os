@@ -1,5 +1,5 @@
 import type { ChangeEvent, FormEvent } from 'react';
-import type { DecisionActionOverview } from '../../application';
+import type { DecisionActionOverview, SpheresSnapshot } from '../../application';
 import {
   ACTION_SESSION_STATUS,
   DECISION_KIND,
@@ -28,11 +28,13 @@ import {
 } from '../decisionOverviewPresentation';
 import { decisionPriorityLabel } from '../entityPresentation';
 import { formatHistoryDuration } from '../historyPresentation';
+import { SphereBadge, SphereSelect } from './SphereReference';
 
 interface DecisionDetailsPanelProps {
   readonly details: DecisionDetailsState;
   readonly currentDate: DayDate;
   readonly readOnly: boolean;
+  readonly spheres: SpheresSnapshot;
   readonly now: Date;
   readonly isFormOpen: boolean;
   readonly isSaving: boolean;
@@ -86,6 +88,7 @@ export function DecisionDetailsPanel({
   details,
   currentDate,
   readOnly,
+  spheres,
   now,
   isFormOpen,
   isSaving,
@@ -269,7 +272,12 @@ export function DecisionDetailsPanel({
                   </div>
                   <div>
                     <dt>Сфера</dt>
-                    <dd>{details.decision.sphere ?? 'Не указана'}</dd>
+                    <dd>
+                      <SphereBadge
+                        sphereId={details.decision.sphereId?.toString() ?? null}
+                        snapshot={spheres}
+                      />
+                    </dd>
                   </div>
                   <div>
                     <dt>Приоритет</dt>
@@ -314,6 +322,7 @@ export function DecisionDetailsPanel({
                   <DecisionEditForm
                     decision={details.decision}
                     form={editForm}
+                    spheres={spheres}
                     isSaving={isEditing}
                     error={editError}
                     onTextChange={onEditTextChange}
@@ -745,6 +754,7 @@ interface DecisionConfirmationFormProps {
 interface DecisionEditFormProps {
   readonly decision: Extract<DecisionDetailsState, { readonly status: 'ready' }>['decision'];
   readonly form: DecisionEditFormState;
+  readonly spheres: SpheresSnapshot;
   readonly isSaving: boolean;
   readonly error: string | null;
   readonly onTextChange: (field: DecisionEditTextField, value: string) => void;
@@ -757,6 +767,7 @@ interface DecisionEditFormProps {
 function DecisionEditForm({
   decision,
   form,
+  spheres,
   isSaving,
   error,
   onTextChange,
@@ -878,13 +889,11 @@ function DecisionEditForm({
       <div className="decision-edit-grid">
         <label>
           <span>Сфера</span>
-          <input
-            value={form.sphere ?? ''}
+          <SphereSelect
+            value={form.sphereId ?? ''}
+            snapshot={spheres}
             disabled={isSaving || started}
-            maxLength={120}
-            onChange={(event: ChangeEvent<HTMLInputElement>) =>
-              onTextChange('sphere', event.target.value)
-            }
+            onChange={(sphereId) => onTextChange('sphereId', sphereId ?? '')}
           />
         </label>
         <label>

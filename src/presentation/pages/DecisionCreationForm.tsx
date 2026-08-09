@@ -10,12 +10,15 @@ import type {
   DecisionCreationFormErrors,
   DecisionCreationFormState,
 } from './DecisionCreationFormState';
+import type { SpheresSnapshot } from '../../application';
+import { SphereSelect } from '../components/SphereReference';
 
 interface DecisionCreationFormProps {
   readonly currentDate: DayDate;
   readonly form: DecisionCreationFormState;
   readonly errors: DecisionCreationFormErrors;
   readonly isSaving: boolean;
+  readonly spheres?: SpheresSnapshot;
   readonly onChange: (form: DecisionCreationFormState) => void;
   readonly onClose: () => void;
   readonly onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -26,6 +29,7 @@ export function DecisionCreationForm({
   form,
   errors,
   isSaving,
+  spheres = { active: [], archived: [] },
   onChange,
   onClose,
   onSubmit,
@@ -144,18 +148,13 @@ export function DecisionCreationForm({
           />
         </DecisionField>
 
-        <DecisionField label="Сфера" error={errors.sphere} fieldId="decision-sphere">
-          <input
+        <DecisionField label="Сфера" error={errors.sphereId} fieldId="decision-sphere">
+          <SphereSelect
             id="decision-sphere"
-            value={form.sphere}
+            value={form.sphereId || null}
+            snapshot={spheres}
             disabled={isSaving}
-            maxLength={120}
-            aria-invalid={errors.sphere !== null}
-            aria-describedby={errorId('decision-sphere', errors.sphere)}
-            placeholder="Работа, здоровье, деньги…"
-            onChange={(event: ChangeEvent<HTMLInputElement>) =>
-              onChange({ ...form, sphere: event.target.value })
-            }
+            onChange={(sphereId) => onChange({ ...form, sphereId: sphereId ?? '' })}
           />
         </DecisionField>
 

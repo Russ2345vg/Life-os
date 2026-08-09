@@ -15,6 +15,8 @@ import type {
   CompleteLifeAction,
   CompleteCurrentDay,
   GetEveningReview,
+  GetSpheres,
+  SpheresSnapshot,
   ConfirmDecisionFromActions,
   CreateDecisionForDate,
   CreateLifeActionForDecision,
@@ -35,6 +37,7 @@ import type {
   StartLifeActionSession,
   UpdateDecisionDetails,
   UpdateLifeActionDetails,
+  UpdateDayResultSphere,
   CompleteCurrentDayResult,
 } from '../../application';
 import {
@@ -42,12 +45,12 @@ import {
   DECISION_KIND,
   DECISION_STATUS,
   DayDate,
+  EntityId,
   type Day,
   type Decision,
   type DecisionKind,
   type DecisionPriority,
   type DecisionStatus,
-  type EntityId,
   type ActionSession,
   type LifeAction,
   type SessionCompletionKind,
@@ -55,6 +58,8 @@ import {
 import { DecisionDetailsPanel } from '../components/DecisionDetailsPanel';
 import { LifeActionDetailsPanel } from '../components/LifeActionDetailsPanel';
 import { EveningReviewPanel } from './EveningReviewPanel';
+import { SphereBadge, SphereSelect } from '../components/SphereReference';
+import { useSpheres } from '../components/sphereReferenceModel';
 import { OpenDayRecoveryPanel } from './OpenDayRecoveryPanel';
 import { CurrentActionCard } from './CurrentActionCard';
 import { NextActionCard } from './NextActionCard';
@@ -124,7 +129,9 @@ interface TodayPageProps {
   readonly onOpenCreateRequestHandled: () => void;
   readonly startCurrentDay: Pick<StartCurrentDay, 'execute'>;
   readonly getEveningReview: Pick<GetEveningReview, 'execute'>;
+  readonly getSpheres: Pick<GetSpheres, 'execute'>;
   readonly completeCurrentDay: Pick<CompleteCurrentDay, 'execute'>;
+  readonly updateDayResultSphere: Pick<UpdateDayResultSphere, 'execute'>;
   readonly getDecisionsForDate: Pick<GetDecisionsForDate, 'execute'>;
   readonly getLifeActionsForDate: Pick<GetLifeActionsForDate, 'execute'>;
   readonly createDecisionForDate: Pick<CreateDecisionForDate, 'execute'>;
@@ -161,7 +168,9 @@ export function TodayPage({
   onOpenCreateRequestHandled,
   startCurrentDay,
   getEveningReview,
+  getSpheres,
   completeCurrentDay,
+  updateDayResultSphere,
   getDecisionsForDate,
   getLifeActionsForDate,
   createDecisionForDate,
@@ -187,6 +196,7 @@ export function TodayPage({
   clock,
   todayActionSelectionStore,
 }: TodayPageProps) {
+  const spheres = useSpheres(getSpheres);
   const [state, dispatch] = useReducer(todayPageReducer, INITIAL_TODAY_PAGE_STATE);
   const selectedDateRef = useRef(selectedDate);
   const loadGenerationRef = useRef(0);
@@ -202,11 +212,14 @@ export function TodayPage({
   const lifeActionEditRef = useRef(false);
   const lifeActionCancellationRef = useRef(false);
   const lifeActionRescheduleRef = useRef(false);
+  const daySphereMutationRef = useRef(false);
   const [currentLifeActions, setCurrentLifeActions] = useState<readonly LifeAction[]>([]);
   const [currentDaySessions, setCurrentDaySessions] = useState<readonly ActionSession[]>([]);
   const [unfinishedSession, setUnfinishedSession] = useState<ActionSession | null>(null);
   const [isCurrentActionMutating, setIsCurrentActionMutating] = useState(false);
   const [currentActionError, setCurrentActionError] = useState<string | null>(null);
+  const [daySphereError, setDaySphereError] = useState<string | null>(null);
+  const [isDaySphereUpdating, setIsDaySphereUpdating] = useState(false);
   const [todayRecoveryStatus, setTodayRecoveryStatus] = useState<TodayRecoveryStatus>('loading');
   const [isStartingDay, setIsStartingDay] = useState(false);
   const [startDayError, setStartDayError] = useState<string | null>(null);
@@ -1179,6 +1192,35 @@ export function TodayPage({
     }
   }
 
+  async function handleDaySphereChange(sphereId: string | null): Promise<void> {
+    if (daySphereMutationRef.current || currentDay.status !== DAY_STATUS.completed) return;
+    daySphereMutationRef.current = true;
+    setIsDaySphereUpdating(true);
+    setDaySphereError(null);
+    try {
+      const result = await updateDayResultSphere.execute({
+        dayId: currentDay.id,
+        date: currentDay.date,
+        expectedVersion: currentDay.version,
+        sphereId: sphereId === null ? null : EntityId.create(sphereId),
+      });
+      if (result.ok) {
+        onCurrentDayChange(result.value);
+      } else {
+        setDaySphereError(
+          result.error.code === 'day.version_conflict'
+            ? 'Результат дня изменился. Обновите данные и повторите.'
+            : 'Не удалось изменить сферу результата дня.',
+        );
+      }
+    } catch {
+      setDaySphereError('Не удалось изменить сферу результата дня.');
+    } finally {
+      daySphereMutationRef.current = false;
+      setIsDaySphereUpdating(false);
+    }
+  }
+
   const todayScreenState = resolveTodayScreenState({
     day: currentDay,
     decisionsStatus: state.decisions.status,
@@ -1223,6 +1265,7 @@ export function TodayPage({
   return (
     <>
       <TodayPageView
+        spheres={spheres}
         currentDate={currentDate}
         todayScreenState={todayScreenState}
         isStartingDay={isStartingDay}
@@ -1237,6 +1280,9 @@ export function TodayPage({
         currentDaySessions={currentDaySessions}
         isCurrentActionMutating={isCurrentActionMutating}
         currentActionError={currentActionError}
+        isDaySphereUpdating={isDaySphereUpdating}
+        daySphereError={daySphereError}
+        onDaySphereChange={(sphereId) => void handleDaySphereChange(sphereId)}
         onRetry={() => void loadDecisions(selectedDate)}
         onRetryTodayRecovery={() => void loadTodayRecovery()}
         onStartDay={() => void handleStartDay()}
@@ -1354,6 +1400,9 @@ export function TodayPage({
         onLifeActionEditExpectedResultChange={(expectedResult) =>
           dispatch({ type: 'life_action_edit_expected_result_changed', expectedResult })
         }
+        onLifeActionEditSphereChange={(sphereId) =>
+          dispatch({ type: 'life_action_edit_sphere_changed', sphereId })
+        }
         onLifeActionEditSubmit={(event) => void handleLifeActionEdit(event)}
         onOpenLifeActionCancellation={() => dispatch({ type: 'life_action_cancellation_opened' })}
         onCloseLifeActionCancellation={() => dispatch({ type: 'life_action_cancellation_closed' })}
@@ -1372,6 +1421,7 @@ export function TodayPage({
       {isEveningReviewOpen ? (
         <EveningReviewPanel
           getEveningReview={getEveningReview}
+          getSpheres={getSpheres}
           completeCurrentDay={completeCurrentDay}
           reviewDate={selectedDate}
           onClose={() => setIsEveningReviewOpen(false)}
@@ -1383,6 +1433,7 @@ export function TodayPage({
 }
 
 interface TodayPageViewProps {
+  readonly spheres?: SpheresSnapshot;
   readonly currentDate: DayDate;
   readonly todayScreenState: TodayScreenState;
   readonly isStartingDay: boolean;
@@ -1397,6 +1448,9 @@ interface TodayPageViewProps {
   readonly currentDaySessions: readonly ActionSession[];
   readonly isCurrentActionMutating: boolean;
   readonly currentActionError: string | null;
+  readonly isDaySphereUpdating?: boolean;
+  readonly daySphereError?: string | null;
+  readonly onDaySphereChange?: (sphereId: string | null) => void;
   readonly onRetry: () => void;
   readonly onRetryTodayRecovery: () => void;
   readonly onStartDay: () => void;
@@ -1468,6 +1522,7 @@ interface TodayPageViewProps {
   readonly onLifeActionEditTitleChange: (title: string) => void;
   readonly onLifeActionEditDescriptionChange: (description: string) => void;
   readonly onLifeActionEditExpectedResultChange: (expectedResult: string) => void;
+  readonly onLifeActionEditSphereChange?: (sphereId: string) => void;
   readonly onLifeActionEditSubmit: (event: FormEvent<HTMLFormElement>) => void;
   readonly onOpenLifeActionCancellation: () => void;
   readonly onCloseLifeActionCancellation: () => void;
@@ -1479,6 +1534,7 @@ interface TodayPageViewProps {
 }
 
 export function TodayPageView({
+  spheres = { active: [], archived: [] },
   currentDate,
   todayScreenState,
   isStartingDay,
@@ -1493,6 +1549,9 @@ export function TodayPageView({
   currentDaySessions,
   isCurrentActionMutating,
   currentActionError,
+  isDaySphereUpdating = false,
+  daySphereError = null,
+  onDaySphereChange = () => undefined,
   onRetry,
   onRetryTodayRecovery,
   onStartDay,
@@ -1564,6 +1623,7 @@ export function TodayPageView({
   onLifeActionEditTitleChange,
   onLifeActionEditDescriptionChange,
   onLifeActionEditExpectedResultChange,
+  onLifeActionEditSphereChange = () => undefined,
   onLifeActionEditSubmit,
   onOpenLifeActionCancellation,
   onCloseLifeActionCancellation,
@@ -1656,6 +1716,7 @@ export function TodayPageView({
 
         {isToday(selectedDate, currentDate) ? (
           <TodayStateCard
+            spheres={spheres}
             state={todayScreenState}
             isStarting={isStartingDay}
             error={startDayError}
@@ -1666,6 +1727,9 @@ export function TodayPageView({
             currentDaySessions={currentDaySessions}
             isCurrentActionMutating={isCurrentActionMutating}
             currentActionError={currentActionError}
+            isDaySphereUpdating={isDaySphereUpdating}
+            daySphereError={daySphereError}
+            onDaySphereChange={onDaySphereChange}
             clock={clock}
             onOpenEveningReview={onOpenEveningReview}
             onOpenLifeAction={onOpenLifeAction}
@@ -1809,6 +1873,7 @@ export function TodayPageView({
 
       {state.actionDetails.status === 'closed' ? (
         <DecisionDetailsPanel
+          spheres={spheres}
           details={state.details}
           currentDate={currentDate}
           readOnly={pastDate}
@@ -1862,6 +1927,7 @@ export function TodayPageView({
         />
       ) : (
         <LifeActionDetailsPanel
+          spheres={spheres}
           details={state.actionDetails}
           currentDate={currentDate}
           readOnly={pastDate}
@@ -1904,6 +1970,7 @@ export function TodayPageView({
           onEditTitleChange={onLifeActionEditTitleChange}
           onEditDescriptionChange={onLifeActionEditDescriptionChange}
           onEditExpectedResultChange={onLifeActionEditExpectedResultChange}
+          onEditSphereChange={onLifeActionEditSphereChange}
           onEditSubmit={onLifeActionEditSubmit}
           onOpenCancellation={onOpenLifeActionCancellation}
           onCloseCancellation={onCloseLifeActionCancellation}
@@ -1969,11 +2036,15 @@ function formatOpenDayDate(date: DayDate): string {
 }
 
 interface TodayStateCardProps {
+  readonly spheres: SpheresSnapshot;
   readonly state: TodayScreenState;
   readonly decisions: readonly Decision[];
   readonly currentDaySessions: readonly ActionSession[];
   readonly isCurrentActionMutating: boolean;
   readonly currentActionError: string | null;
+  readonly isDaySphereUpdating: boolean;
+  readonly daySphereError: string | null;
+  readonly onDaySphereChange: (sphereId: string | null) => void;
   readonly clock: Pick<Clock, 'now'>;
   readonly isStarting: boolean;
   readonly error: string | null;
@@ -1992,11 +2063,15 @@ interface TodayStateCardProps {
 }
 
 function TodayStateCard({
+  spheres,
   state,
   decisions,
   currentDaySessions,
   isCurrentActionMutating,
   currentActionError,
+  isDaySphereUpdating,
+  daySphereError,
+  onDaySphereChange,
   clock,
   isStarting,
   error,
@@ -2068,6 +2143,19 @@ function TodayStateCard({
           {state.day.summary === null ? null : (
             <blockquote className="day-completed-summary">{state.day.summary}</blockquote>
           )}
+          <div className="day-result-sphere">
+            <SphereBadge sphereId={state.day.sphereId?.toString() ?? null} snapshot={spheres} />
+            <label>
+              Сфера результата
+              <SphereSelect
+                value={state.day.sphereId?.toString() ?? null}
+                snapshot={spheres}
+                disabled={isDaySphereUpdating}
+                onChange={onDaySphereChange}
+              />
+            </label>
+            {daySphereError === null ? null : <p className="form-error">{daySphereError}</p>}
+          </div>
         </section>
       );
 

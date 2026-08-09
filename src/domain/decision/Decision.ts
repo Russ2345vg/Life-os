@@ -35,7 +35,7 @@ export interface DecisionDraftInput {
   readonly kind: DecisionKind;
   readonly reason?: string;
   readonly expectedResult?: ExpectedResult;
-  readonly sphere?: string;
+  readonly sphereId?: EntityId | null;
   readonly price?: string;
   readonly sacrifices?: string;
   readonly priority?: DecisionPriority;
@@ -65,7 +65,7 @@ export interface DecisionDetailsUpdateInput {
   readonly title?: DecisionTitle;
   readonly reason?: string | null;
   readonly expectedResult?: ExpectedResult | null;
-  readonly sphere?: string | null;
+  readonly sphereId?: EntityId | null;
   readonly price?: string | null;
   readonly sacrifices?: string | null;
   readonly priority?: DecisionPriority;
@@ -88,7 +88,7 @@ export interface DecisionRehydrationData {
   readonly id: EntityId;
   readonly title: DecisionTitle;
   readonly reason: string | null;
-  readonly sphere?: string | null;
+  readonly sphereId?: EntityId | null;
   readonly price?: string | null;
   readonly sacrifices?: string | null;
   readonly priority?: DecisionPriority;
@@ -120,7 +120,7 @@ export class Decision extends Entity {
   readonly #createdAt: Date;
   readonly #domainEvents: DomainEvent[];
   #reason: string | null;
-  #sphere: string | null;
+  #sphereId: EntityId | null;
   #price: string | null;
   #sacrifices: string | null;
   #priority: DecisionPriority;
@@ -154,12 +154,7 @@ export class Decision extends Entity {
       1_000,
       'decision.invalid_reason',
     );
-    this.#sphere = normalizeOptionalDecisionField(
-      data.sphere ?? null,
-      'Сфера решения',
-      120,
-      'decision.invalid_sphere',
-    );
+    this.#sphereId = data.sphereId ?? null;
     this.#price = normalizeOptionalDecisionField(
       data.price ?? null,
       'Цена решения',
@@ -213,7 +208,7 @@ export class Decision extends Entity {
         id: input.id,
         title: input.title,
         reason: input.reason ?? null,
-        sphere: input.sphere ?? null,
+        sphereId: input.sphereId ?? null,
         price: input.price ?? null,
         sacrifices: input.sacrifices ?? null,
         priority: input.priority ?? DECISION_PRIORITY.normal,
@@ -249,7 +244,7 @@ export class Decision extends Entity {
         decision.#title,
         decision.#kind,
         decision.#reason,
-        decision.#sphere,
+        decision.#sphereId,
         decision.#price,
         decision.#sacrifices,
         decision.#priority,
@@ -281,8 +276,8 @@ export class Decision extends Entity {
     return this.#reason;
   }
 
-  public get sphere(): string | null {
-    return this.#sphere;
+  public get sphereId(): EntityId | null {
+    return this.#sphereId;
   }
 
   public get price(): string | null {
@@ -461,12 +456,7 @@ export class Decision extends Entity {
     );
     const expectedResult =
       input.expectedResult === undefined ? this.#expectedResult : input.expectedResult;
-    const sphere = normalizeOptionalDecisionField(
-      input.sphere === undefined ? this.#sphere : input.sphere,
-      'Сфера решения',
-      120,
-      'decision.invalid_sphere',
-    );
+    const sphereId = input.sphereId === undefined ? this.#sphereId : input.sphereId;
     const price = normalizeOptionalDecisionField(
       input.price === undefined ? this.#price : input.price,
       'Цена решения',
@@ -499,7 +489,7 @@ export class Decision extends Entity {
         !this.#title.equals(title) ||
         this.#kind !== kind ||
         this.#order !== order ||
-        this.#sphere !== sphere ||
+        !sameOptionalEntityId(this.#sphereId, sphereId) ||
         this.#priority !== priority ||
         this.#projectReference !== projectReference;
 
@@ -516,7 +506,7 @@ export class Decision extends Entity {
       this.#title.equals(title) &&
       this.#reason === reason &&
       hasSameExpectedResult &&
-      this.#sphere === sphere &&
+      sameOptionalEntityId(this.#sphereId, sphereId) &&
       this.#price === price &&
       this.#sacrifices === sacrifices &&
       this.#priority === priority &&
@@ -532,7 +522,7 @@ export class Decision extends Entity {
     this.#title = title;
     this.#reason = reason;
     this.#expectedResult = expectedResult;
-    this.#sphere = sphere;
+    this.#sphereId = sphereId;
     this.#price = price;
     this.#sacrifices = sacrifices;
     this.#priority = priority;
@@ -867,6 +857,10 @@ function normalizeRescheduleHistory(
 }
 
 function sameExpectedResult(left: ExpectedResult | null, right: ExpectedResult | null): boolean {
+  return left === null ? right === null : right !== null && left.equals(right);
+}
+
+function sameOptionalEntityId(left: EntityId | null, right: EntityId | null): boolean {
   return left === null ? right === null : right !== null && left.equals(right);
 }
 

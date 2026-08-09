@@ -1,4 +1,9 @@
-import { ACTION_LIST_GROUP, type ActionListGroup, type ActionListItem } from '../application';
+import {
+  ACTION_LIST_GROUP,
+  type ActionListGroup,
+  type ActionListItem,
+  type SpheresSnapshot,
+} from '../application';
 
 export const ACTION_FILTER_ANY = 'all';
 export const ACTION_FILTER_NONE = '__none__';
@@ -70,16 +75,28 @@ export function filterActionListItems(
   });
 }
 
-export function buildActionFilterOptions(items: readonly ActionListItem[]): ActionFilterOptions {
+export function buildActionFilterOptions(
+  items: readonly ActionListItem[],
+  spheresSnapshot?: SpheresSnapshot,
+): ActionFilterOptions {
   const spheres = new Map<string, string>();
   const decisions = new Map<string, string>();
 
   for (const item of items) {
-    const sphere = item.decisionSphere?.trim();
-    if (sphere === undefined || sphere.length === 0) {
+    const sphereId = item.sphereId;
+    if (sphereId === null) {
       spheres.set(ACTION_FILTER_NONE, 'Без сферы');
     } else {
-      spheres.set(sphere, sphere);
+      const sphere = [
+        ...(spheresSnapshot?.active ?? []),
+        ...(spheresSnapshot?.archived ?? []),
+      ].find((candidate) => candidate.id.toString() === sphereId);
+      spheres.set(
+        sphereId,
+        sphere === undefined
+          ? 'Сфера недоступна'
+          : `${sphere.name}${sphere.status === 'archived' ? ' · Архивная' : ''}`,
+      );
     }
 
     const decisionId = item.lifeAction.decisionId?.toString();
@@ -122,11 +139,10 @@ function matchesSphere(item: ActionListItem, sphere: string): boolean {
   if (sphere === ACTION_FILTER_ANY) {
     return true;
   }
-  const itemSphere = item.decisionSphere?.trim();
   if (sphere === ACTION_FILTER_NONE) {
-    return itemSphere === undefined || itemSphere.length === 0;
+    return item.sphereId === null;
   }
-  return itemSphere === sphere;
+  return item.sphereId === sphere;
 }
 
 function matchesDecision(item: ActionListItem, decisionId: string): boolean {

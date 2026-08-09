@@ -22,7 +22,7 @@ export interface UpdateDecisionDetailsInput {
   readonly title: string;
   readonly expectedResult: string;
   readonly reason?: string;
-  readonly sphere?: string;
+  readonly sphereId?: EntityId | null;
   readonly price?: string;
   readonly sacrifices?: string;
   readonly priority?: DecisionPriority;
@@ -133,7 +133,7 @@ export class UpdateDecisionDetails {
       }
 
       const reason = normalizeOptionalText(input.reason, storedDecision.reason);
-      const sphere = normalizeOptionalText(input.sphere, storedDecision.sphere);
+      const sphereId = input.sphereId === undefined ? storedDecision.sphereId : input.sphereId;
       const price = normalizeOptionalText(input.price, storedDecision.price);
       const sacrifices = normalizeOptionalText(input.sacrifices, storedDecision.sacrifices);
       const priority = input.priority ?? storedDecision.priority;
@@ -147,7 +147,7 @@ export class UpdateDecisionDetails {
           title,
           reason,
           expectedResult,
-          sphere,
+          sphereId,
           price,
           sacrifices,
           priority,
@@ -164,7 +164,7 @@ export class UpdateDecisionDetails {
         title,
         reason,
         expectedResult,
-        sphere,
+        sphereId,
         price,
         sacrifices,
         priority,
@@ -187,7 +187,7 @@ interface ComparableDecisionDetails {
   readonly title: DecisionTitle;
   readonly reason: string | null;
   readonly expectedResult: ExpectedResult | null;
-  readonly sphere: string | null;
+  readonly sphereId: EntityId | null;
   readonly price: string | null;
   readonly sacrifices: string | null;
   readonly priority: DecisionPriority;
@@ -206,7 +206,7 @@ function isSameDecisionDetails(decision: Decision, details: ComparableDecisionDe
     decision.title.equals(details.title) &&
     decision.reason === details.reason &&
     sameExpectedResult &&
-    decision.sphere === details.sphere &&
+    sameOptionalEntityId(decision.sphereId, details.sphereId) &&
     decision.price === details.price &&
     decision.sacrifices === details.sacrifices &&
     decision.priority === details.priority &&
@@ -261,7 +261,7 @@ function cloneDecision(decision: Decision): Decision {
     id: decision.id,
     title: decision.title,
     reason: decision.reason,
-    sphere: decision.sphere,
+    sphereId: decision.sphereId,
     price: decision.price,
     sacrifices: decision.sacrifices,
     priority: decision.priority,
@@ -286,4 +286,8 @@ function cloneDecision(decision: Decision): Decision {
     rescheduleCount: decision.rescheduleCount,
     version: decision.version,
   });
+}
+
+function sameOptionalEntityId(left: EntityId | null, right: EntityId | null): boolean {
+  return left === null ? right === null : right !== null && left.equals(right);
 }

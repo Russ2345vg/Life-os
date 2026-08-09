@@ -267,7 +267,7 @@ describe('Decision', () => {
         title: DecisionTitle.create('Главное обновлённое решение'),
         reason: 'Новая причина',
         expectedResult: ExpectedResult.create('Измеримый результат'),
-        sphere: 'Разработка',
+        sphereId: id('sphere-development'),
         price: 'Два часа',
         sacrifices: 'Не переключаться',
         priority: DECISION_PRIORITY.high,
@@ -282,7 +282,7 @@ describe('Decision', () => {
       expect(decision.title.toString()).toBe('Главное обновлённое решение');
       expect(decision.reason).toBe('Новая причина');
       expect(decision.expectedResult?.toString()).toBe('Измеримый результат');
-      expect(decision.sphere).toBe('Разработка');
+      expect(decision.sphereId?.toString()).toBe('sphere-development');
       expect(decision.price).toBe('Два часа');
       expect(decision.sacrifices).toBe('Не переключаться');
       expect(decision.priority).toBe(DECISION_PRIORITY.high);

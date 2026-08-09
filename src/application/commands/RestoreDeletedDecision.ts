@@ -150,7 +150,7 @@ function cloneDecision(decision: Decision, order: number | null): Decision {
     id: decision.id,
     title: decision.title,
     reason: decision.reason,
-    sphere: decision.sphere,
+    sphereId: decision.sphereId,
     price: decision.price,
     sacrifices: decision.sacrifices,
     priority: decision.priority,

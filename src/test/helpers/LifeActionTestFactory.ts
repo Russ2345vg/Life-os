@@ -15,6 +15,7 @@ interface CreateLifeActionDraftOptions {
   readonly createdAt?: Date;
   readonly decisionId?: EntityId;
   readonly description?: string;
+  readonly sphereId?: EntityId | null;
 }
 
 export function lifeActionId(value: string): EntityId {
@@ -30,6 +31,7 @@ export function createLifeActionDraft(
     title: LifeActionTitle.create(`Действие ${id}`),
     ...(options.decisionId === undefined ? {} : { decisionId: options.decisionId }),
     ...(options.description === undefined ? {} : { description: options.description }),
+    ...(options.sphereId === undefined ? {} : { sphereId: options.sphereId }),
     createdAt: options.createdAt ?? CREATED_AT,
     eventId: lifeActionId(`${id}-draft-event`),
   });

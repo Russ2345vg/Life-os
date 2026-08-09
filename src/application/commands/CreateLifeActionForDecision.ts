@@ -24,6 +24,7 @@ export interface CreateLifeActionForDecisionInput {
   readonly description?: string;
   readonly expectedResult: string;
   readonly plannedDate: DayDate;
+  readonly sphereId?: EntityId | null;
 }
 
 export class CreateLifeActionForDecision {
@@ -69,6 +70,7 @@ export class CreateLifeActionForDecision {
         title: LifeActionTitle.create(input.title),
         ...(input.description === undefined ? {} : { description: input.description }),
         decisionId: input.decisionId,
+        sphereId: input.sphereId === undefined ? decision.sphereId : input.sphereId,
         createdAt: occurredAt,
         eventId: this.#idGenerator.generate(),
       });

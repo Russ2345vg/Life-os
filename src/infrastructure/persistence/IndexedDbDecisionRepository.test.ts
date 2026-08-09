@@ -212,7 +212,7 @@ describe('IndexedDbDecisionRepository', () => {
       kind: DECISION_KIND.main,
       reason: 'Сведения не должны исчезнуть после F5',
       expectedResult: ExpectedResult.create('Все поля восстановлены'),
-      sphere: 'Разработка',
+      sphereId: EntityId.create('sphere-development'),
       price: 'Один час',
       sacrifices: 'Не переключаться на другие задачи',
       priority: DECISION_PRIORITY.high,
@@ -235,7 +235,7 @@ describe('IndexedDbDecisionRepository', () => {
 
     expect(restored).not.toBeNull();
     expect(restored?.reason).toBe('Сведения не должны исчезнуть после F5');
-    expect(restored?.sphere).toBe('Разработка');
+    expect(restored?.sphereId?.toString()).toBe('sphere-development');
     expect(restored?.price).toBe('Один час');
     expect(restored?.sacrifices).toBe('Не переключаться на другие задачи');
     expect(restored?.priority).toBe(DECISION_PRIORITY.high);

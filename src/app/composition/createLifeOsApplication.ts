@@ -62,6 +62,13 @@ import {
   StartWalk,
   UpdateWalkPhoto,
   UpdateWalkSphere,
+  UpdateDayResultSphere,
+  CreateSphere,
+  UpdateSphere,
+  ArchiveSphere,
+  RestoreSphere,
+  EnsureDefaultSpheres,
+  GetSpheres,
 } from '../../application';
 import { SystemClock } from '../../infrastructure/clock/SystemClock';
 import { SystemCurrentDateProvider } from '../../infrastructure/clock/SystemCurrentDateProvider';
@@ -76,6 +83,7 @@ import { IndexedDbRoutineBlockRepository } from '../../infrastructure/persistenc
 import { IndexedDbRoutineOccurrenceOverrideRepository } from '../../infrastructure/persistence/IndexedDbRoutineOccurrenceOverrideRepository';
 import { IndexedDbRoutineOccurrenceExecutionRepository } from '../../infrastructure/persistence/IndexedDbRoutineOccurrenceExecutionRepository';
 import { IndexedDbWalkRepository } from '../../infrastructure/persistence/IndexedDbWalkRepository';
+import { IndexedDbSphereRepository } from '../../infrastructure/persistence/IndexedDbSphereRepository';
 import { IndexedDbOpenDayConflictReader } from '../../infrastructure/persistence/IndexedDbOpenDayConflictReader';
 import { IndexedDbOpenDayRecoveryUnitOfWork } from '../../infrastructure/persistence/IndexedDbOpenDayRecoveryUnitOfWork';
 import { LifeOsIndexedDb } from '../../infrastructure/persistence/indexed-db/LifeOsIndexedDb';
@@ -109,12 +117,15 @@ export async function createLifeOsApplication(
       database,
     );
     const walkRepository = new IndexedDbWalkRepository(database);
+    const sphereRepository = new IndexedDbSphereRepository(database);
     const openDayConflictReader = new IndexedDbOpenDayConflictReader(database);
     const openDayRecoveryUnitOfWork = new IndexedDbOpenDayRecoveryUnitOfWork(database);
     const clock = dependencies.clock ?? new SystemClock();
     const currentDateProvider =
       dependencies.currentDateProvider ?? new SystemCurrentDateProvider(clock);
     const idGenerator = dependencies.idGenerator ?? new CryptoIdGenerator();
+    const ensureDefaultSpheres = new EnsureDefaultSpheres(sphereRepository, clock);
+    await ensureDefaultSpheres.execute();
     const ensureCurrentDay = new EnsureCurrentDay(
       dayRepository,
       currentDateProvider,
@@ -147,6 +158,7 @@ export async function createLifeOsApplication(
       clock,
       idGenerator,
     );
+    const updateDayResultSphere = new UpdateDayResultSphere(dayRepository);
     const mainDecisionLimitPolicy = new MainDecisionLimitPolicy(decisionRepository);
     const createDecisionForDate = new CreateDecisionForDate(
       decisionRepository,
@@ -360,6 +372,11 @@ export async function createLifeOsApplication(
     const startWalk = new StartWalk(walkRepository, currentDateProvider, clock);
     const updateWalkPhoto = new UpdateWalkPhoto(walkRepository, clock);
     const updateWalkSphere = new UpdateWalkSphere(walkRepository, clock);
+    const createSphere = new CreateSphere(sphereRepository, clock, idGenerator);
+    const updateSphere = new UpdateSphere(sphereRepository, clock);
+    const archiveSphere = new ArchiveSphere(sphereRepository, clock);
+    const restoreSphere = new RestoreSphere(sphereRepository, clock);
+    const getSpheres = new GetSpheres(sphereRepository);
     const application = new LifeOsApplication({
       dayRepository,
       decisionRepository,
@@ -369,6 +386,7 @@ export async function createLifeOsApplication(
       routineOccurrenceOverrideRepository,
       routineOccurrenceExecutionRepository,
       walkRepository,
+      sphereRepository,
       clock,
       currentDateProvider,
       idGenerator,
@@ -378,6 +396,7 @@ export async function createLifeOsApplication(
       startCurrentDay,
       getEveningReview,
       completeCurrentDay,
+      updateDayResultSphere,
       createDecisionForDate,
       getDecisionsForDate,
       getDeletedDecisions,
@@ -435,6 +454,11 @@ export async function createLifeOsApplication(
       startWalk,
       updateWalkPhoto,
       updateWalkSphere,
+      createSphere,
+      updateSphere,
+      archiveSphere,
+      restoreSphere,
+      getSpheres,
       closeDatabase: () => database.close(),
     });
 

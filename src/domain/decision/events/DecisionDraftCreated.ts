@@ -9,7 +9,7 @@ export class DecisionDraftCreated extends DecisionEvent<'decision.draft_created'
   public readonly title: DecisionTitle;
   public readonly kind: DecisionKind;
   public readonly reason: string | null;
-  public readonly sphere: string | null;
+  public readonly sphereId: EntityId | null;
   public readonly price: string | null;
   public readonly sacrifices: string | null;
   public readonly priority: DecisionPriority;
@@ -21,7 +21,7 @@ export class DecisionDraftCreated extends DecisionEvent<'decision.draft_created'
     title: DecisionTitle,
     kind: DecisionKind,
     reason: string | null,
-    sphere: string | null,
+    sphereId: EntityId | null,
     price: string | null,
     sacrifices: string | null,
     priority: DecisionPriority,
@@ -32,7 +32,7 @@ export class DecisionDraftCreated extends DecisionEvent<'decision.draft_created'
     this.title = title;
     this.kind = kind;
     this.reason = reason;
-    this.sphere = sphere;
+    this.sphereId = sphereId;
     this.price = price;
     this.sacrifices = sacrifices;
     this.priority = priority;

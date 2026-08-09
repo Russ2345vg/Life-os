@@ -11,6 +11,8 @@ import type {
   CompleteCurrentDayResult,
   EveningReviewSnapshot,
   GetEveningReview,
+  GetSpheres,
+  SpheresSnapshot,
 } from '../../application';
 import {
   ACTION_SESSION_STATUS,
@@ -18,6 +20,7 @@ import {
   type DayDate,
   type DecisionKind,
   type LifeAction,
+  EntityId,
 } from '../../domain';
 import {
   decisionKindLabel,
@@ -38,10 +41,13 @@ import {
   type EveningActionResolutionKind,
   type TomorrowDecisionForm,
 } from './EveningReviewPanelState';
+import { SphereSelect } from '../components/SphereReference';
+import { useSpheres } from '../components/sphereReferenceModel';
 
 interface EveningReviewPanelProps {
   readonly getEveningReview: Pick<GetEveningReview, 'execute'>;
   readonly completeCurrentDay: Pick<CompleteCurrentDay, 'execute'>;
+  readonly getSpheres?: Pick<GetSpheres, 'execute'>;
   readonly reviewDate?: DayDate;
   readonly onClose: () => void;
   readonly onCompleted: (result: CompleteCurrentDayResult) => void;
@@ -52,15 +58,22 @@ type LoadState =
   | Readonly<{ status: 'error'; message: string }>
   | Readonly<{ status: 'ready'; snapshot: EveningReviewSnapshot }>;
 
+const EMPTY_GET_SPHERES: Pick<GetSpheres, 'execute'> = {
+  execute: async () => ({ active: [], archived: [] }),
+};
+
 export function EveningReviewPanel({
   getEveningReview,
   completeCurrentDay,
+  getSpheres,
   reviewDate,
   onClose,
   onCompleted,
 }: EveningReviewPanelProps) {
   const [loadState, setLoadState] = useState<LoadState>({ status: 'loading' });
   const [summary, setSummary] = useState('');
+  const [sphereId, setSphereId] = useState<string | null>(null);
+  const spheres = useSpheres(getSpheres ?? EMPTY_GET_SPHERES);
   const [actionForms, setActionForms] = useState<EveningActionForms>({});
   const [tomorrowForms, setTomorrowForms] = useState<readonly TomorrowDecisionForm[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -161,7 +174,13 @@ export function EveningReviewPanel({
     setSubmitError(null);
     try {
       const result = await completeCurrentDay.execute(
-        buildCompleteCurrentDayInput(loadState.snapshot, summary, actionForms, tomorrowForms),
+        buildCompleteCurrentDayInput(
+          loadState.snapshot,
+          summary,
+          actionForms,
+          tomorrowForms,
+          sphereId === null ? null : EntityId.create(sphereId),
+        ),
         reviewDate,
       );
       if (!result.ok) {
@@ -203,6 +222,9 @@ export function EveningReviewPanel({
     <EveningReviewPanelView
       snapshot={loadState.snapshot}
       summary={summary}
+      spheres={spheres}
+      sphereId={sphereId}
+      onSphereChange={setSphereId}
       actionForms={actionForms}
       tomorrowForms={tomorrowForms}
       isSubmitting={isSubmitting}
@@ -231,6 +253,9 @@ export function EveningReviewPanel({
 interface EveningReviewPanelViewProps {
   readonly snapshot: EveningReviewSnapshot;
   readonly summary: string;
+  readonly spheres?: SpheresSnapshot;
+  readonly sphereId?: string | null;
+  readonly onSphereChange?: (sphereId: string | null) => void;
   readonly actionForms: EveningActionForms;
   readonly tomorrowForms: readonly TomorrowDecisionForm[];
   readonly isSubmitting: boolean;
@@ -253,6 +278,9 @@ interface EveningReviewPanelViewProps {
 export function EveningReviewPanelView({
   snapshot,
   summary,
+  spheres = { active: [], archived: [] },
+  sphereId = null,
+  onSphereChange = () => undefined,
   actionForms,
   tomorrowForms,
   isSubmitting,
@@ -431,6 +459,15 @@ export function EveningReviewPanelView({
                 onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
                   onSummaryChange(event.target.value)
                 }
+              />
+            </label>
+            <label className="evening-review-field">
+              <span>Сфера результата дня</span>
+              <SphereSelect
+                value={sphereId}
+                snapshot={spheres}
+                disabled={isSubmitting}
+                onChange={onSphereChange}
               />
             </label>
           </section>

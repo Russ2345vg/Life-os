@@ -1,7 +1,7 @@
 import { DomainError } from '../../../shared/errors/DomainError';
 
 export const LIFE_OS_DATABASE_NAME = 'lifeos';
-export const LIFE_OS_DATABASE_VERSION = 6;
+export const LIFE_OS_DATABASE_VERSION = 7;
 
 export const LIFE_OS_STORE = {
   days: 'days',
@@ -12,6 +12,7 @@ export const LIFE_OS_STORE = {
   routineOccurrenceOverrides: 'routineOccurrenceOverrides',
   routineOccurrenceExecutions: 'routineOccurrenceExecutions',
   walks: 'walks',
+  spheres: 'spheres',
 } as const;
 
 export class LifeOsIndexedDb {
@@ -77,6 +78,7 @@ export class LifeOsIndexedDb {
           if (oldVersion < 4) createVersionFourSchema(request.result);
           if (oldVersion < 5) createVersionFiveSchema(request.result);
           if (oldVersion < 6) createVersionSixSchema(request.transaction);
+          if (oldVersion < 7) createVersionSevenSchema(request.result);
         } catch (error: unknown) {
           upgradeError = error;
           request.transaction?.abort();
@@ -118,6 +120,13 @@ export class LifeOsIndexedDb {
     });
   }
 }
+
+function createVersionSevenSchema(database: IDBDatabase): void {
+  const spheres = database.createObjectStore(LIFE_OS_STORE.spheres, { keyPath: 'id' });
+  spheres.createIndex('byNormalizedName', 'normalizedName', { unique: true });
+  spheres.createIndex('byStatus', 'status', { unique: false });
+}
+
 function createVersionFiveSchema(database: IDBDatabase): void {
   const walks = database.createObjectStore(LIFE_OS_STORE.walks, { keyPath: 'id' });
   walks.createIndex('byDate', 'date', { unique: false });
@@ -129,7 +138,6 @@ function createVersionSixSchema(transaction: IDBTransaction | null): void {
   }
   transaction.objectStore(LIFE_OS_STORE.walks).createIndex('byStatus', 'status', { unique: false });
 }
-
 
 function createVersionFourSchema(database: IDBDatabase): void {
   const executions = database.createObjectStore(LIFE_OS_STORE.routineOccurrenceExecutions, {

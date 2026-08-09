@@ -188,7 +188,7 @@ function createItem(
   return {
     lifeAction,
     decisionTitle: options.decisionTitle ?? null,
-    decisionSphere: null,
+    sphereId: null,
     sessions,
     unfinishedSession: options.unfinishedSession ?? null,
     group,

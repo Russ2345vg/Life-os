@@ -137,6 +137,13 @@ export function readNullableEntityId(record: UnknownRecord, field: string): Enti
   return readEntityId({ [field]: value }, field);
 }
 
+export function readOptionalNullableEntityId(
+  record: UnknownRecord,
+  field: string,
+): EntityId | null {
+  return Object.hasOwn(record, field) ? readNullableEntityId(record, field) : null;
+}
+
 export function readIsoDate(record: UnknownRecord, field: string): Date {
   const value = readRequired(record, field);
   if (typeof value !== 'string') {

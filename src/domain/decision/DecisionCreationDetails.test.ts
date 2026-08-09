@@ -23,7 +23,7 @@ describe('сведения создания решения', () => {
   it('нормализует причину, сферу, цену, жертвы и связь с проектом', () => {
     const decision = createDecision({
       reason: '  Причина  ',
-      sphere: '  Развитие  ',
+      sphereId: EntityId.create('sphere-growth'),
       price: '  90 минут  ',
       sacrifices: '  Отказ от отвлечений  ',
       priority: DECISION_PRIORITY.high,
@@ -31,7 +31,7 @@ describe('сведения создания решения', () => {
     });
 
     expect(decision.reason).toBe('Причина');
-    expect(decision.sphere).toBe('Развитие');
+    expect(decision.sphereId?.toString()).toBe('sphere-growth');
     expect(decision.price).toBe('90 минут');
     expect(decision.sacrifices).toBe('Отказ от отвлечений');
     expect(decision.priority).toBe(DECISION_PRIORITY.high);
@@ -41,14 +41,14 @@ describe('сведения создания решения', () => {
   it('использует обычный приоритет и null для незаполненных необязательных полей', () => {
     const decision = createDecision({
       reason: '   ',
-      sphere: '',
+      sphereId: null,
       price: '\n',
       sacrifices: ' ',
       projectReference: '\t',
     });
 
     expect(decision.reason).toBeNull();
-    expect(decision.sphere).toBeNull();
+    expect(decision.sphereId).toBeNull();
     expect(decision.price).toBeNull();
     expect(decision.sacrifices).toBeNull();
     expect(decision.priority).toBe(DECISION_PRIORITY.normal);
@@ -57,7 +57,6 @@ describe('сведения создания решения', () => {
 
   it.each([
     ['reason', 'x'.repeat(1_001), 'decision.invalid_reason'],
-    ['sphere', 'x'.repeat(121), 'decision.invalid_sphere'],
     ['price', 'x'.repeat(501), 'decision.invalid_price'],
     ['sacrifices', 'x'.repeat(1_001), 'decision.invalid_sacrifices'],
     ['projectReference', 'x'.repeat(201), 'decision.invalid_project_reference'],

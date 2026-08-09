@@ -19,7 +19,7 @@ function validForm() {
     title: 'Выпустить форму создания решения',
     reason: 'Нужен полный контур решений',
     expectedResult: 'Решение сохраняется после F5',
-    sphere: 'Разработка',
+    sphereId: 'sphere-development',
     price: 'Два часа',
     sacrifices: 'Отложить украшения',
     priority: DECISION_PRIORITY.high,
@@ -75,7 +75,7 @@ describe('DecisionCreationFormState', () => {
       {
         ...validForm(),
         reason: 'x'.repeat(1_001),
-        sphere: 'x'.repeat(121),
+        sphereId: 'sphere-development',
         price: 'x'.repeat(501),
         sacrifices: 'x'.repeat(1_001),
         projectReference: 'x'.repeat(201),
@@ -86,7 +86,7 @@ describe('DecisionCreationFormState', () => {
     expect(validation.ok).toBe(false);
     if (!validation.ok) {
       expect(validation.errors.reason).not.toBeNull();
-      expect(validation.errors.sphere).not.toBeNull();
+      expect(validation.errors.sphereId).toBeNull();
       expect(validation.errors.price).not.toBeNull();
       expect(validation.errors.sacrifices).not.toBeNull();
       expect(validation.errors.projectReference).not.toBeNull();
@@ -111,7 +111,7 @@ describe('DecisionCreationFormState', () => {
       plannedDate: expect.objectContaining({}),
       expectedResult: 'Решение сохраняется после F5',
       reason: 'Нужен полный контур решений',
-      sphere: 'Разработка',
+      sphereId: 'sphere-development',
       price: 'Два часа',
       sacrifices: 'Отложить украшения',
       priority: DECISION_PRIORITY.high,

@@ -16,6 +16,8 @@ import type {
   GetDecisionsForDate,
   GetDeletedDecisions,
   GetLifeActionsForDecision,
+  GetSpheres,
+  SpheresSnapshot,
   GetUnfinishedActionSession,
   PauseActionSession,
   RescheduleDecisionSafely,
@@ -27,6 +29,12 @@ import type {
 } from '../../application';
 import { DECISION_KIND, DECISION_STATUS, type DayDate, type Decision } from '../../domain';
 import { DecisionDetailsController } from '../components/DecisionDetailsController';
+import { SphereBadge } from '../components/SphereReference';
+import {
+  SPHERE_FILTER_ALL,
+  SPHERE_FILTER_NONE,
+  useSpheres,
+} from '../components/sphereReferenceModel';
 import { SectionDateNavigator } from '../components/SectionDateNavigator';
 import { SectionPageHeader } from '../components/SectionPageHeader';
 import { DECISION_FILTER, filterDecisions, type DecisionFilter } from '../decisionFilters';
@@ -57,6 +65,7 @@ interface DecisionsPageProps {
   readonly getDecisionById: Pick<GetDecisionById, 'execute'>;
   readonly getDecisionOverview: Pick<GetDecisionOverview, 'execute'>;
   readonly getLifeActionsForDecision: Pick<GetLifeActionsForDecision, 'execute'>;
+  readonly getSpheres: Pick<GetSpheres, 'execute'>;
   readonly createLifeActionForDecision: Pick<CreateLifeActionForDecision, 'execute'>;
   readonly confirmDecisionFromActions: Pick<ConfirmDecisionFromActions, 'execute'>;
   readonly updateDecisionDetails: Pick<UpdateDecisionDetails, 'execute'>;
@@ -96,6 +105,7 @@ export function DecisionsPage({
   getDecisionById,
   getDecisionOverview,
   getLifeActionsForDecision,
+  getSpheres,
   createLifeActionForDecision,
   confirmDecisionFromActions,
   updateDecisionDetails,
@@ -118,6 +128,8 @@ export function DecisionsPage({
   onOpenToday,
 }: DecisionsPageProps) {
   const { state, reload } = useDateQuery(selectedDate, getDecisionsForDate);
+  const spheres = useSpheres(getSpheres);
+  const [sphereFilter, setSphereFilter] = useState(SPHERE_FILTER_ALL);
   const selectedDateKey = selectedDate.toString();
   const selectedDateKeyRef = useRef(selectedDateKey);
   const createRef = useRef(false);
@@ -407,6 +419,7 @@ export function DecisionsPage({
               currentDate={currentDate}
               form={activeFormState.form}
               isSaving={activeFormState.saving}
+              spheres={spheres}
               errors={activeFormState.errors}
               onChange={updateForm}
               onClose={() => setFormState(createClosedFormState(selectedDateKey, selectedDate))}
@@ -423,6 +436,9 @@ export function DecisionsPage({
           {state.status === 'ready' ? (
             <DecisionsPageContent
               decisions={state.value}
+              spheres={spheres}
+              sphereFilter={sphereFilter}
+              onSphereFilterChange={setSphereFilter}
               filter={filter}
               onFilterChange={(value) => setFilterState({ dateKey: selectedDateKey, value })}
               onOpenDecision={(decision) => setSelection({ dateKey: selectedDateKey, decision })}
@@ -467,6 +483,7 @@ export function DecisionsPage({
         getDecisionById={getDecisionById}
         getDecisionOverview={getDecisionOverview}
         getLifeActionsForDecision={getLifeActionsForDecision}
+        spheres={spheres}
         createLifeActionForDecision={createLifeActionForDecision}
         confirmDecisionFromActions={confirmDecisionFromActions}
         updateDecisionDetails={updateDecisionDetails}
@@ -492,6 +509,9 @@ export function DecisionsPage({
 
 interface DecisionsPageContentProps {
   readonly decisions: readonly Decision[];
+  readonly spheres?: SpheresSnapshot;
+  readonly sphereFilter?: string;
+  readonly onSphereFilterChange?: (sphereId: string) => void;
   readonly filter: DecisionFilter;
   readonly onFilterChange: (filter: DecisionFilter) => void;
   readonly onOpenDecision: (decision: Decision) => void;
@@ -500,6 +520,9 @@ interface DecisionsPageContentProps {
 
 export function DecisionsPageContent({
   decisions,
+  spheres = { active: [], archived: [] },
+  sphereFilter = SPHERE_FILTER_ALL,
+  onSphereFilterChange = () => undefined,
   filter,
   onFilterChange,
   onOpenDecision,
@@ -510,7 +533,15 @@ export function DecisionsPageContent({
   const confirmedCount = decisions.filter(
     (decision) => decision.status === DECISION_STATUS.confirmed,
   ).length;
-  const filteredDecisions = useMemo(() => filterDecisions(decisions, filter), [decisions, filter]);
+  const filteredDecisions = useMemo(
+    () =>
+      filterDecisions(decisions, filter).filter((decision) => {
+        if (sphereFilter === SPHERE_FILTER_ALL) return true;
+        if (sphereFilter === SPHERE_FILTER_NONE) return decision.sphereId === null;
+        return decision.sphereId?.toString() === sphereFilter;
+      }),
+    [decisions, filter, sphereFilter],
+  );
 
   if (decisions.length === 0) {
     return <SectionMessage>На выбранный день решений пока нет</SectionMessage>;
@@ -548,6 +579,22 @@ export function DecisionsPageContent({
             </button>
           ))}
         </div>
+        <label className="action-filter-field decision-sphere-filter">
+          <span>Сфера</span>
+          <select
+            value={sphereFilter}
+            onChange={(event) => onSphereFilterChange(event.currentTarget.value)}
+          >
+            <option value={SPHERE_FILTER_ALL}>Все сферы</option>
+            <option value={SPHERE_FILTER_NONE}>Без сферы</option>
+            {[...spheres.active, ...spheres.archived].map((sphere) => (
+              <option key={sphere.id.toString()} value={sphere.id.toString()}>
+                {sphere.name}
+                {sphere.status === 'archived' ? ' · Архивная' : ''}
+              </option>
+            ))}
+          </select>
+        </label>
       </section>
 
       <section className="section-entity-list" aria-labelledby="decision-list-title">
@@ -576,7 +623,9 @@ export function DecisionsPageContent({
                   <div className="section-card-meta">
                     <span>{decisionKindLabel(decision.kind)}</span>
                     <span>{decisionPriorityLabel(decision.priority)}</span>
-                    {decision.sphere === null ? null : <span>{decision.sphere}</span>}
+                    {decision.sphereId === null ? null : (
+                      <SphereBadge sphereId={decision.sphereId.toString()} snapshot={spheres} />
+                    )}
                     {decision.kind === DECISION_KIND.main && decision.order !== null ? (
                       <span>Позиция {decision.order}</span>
                     ) : null}

@@ -23,6 +23,7 @@ describe('DayRecordMapper', () => {
       firstActivityAt: '2026-08-02T06:15:00.000Z',
       completedAt: '2026-08-02T14:00:00.000Z',
       summary: 'День завершён',
+      sphereId: 'sphere-growth',
       version: 3,
     });
     expect(day.getUncommittedEvents()).toHaveLength(eventCount);
@@ -45,8 +46,16 @@ describe('DayRecordMapper', () => {
     expect(restored.createdAt.toISOString()).toBe(record.createdAt);
     expect(restored.firstActivityAt?.toISOString()).toBe(record.firstActivityAt);
     expect(restored.completedAt?.toISOString()).toBe(record.completedAt);
+    expect(restored.sphereId?.toString()).toBe('sphere-growth');
     expect(restored.getUncommittedEvents()).toHaveLength(0);
     expect(DayRecordMapper.toRecord(restored)).toEqual(record);
+  });
+
+  it('читает старую запись без sphereId как день без сферы', () => {
+    const record = DayRecordMapper.toRecord(completedDay());
+    delete (record as { sphereId?: string | null }).sphereId;
+
+    expect(DayRecordMapper.fromRecord(record).sphereId).toBeNull();
   });
 
   it('отклоняет неподдерживаемую schemaVersion и некорректный EntityId', () => {
@@ -83,7 +92,7 @@ function completedDay(): Day {
     openedEventId: id('event-opened'),
   });
   day.recordFirstActivity(time('06:15'), id('event-activity'));
-  day.complete(time('14:00'), id('event-completed'), 'День завершён');
+  day.complete(time('14:00'), id('event-completed'), 'День завершён', id('sphere-growth'));
   return day;
 }
 

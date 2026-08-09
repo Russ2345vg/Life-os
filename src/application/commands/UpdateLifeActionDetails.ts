@@ -17,6 +17,7 @@ export interface UpdateLifeActionDetailsInput {
   readonly title: string;
   readonly description?: string;
   readonly expectedResult: string;
+  readonly sphereId?: EntityId | null;
 }
 
 export class UpdateLifeActionDetails {
@@ -63,7 +64,8 @@ export class UpdateLifeActionDetails {
       if (
         lifeAction.title.equals(title) &&
         lifeAction.description === description &&
-        lifeAction.expectedResult?.equals(expectedResult)
+        lifeAction.expectedResult?.equals(expectedResult) &&
+        sameOptionalEntityId(lifeAction.sphereId, input.sphereId ?? lifeAction.sphereId)
       ) {
         return success(lifeAction);
       }
@@ -72,6 +74,7 @@ export class UpdateLifeActionDetails {
         title,
         description,
         expectedResult,
+        ...(input.sphereId === undefined ? {} : { sphereId: input.sphereId }),
         occurredAt: this.#clock.now(),
         eventId: this.#idGenerator.generate(),
       });
@@ -81,6 +84,10 @@ export class UpdateLifeActionDetails {
       return lifeActionDomainFailure(error);
     }
   }
+}
+
+function sameOptionalEntityId(left: EntityId | null, right: EntityId | null): boolean {
+  return left === null ? right === null : right !== null && left.equals(right);
 }
 
 function normalizeDescription(description: string | undefined): string | null {

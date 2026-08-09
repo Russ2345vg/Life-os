@@ -25,7 +25,7 @@ describe('DecisionRecordMapper', () => {
       status: 'confirmed',
       version: 4,
       plannedDate: '2026-08-02',
-      sphere: 'Работа',
+      sphereId: 'sphere-work',
       price: 'Два часа',
       sacrifices: 'Отложить второстепенное',
       priority: DECISION_PRIORITY.high,
@@ -58,7 +58,7 @@ describe('DecisionRecordMapper', () => {
 
   it('восстанавливает старую запись без новых полей с безопасными значениями по умолчанию', () => {
     const record = DecisionRecordMapper.toRecord(confirmedDecision());
-    delete (record as { sphere?: string | null }).sphere;
+    delete (record as { sphereId?: string | null }).sphereId;
     delete (record as { price?: string | null }).price;
     delete (record as { sacrifices?: string | null }).sacrifices;
     delete (record as { priority?: string }).priority;
@@ -66,7 +66,7 @@ describe('DecisionRecordMapper', () => {
 
     const restored = DecisionRecordMapper.fromRecord(record);
 
-    expect(restored.sphere).toBeNull();
+    expect(restored.sphereId).toBeNull();
     expect(restored.price).toBeNull();
     expect(restored.sacrifices).toBeNull();
     expect(restored.priority).toBe(DECISION_PRIORITY.normal);
@@ -239,7 +239,7 @@ function confirmedDecision(): Decision {
     title: DecisionTitle.create('Опубликовать документ'),
     kind: DECISION_KIND.main,
     reason: 'Нужен устойчивый формат',
-    sphere: 'Работа',
+    sphereId: EntityId.create('sphere-work'),
     price: 'Два часа',
     sacrifices: 'Отложить второстепенное',
     priority: DECISION_PRIORITY.high,

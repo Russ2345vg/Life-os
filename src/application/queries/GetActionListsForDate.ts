@@ -12,10 +12,9 @@ import type { LifeActionRepository } from '../ports/LifeActionRepository';
 
 interface DecisionMetadata {
   readonly title: string | null;
-  readonly sphere: string | null;
 }
 
-const EMPTY_DECISION_METADATA: DecisionMetadata = Object.freeze({ title: null, sphere: null });
+const EMPTY_DECISION_METADATA: DecisionMetadata = Object.freeze({ title: null });
 
 export const ACTION_LIST_GROUP = {
   active: 'active',
@@ -30,7 +29,7 @@ export type ActionListGroup = (typeof ACTION_LIST_GROUP)[keyof typeof ACTION_LIS
 export interface ActionListItem {
   readonly lifeAction: LifeAction;
   readonly decisionTitle: string | null;
-  readonly decisionSphere: string | null;
+  readonly sphereId: string | null;
   readonly sessions: readonly ActionSession[];
   readonly unfinishedSession: ActionSession | null;
   readonly group: ActionListGroup;
@@ -95,7 +94,7 @@ export class GetActionListsForDate {
         return Object.freeze({
           lifeAction,
           decisionTitle: decisionMetadata.title,
-          decisionSphere: decisionMetadata.sphere,
+          sphereId: lifeAction.sphereId?.toString() ?? null,
           sessions: Object.freeze([...sessions]),
           unfinishedSession: relatedUnfinishedSession,
           group: resolveActionListGroup(lifeAction, relatedUnfinishedSession),
@@ -130,7 +129,6 @@ export class GetActionListsForDate {
         .findById(lifeAction.decisionId)
         .then((decision) => ({
           title: decision?.title.toString() ?? null,
-          sphere: decision?.sphere ?? null,
         }));
       cache.set(key, metadataPromise);
     }

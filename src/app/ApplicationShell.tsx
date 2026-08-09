@@ -8,6 +8,7 @@ import { MorePage } from '../presentation/pages/MorePage';
 import { TodayPage } from '../presentation/pages/TodayPage';
 import { RoutinePage } from '../presentation/pages/RoutinePage';
 import { WalksPage } from '../presentation/pages/WalksPage';
+import { SpheresPage } from '../presentation/pages/SpheresPage';
 import { APP_SECTION, type AppSection } from '../presentation/navigation/AppSection';
 import { useLifeOsApplication } from './providers';
 import { BrowserActionListFiltersStore } from './settings/BrowserActionListFiltersStore';
@@ -40,6 +41,7 @@ export function ApplicationShell() {
       getRoutineActionDetails: application.getRoutineActionDetails,
       getDecisionsForDate: application.getDecisionsForDate,
       getEveningReview: application.getEveningReview,
+      getSpheres: application.getSpheres,
       completeCurrentDay: application.completeCurrentDay,
       getDecisionById: application.getDecisionById,
       getDecisionOverview: application.getDecisionOverview,
@@ -121,7 +123,9 @@ export function ApplicationShell() {
           onOpenCreateRequestHandled={() => setOpenCreateRequested(false)}
           startCurrentDay={application.startCurrentDay}
           getEveningReview={application.getEveningReview}
+          getSpheres={application.getSpheres}
           completeCurrentDay={application.completeCurrentDay}
+          updateDayResultSphere={application.updateDayResultSphere}
           getDecisionsForDate={application.getDecisionsForDate}
           getLifeActionsForDate={application.getLifeActionsForDate}
           createDecisionForDate={application.createDecisionForDate}
@@ -159,6 +163,7 @@ export function ApplicationShell() {
           getDecisionById={application.getDecisionById}
           getDecisionOverview={application.getDecisionOverview}
           getLifeActionsForDecision={application.getLifeActionsForDecision}
+          getSpheres={application.getSpheres}
           createLifeActionForDecision={application.createLifeActionForDecision}
           confirmDecisionFromActions={application.confirmDecisionFromActions}
           updateDecisionDetails={application.updateDecisionDetails}
@@ -187,6 +192,7 @@ export function ApplicationShell() {
           currentDate={application.currentDate}
           selectedDate={selectedDate}
           getActionListsForDate={application.getActionListsForDate}
+          getSpheres={application.getSpheres}
           getDecisionById={application.getDecisionById}
           getActionSessionsForLifeAction={application.getActionSessionsForLifeAction}
           getUnfinishedActionSession={application.getUnfinishedActionSession}
@@ -230,10 +236,12 @@ export function ApplicationShell() {
           workflow={routineWorkflow}
         />
       ) : null}
+
       {activeSection === APP_SECTION.walks ? (
         <WalksPage
           currentDate={application.currentDate}
           selectedDate={selectedDate}
+          onDateChange={setSelectedDate}
           createWalk={application.createWalk}
           completeWalk={application.completeWalk}
           abandonWalk={application.abandonWalk}
@@ -244,10 +252,19 @@ export function ApplicationShell() {
           startWalk={application.startWalk}
           updateWalkPhoto={application.updateWalkPhoto}
           updateWalkSphere={application.updateWalkSphere}
-          onDateChange={setSelectedDate}
+          getSpheres={application.getSpheres}
         />
       ) : null}
 
+      {activeSection === APP_SECTION.spheres ? (
+        <SpheresPage
+          createSphere={application.createSphere}
+          updateSphere={application.updateSphere}
+          archiveSphere={application.archiveSphere}
+          restoreSphere={application.restoreSphere}
+          getSpheres={application.getSpheres}
+        />
+      ) : null}
 
       {activeSection === APP_SECTION.history ? (
         <HistoryPage

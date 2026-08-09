@@ -6,3 +6,4 @@ export { RoutineBlockRecordMapper } from './RoutineBlockRecordMapper';
 export { RoutineOccurrenceOverrideRecordMapper } from './RoutineOccurrenceOverrideRecordMapper';
 export { RoutineOccurrenceExecutionRecordMapper } from './RoutineOccurrenceExecutionRecordMapper';
 export { WalkRecordMapper } from './WalkRecordMapper';
+export { SphereRecordMapper } from './SphereRecordMapper';

@@ -42,6 +42,7 @@ describe('LifeActionRecordMapper', () => {
 
     expect(restored.id.toString()).toBe(source.id.toString());
     expect(restored.decisionId?.toString()).toBe(source.decisionId?.toString());
+    expect(restored.sphereId?.toString()).toBe('sphere-work');
     expect(restored.status).toBe(source.status);
     expect(restored.version).toBe(source.version);
     expect(restored.createdAt.toISOString()).toBe(record.createdAt);
@@ -49,6 +50,13 @@ describe('LifeActionRecordMapper', () => {
     expect(restored.completedAt?.toISOString()).toBe(record.completedAt);
     expect(restored.getUncommittedEvents()).toHaveLength(0);
     expect(LifeActionRecordMapper.toRecord(restored)).toEqual(record);
+  });
+
+  it('читает старую запись без sphereId как действие без сферы', () => {
+    const record = LifeActionRecordMapper.toRecord(completedAction());
+    delete (record as { sphereId?: string | null }).sphereId;
+
+    expect(LifeActionRecordMapper.fromRecord(record).sphereId).toBeNull();
   });
 
   it('отклоняет неподдерживаемую schemaVersion и некорректный EntityId', () => {
@@ -88,6 +96,7 @@ function completedAction(): LifeAction {
     title: LifeActionTitle.create('Проверить persistence'),
     description: 'Проверить полный круг',
     decisionId: id('decision-1'),
+    sphereId: id('sphere-work'),
     createdAt: time('2026-08-01T10:00:00.000Z'),
     eventId: id('event-draft'),
   });

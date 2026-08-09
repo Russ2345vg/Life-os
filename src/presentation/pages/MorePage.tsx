@@ -64,9 +64,10 @@ const MORE_SECTIONS: readonly MoreSectionItem[] = [
   },
   {
     title: 'Сферы',
-    description: 'Связь решений с направлениями и сферами жизни.',
+    description: 'Области жизни, к которым относятся ваши решения и действия.',
     icon: 'spheres',
-    available: false,
+    available: true,
+    target: APP_SECTION.spheres,
   },
 ];
 

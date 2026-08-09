@@ -12,6 +12,7 @@ import type {
   ResumeActionSession,
   StartLifeActionSession,
   UpdateLifeActionDetails,
+  SpheresSnapshot,
 } from '../../application';
 import type { ActionSession, DayDate, LifeAction, SessionCompletionKind } from '../../domain';
 import { LifeActionDetailsPanel } from './LifeActionDetailsPanel';
@@ -41,6 +42,7 @@ interface LifeActionDetailsControllerProps {
   readonly lifeAction: LifeAction | null;
   readonly currentDate: DayDate;
   readonly readOnly: boolean;
+  readonly spheres?: SpheresSnapshot;
   readonly clock: Pick<Clock, 'now'>;
   readonly getDecisionById: Pick<GetDecisionById, 'execute'>;
   readonly getActionSessionsForLifeAction: Pick<GetActionSessionsForLifeAction, 'execute'>;
@@ -62,6 +64,7 @@ export function LifeActionDetailsController({
   lifeAction,
   currentDate,
   readOnly,
+  spheres = { active: [], archived: [] },
   clock,
   getDecisionById,
   getActionSessionsForLifeAction,
@@ -432,6 +435,7 @@ export function LifeActionDetailsController({
       details={state.actionDetails}
       currentDate={currentDate}
       readOnly={readOnly}
+      spheres={spheres}
       decisionTitle={decisionContext?.title ?? null}
       decisionPlannedDate={decisionContext?.plannedDate ?? null}
       clock={clock}
@@ -482,6 +486,9 @@ export function LifeActionDetailsController({
       }
       onEditExpectedResultChange={(expectedResult) =>
         dispatch({ type: 'life_action_edit_expected_result_changed', expectedResult })
+      }
+      onEditSphereChange={(sphereId) =>
+        dispatch({ type: 'life_action_edit_sphere_changed', sphereId })
       }
       onEditSubmit={(event) => void handleLifeActionEdit(event)}
       onOpenCancellation={() => dispatch({ type: 'life_action_cancellation_opened' })}

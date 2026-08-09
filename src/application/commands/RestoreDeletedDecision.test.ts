@@ -119,7 +119,7 @@ function cloneWithId(source: Decision, id: string): Decision {
     id: EntityId.create(id),
     title: source.title,
     reason: source.reason,
-    sphere: source.sphere,
+    sphereId: source.sphereId,
     price: source.price,
     sacrifices: source.sacrifices,
     priority: source.priority,

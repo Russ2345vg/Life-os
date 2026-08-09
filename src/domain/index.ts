@@ -71,6 +71,20 @@ export type { DomainEvent } from './shared/DomainEvent';
 export { Entity } from './shared/Entity';
 export { EntityId } from './shared/EntityId';
 export {
+  MAX_SPHERE_DESCRIPTION_LENGTH,
+  MAX_SPHERE_ICON_LENGTH,
+  MAX_SPHERE_NAME_LENGTH,
+  SPHERE_STATUS,
+  Sphere,
+  isSphereStatus,
+  normalizeSphereName,
+  sphereNameKey,
+  type SphereCreationData,
+  type SphereDetails,
+  type SphereRehydrationData,
+  type SphereStatus,
+} from './sphere';
+export {
   ROUTINE_BLOCK_CATEGORY,
   ROUTINE_BLOCK_ASSIGNMENT,
   ROUTINE_BLOCK_RECURRENCE,

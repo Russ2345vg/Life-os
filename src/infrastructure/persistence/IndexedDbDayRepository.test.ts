@@ -10,6 +10,45 @@ const DATE = DayDate.create('2026-08-02');
 const OPENED_AT = new Date('2026-08-02T06:00:00.000Z');
 
 describe('IndexedDbDayRepository', () => {
+  it('restores the day-result sphere after IndexedDB reopen (F5)', async () => {
+    const indexedDb = new IDBFactory();
+    const firstDatabase = new LifeOsIndexedDb(indexedDb);
+    const day = createDay('day-with-sphere');
+    day.complete(
+      new Date('2026-08-02T14:00:00.000Z'),
+      id('day-completed'),
+      'Итог дня',
+      id('sphere-growth'),
+    );
+    await new IndexedDbDayRepository(firstDatabase).save(day);
+    firstDatabase.close();
+
+    const reopenedDatabase = new LifeOsIndexedDb(indexedDb);
+    const restored = await new IndexedDbDayRepository(reopenedDatabase).findByDate(DATE);
+    expect(restored?.sphereId?.toString()).toBe('sphere-growth');
+    reopenedDatabase.close();
+  });
+
+  it('atomically updates the result sphere and preserves it after reopen', async () => {
+    const indexedDb = new IDBFactory();
+    const firstDatabase = new LifeOsIndexedDb(indexedDb);
+    const repository = new IndexedDbDayRepository(firstDatabase);
+    const day = createDay('day-update-sphere');
+    day.complete(new Date('2026-08-02T14:00:00.000Z'), id('completed'), 'Итог');
+    await repository.save(day);
+
+    const expectedVersion = day.version;
+    day.changeResultSphere(id('sphere-work'));
+    await expect(repository.saveIfVersionMatches(day, expectedVersion)).resolves.toBe(true);
+    await expect(repository.saveIfVersionMatches(day, expectedVersion)).resolves.toBe(false);
+    firstDatabase.close();
+
+    const reopenedDatabase = new LifeOsIndexedDb(indexedDb);
+    const restored = await new IndexedDbDayRepository(reopenedDatabase).findByDate(DATE);
+    expect(restored?.sphereId?.toString()).toBe('sphere-work');
+    reopenedDatabase.close();
+  });
+
   it('сохраняет день, находит его через byDate и восстанавливает через mapper', async () => {
     const { database, repository } = createContext();
     const day = createDay('day-1');

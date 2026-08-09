@@ -19,6 +19,7 @@ import type {
   StartLifeActionSession,
   UpdateDecisionDetails,
   UpdateLifeActionDetails,
+  SpheresSnapshot,
 } from '../../application';
 import type { DayDate, Decision, EntityId, LifeAction } from '../../domain';
 import { DecisionDetailsPanel } from './DecisionDetailsPanel';
@@ -42,6 +43,7 @@ interface DecisionDetailsControllerProps {
   readonly currentDate: DayDate;
   readonly selectedDate: DayDate;
   readonly readOnly: boolean;
+  readonly spheres?: SpheresSnapshot;
   readonly getDecisionById: Pick<GetDecisionById, 'execute'>;
   readonly getDecisionOverview: Pick<GetDecisionOverview, 'execute'>;
   readonly getLifeActionsForDecision: Pick<GetLifeActionsForDecision, 'execute'>;
@@ -72,6 +74,7 @@ export function DecisionDetailsController({
   currentDate,
   selectedDate,
   readOnly,
+  spheres = { active: [], archived: [] },
   getDecisionById,
   getDecisionOverview,
   getLifeActionsForDecision,
@@ -404,6 +407,7 @@ export function DecisionDetailsController({
         cancelLifeActionSafely={cancelLifeActionSafely}
         rescheduleLifeActionSafely={rescheduleLifeActionSafely}
         backLabel="Назад к решению"
+        spheres={spheres}
         onClose={() => setSelectedAction(null)}
         onActionChanged={handleActionChanged}
       />
@@ -415,6 +419,7 @@ export function DecisionDetailsController({
       details={state.details}
       currentDate={currentDate}
       readOnly={readOnly}
+      spheres={spheres}
       now={clock.now()}
       isFormOpen={state.isLifeActionFormOpen}
       isSaving={state.isLifeActionSaving}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ACTION_LIST_GROUP, type ActionListItem } from '../application';
-import { DayDate, EntityId } from '../domain';
+import { DayDate, EntityId, Sphere } from '../domain';
 import { completeLifeAction, createReadyLifeAction } from '../test/helpers/LifeActionTestFactory';
 import {
   ACTION_DURATION_FILTER,
@@ -20,26 +20,26 @@ describe('actionListFilters', () => {
     const matching = item('match', ACTION_LIST_GROUP.completed, {
       decisionId: 'decision-money',
       decisionTitle: 'Увеличить доход',
-      decisionSphere: 'Деньги',
+      sphereId: 'sphere-money',
       durationMs: 90 * 60_000,
       completed: true,
     });
     const wrongSphere = item('health', ACTION_LIST_GROUP.completed, {
       decisionId: 'decision-health',
       decisionTitle: 'Тренировка',
-      decisionSphere: 'Здоровье',
+      sphereId: 'sphere-health',
       durationMs: 90 * 60_000,
       completed: true,
     });
     const noResult = item('ready', ACTION_LIST_GROUP.ready, {
       decisionId: 'decision-money',
       decisionTitle: 'Увеличить доход',
-      decisionSphere: 'Деньги',
+      sphereId: 'sphere-money',
       durationMs: 90 * 60_000,
     });
 
     const filtered = filterActionListItems([matching, wrongSphere, noResult], {
-      sphere: 'Деньги',
+      sphere: 'sphere-money',
       decisionId: 'decision-money',
       group: ACTION_LIST_GROUP.completed,
       duration: ACTION_DURATION_FILTER.from60To120,
@@ -58,7 +58,7 @@ describe('actionListFilters', () => {
     const withSphere = item('with-sphere', ACTION_LIST_GROUP.ready, {
       decisionId: 'decision-work',
       decisionTitle: 'Рабочее решение',
-      decisionSphere: 'Работа',
+      sphereId: 'sphere-work',
     });
 
     expect(
@@ -98,19 +98,25 @@ describe('actionListFilters', () => {
   });
 
   it('строит уникальные отсортированные варианты сфер и решений', () => {
-    const options = buildActionFilterOptions([
-      item('a', ACTION_LIST_GROUP.ready, {
-        decisionId: 'd2',
-        decisionTitle: 'Бета',
-        decisionSphere: 'Работа',
-      }),
-      item('b', ACTION_LIST_GROUP.ready, {
-        decisionId: 'd1',
-        decisionTitle: 'Альфа',
-        decisionSphere: 'Здоровье',
-      }),
-      item('c', ACTION_LIST_GROUP.ready),
-    ]);
+    const options = buildActionFilterOptions(
+      [
+        item('a', ACTION_LIST_GROUP.ready, {
+          decisionId: 'd2',
+          decisionTitle: 'Бета',
+          sphereId: 'sphere-work',
+        }),
+        item('b', ACTION_LIST_GROUP.ready, {
+          decisionId: 'd1',
+          decisionTitle: 'Альфа',
+          sphereId: 'sphere-health',
+        }),
+        item('c', ACTION_LIST_GROUP.ready),
+      ],
+      {
+        active: [sphere('sphere-work', 'Работа'), sphere('sphere-health', 'Здоровье')],
+        archived: [],
+      },
+    );
 
     expect(options.decisions.map((option) => option.label)).toEqual([
       'Альфа',
@@ -128,7 +134,7 @@ describe('actionListFilters', () => {
     expect(countActiveActionFilters(DEFAULT_ACTION_LIST_FILTERS)).toBe(0);
     expect(
       countActiveActionFilters({
-        sphere: 'Работа',
+        sphere: 'sphere-work',
         decisionId: ACTION_FILTER_ANY,
         group: ACTION_LIST_GROUP.ready,
         duration: ACTION_DURATION_FILTER.all,
@@ -141,7 +147,7 @@ describe('actionListFilters', () => {
 interface ItemOptions {
   readonly decisionId?: string;
   readonly decisionTitle?: string;
-  readonly decisionSphere?: string;
+  readonly sphereId?: string;
   readonly durationMs?: number;
   readonly completed?: boolean;
 }
@@ -161,11 +167,15 @@ function item(
   return {
     lifeAction,
     decisionTitle: options.decisionTitle ?? null,
-    decisionSphere: options.decisionSphere ?? null,
+    sphereId: options.sphereId ?? null,
     sessions: [],
     unfinishedSession: null,
     group,
     completedSessionCount: 0,
     totalWorkedDurationMs: options.durationMs ?? 0,
   };
+}
+
+function sphere(id: string, name: string): Sphere {
+  return Sphere.create({ id: EntityId.create(id), name, now: new Date('2026-08-07T00:00:00Z') });
 }

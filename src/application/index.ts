@@ -147,6 +147,21 @@ export type { RoutineBlockRepository } from './ports/RoutineBlockRepository';
 export type { RoutineOccurrenceOverrideRepository } from './ports/RoutineOccurrenceOverrideRepository';
 export type { StartWalkPersistenceResult, WalkRepository } from './ports/WalkRepository';
 export type {
+  CreateSpherePersistenceResult,
+  SphereRepository,
+  UpdateSpherePersistenceResult,
+} from './ports/SphereRepository';
+export { CreateSphere, type CreateSphereInput } from './commands/CreateSphere';
+export { UpdateSphere, type UpdateSphereInput } from './commands/UpdateSphere';
+export { ArchiveSphere, type ArchiveSphereInput } from './commands/ArchiveSphere';
+export { RestoreSphere, type RestoreSphereInput } from './commands/RestoreSphere';
+export {
+  DEFAULT_SPHERES,
+  EnsureDefaultSpheres,
+  type DefaultSphereDefinition,
+} from './commands/EnsureDefaultSpheres';
+export { GetSpheres, type SpheresSnapshot } from './queries/GetSpheres';
+export type {
   RoutineOccurrenceExecutionRepository,
   StartRoutineExecutionResult,
 } from './ports/RoutineOccurrenceExecutionRepository';
@@ -219,6 +234,10 @@ export {
   pickWalkReflectionQuestion,
   type WalkReflectionQuestionPicker,
 } from './walk/WalkReflectionQuestions';
+export {
+  UpdateDayResultSphere,
+  type UpdateDayResultSphereInput,
+} from './commands/UpdateDayResultSphere';
 export type {
   RoutineOccurrenceCommandDependencies,
   RoutineOccurrenceCommandInput,

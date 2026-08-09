@@ -1,4 +1,10 @@
-import { Decision, type DecisionKind, type DecisionTitle, type ExpectedResult } from '../../domain';
+import {
+  Decision,
+  type DecisionKind,
+  type DecisionTitle,
+  type EntityId,
+  type ExpectedResult,
+} from '../../domain';
 import type { DomainError } from '../../shared/errors/DomainError';
 import { success, type Result } from '../../shared/result/Result';
 import type { Clock } from '../ports/Clock';
@@ -11,6 +17,7 @@ export interface CreateDecisionDraftInput {
   readonly kind: DecisionKind;
   readonly reason?: string;
   readonly expectedResult?: ExpectedResult;
+  readonly sphereId?: EntityId | null;
 }
 
 export class CreateDecisionDraft {
@@ -32,6 +39,7 @@ export class CreateDecisionDraft {
         kind: input.kind,
         ...(input.reason === undefined ? {} : { reason: input.reason }),
         ...(input.expectedResult === undefined ? {} : { expectedResult: input.expectedResult }),
+        sphereId: input.sphereId ?? null,
         occurredAt: this.#clock.now(),
         eventId: this.#idGenerator.generate(),
       });

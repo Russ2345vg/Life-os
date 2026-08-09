@@ -11,7 +11,7 @@ export interface DecisionRecord {
   readonly id: string;
   readonly title: string;
   readonly reason: string | null;
-  readonly sphere?: string | null;
+  readonly sphereId?: string | null;
   readonly price?: string | null;
   readonly sacrifices?: string | null;
   readonly priority?: 'low' | 'normal' | 'high';

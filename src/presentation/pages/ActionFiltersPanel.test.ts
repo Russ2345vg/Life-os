@@ -2,7 +2,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { ACTION_LIST_GROUP, type ActionListItem } from '../../application';
-import { DayDate, EntityId } from '../../domain';
+import { DayDate, EntityId, Sphere } from '../../domain';
 import { createReadyLifeAction } from '../../test/helpers/LifeActionTestFactory';
 import {
   ACTION_DURATION_FILTER,
@@ -22,7 +22,7 @@ describe('ActionFiltersPanel', () => {
     const item: ActionListItem = {
       lifeAction: action,
       decisionTitle: 'Развить продукт',
-      decisionSphere: 'Работа',
+      sphereId: 'sphere-work',
       sessions: [],
       unfinishedSession: null,
       group: ACTION_LIST_GROUP.ready,
@@ -35,6 +35,16 @@ describe('ActionFiltersPanel', () => {
         currentDate: CURRENT_DATE,
         selectedDate: CURRENT_DATE,
         items: [item],
+        spheres: {
+          active: [
+            Sphere.create({
+              id: EntityId.create('sphere-work'),
+              name: 'Работа',
+              now: new Date('2026-08-07T00:00:00.000Z'),
+            }),
+          ],
+          archived: [],
+        },
         filters: DEFAULT_ACTION_LIST_FILTERS,
         onDateChange: vi.fn(),
         onFiltersChange: vi.fn(),

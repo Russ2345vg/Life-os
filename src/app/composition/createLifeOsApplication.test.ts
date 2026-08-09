@@ -98,6 +98,36 @@ describe('createLifeOsApplication', () => {
     secondApplication.close();
   });
 
+  it('инициализирует шесть стандартных сфер без дублей и сохраняет пользовательскую после F5', async () => {
+    const indexedDbFactory = new IDBFactory();
+    const firstApplication = await createTestApplication(
+      indexedDbFactory,
+      new FakeIdGenerator('sphere-start'),
+    );
+    expect(
+      (await firstApplication.getSpheres.execute()).active.map((sphere) => sphere.name).sort(),
+    ).toEqual(['Дом', 'Деньги', 'Здоровье', 'Отношения', 'Работа', 'Развитие'].sort());
+    const custom = await firstApplication.createSphere.execute({
+      name: 'Творчество',
+      description: 'Личные проекты',
+    });
+    expect(custom.ok).toBe(true);
+    firstApplication.close();
+
+    const reloaded = await createTestApplication(
+      indexedDbFactory,
+      new FakeIdGenerator('sphere-reload'),
+    );
+    const snapshot = await reloaded.getSpheres.execute();
+    expect(snapshot.active).toHaveLength(7);
+    expect(snapshot.active.filter((sphere) => sphere.name === 'Здоровье')).toHaveLength(1);
+    expect(snapshot.active.find((sphere) => sphere.name === 'Творчество')).toMatchObject({
+      description: 'Личные проекты',
+      version: 1,
+    });
+    reloaded.close();
+  });
+
   it('явно начинает день и восстанавливает открытое состояние после перезапуска', async () => {
     const indexedDbFactory = new IDBFactory();
     const firstApplication = await createTestApplication(
@@ -471,7 +501,7 @@ describe('createLifeOsApplication', () => {
       title: 'Отредактированное решение',
       reason: 'Сохранённая причина',
       expectedResult: 'Отредактированный результат',
-      sphere: 'Разработка',
+      sphereId: EntityId.create('sphere-development'),
       price: 'Два часа',
       sacrifices: 'Не переключаться',
       priority: DECISION_PRIORITY.high,
@@ -495,7 +525,7 @@ describe('createLifeOsApplication', () => {
     expect(restored?.title.toString()).toBe('Отредактированное решение');
     expect(restored?.reason).toBe('Сохранённая причина');
     expect(restored?.expectedResult?.toString()).toBe('Отредактированный результат');
-    expect(restored?.sphere).toBe('Разработка');
+    expect(restored?.sphereId?.toString()).toBe('sphere-development');
     expect(restored?.price).toBe('Два часа');
     expect(restored?.sacrifices).toBe('Не переключаться');
     expect(restored?.priority).toBe(DECISION_PRIORITY.high);

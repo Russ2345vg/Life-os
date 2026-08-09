@@ -25,12 +25,14 @@ export interface LifeActionDraftInput {
   readonly title: LifeActionTitle;
   readonly description?: string;
   readonly decisionId?: EntityId;
+  readonly sphereId?: EntityId | null;
   readonly createdAt: Date;
   readonly eventId: EntityId;
 }
 
 export interface LifeActionReadyInput {
   readonly expectedResult: ActionExpectedResult;
+  readonly sphereId?: EntityId | null;
   readonly plannedDate: DayDate;
   readonly occurredAt: Date;
   readonly eventId: EntityId;
@@ -40,6 +42,7 @@ export interface LifeActionDetailsUpdateInput {
   readonly title: LifeActionTitle;
   readonly description: string | null;
   readonly expectedResult: ActionExpectedResult;
+  readonly sphereId?: EntityId | null;
   readonly occurredAt: Date;
   readonly eventId: EntityId;
 }
@@ -52,6 +55,7 @@ export interface LifeActionRehydrationData {
   readonly actualResult: ActionActualResult | null;
   readonly status: LifeActionStatus;
   readonly decisionId: EntityId | null;
+  readonly sphereId?: EntityId | null;
   readonly plannedDate: DayDate | null;
   readonly createdAt: Date;
   readonly readyAt: Date | null;
@@ -68,6 +72,7 @@ export class LifeAction extends Entity {
   #title: LifeActionTitle;
   #description: string | null;
   readonly #decisionId: EntityId | null;
+  #sphereId: EntityId | null;
   readonly #createdAt: Date;
   readonly #domainEvents: DomainEvent[];
   #expectedResult: ActionExpectedResult | null;
@@ -91,6 +96,7 @@ export class LifeAction extends Entity {
     this.#actualResult = data.actualResult;
     this.#status = data.status;
     this.#decisionId = data.decisionId;
+    this.#sphereId = data.sphereId ?? null;
     this.#plannedDate = data.plannedDate;
     this.#createdAt = copyDate(data.createdAt);
     this.#readyAt = copyOptionalDate(data.readyAt);
@@ -118,6 +124,7 @@ export class LifeAction extends Entity {
         actualResult: null,
         status: LIFE_ACTION_STATUS.draft,
         decisionId: input.decisionId ?? null,
+        sphereId: input.sphereId ?? null,
         plannedDate: null,
         createdAt: input.createdAt,
         readyAt: null,
@@ -172,6 +179,10 @@ export class LifeAction extends Entity {
 
   public get decisionId(): EntityId | null {
     return this.#decisionId;
+  }
+
+  public get sphereId(): EntityId | null {
+    return this.#sphereId;
   }
 
   public get plannedDate(): DayDate | null {
@@ -275,11 +286,13 @@ export class LifeAction extends Entity {
     assertLifeActionTitle(input.title);
     assertExpectedResult(input.expectedResult);
     const description = normalizeOptionalDescription(input.description);
+    const sphereId = input.sphereId === undefined ? this.#sphereId : input.sphereId;
 
     if (
       this.#title.equals(input.title) &&
       this.#description === description &&
-      this.#expectedResult?.equals(input.expectedResult)
+      this.#expectedResult?.equals(input.expectedResult) &&
+      sameOptionalEntityId(this.#sphereId, sphereId)
     ) {
       return false;
     }
@@ -288,6 +301,7 @@ export class LifeAction extends Entity {
     this.#title = input.title;
     this.#description = description;
     this.#expectedResult = input.expectedResult;
+    this.#sphereId = sphereId;
     this.#version += 1;
     this.#domainEvents.push(
       new LifeActionDetailsUpdated(
@@ -667,6 +681,10 @@ function assertOptionalDecisionId(decisionId: EntityId | null): void {
       'Связь с решением должна содержать корректный идентификатор.',
     );
   }
+}
+
+function sameOptionalEntityId(left: EntityId | null, right: EntityId | null): boolean {
+  return left === null ? right === null : right !== null && left.equals(right);
 }
 
 function assertValidDate(value: Date, fieldName: string): void {

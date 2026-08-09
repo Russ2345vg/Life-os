@@ -9,6 +9,7 @@ import {
   readNullableIsoDate,
   readNullableString,
   readNumber,
+  readOptionalNullableEntityId,
   readString,
   toNullableIsoDate,
 } from './RecordMapperSupport';
@@ -26,6 +27,7 @@ export class DayRecordMapper {
       firstActivityAt: toNullableIsoDate(entity.firstActivityAt),
       completedAt: toNullableIsoDate(entity.completedAt),
       summary: entity.summary,
+      sphereId: entity.sphereId?.toString() ?? null,
       version: entity.version,
     };
   }
@@ -42,6 +44,7 @@ export class DayRecordMapper {
       firstActivityAt: readNullableIsoDate(record, 'firstActivityAt'),
       completedAt: readNullableIsoDate(record, 'completedAt'),
       summary: readNullableString(record, 'summary'),
+      sphereId: readOptionalNullableEntityId(record, 'sphereId'),
       version: readNumber(record, 'version'),
     });
   }

@@ -6,3 +6,4 @@ export type { RoutineBlockRecord } from './RoutineBlockRecord';
 export type { RoutineOccurrenceOverrideRecord } from './RoutineOccurrenceOverrideRecord';
 export type { RoutineOccurrenceExecutionRecord } from './RoutineOccurrenceExecutionRecord';
 export type { WalkRecord } from './WalkRecord';
+export type { SphereRecord } from './SphereRecord';

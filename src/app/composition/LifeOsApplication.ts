@@ -70,6 +70,13 @@ import type {
   StartWalk,
   UpdateWalkPhoto,
   UpdateWalkSphere,
+  UpdateDayResultSphere,
+  SphereRepository,
+  CreateSphere,
+  UpdateSphere,
+  ArchiveSphere,
+  RestoreSphere,
+  GetSpheres,
 } from '../../application';
 import { EnsureCurrentDay } from '../../application';
 import type { Day, DayDate } from '../../domain';
@@ -83,6 +90,7 @@ interface LifeOsApplicationServices {
   readonly routineOccurrenceOverrideRepository: RoutineOccurrenceOverrideRepository;
   readonly routineOccurrenceExecutionRepository: RoutineOccurrenceExecutionRepository;
   readonly walkRepository: WalkRepository;
+  readonly sphereRepository: SphereRepository;
   readonly clock: Clock;
   readonly currentDateProvider: CurrentDateProvider;
   readonly idGenerator: IdGenerator;
@@ -92,6 +100,7 @@ interface LifeOsApplicationServices {
   readonly startCurrentDay: StartCurrentDay;
   readonly getEveningReview: GetEveningReview;
   readonly completeCurrentDay: CompleteCurrentDay;
+  readonly updateDayResultSphere: UpdateDayResultSphere;
   readonly createDecisionForDate: CreateDecisionForDate;
   readonly getDecisionsForDate: GetDecisionsForDate;
   readonly getDeletedDecisions: GetDeletedDecisions;
@@ -149,6 +158,11 @@ interface LifeOsApplicationServices {
   readonly startWalk: StartWalk;
   readonly updateWalkPhoto: UpdateWalkPhoto;
   readonly updateWalkSphere: UpdateWalkSphere;
+  readonly createSphere: CreateSphere;
+  readonly updateSphere: UpdateSphere;
+  readonly archiveSphere: ArchiveSphere;
+  readonly restoreSphere: RestoreSphere;
+  readonly getSpheres: GetSpheres;
   readonly closeDatabase: () => void;
 }
 
@@ -161,6 +175,7 @@ export class LifeOsApplication {
   public readonly routineOccurrenceOverrideRepository: RoutineOccurrenceOverrideRepository;
   public readonly routineOccurrenceExecutionRepository: RoutineOccurrenceExecutionRepository;
   public readonly walkRepository: WalkRepository;
+  public readonly sphereRepository: SphereRepository;
   public readonly clock: Clock;
   public readonly currentDateProvider: CurrentDateProvider;
   public readonly idGenerator: IdGenerator;
@@ -170,6 +185,7 @@ export class LifeOsApplication {
   public readonly startCurrentDay: StartCurrentDay;
   public readonly getEveningReview: GetEveningReview;
   public readonly completeCurrentDay: CompleteCurrentDay;
+  public readonly updateDayResultSphere: UpdateDayResultSphere;
   public readonly createDecisionForDate: CreateDecisionForDate;
   public readonly getDecisionsForDate: GetDecisionsForDate;
   public readonly getDeletedDecisions: GetDeletedDecisions;
@@ -227,6 +243,11 @@ export class LifeOsApplication {
   public readonly startWalk: StartWalk;
   public readonly updateWalkPhoto: UpdateWalkPhoto;
   public readonly updateWalkSphere: UpdateWalkSphere;
+  public readonly createSphere: CreateSphere;
+  public readonly updateSphere: UpdateSphere;
+  public readonly archiveSphere: ArchiveSphere;
+  public readonly restoreSphere: RestoreSphere;
+  public readonly getSpheres: GetSpheres;
 
   readonly #closeDatabase: () => void;
 
@@ -239,6 +260,7 @@ export class LifeOsApplication {
     this.routineOccurrenceOverrideRepository = services.routineOccurrenceOverrideRepository;
     this.routineOccurrenceExecutionRepository = services.routineOccurrenceExecutionRepository;
     this.walkRepository = services.walkRepository;
+    this.sphereRepository = services.sphereRepository;
     this.clock = services.clock;
     this.currentDateProvider = services.currentDateProvider;
     this.idGenerator = services.idGenerator;
@@ -248,6 +270,7 @@ export class LifeOsApplication {
     this.startCurrentDay = services.startCurrentDay;
     this.getEveningReview = services.getEveningReview;
     this.completeCurrentDay = services.completeCurrentDay;
+    this.updateDayResultSphere = services.updateDayResultSphere;
     this.createDecisionForDate = services.createDecisionForDate;
     this.getDecisionsForDate = services.getDecisionsForDate;
     this.getDeletedDecisions = services.getDeletedDecisions;
@@ -305,6 +328,11 @@ export class LifeOsApplication {
     this.startWalk = services.startWalk;
     this.updateWalkPhoto = services.updateWalkPhoto;
     this.updateWalkSphere = services.updateWalkSphere;
+    this.createSphere = services.createSphere;
+    this.updateSphere = services.updateSphere;
+    this.archiveSphere = services.archiveSphere;
+    this.restoreSphere = services.restoreSphere;
+    this.getSpheres = services.getSpheres;
     this.#closeDatabase = services.closeDatabase;
   }
 

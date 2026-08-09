@@ -7,6 +7,7 @@ export interface LifeActionRecord {
   readonly actualResult: string | null;
   readonly status: 'draft' | 'ready' | 'in_progress' | 'completed' | 'cancelled';
   readonly decisionId: string | null;
+  readonly sphereId?: string | null;
   readonly plannedDate: string | null;
   readonly createdAt: string;
   readonly readyAt: string | null;

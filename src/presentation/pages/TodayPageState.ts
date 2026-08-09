@@ -23,7 +23,7 @@ import {
   type Decision,
   type DecisionKind,
   type DecisionPriority,
-  type EntityId,
+  EntityId,
   type LifeAction,
   type SessionCompletionKind,
 } from '../../domain';
@@ -50,13 +50,13 @@ export interface DecisionConfirmationFormState {
 }
 
 export type DecisionEditTextField =
-  'title' | 'reason' | 'expectedResult' | 'sphere' | 'price' | 'sacrifices' | 'projectReference';
+  'title' | 'reason' | 'expectedResult' | 'sphereId' | 'price' | 'sacrifices' | 'projectReference';
 
 export interface DecisionEditFormState {
   readonly title: string;
   readonly expectedResult: string;
   readonly reason?: string;
-  readonly sphere?: string;
+  readonly sphereId?: string;
   readonly price?: string;
   readonly sacrifices?: string;
   readonly projectReference?: string;
@@ -74,6 +74,7 @@ export interface LifeActionEditFormState {
   readonly title: string;
   readonly description: string;
   readonly expectedResult: string;
+  readonly sphereId: string;
 }
 
 export interface LifeActionRescheduleFormState {
@@ -267,6 +268,7 @@ export type TodayPageAction =
   | { readonly type: 'life_action_edit_form_closed' }
   | { readonly type: 'life_action_edit_title_changed'; readonly title: string }
   | { readonly type: 'life_action_edit_description_changed'; readonly description: string }
+  | { readonly type: 'life_action_edit_sphere_changed'; readonly sphereId: string }
   | {
       readonly type: 'life_action_edit_expected_result_changed';
       readonly expectedResult: string;
@@ -576,7 +578,7 @@ export function todayPageReducer(state: TodayPageState, action: TodayPageAction)
           title: state.details.decision.title.toString(),
           reason: state.details.decision.reason ?? '',
           expectedResult: state.details.decision.expectedResult?.toString() ?? '',
-          sphere: state.details.decision.sphere ?? '',
+          sphereId: state.details.decision.sphereId?.toString() ?? '',
           price: state.details.decision.price ?? '',
           sacrifices: state.details.decision.sacrifices ?? '',
           projectReference: state.details.decision.projectReference ?? '',
@@ -807,6 +809,7 @@ export function todayPageReducer(state: TodayPageState, action: TodayPageAction)
           title: state.actionDetails.lifeAction.title.toString(),
           description: state.actionDetails.lifeAction.description ?? '',
           expectedResult: state.actionDetails.lifeAction.expectedResult?.toString() ?? '',
+          sphereId: state.actionDetails.lifeAction.sphereId?.toString() ?? '',
         },
         lifeActionEditError: null,
         isLifeActionCancellationOpen: false,
@@ -839,6 +842,12 @@ export function todayPageReducer(state: TodayPageState, action: TodayPageAction)
           ...state.lifeActionEditForm,
           expectedResult: action.expectedResult,
         },
+        lifeActionEditError: null,
+      };
+    case 'life_action_edit_sphere_changed':
+      return {
+        ...state,
+        lifeActionEditForm: { ...state.lifeActionEditForm, sphereId: action.sphereId },
         lifeActionEditError: null,
       };
     case 'life_action_edit_started':
@@ -1298,11 +1307,15 @@ export async function updateLifeActionDetailsResult(input: {
   | { readonly ok: true; readonly lifeAction: LifeAction }
   | { readonly ok: false; readonly message: string }
 > {
+  const sphereId = input.form.sphereId;
   const result = await input.updateLifeActionDetails.execute({
     lifeActionId: input.lifeActionId,
     title: input.form.title,
     description: input.form.description,
     expectedResult: input.form.expectedResult,
+    ...(sphereId === undefined
+      ? {}
+      : { sphereId: sphereId.trim().length === 0 ? null : EntityId.create(sphereId) }),
   });
 
   return result.ok
@@ -1409,7 +1422,12 @@ export async function updateDecisionDetailsResult(input: {
     title: input.form.title,
     expectedResult: input.form.expectedResult,
     ...(input.form.reason === undefined ? {} : { reason: input.form.reason }),
-    ...(input.form.sphere === undefined ? {} : { sphere: input.form.sphere }),
+    ...(input.form.sphereId === undefined
+      ? {}
+      : {
+          sphereId:
+            input.form.sphereId.trim().length === 0 ? null : EntityId.create(input.form.sphereId),
+        }),
     ...(input.form.price === undefined ? {} : { price: input.form.price }),
     ...(input.form.sacrifices === undefined ? {} : { sacrifices: input.form.sacrifices }),
     ...(input.form.projectReference === undefined
@@ -1708,7 +1726,7 @@ function createEmptyLifeActionForm(): LifeActionFormState {
 }
 
 function createEmptyLifeActionEditForm(): LifeActionEditFormState {
-  return { title: '', description: '', expectedResult: '' };
+  return { title: '', description: '', expectedResult: '', sphereId: '' };
 }
 
 function createEmptyDecisionRescheduleForm(): DecisionRescheduleFormState {

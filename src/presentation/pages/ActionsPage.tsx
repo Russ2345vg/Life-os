@@ -10,6 +10,8 @@ import type {
   GetActionSessionsForLifeAction,
   GetDecisionById,
   GetUnfinishedActionSession,
+  GetSpheres,
+  SpheresSnapshot,
   PauseActionSession,
   RescheduleLifeActionSafely,
   ResumeActionSession,
@@ -30,6 +32,8 @@ import {
   type ActionListFilters,
 } from '../actionListFilters';
 import { LifeActionDetailsController } from '../components/LifeActionDetailsController';
+import { SphereBadge } from '../components/SphereReference';
+import { useSpheres } from '../components/sphereReferenceModel';
 import { SectionDateNavigator } from '../components/SectionDateNavigator';
 import { SectionPageHeader } from '../components/SectionPageHeader';
 import { isPastDate } from '../date/selectedDate';
@@ -44,6 +48,7 @@ interface ActionsPageProps {
   readonly getDecisionById: Pick<GetDecisionById, 'execute'>;
   readonly getActionSessionsForLifeAction: Pick<GetActionSessionsForLifeAction, 'execute'>;
   readonly getUnfinishedActionSession: Pick<GetUnfinishedActionSession, 'execute'>;
+  readonly getSpheres: Pick<GetSpheres, 'execute'>;
   readonly startLifeActionSession: Pick<StartLifeActionSession, 'execute'>;
   readonly pauseActionSession: Pick<PauseActionSession, 'execute'>;
   readonly resumeActionSession: Pick<ResumeActionSession, 'execute'>;
@@ -79,6 +84,7 @@ export function ActionsPage({
   getDecisionById,
   getActionSessionsForLifeAction,
   getUnfinishedActionSession,
+  getSpheres,
   startLifeActionSession,
   pauseActionSession,
   resumeActionSession,
@@ -93,6 +99,7 @@ export function ActionsPage({
   onOpenToday,
 }: ActionsPageProps) {
   const { state, reload } = useDateQuery(selectedDate, getActionListsForDate);
+  const spheres = useSpheres(getSpheres);
   const [filters, setFilters] = useState<ActionListFilters>(() => actionListFiltersStore.load());
   const selectedDateKey = selectedDate.toString();
   const [selection, setSelection] = useState<{
@@ -270,6 +277,7 @@ export function ActionsPage({
             currentDate={currentDate}
             selectedDate={selectedDate}
             items={state.value.items}
+            spheres={spheres}
             filters={filters}
             onDateChange={onDateChange}
             onFiltersChange={updateFilters}
@@ -282,6 +290,7 @@ export function ActionsPage({
               countActiveActionFilters(filters) + (selectedDate.equals(currentDate) ? 0 : 1)
             }
             canManageSessions={canManageSessions}
+            spheres={spheres}
             busyActionId={visibleOperationState.actionId}
             onOpenAction={(action) => setSelection({ dateKey: selectedDateKey, action })}
             onPrimaryAction={(item) => void handlePrimaryAction(item)}
@@ -291,6 +300,7 @@ export function ActionsPage({
 
       <LifeActionDetailsController
         lifeAction={selectedAction}
+        spheres={spheres}
         currentDate={currentDate}
         readOnly={isPastDate(selectedDate, currentDate)}
         clock={clock}
@@ -317,6 +327,7 @@ interface ActionFiltersPanelProps {
   readonly currentDate: DayDate;
   readonly selectedDate: DayDate;
   readonly items: readonly ActionListItem[];
+  readonly spheres?: SpheresSnapshot;
   readonly filters: ActionListFilters;
   readonly onDateChange: (date: DayDate) => void;
   readonly onFiltersChange: (filters: ActionListFilters) => void;
@@ -327,12 +338,13 @@ export function ActionFiltersPanel({
   currentDate,
   selectedDate,
   items,
+  spheres = { active: [], archived: [] },
   filters,
   onDateChange,
   onFiltersChange,
   onReset,
 }: ActionFiltersPanelProps) {
-  const options = buildActionFilterOptions(items);
+  const options = buildActionFilterOptions(items, spheres);
   const activeCount =
     countActiveActionFilters(filters) + (selectedDate.equals(currentDate) ? 0 : 1);
 
@@ -464,6 +476,7 @@ interface ActionsPageContentProps {
   readonly totalItemCount?: number;
   readonly activeFilterCount?: number;
   readonly canManageSessions: boolean;
+  readonly spheres?: SpheresSnapshot;
   readonly busyActionId: string | null;
   readonly onOpenAction: (lifeAction: LifeAction) => void;
   readonly onPrimaryAction: (item: ActionListItem) => void;
@@ -474,6 +487,7 @@ export function ActionsPageContent({
   totalItemCount = snapshot.items.length,
   activeFilterCount = 0,
   canManageSessions,
+  spheres = { active: [], archived: [] },
   busyActionId,
   onOpenAction,
   onPrimaryAction,
@@ -550,6 +564,7 @@ export function ActionsPageContent({
               items={items}
               isExpanded={isExpanded}
               canManageSessions={canManageSessions}
+              spheres={spheres}
               busyActionId={busyActionId}
               onToggle={() => setGroupExpanded(definition.group, !isExpanded)}
               onOpenAction={onOpenAction}
@@ -616,6 +631,7 @@ interface ActionListSectionProps {
   readonly items: readonly ActionListItem[];
   readonly isExpanded: boolean;
   readonly canManageSessions: boolean;
+  readonly spheres: SpheresSnapshot;
   readonly busyActionId: string | null;
   readonly onToggle: () => void;
   readonly onOpenAction: (lifeAction: LifeAction) => void;
@@ -627,6 +643,7 @@ function ActionListSection({
   items,
   isExpanded,
   canManageSessions,
+  spheres,
   busyActionId,
   onToggle,
   onOpenAction,
@@ -675,6 +692,7 @@ function ActionListSection({
                   key={item.lifeAction.id.toString()}
                   item={item}
                   canManageSessions={canManageSessions}
+                  spheres={spheres}
                   isBusy={busyActionId === item.lifeAction.id.toString()}
                   onOpenAction={onOpenAction}
                   onPrimaryAction={onPrimaryAction}
@@ -691,6 +709,7 @@ function ActionListSection({
 interface ActionListCardProps {
   readonly item: ActionListItem;
   readonly canManageSessions: boolean;
+  readonly spheres: SpheresSnapshot;
   readonly isBusy: boolean;
   readonly onOpenAction: (lifeAction: LifeAction) => void;
   readonly onPrimaryAction: (item: ActionListItem) => void;
@@ -699,6 +718,7 @@ interface ActionListCardProps {
 function ActionListCard({
   item,
   canManageSessions,
+  spheres,
   isBusy,
   onOpenAction,
   onPrimaryAction,
@@ -710,6 +730,7 @@ function ActionListCard({
     <article className="section-entity-card action-list-card" aria-busy={isBusy}>
       <div className="section-card-meta">
         <span>{item.decisionTitle ?? 'Самостоятельное действие'}</span>
+        <SphereBadge sphereId={item.sphereId} snapshot={spheres} />
         <time dateTime={action.plannedDate?.toString()}>
           {action.plannedDate === null ? 'Без даты' : formatShortRussianDate(action.plannedDate)}
         </time>

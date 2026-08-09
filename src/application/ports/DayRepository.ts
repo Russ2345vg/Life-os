@@ -4,4 +4,5 @@ export interface DayRepository {
   findByDate(date: DayDate): Promise<Day | null>;
   findOpen(): Promise<Day | null>;
   save(day: Day): Promise<void>;
+  saveIfVersionMatches(day: Day, expectedVersion: number): Promise<boolean>;
 }

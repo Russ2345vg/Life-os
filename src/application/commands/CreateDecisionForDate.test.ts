@@ -195,7 +195,7 @@ describe('CreateDecisionForDate', () => {
         plannedDate: DATE,
         expectedResult: '  Форма создания решения проверена  ',
         reason: '  Нужен полный раздел решений  ',
-        sphere: '  Разработка  ',
+        sphereId: 'sphere-development',
         price: '  Два часа сосредоточенной работы  ',
         sacrifices: '  Отложить необязательные улучшения  ',
         priority: DECISION_PRIORITY.high,
@@ -206,7 +206,7 @@ describe('CreateDecisionForDate', () => {
     expect(decision.title.toString()).toBe('Выпустить этап 11.1');
     expect(decision.expectedResult?.toString()).toBe('Форма создания решения проверена');
     expect(decision.reason).toBe('Нужен полный раздел решений');
-    expect(decision.sphere).toBe('Разработка');
+    expect(decision.sphereId?.toString()).toBe('sphere-development');
     expect(decision.price).toBe('Два часа сосредоточенной работы');
     expect(decision.sacrifices).toBe('Отложить необязательные улучшения');
     expect(decision.priority).toBe(DECISION_PRIORITY.high);

@@ -200,6 +200,15 @@ class MemoryDayRepository implements DayRepository {
   public async save(day: Day): Promise<void> {
     this.#items.set(day.date.toString(), day);
   }
+
+  public async saveIfVersionMatches(day: Day, expectedVersion: number): Promise<boolean> {
+    const stored = this.#items.get(day.date.toString());
+    if (stored === undefined || !stored.id.equals(day.id) || stored.version !== expectedVersion) {
+      return false;
+    }
+    this.#items.set(day.date.toString(), day);
+    return true;
+  }
 }
 
 class MemoryDecisionRepository implements DecisionRepository {

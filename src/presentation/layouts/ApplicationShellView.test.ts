@@ -35,6 +35,7 @@ describe('ApplicationShellView', () => {
     expect(markup).toContain('День');
     expect(markup).toContain('Решения');
     expect(markup).toContain('Действия');
+    expect(markup).toContain('Сферы');
     expect(markup).toContain('История');
     expect(markup).toContain('Ещё');
     expect(markup).toContain('День не начат');
@@ -86,5 +87,14 @@ describe('ApplicationShellView', () => {
     expect(markup).toContain('Сегодня');
     expect(markup).toContain('Вторник');
     expect(markup).toContain('Содержимое раздела');
+  });
+
+  it('показывает сферы в настольной навигации, сохраняя мобильный доступ через «Ещё»', () => {
+    const markup = renderShell(APP_SECTION.spheres);
+
+    expect(markup).toMatch(/aria-current="page"[^>]*><svg[^>]*>[\s\S]*?<span>Сферы<\/span>/);
+    const mobileNavigation = markup.slice(markup.indexOf('Мобильная навигация'));
+    expect(mobileNavigation).toContain('<span>Ещё</span>');
+    expect(mobileNavigation).not.toContain('<span>Сферы</span>');
   });
 });

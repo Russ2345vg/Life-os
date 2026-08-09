@@ -13,6 +13,7 @@ import {
   ExpectedResult,
   SESSION_COMPLETION_KIND,
   SessionResultNote,
+  Sphere,
   type LifeAction,
 } from '../../domain';
 import { DomainError } from '../../shared/errors/DomainError';
@@ -332,6 +333,8 @@ describe('TodayPage view and workflow', () => {
 
     expect(markup).toContain('День завершён');
     expect(markup).toContain('Итог контрольного дня');
+    expect(markup).toContain('Сфера результата');
+    expect(markup).toContain('Разработка');
     expect(markup).toContain('Повторное завершение и запуск недоступны');
     expect(markup).not.toContain('Вечерний контроль');
     expect(markup).not.toContain('Начать день');
@@ -1187,7 +1190,7 @@ describe('TodayPage view and workflow', () => {
     const decision = createPlannedDecision('edit-form', DATE);
     decision.updateDetails({
       reason: 'Причина решения',
-      sphere: 'Разработка',
+      sphereId: EntityId.create('sphere-development'),
       price: 'Два часа',
       sacrifices: 'Не отвлекаться',
       priority: DECISION_PRIORITY.high,
@@ -1204,7 +1207,7 @@ describe('TodayPage view and workflow', () => {
       title: 'Решение edit-form',
       reason: 'Причина решения',
       expectedResult: 'Результат edit-form',
-      sphere: 'Разработка',
+      sphereId: 'sphere-development',
       price: 'Два часа',
       sacrifices: 'Не отвлекаться',
       projectReference: 'LifeOS',
@@ -1258,7 +1261,7 @@ describe('TodayPage view and workflow', () => {
       title: 'Обновлённое решение',
       reason: 'Новая причина',
       expectedResult: 'Новый результат',
-      sphere: 'Разработка',
+      sphereId: 'sphere-development',
       price: 'Три часа',
       sacrifices: 'Сосредоточиться',
       projectReference: 'LifeOS',
@@ -1280,7 +1283,7 @@ describe('TodayPage view and workflow', () => {
       title: 'Обновлённое решение',
       reason: 'Новая причина',
       expectedResult: 'Новый результат',
-      sphere: 'Разработка',
+      sphereId: EntityId.create('sphere-development'),
       price: 'Три часа',
       sacrifices: 'Сосредоточиться',
       projectReference: 'LifeOS',
@@ -1530,6 +1533,7 @@ describe('TodayPage view and workflow', () => {
       title: updated.title.toString(),
       description: 'Новое описание',
       expectedResult: updated.expectedResult!.toString(),
+      sphereId: '',
     };
 
     expect(validateLifeActionEditForm({ ...form, title: ' ' })).toBe('Введите название действия');
@@ -1570,6 +1574,7 @@ describe('TodayPage view and workflow', () => {
       title: 'Введённое название',
       description: 'Введённое описание',
       expectedResult: 'Введённый результат',
+      sphereId: '',
     };
     const pending = {
       ...createActionDetailsState(decision, action),
@@ -2368,7 +2373,7 @@ function createDetailedDecision(): Decision {
     kind: DECISION_KIND.main,
     reason: 'Причина стратегического выбора',
     expectedResult: ExpectedResult.create('Проверяемый итог решения'),
-    sphere: 'Сфера развития',
+    sphereId: EntityId.create('sphere-growth'),
     price: 'Цена концентрации',
     sacrifices: 'Отказ от отвлечений',
     priority: DECISION_PRIORITY.high,
@@ -2541,6 +2546,21 @@ function renderView(
 
   return renderToStaticMarkup(
     TodayPageView({
+      spheres: {
+        active: [
+          Sphere.create({
+            id: EntityId.create('sphere-development'),
+            name: 'Разработка',
+            now: new Date('2026-08-02T06:00:00.000+09:00'),
+          }),
+          Sphere.create({
+            id: EntityId.create('sphere-growth'),
+            name: 'Сфера развития',
+            now: new Date('2026-08-02T06:00:00.000+09:00'),
+          }),
+        ],
+        archived: [],
+      },
       currentDate: DATE,
       todayScreenState,
       isStartingDay: false,

@@ -14,7 +14,7 @@ export interface DecisionCreationFormState {
   readonly title: string;
   readonly reason: string;
   readonly expectedResult: string;
-  readonly sphere: string;
+  readonly sphereId: string;
   readonly price: string;
   readonly sacrifices: string;
   readonly priority: DecisionPriority;
@@ -27,7 +27,7 @@ export interface DecisionCreationFormErrors {
   readonly title: string | null;
   readonly reason: string | null;
   readonly expectedResult: string | null;
-  readonly sphere: string | null;
+  readonly sphereId: string | null;
   readonly price: string | null;
   readonly sacrifices: string | null;
   readonly priority: string | null;
@@ -50,7 +50,7 @@ export function createDecisionCreationForm(plannedDate: DayDate): DecisionCreati
     title: '',
     reason: '',
     expectedResult: '',
-    sphere: '',
+    sphereId: '',
     price: '',
     sacrifices: '',
     priority: DECISION_PRIORITY.normal,
@@ -65,7 +65,7 @@ export function createEmptyDecisionCreationErrors(): DecisionCreationFormErrors 
     title: null,
     reason: null,
     expectedResult: null,
-    sphere: null,
+    sphereId: null,
     price: null,
     sacrifices: null,
     priority: null,
@@ -107,7 +107,7 @@ export function validateDecisionCreationForm(
             1_000,
             'Ожидаемый результат не может быть длиннее 1000 символов',
           ),
-    sphere: validateOptionalText(form.sphere, 120, 'Сфера не может быть длиннее 120 символов'),
+    sphereId: null,
     price: validateOptionalText(form.price, 500, 'Цена решения не может быть длиннее 500 символов'),
     sacrifices: validateOptionalText(
       form.sacrifices,
@@ -148,7 +148,7 @@ export async function submitDecisionCreation(input: {
     plannedDate: validation.plannedDate,
     expectedResult: input.form.expectedResult,
     reason: input.form.reason,
-    sphere: input.form.sphere,
+    sphereId: input.form.sphereId || null,
     price: input.form.price,
     sacrifices: input.form.sacrifices,
     priority: input.form.priority,
@@ -176,8 +176,6 @@ export function errorsForDecisionCreationCode(code: string): DecisionCreationFor
       return { ...errors, expectedResult: 'Укажите ожидаемый результат главного решения' };
     case 'decision.invalid_reason':
       return { ...errors, reason: 'Проверьте причину решения' };
-    case 'decision.invalid_sphere':
-      return { ...errors, sphere: 'Проверьте сферу решения' };
     case 'decision.invalid_price':
       return { ...errors, price: 'Проверьте цену решения' };
     case 'decision.invalid_sacrifices':

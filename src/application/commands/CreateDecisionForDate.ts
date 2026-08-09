@@ -6,6 +6,7 @@ import {
   Decision,
   DecisionTitle,
   ExpectedResult,
+  EntityId,
   type DayDate,
   type DecisionKind,
   type DecisionPriority,
@@ -26,7 +27,7 @@ export interface CreateDecisionForDateInput {
   readonly plannedDate: DayDate;
   readonly expectedResult?: string;
   readonly reason?: string;
-  readonly sphere?: string;
+  readonly sphereId?: string | null;
   readonly price?: string;
   readonly sacrifices?: string;
   readonly priority?: DecisionPriority;
@@ -119,7 +120,7 @@ export class CreateDecisionForDate {
       const plannedEventId = this.#idGenerator.generate();
       const expectedResult = normalizeExpectedResult(input.expectedResult);
       const reason = normalizeOptionalText(input.reason);
-      const sphere = normalizeOptionalText(input.sphere);
+      const sphereId = parseOptionalEntityId(input.sphereId);
       const price = normalizeOptionalText(input.price);
       const sacrifices = normalizeOptionalText(input.sacrifices);
       const projectReference = normalizeOptionalText(input.projectReference);
@@ -129,7 +130,7 @@ export class CreateDecisionForDate {
         kind: input.kind,
         ...(reason === undefined ? {} : { reason }),
         ...(expectedResult === undefined ? {} : { expectedResult }),
-        ...(sphere === undefined ? {} : { sphere }),
+        ...(sphereId === undefined ? {} : { sphereId }),
         ...(price === undefined ? {} : { price }),
         ...(sacrifices === undefined ? {} : { sacrifices }),
         priority: input.priority ?? DECISION_PRIORITY.normal,
@@ -168,4 +169,10 @@ function normalizeExpectedResult(value: string | undefined): ExpectedResult | un
   return value === undefined || value.trim().length === 0
     ? undefined
     : ExpectedResult.create(value);
+}
+
+function parseOptionalEntityId(value: string | null | undefined): EntityId | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value.trim().length === 0) return null;
+  return EntityId.create(value);
 }
