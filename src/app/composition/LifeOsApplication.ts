@@ -24,6 +24,7 @@ import type {
   GetLifeActionsForDecision,
   GetHistoryForDateRange,
   GetJournalTimeline,
+  GetStatistics,
   GetActionListsForDate,
   GetLifeActionsForDate,
   GetActionSessionsForLifeAction,
@@ -115,6 +116,7 @@ interface LifeOsApplicationServices {
   readonly getLifeActionsForDecision: GetLifeActionsForDecision;
   readonly getHistoryForDateRange: GetHistoryForDateRange;
   readonly getJournalTimeline: GetJournalTimeline;
+  readonly getStatistics: GetStatistics;
   readonly correctJournalData: CorrectJournalData;
   readonly createLifeActionForDecision: CreateLifeActionForDecision;
   readonly startLifeActionSession: StartLifeActionSession;
@@ -203,6 +205,7 @@ export class LifeOsApplication {
   public readonly getLifeActionsForDecision: GetLifeActionsForDecision;
   public readonly getHistoryForDateRange: GetHistoryForDateRange;
   public readonly getJournalTimeline: GetJournalTimeline;
+  public readonly getStatistics: GetStatistics;
   public readonly correctJournalData: CorrectJournalData;
   public readonly createLifeActionForDecision: CreateLifeActionForDecision;
   public readonly startLifeActionSession: StartLifeActionSession;
@@ -291,6 +294,7 @@ export class LifeOsApplication {
     this.getLifeActionsForDecision = services.getLifeActionsForDecision;
     this.getHistoryForDateRange = services.getHistoryForDateRange;
     this.getJournalTimeline = services.getJournalTimeline;
+    this.getStatistics = services.getStatistics;
     this.correctJournalData = services.correctJournalData;
     this.createLifeActionForDecision = services.createLifeActionForDecision;
     this.startLifeActionSession = services.startLifeActionSession;

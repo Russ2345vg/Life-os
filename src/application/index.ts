@@ -133,6 +133,18 @@ export {
   type JournalCorrectionTarget,
   type JournalTimelineResult,
 } from './queries/GetJournalTimeline';
+export {
+  GetStatistics,
+  STATISTICS_PERIOD_KIND,
+  resolveStatisticsPeriod,
+  type LifeActionTimeStatistics,
+  type ResolvedStatisticsPeriod,
+  type SphereStatistics,
+  type StatisticsMetrics,
+  type StatisticsPeriod,
+  type StatisticsSnapshot,
+  type WalkStatisticsMetrics,
+} from './queries/GetStatistics';
 export type { ActionSessionRepository } from './ports/ActionSessionRepository';
 export type { Clock } from './ports/Clock';
 export type { CurrentDateProvider } from './ports/CurrentDateProvider';

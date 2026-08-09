@@ -23,6 +23,7 @@ import {
   GetLifeActionsForDecision,
   GetHistoryForDateRange,
   GetJournalTimeline,
+  GetStatistics,
   GetActionSessionsForLifeAction,
   GetUnfinishedActionSession,
   GetOpenDayConflict,
@@ -202,6 +203,13 @@ export async function createLifeOsApplication(
       decisionRepository,
       lifeActionRepository,
       sphereRepository,
+    );
+    const getStatistics = new GetStatistics(
+      decisionRepository,
+      lifeActionRepository,
+      actionSessionRepository,
+      walkRepository,
+      journalRepository,
     );
     const correctJournalData = new CorrectJournalData(
       journalRepository,
@@ -449,6 +457,7 @@ export async function createLifeOsApplication(
       getLifeActionsForDecision,
       getHistoryForDateRange,
       getJournalTimeline,
+      getStatistics,
       correctJournalData,
       createLifeActionForDecision,
       startLifeActionSession,
