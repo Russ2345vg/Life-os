@@ -121,6 +121,35 @@ describe('IndexedDbRoutineBlockRepository', () => {
     database.close();
   });
 
+  it('restores an existing stage 13 walk assignment unchanged', async () => {
+    const database = new LifeOsIndexedDb(new IDBFactory());
+    const connection = await database.open();
+    await executeIndexedDbRequest(connection, LIFE_OS_STORE.routineBlocks, 'readwrite', (store) =>
+      store.put({
+        schemaVersion: 1,
+        id: 'legacy-walk-routine',
+        anchorDate: DATE.toString(),
+        title: 'Прогулка',
+        startTime: '12:00',
+        endTime: '13:00',
+        category: ROUTINE_BLOCK_CATEGORY.other,
+        recurrence: ROUTINE_BLOCK_RECURRENCE.none,
+        selectedWeekdays: [],
+        required: false,
+        assignment: ROUTINE_BLOCK_ASSIGNMENT.walk,
+        createdAt: '2026-08-08T00:00:00.000Z',
+        updatedAt: '2026-08-08T00:00:00.000Z',
+        version: 1,
+      }),
+    );
+
+    const restored = await new IndexedDbRoutineBlockRepository(database).findById(
+      EntityId.create('legacy-walk-routine'),
+    );
+    expect(restored?.assignment).toEqual({ kind: ROUTINE_BLOCK_ASSIGNMENT.walk });
+    database.close();
+  });
+
   it('persists editing and increments version', async () => {
     const database = new LifeOsIndexedDb(new IDBFactory());
     const app = services(database, 'update');

@@ -85,6 +85,7 @@ import {
   type RoutineBlockFormState,
 } from '../routine/RoutineBlockFormState';
 import { RoutineSubmissionGuard } from '../routine/RoutineSubmissionGuard';
+import { openRoutineAssignmentSection } from '../routine/RoutineAssignmentNavigation';
 import { findRoutineBlockOverlaps } from '../routine/RoutineBlockOverlaps';
 import { EveningReviewPanel } from './EveningReviewPanel';
 
@@ -108,6 +109,7 @@ interface RoutinePageProps {
   readonly startRoutineOccurrence?: StartRoutineOccurrence;
   readonly completeRoutineOccurrence?: CompleteRoutineOccurrence;
   readonly abandonRoutineOccurrence?: AbandonRoutineOccurrence;
+  readonly onOpenWalks?: () => void;
   readonly workflow?: RoutinePageWorkflowServices;
 }
 
@@ -521,9 +523,10 @@ export function RoutinePage(props: RoutinePageProps) {
           return;
         }
         case ROUTINE_BLOCK_ASSIGNMENT.walk:
-          setActivationMessage(
-            'Прогулки будут доступны после реализации раздела «Прогулки» на этапе 14.',
-          );
+          if (!openRoutineAssignmentSection(block.assignment, props.onOpenWalks)) {
+            setActivationMessage('Раздел «Прогулки» сейчас недоступен.');
+          }
+          return;
       }
     } finally {
       activationGuard.current.release();
@@ -1381,7 +1384,7 @@ function primaryCommandLabel(
     case ROUTINE_BLOCK_ASSIGNMENT.eveningReview:
       return 'Открыть вечерний контроль';
     case ROUTINE_BLOCK_ASSIGNMENT.walk:
-      return 'Прогулка пока недоступна';
+      return 'Открыть прогулки';
   }
 }
 

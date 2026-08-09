@@ -7,6 +7,7 @@ import { HistoryPage } from '../presentation/pages/HistoryPage';
 import { MorePage } from '../presentation/pages/MorePage';
 import { TodayPage } from '../presentation/pages/TodayPage';
 import { RoutinePage } from '../presentation/pages/RoutinePage';
+import { WalksPage } from '../presentation/pages/WalksPage';
 import { APP_SECTION, type AppSection } from '../presentation/navigation/AppSection';
 import { useLifeOsApplication } from './providers';
 import { BrowserActionListFiltersStore } from './settings/BrowserActionListFiltersStore';
@@ -225,9 +226,28 @@ export function ApplicationShell() {
           startRoutineOccurrence={application.startRoutineOccurrence}
           completeRoutineOccurrence={application.completeRoutineOccurrence}
           abandonRoutineOccurrence={application.abandonRoutineOccurrence}
+          onOpenWalks={() => setActiveSection(APP_SECTION.walks)}
           workflow={routineWorkflow}
         />
       ) : null}
+      {activeSection === APP_SECTION.walks ? (
+        <WalksPage
+          currentDate={application.currentDate}
+          selectedDate={selectedDate}
+          createWalk={application.createWalk}
+          completeWalk={application.completeWalk}
+          abandonWalk={application.abandonWalk}
+          deleteWalk={application.deleteWalk}
+          getWalkStatistics={application.getWalkStatistics}
+          getWalksForDate={application.getWalksForDate}
+          getRunningWalk={application.getRunningWalk}
+          startWalk={application.startWalk}
+          updateWalkPhoto={application.updateWalkPhoto}
+          updateWalkSphere={application.updateWalkSphere}
+          onDateChange={setSelectedDate}
+        />
+      ) : null}
+
 
       {activeSection === APP_SECTION.history ? (
         <HistoryPage

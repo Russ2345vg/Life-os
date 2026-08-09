@@ -145,6 +145,7 @@ export type { LifeActionRepository } from './ports/LifeActionRepository';
 export type { OpenDayConflictReader } from './ports/OpenDayConflictReader';
 export type { RoutineBlockRepository } from './ports/RoutineBlockRepository';
 export type { RoutineOccurrenceOverrideRepository } from './ports/RoutineOccurrenceOverrideRepository';
+export type { StartWalkPersistenceResult, WalkRepository } from './ports/WalkRepository';
 export type {
   RoutineOccurrenceExecutionRepository,
   StartRoutineExecutionResult,
@@ -198,6 +199,26 @@ export {
   ClearRoutineOccurrenceOverride,
   type ClearRoutineOccurrenceOverrideInput,
 } from './commands/ClearRoutineOccurrenceOverride';
+export { CreateWalk, type CreateWalkInput } from './commands/CreateWalk';
+export { CompleteWalk, type CompleteWalkInput } from './commands/CompleteWalk';
+export { AbandonWalk, type AbandonWalkInput } from './commands/AbandonWalk';
+export { DeleteWalk, type DeleteWalkInput } from './commands/DeleteWalk';
+export { StartWalk, type StartWalkInput } from './commands/StartWalk';
+export { UpdateWalkPhoto, type UpdateWalkPhotoInput } from './commands/UpdateWalkPhoto';
+export { UpdateWalkSphere, type UpdateWalkSphereInput } from './commands/UpdateWalkSphere';
+export { GetWalksForDate } from './queries/GetWalksForDate';
+export { GetRunningWalk } from './queries/GetRunningWalk';
+export {
+  GetWalkStatistics,
+  WALK_STATISTICS_PERIOD,
+  type WalkStatistics,
+  type WalkStatisticsPeriod,
+} from './queries/GetWalkStatistics';
+export {
+  WALK_REFLECTION_QUESTIONS,
+  pickWalkReflectionQuestion,
+  type WalkReflectionQuestionPicker,
+} from './walk/WalkReflectionQuestions';
 export type {
   RoutineOccurrenceCommandDependencies,
   RoutineOccurrenceCommandInput,

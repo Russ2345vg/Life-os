@@ -110,3 +110,21 @@ export {
   type RoutineOccurrenceExecutionRehydrationData,
   type StartRoutineOccurrenceExecutionData,
 } from './routine-execution';
+export {
+  MAX_WALK_PHOTO_BYTES,
+  MAX_WALK_RESULT_LENGTH,
+  Walk,
+  WALK_MODE,
+  WALK_STATUS,
+  WALK_TYPE,
+  isWalkMode,
+  isWalkStatus,
+  isWalkType,
+  type WalkCompletionData,
+  type WalkMode,
+  type WalkPhoto,
+  type WalkPhotoUpdateData,
+  type WalkRehydrationData,
+  type WalkStatus,
+  type WalkType,
+} from './walk';

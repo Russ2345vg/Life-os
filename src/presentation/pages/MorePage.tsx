@@ -51,9 +51,10 @@ const MORE_SECTIONS: readonly MoreSectionItem[] = [
   },
   {
     title: 'Прогулки',
-    description: 'Сессии прогулок, заметки и наблюдения.',
+    description: 'Запланированные прогулки по типам.',
     icon: 'walks',
-    available: false,
+    available: true,
+    target: APP_SECTION.walks,
   },
   {
     title: 'Статистика',

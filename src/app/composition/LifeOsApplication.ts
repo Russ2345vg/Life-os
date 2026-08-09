@@ -59,6 +59,17 @@ import type {
   StartRoutineOccurrence,
   CompleteRoutineOccurrence,
   AbandonRoutineOccurrence,
+  WalkRepository,
+  AbandonWalk,
+  CompleteWalk,
+  CreateWalk,
+  DeleteWalk,
+  GetWalkStatistics,
+  GetWalksForDate,
+  GetRunningWalk,
+  StartWalk,
+  UpdateWalkPhoto,
+  UpdateWalkSphere,
 } from '../../application';
 import { EnsureCurrentDay } from '../../application';
 import type { Day, DayDate } from '../../domain';
@@ -71,6 +82,7 @@ interface LifeOsApplicationServices {
   readonly routineBlockRepository: RoutineBlockRepository;
   readonly routineOccurrenceOverrideRepository: RoutineOccurrenceOverrideRepository;
   readonly routineOccurrenceExecutionRepository: RoutineOccurrenceExecutionRepository;
+  readonly walkRepository: WalkRepository;
   readonly clock: Clock;
   readonly currentDateProvider: CurrentDateProvider;
   readonly idGenerator: IdGenerator;
@@ -127,6 +139,16 @@ interface LifeOsApplicationServices {
   readonly startRoutineOccurrence: StartRoutineOccurrence;
   readonly completeRoutineOccurrence: CompleteRoutineOccurrence;
   readonly abandonRoutineOccurrence: AbandonRoutineOccurrence;
+  readonly createWalk: CreateWalk;
+  readonly completeWalk: CompleteWalk;
+  readonly abandonWalk: AbandonWalk;
+  readonly deleteWalk: DeleteWalk;
+  readonly getWalkStatistics: GetWalkStatistics;
+  readonly getWalksForDate: GetWalksForDate;
+  readonly getRunningWalk: GetRunningWalk;
+  readonly startWalk: StartWalk;
+  readonly updateWalkPhoto: UpdateWalkPhoto;
+  readonly updateWalkSphere: UpdateWalkSphere;
   readonly closeDatabase: () => void;
 }
 
@@ -138,6 +160,7 @@ export class LifeOsApplication {
   public readonly routineBlockRepository: RoutineBlockRepository;
   public readonly routineOccurrenceOverrideRepository: RoutineOccurrenceOverrideRepository;
   public readonly routineOccurrenceExecutionRepository: RoutineOccurrenceExecutionRepository;
+  public readonly walkRepository: WalkRepository;
   public readonly clock: Clock;
   public readonly currentDateProvider: CurrentDateProvider;
   public readonly idGenerator: IdGenerator;
@@ -194,6 +217,16 @@ export class LifeOsApplication {
   public readonly startRoutineOccurrence: StartRoutineOccurrence;
   public readonly completeRoutineOccurrence: CompleteRoutineOccurrence;
   public readonly abandonRoutineOccurrence: AbandonRoutineOccurrence;
+  public readonly createWalk: CreateWalk;
+  public readonly completeWalk: CompleteWalk;
+  public readonly abandonWalk: AbandonWalk;
+  public readonly deleteWalk: DeleteWalk;
+  public readonly getWalkStatistics: GetWalkStatistics;
+  public readonly getWalksForDate: GetWalksForDate;
+  public readonly getRunningWalk: GetRunningWalk;
+  public readonly startWalk: StartWalk;
+  public readonly updateWalkPhoto: UpdateWalkPhoto;
+  public readonly updateWalkSphere: UpdateWalkSphere;
 
   readonly #closeDatabase: () => void;
 
@@ -205,6 +238,7 @@ export class LifeOsApplication {
     this.routineBlockRepository = services.routineBlockRepository;
     this.routineOccurrenceOverrideRepository = services.routineOccurrenceOverrideRepository;
     this.routineOccurrenceExecutionRepository = services.routineOccurrenceExecutionRepository;
+    this.walkRepository = services.walkRepository;
     this.clock = services.clock;
     this.currentDateProvider = services.currentDateProvider;
     this.idGenerator = services.idGenerator;
@@ -261,6 +295,16 @@ export class LifeOsApplication {
     this.startRoutineOccurrence = services.startRoutineOccurrence;
     this.completeRoutineOccurrence = services.completeRoutineOccurrence;
     this.abandonRoutineOccurrence = services.abandonRoutineOccurrence;
+    this.createWalk = services.createWalk;
+    this.completeWalk = services.completeWalk;
+    this.abandonWalk = services.abandonWalk;
+    this.deleteWalk = services.deleteWalk;
+    this.getWalkStatistics = services.getWalkStatistics;
+    this.getWalksForDate = services.getWalksForDate;
+    this.getRunningWalk = services.getRunningWalk;
+    this.startWalk = services.startWalk;
+    this.updateWalkPhoto = services.updateWalkPhoto;
+    this.updateWalkSphere = services.updateWalkSphere;
     this.#closeDatabase = services.closeDatabase;
   }
 

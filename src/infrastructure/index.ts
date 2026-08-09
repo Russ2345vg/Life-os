@@ -8,12 +8,14 @@ export { IndexedDbLifeActionRepository } from './persistence/IndexedDbLifeAction
 export { IndexedDbRoutineBlockRepository } from './persistence/IndexedDbRoutineBlockRepository';
 export { IndexedDbRoutineOccurrenceOverrideRepository } from './persistence/IndexedDbRoutineOccurrenceOverrideRepository';
 export { IndexedDbRoutineOccurrenceExecutionRepository } from './persistence/IndexedDbRoutineOccurrenceExecutionRepository';
+export { IndexedDbWalkRepository } from './persistence/IndexedDbWalkRepository';
 export { InMemoryDecisionRepository } from './persistence/InMemoryDecisionRepository';
 export { InMemoryDayRepository } from './persistence/InMemoryDayRepository';
 export { InMemoryLifeActionRepository } from './persistence/InMemoryLifeActionRepository';
 export { InMemoryRoutineBlockRepository } from './persistence/InMemoryRoutineBlockRepository';
 export { InMemoryRoutineOccurrenceOverrideRepository } from './persistence/InMemoryRoutineOccurrenceOverrideRepository';
 export { InMemoryRoutineOccurrenceExecutionRepository } from './persistence/InMemoryRoutineOccurrenceExecutionRepository';
+export { InMemoryWalkRepository } from './persistence/InMemoryWalkRepository';
 export {
   LIFE_OS_DATABASE_NAME,
   LIFE_OS_DATABASE_VERSION,
@@ -28,6 +30,7 @@ export {
   RoutineBlockRecordMapper,
   RoutineOccurrenceOverrideRecordMapper,
   RoutineOccurrenceExecutionRecordMapper,
+  WalkRecordMapper,
 } from './persistence/mappers';
 export type {
   ActionSessionRecord,
@@ -37,5 +40,6 @@ export type {
   RoutineBlockRecord,
   RoutineOccurrenceOverrideRecord,
   RoutineOccurrenceExecutionRecord,
+  WalkRecord,
   PauseIntervalRecord,
 } from './persistence/records';

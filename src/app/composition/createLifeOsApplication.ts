@@ -52,6 +52,16 @@ import {
   StartRoutineOccurrence,
   CompleteRoutineOccurrence,
   AbandonRoutineOccurrence,
+  AbandonWalk,
+  CompleteWalk,
+  CreateWalk,
+  DeleteWalk,
+  GetWalkStatistics,
+  GetWalksForDate,
+  GetRunningWalk,
+  StartWalk,
+  UpdateWalkPhoto,
+  UpdateWalkSphere,
 } from '../../application';
 import { SystemClock } from '../../infrastructure/clock/SystemClock';
 import { SystemCurrentDateProvider } from '../../infrastructure/clock/SystemCurrentDateProvider';
@@ -65,6 +75,7 @@ import { IndexedDbLifeActionRepository } from '../../infrastructure/persistence/
 import { IndexedDbRoutineBlockRepository } from '../../infrastructure/persistence/IndexedDbRoutineBlockRepository';
 import { IndexedDbRoutineOccurrenceOverrideRepository } from '../../infrastructure/persistence/IndexedDbRoutineOccurrenceOverrideRepository';
 import { IndexedDbRoutineOccurrenceExecutionRepository } from '../../infrastructure/persistence/IndexedDbRoutineOccurrenceExecutionRepository';
+import { IndexedDbWalkRepository } from '../../infrastructure/persistence/IndexedDbWalkRepository';
 import { IndexedDbOpenDayConflictReader } from '../../infrastructure/persistence/IndexedDbOpenDayConflictReader';
 import { IndexedDbOpenDayRecoveryUnitOfWork } from '../../infrastructure/persistence/IndexedDbOpenDayRecoveryUnitOfWork';
 import { LifeOsIndexedDb } from '../../infrastructure/persistence/indexed-db/LifeOsIndexedDb';
@@ -97,6 +108,7 @@ export async function createLifeOsApplication(
     const routineOccurrenceExecutionRepository = new IndexedDbRoutineOccurrenceExecutionRepository(
       database,
     );
+    const walkRepository = new IndexedDbWalkRepository(database);
     const openDayConflictReader = new IndexedDbOpenDayConflictReader(database);
     const openDayRecoveryUnitOfWork = new IndexedDbOpenDayRecoveryUnitOfWork(database);
     const clock = dependencies.clock ?? new SystemClock();
@@ -338,6 +350,16 @@ export async function createLifeOsApplication(
     const startRoutineOccurrence = new StartRoutineOccurrence(routineExecutionDependencies);
     const completeRoutineOccurrence = new CompleteRoutineOccurrence(routineExecutionDependencies);
     const abandonRoutineOccurrence = new AbandonRoutineOccurrence(routineExecutionDependencies);
+    const createWalk = new CreateWalk(walkRepository, clock, idGenerator);
+    const completeWalk = new CompleteWalk(walkRepository, clock);
+    const abandonWalk = new AbandonWalk(walkRepository, clock);
+    const deleteWalk = new DeleteWalk(walkRepository);
+    const getWalkStatistics = new GetWalkStatistics(walkRepository, currentDateProvider);
+    const getWalksForDate = new GetWalksForDate(walkRepository);
+    const getRunningWalk = new GetRunningWalk(walkRepository);
+    const startWalk = new StartWalk(walkRepository, currentDateProvider, clock);
+    const updateWalkPhoto = new UpdateWalkPhoto(walkRepository, clock);
+    const updateWalkSphere = new UpdateWalkSphere(walkRepository, clock);
     const application = new LifeOsApplication({
       dayRepository,
       decisionRepository,
@@ -346,6 +368,7 @@ export async function createLifeOsApplication(
       routineBlockRepository,
       routineOccurrenceOverrideRepository,
       routineOccurrenceExecutionRepository,
+      walkRepository,
       clock,
       currentDateProvider,
       idGenerator,
@@ -402,6 +425,16 @@ export async function createLifeOsApplication(
       startRoutineOccurrence,
       completeRoutineOccurrence,
       abandonRoutineOccurrence,
+      createWalk,
+      completeWalk,
+      abandonWalk,
+      deleteWalk,
+      getWalkStatistics,
+      getWalksForDate,
+      getRunningWalk,
+      startWalk,
+      updateWalkPhoto,
+      updateWalkSphere,
       closeDatabase: () => database.close(),
     });
 
