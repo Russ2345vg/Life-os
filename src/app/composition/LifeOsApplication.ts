@@ -2,6 +2,7 @@ import type {
   ActionSessionRepository,
   Clock,
   CompleteCurrentDay,
+  CorrectJournalData,
   CompleteActionSession,
   CompleteLifeAction,
   VerifyLifeActionResult,
@@ -114,6 +115,7 @@ interface LifeOsApplicationServices {
   readonly getLifeActionsForDecision: GetLifeActionsForDecision;
   readonly getHistoryForDateRange: GetHistoryForDateRange;
   readonly getJournalTimeline: GetJournalTimeline;
+  readonly correctJournalData: CorrectJournalData;
   readonly createLifeActionForDecision: CreateLifeActionForDecision;
   readonly startLifeActionSession: StartLifeActionSession;
   readonly pauseActionSession: PauseActionSession;
@@ -201,6 +203,7 @@ export class LifeOsApplication {
   public readonly getLifeActionsForDecision: GetLifeActionsForDecision;
   public readonly getHistoryForDateRange: GetHistoryForDateRange;
   public readonly getJournalTimeline: GetJournalTimeline;
+  public readonly correctJournalData: CorrectJournalData;
   public readonly createLifeActionForDecision: CreateLifeActionForDecision;
   public readonly startLifeActionSession: StartLifeActionSession;
   public readonly pauseActionSession: PauseActionSession;
@@ -288,6 +291,7 @@ export class LifeOsApplication {
     this.getLifeActionsForDecision = services.getLifeActionsForDecision;
     this.getHistoryForDateRange = services.getHistoryForDateRange;
     this.getJournalTimeline = services.getJournalTimeline;
+    this.correctJournalData = services.correctJournalData;
     this.createLifeActionForDecision = services.createLifeActionForDecision;
     this.startLifeActionSession = services.startLifeActionSession;
     this.pauseActionSession = services.pauseActionSession;

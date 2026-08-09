@@ -271,6 +271,8 @@ export function ApplicationShell() {
           currentDate={application.currentDate}
           selectedDate={selectedDate}
           getJournalTimeline={application.getJournalTimeline}
+          correctJournalData={application.correctJournalData}
+          idGenerator={application.idGenerator}
           getDecisionById={application.getDecisionById}
           getDecisionOverview={application.getDecisionOverview}
           getLifeActionsForDecision={application.getLifeActionsForDecision}

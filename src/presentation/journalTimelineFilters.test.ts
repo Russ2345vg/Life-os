@@ -5,6 +5,7 @@ import type { JournalTimelineItem, JournalTimelineResult } from '../application'
 import {
   DayDate,
   EntityId,
+  JOURNAL_CORRECTION_FIELD,
   JOURNAL_ENTRY_TYPE,
   JOURNAL_SUBJECT_TYPE,
   JournalEntry,
@@ -154,6 +155,29 @@ describe('journal timeline filters', () => {
     ]);
   });
 
+  it('finds corrections by values and reason and filters them by their own type', () => {
+    const correction = correctionItem();
+    expect(
+      filterJournalTimelineItems([correction], {
+        ...DEFAULT_JOURNAL_TIMELINE_FILTERS,
+        query: 'уточнена формулировка',
+      }),
+    ).toEqual([correction]);
+    expect(
+      filterJournalTimelineItems([ITEMS[0], correction], {
+        ...DEFAULT_JOURNAL_TIMELINE_FILTERS,
+        type: JOURNAL_TYPE_FILTER.correction,
+        state: JOURNAL_STATE_FILTER.corrected,
+      }),
+    ).toEqual([correction]);
+    expect(
+      filterJournalTimelineItems([ITEMS[0], correction], {
+        ...DEFAULT_JOURNAL_TIMELINE_FILTERS,
+        type: JOURNAL_TYPE_FILTER.lifeAction,
+      }),
+    ).toEqual([]);
+  });
+
   it('renders all five controls and an explicit empty-search state', () => {
     const data: JournalTimelineResult = {
       startDate: DayDate.create('2026-08-08'),
@@ -206,5 +230,37 @@ function item(options: ItemOptions): JournalTimelineItem {
     sphereName: options.sphereName ?? null,
     decision: null,
     lifeAction: null,
+    correctionTarget: null,
+    sourceEntry: null,
+  };
+}
+
+function correctionItem(): JournalTimelineItem {
+  const occurredAt = new Date('2026-08-09T12:00:00.000+09:00');
+  return {
+    entry: JournalEntry.create({
+      id: EntityId.create('correction'),
+      type: JOURNAL_ENTRY_TYPE.dataCorrected,
+      occurredAt,
+      effectiveDate: DayDate.create('2026-08-09'),
+      subjectType: JOURNAL_SUBJECT_TYPE.lifeAction,
+      subjectId: EntityId.create('action'),
+      labelAtEvent: 'Старая задача',
+      correction: {
+        sourceEntryId: EntityId.create('source'),
+        previousCorrectionId: null,
+        field: JOURNAL_CORRECTION_FIELD.lifeActionActualResult,
+        previousValue: 'Старое значение',
+        newValue: 'Новое значение',
+        reason: 'Уточнена формулировка',
+        commandId: EntityId.create('correction'),
+      },
+      createdAt: occurredAt,
+    }),
+    sphereName: null,
+    decision: null,
+    lifeAction: null,
+    correctionTarget: null,
+    sourceEntry: null,
   };
 }

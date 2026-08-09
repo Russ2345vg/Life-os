@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import type {
   CancelDecisionSafely,
   CancelLifeActionSafely,
   Clock,
   CompleteActionSession,
   CompleteLifeAction,
+  CorrectJournalData,
   ConfirmDecisionFromActions,
   CreateLifeActionForDecision,
   GetActionSessionsForLifeAction,
@@ -15,6 +16,7 @@ import type {
   GetSpheres,
   GetUnfinishedActionSession,
   HistoryDateRangeResult,
+  IdGenerator,
   JournalTimelineItem,
   JournalTimelineResult,
   PauseActionSession,
@@ -27,6 +29,7 @@ import type {
 } from '../../application';
 import {
   JOURNAL_ENTRY_TYPE,
+  JOURNAL_SUBJECT_TYPE,
   SESSION_COMPLETION_KIND,
   type DayDate,
   type Decision,
@@ -80,6 +83,8 @@ interface HistoryPageProps {
   readonly currentDate: DayDate;
   readonly selectedDate: DayDate;
   readonly getJournalTimeline: Pick<GetJournalTimeline, 'execute'>;
+  readonly correctJournalData: Pick<CorrectJournalData, 'execute'>;
+  readonly idGenerator: Pick<IdGenerator, 'generate'>;
   readonly getDecisionById: Pick<GetDecisionById, 'execute'>;
   readonly getDecisionOverview: Pick<GetDecisionOverview, 'execute'>;
   readonly getLifeActionsForDecision: Pick<GetLifeActionsForDecision, 'execute'>;
@@ -107,6 +112,8 @@ export function HistoryPage({
   currentDate,
   selectedDate,
   getJournalTimeline,
+  correctJournalData,
+  idGenerator,
   getDecisionById,
   getDecisionOverview,
   getLifeActionsForDecision,
@@ -136,6 +143,7 @@ export function HistoryPage({
   );
   const [selectedDecision, setSelectedDecision] = useState<Decision | null>(null);
   const [selectedAction, setSelectedAction] = useState<LifeAction | null>(null);
+  const [selectedCorrection, setSelectedCorrection] = useState<JournalTimelineItem | null>(null);
   const historyQuery = useMemo(
     () => ({
       execute: (endDate: DayDate) =>
@@ -151,6 +159,7 @@ export function HistoryPage({
   function closeDetails(): void {
     setSelectedDecision(null);
     setSelectedAction(null);
+    setSelectedCorrection(null);
   }
 
   function handleDateChange(date: DayDate): void {
@@ -175,7 +184,7 @@ export function HistoryPage({
       <SectionPageHeader
         eyebrow="Хронология LifeOS"
         title="История"
-        description="Значимые события дня в порядке их фактического совершения. Журнал доступен только для просмотра."
+        description="Значимые события дня в порядке их фактического совершения. Ошибочные данные исправляются отдельными аудируемыми событиями."
       />
 
       <SectionDateNavigator
@@ -203,6 +212,12 @@ export function HistoryPage({
             setSelectedDecision(null);
             setSelectedAction(lifeAction);
           }}
+          onCorrect={(item) => {
+            setSelectedDecision(null);
+            setSelectedAction(null);
+            setSelectedCorrection(item);
+          }}
+          onNavigateToSource={(date) => handleDateChange(date)}
         />
       ) : null}
 
@@ -256,6 +271,17 @@ export function HistoryPage({
         onClose={() => setSelectedAction(null)}
         onActionChanged={() => undefined}
       />
+
+      <JournalCorrectionDialog
+        item={selectedCorrection}
+        correctJournalData={correctJournalData}
+        idGenerator={idGenerator}
+        onClose={() => setSelectedCorrection(null)}
+        onSaved={() => {
+          setSelectedCorrection(null);
+          void reload();
+        }}
+      />
     </main>
   );
 }
@@ -266,6 +292,8 @@ interface JournalTimelineContentProps {
   readonly onFiltersChange?: (filters: JournalTimelineFilters) => void;
   readonly onOpenDecision?: (decision: Decision) => void;
   readonly onOpenAction?: (lifeAction: LifeAction) => void;
+  readonly onCorrect?: (item: JournalTimelineItem) => void;
+  readonly onNavigateToSource?: (date: DayDate) => void;
 }
 
 export function JournalTimelineContent({
@@ -274,6 +302,8 @@ export function JournalTimelineContent({
   onFiltersChange = () => undefined,
   onOpenDecision = () => undefined,
   onOpenAction = () => undefined,
+  onCorrect = () => undefined,
+  onNavigateToSource = () => undefined,
 }: JournalTimelineContentProps) {
   const filteredItems = filterJournalTimelineItems(data.items, filters);
   const groups = groupJournalItems(filteredItems);
@@ -313,6 +343,8 @@ export function JournalTimelineContent({
                     key={item.entry.id.toString()}
                     onOpenDecision={onOpenDecision}
                     onOpenAction={onOpenAction}
+                    onCorrect={onCorrect}
+                    onNavigateToSource={onNavigateToSource}
                   />
                 ))}
               </ol>
@@ -427,6 +459,7 @@ const JOURNAL_TYPE_OPTIONS: readonly FilterOption<JournalTypeFilter>[] = [
   { value: JOURNAL_TYPE_FILTER.decision, label: 'Решение' },
   { value: JOURNAL_TYPE_FILTER.lifeAction, label: 'Действие' },
   { value: JOURNAL_TYPE_FILTER.workSession, label: 'Рабочая сессия' },
+  { value: JOURNAL_TYPE_FILTER.correction, label: 'Исправление данных' },
 ];
 
 const JOURNAL_STATE_OPTIONS: readonly FilterOption<JournalStateFilter>[] = [
@@ -439,20 +472,25 @@ const JOURNAL_STATE_OPTIONS: readonly FilterOption<JournalStateFilter>[] = [
   { value: JOURNAL_STATE_FILTER.interrupted, label: 'Прервано' },
   { value: JOURNAL_STATE_FILTER.rescheduled, label: 'Перенесено' },
   { value: JOURNAL_STATE_FILTER.cancelled, label: 'Отменено' },
+  { value: JOURNAL_STATE_FILTER.corrected, label: 'Исправлено' },
 ];
 
 function JournalTimelineRow({
   item,
   onOpenDecision,
   onOpenAction,
+  onCorrect,
+  onNavigateToSource,
 }: {
   readonly item: JournalTimelineItem;
   readonly onOpenDecision: (decision: Decision) => void;
   readonly onOpenAction: (lifeAction: LifeAction) => void;
+  readonly onCorrect: (item: JournalTimelineItem) => void;
+  readonly onNavigateToSource: (date: DayDate) => void;
 }) {
   const context = journalContext(item);
   return (
-    <li className="journal-event">
+    <li className="journal-event" id={`journal-entry-${item.entry.id.toString()}`}>
       <time dateTime={item.entry.occurredAt.toISOString()}>
         {formatJournalTime(item.entry.occurredAt)}
       </time>
@@ -473,10 +511,235 @@ function JournalTimelineRow({
         {item.entry.sphereId === null ? null : (
           <span className="journal-sphere">{item.sphereName ?? 'Сфера недоступна'}</span>
         )}
+        {relatedEntityUnavailable(item) ? (
+          <span className="journal-unavailable">Связанная сущность недоступна</span>
+        ) : null}
         {context === null ? null : <p>{context}</p>}
+        {item.entry.correction === null ? null : (
+          <JournalCorrectionSummary item={item} onNavigateToSource={onNavigateToSource} />
+        )}
+        {item.correctionTarget === null ? null : (
+          <button
+            type="button"
+            className="secondary-button journal-correction-action"
+            onClick={() => onCorrect(item)}
+          >
+            Исправить данные
+          </button>
+        )}
       </div>
     </li>
   );
+}
+
+function JournalCorrectionSummary({
+  item,
+  onNavigateToSource,
+}: {
+  readonly item: JournalTimelineItem;
+  readonly onNavigateToSource: (date: DayDate) => void;
+}) {
+  const correction = item.entry.correction;
+  if (correction === null) return null;
+
+  return (
+    <section className="journal-correction-summary" aria-label="Сведения об исправлении">
+      <dl>
+        <div>
+          <dt>Прежнее значение</dt>
+          <dd>{correction.previousValue ?? 'Не указано'}</dd>
+        </div>
+        <div>
+          <dt>Новое значение</dt>
+          <dd>{correction.newValue}</dd>
+        </div>
+        <div>
+          <dt>Причина</dt>
+          <dd>{correction.reason}</dd>
+        </div>
+      </dl>
+      {correction.previousCorrectionId === null ? null : (
+        <span>Продолжение цепочки исправлений</span>
+      )}
+      {item.sourceEntry === null ? (
+        <span>Исходное событие недоступно, историческая запись сохранена.</span>
+      ) : (
+        <a
+          href={`#journal-entry-${item.sourceEntry.id.toString()}`}
+          onClick={() => onNavigateToSource(item.sourceEntry!.effectiveDate)}
+        >
+          Перейти к исходному событию
+        </a>
+      )}
+    </section>
+  );
+}
+
+export function JournalCorrectionDialog({
+  item,
+  correctJournalData,
+  idGenerator,
+  onClose,
+  onSaved,
+}: {
+  readonly item: JournalTimelineItem | null;
+  readonly correctJournalData: Pick<CorrectJournalData, 'execute'>;
+  readonly idGenerator: Pick<IdGenerator, 'generate'>;
+  readonly onClose: () => void;
+  readonly onSaved: () => void;
+}) {
+  if (item?.correctionTarget === null || item === null) return null;
+  return (
+    <JournalCorrectionForm
+      key={item.entry.id.toString()}
+      item={item}
+      target={item.correctionTarget}
+      correctJournalData={correctJournalData}
+      idGenerator={idGenerator}
+      onClose={onClose}
+      onSaved={onSaved}
+    />
+  );
+}
+
+function JournalCorrectionForm({
+  item,
+  target,
+  correctJournalData,
+  idGenerator,
+  onClose,
+  onSaved,
+}: {
+  readonly item: JournalTimelineItem;
+  readonly target: NonNullable<JournalTimelineItem['correctionTarget']>;
+  readonly correctJournalData: Pick<CorrectJournalData, 'execute'>;
+  readonly idGenerator: Pick<IdGenerator, 'generate'>;
+  readonly onClose: () => void;
+  readonly onSaved: () => void;
+}) {
+  const [commandId] = useState(() => idGenerator.generate());
+  const [newValue, setNewValue] = useState(target.currentValue ?? '');
+  const [reason, setReason] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const normalizedValue = newValue.trim();
+  const canSubmit =
+    !submitting &&
+    normalizedValue.length > 0 &&
+    normalizedValue !== target.currentValue &&
+    reason.trim().length > 0;
+
+  async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (!canSubmit) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const result = await correctJournalData.execute({
+        commandId,
+        sourceEntryId: item.entry.id,
+        newValue,
+        reason,
+      });
+      if (result.ok) {
+        onSaved();
+        return;
+      }
+      setError(result.error.message);
+    } catch {
+      setError('Исправление не сохранено. Исходные данные не изменились.');
+    }
+    setSubmitting(false);
+  }
+
+  return (
+    <div className="decision-details-backdrop journal-correction-backdrop">
+      <section
+        className="journal-correction-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="journal-correction-title"
+      >
+        <button
+          type="button"
+          className="decision-details-close"
+          aria-label="Закрыть исправление"
+          disabled={submitting}
+          onClick={onClose}
+        >
+          ×
+        </button>
+        <p className="section-page-eyebrow">Безопасное исправление</p>
+        <h2 id="journal-correction-title">Исправить данные</h2>
+        <form className="journal-correction-form" onSubmit={(event) => void submit(event)}>
+          <dl className="journal-correction-target">
+            <div>
+              <dt>Сущность</dt>
+              <dd>{target.entityLabel}</dd>
+            </div>
+            <div>
+              <dt>Поле</dt>
+              <dd>{target.fieldLabel}</dd>
+            </div>
+            <div>
+              <dt>Прежнее значение</dt>
+              <dd>{target.currentValue ?? 'Не указано'}</dd>
+            </div>
+          </dl>
+          <label>
+            <span>Новое значение</span>
+            <textarea
+              required
+              maxLength={target.field === 'lifeAction.actualResult' ? 2_000 : 1_000}
+              value={newValue}
+              onChange={(event) => setNewValue(event.currentTarget.value)}
+            />
+          </label>
+          <label>
+            <span>Причина исправления</span>
+            <textarea
+              required
+              maxLength={2_000}
+              value={reason}
+              onChange={(event) => setReason(event.currentTarget.value)}
+            />
+          </label>
+          <p className="journal-correction-confirmation">
+            Исходная запись останется в истории. Исправление будет добавлено как новое событие.
+          </p>
+          {error === null ? null : (
+            <p className="form-error" role="alert">
+              {error}
+            </p>
+          )}
+          <div className="form-actions">
+            <button type="submit" className="primary-button" disabled={!canSubmit}>
+              {submitting ? 'Сохраняем…' : 'Сохранить исправление'}
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={submitting}
+              onClick={onClose}
+            >
+              Отмена
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  );
+}
+
+function relatedEntityUnavailable(item: JournalTimelineItem): boolean {
+  if (item.entry.subjectType === JOURNAL_SUBJECT_TYPE.decision) return item.decision === null;
+  if (
+    item.entry.subjectType === JOURNAL_SUBJECT_TYPE.lifeAction ||
+    item.entry.subjectType === JOURNAL_SUBJECT_TYPE.workSession
+  ) {
+    return item.lifeAction === null;
+  }
+  return false;
 }
 
 const JOURNAL_EVENT_LABELS: Readonly<Record<JournalEntryType, string>> = {
@@ -492,9 +755,11 @@ const JOURNAL_EVENT_LABELS: Readonly<Record<JournalEntryType, string>> = {
   [JOURNAL_ENTRY_TYPE.actionCompleted]: 'Действие завершено',
   [JOURNAL_ENTRY_TYPE.actionCancelled]: 'Действие отменено',
   [JOURNAL_ENTRY_TYPE.dayCompleted]: 'Вечерний контроль завершён',
+  [JOURNAL_ENTRY_TYPE.dataCorrected]: 'Исправление данных',
 };
 
 function journalContext(item: JournalTimelineItem): string | null {
+  if (item.entry.correction !== null) return null;
   const metadata = item.entry.metadata;
   if (metadata === null) return null;
   if (

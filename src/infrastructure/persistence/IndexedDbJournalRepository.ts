@@ -1,5 +1,5 @@
 import type { JournalRepository } from '../../application';
-import type { DayDate, JournalEntry } from '../../domain';
+import { JOURNAL_ENTRY_TYPE, type DayDate, type EntityId, type JournalEntry } from '../../domain';
 import { executeIndexedDbRequest } from './indexed-db/IndexedDbRequest';
 import { LIFE_OS_STORE, LifeOsIndexedDb } from './indexed-db/LifeOsIndexedDb';
 import { JournalEntryRecordMapper } from './mappers/JournalEntryRecordMapper';
@@ -49,6 +49,37 @@ export class IndexedDbJournalRepository implements JournalRepository {
           .getAll(IDBKeyRange.bound(startDate.toString(), endDate.toString())),
     );
     return records.map(JournalEntryRecordMapper.fromRecord).sort(compareJournalEntries);
+  }
+
+  public async findById(id: EntityId): Promise<JournalEntry | null> {
+    const database = await this.#indexedDb.open();
+    const record = await executeIndexedDbRequest<unknown>(
+      database,
+      LIFE_OS_STORE.journal,
+      'readonly',
+      (store) => store.get(id.toString()),
+    );
+    return record === undefined ? null : JournalEntryRecordMapper.fromRecord(record);
+  }
+
+  public async findCorrectionsBySourceEntryId(
+    sourceEntryId: EntityId,
+  ): Promise<readonly JournalEntry[]> {
+    const database = await this.#indexedDb.open();
+    const records = await executeIndexedDbRequest<unknown[]>(
+      database,
+      LIFE_OS_STORE.journal,
+      'readonly',
+      (store) => store.getAll(),
+    );
+    return records
+      .map(JournalEntryRecordMapper.fromRecord)
+      .filter(
+        (entry) =>
+          entry.type === JOURNAL_ENTRY_TYPE.dataCorrected &&
+          entry.correction?.sourceEntryId.equals(sourceEntryId) === true,
+      )
+      .sort(compareJournalEntries);
   }
 }
 

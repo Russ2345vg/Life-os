@@ -1,3 +1,4 @@
+export { CorrectJournalData, type CorrectJournalDataInput } from './commands/CorrectJournalData';
 export {
   CompleteCurrentDay,
   type CompleteCurrentDayInput,
@@ -129,6 +130,7 @@ export {
   GetJournalTimeline,
   type GetJournalTimelineInput,
   type JournalTimelineItem,
+  type JournalCorrectionTarget,
   type JournalTimelineResult,
 } from './queries/GetJournalTimeline';
 export type { ActionSessionRepository } from './ports/ActionSessionRepository';

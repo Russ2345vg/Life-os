@@ -1,5 +1,5 @@
 import type { JournalRepository } from '../../application';
-import type { DayDate, JournalEntry } from '../../domain';
+import { JOURNAL_ENTRY_TYPE, type DayDate, type EntityId, type JournalEntry } from '../../domain';
 import { DomainError } from '../../shared/errors/DomainError';
 
 export class InMemoryJournalRepository implements JournalRepository {
@@ -22,6 +22,22 @@ export class InMemoryJournalRepository implements JournalRepository {
       .filter(
         (entry) =>
           !entry.effectiveDate.isBefore(startDate) && !entry.effectiveDate.isAfter(endDate),
+      )
+      .sort(compareJournalEntries);
+  }
+
+  public async findById(id: EntityId): Promise<JournalEntry | null> {
+    return this.#entriesById.get(id.toString()) ?? null;
+  }
+
+  public async findCorrectionsBySourceEntryId(
+    sourceEntryId: EntityId,
+  ): Promise<readonly JournalEntry[]> {
+    return [...this.#entriesById.values()]
+      .filter(
+        (entry) =>
+          entry.type === JOURNAL_ENTRY_TYPE.dataCorrected &&
+          entry.correction?.sourceEntryId.equals(sourceEntryId) === true,
       )
       .sort(compareJournalEntries);
   }

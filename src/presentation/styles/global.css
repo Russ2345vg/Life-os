@@ -3409,6 +3409,133 @@ button.more-section-card.available:hover {
   font-size: 0.85rem;
 }
 
+.journal-event-content .journal-correction-action {
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+}
+
+.journal-correction-summary {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+  padding: var(--space-3);
+  border-left: 3px solid #8b7740;
+  border-radius: var(--radius-small);
+  background: rgb(215 193 120 / 7%);
+}
+
+.journal-correction-summary dl,
+.journal-correction-target {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.journal-correction-summary dl > div,
+.journal-correction-target > div {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.journal-correction-summary dt,
+.journal-correction-target dt {
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.journal-correction-summary dd,
+.journal-correction-target dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.journal-correction-summary > span {
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+}
+
+.journal-correction-summary > a {
+  width: fit-content;
+  color: #d7c178;
+  font-size: 0.82rem;
+}
+
+.journal-correction-backdrop {
+  z-index: 30;
+  align-items: center;
+  justify-content: center;
+}
+
+.journal-correction-dialog {
+  position: relative;
+  width: min(100%, 38rem);
+  max-height: 100%;
+  padding: clamp(var(--space-5), 4vw, var(--space-8));
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-medium);
+  background: #0f1311;
+  box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 38%);
+}
+
+.journal-correction-dialog h2 {
+  margin: var(--space-2) 0 var(--space-6);
+}
+
+.journal-correction-form {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.journal-correction-form label {
+  display: grid;
+  gap: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.journal-correction-form textarea {
+  width: 100%;
+  min-height: 6rem;
+  padding: var(--space-3);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-small);
+  background: #101412;
+  font: inherit;
+  font-weight: 500;
+  resize: vertical;
+}
+
+.journal-correction-form textarea:focus {
+  border-color: #8b7740;
+  outline: 2px solid rgb(215 193 120 / 24%);
+  outline-offset: 1px;
+}
+
+.journal-correction-confirmation {
+  padding: var(--space-3);
+  color: var(--color-text);
+  border: 1px solid #5f5435;
+  border-radius: var(--radius-small);
+  background: rgb(215 193 120 / 8%);
+}
+
+.journal-correction-form .form-actions {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.journal-unavailable {
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+}
+
 .history-range-panel,
 .history-filter-panel,
 .history-timeline {
@@ -3677,6 +3804,10 @@ button.more-section-card.available:hover {
 
   .journal-filter-search {
     grid-column: auto;
+  }
+
+  .journal-correction-form .form-actions > button {
+    width: 100%;
   }
 
   .journal-day {

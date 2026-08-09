@@ -1,6 +1,7 @@
 import type { Clock, CurrentDateProvider, IdGenerator } from '../../application';
 import {
   CompleteCurrentDay,
+  CorrectJournalData,
   CreateDecisionForDate,
   CreateLifeActionForDecision,
   CompleteActionSession,
@@ -201,6 +202,13 @@ export async function createLifeOsApplication(
       decisionRepository,
       lifeActionRepository,
       sphereRepository,
+    );
+    const correctJournalData = new CorrectJournalData(
+      journalRepository,
+      decisionRepository,
+      lifeActionRepository,
+      journalUnitOfWork,
+      clock,
     );
     const createLifeActionForDecision = new CreateLifeActionForDecision(
       decisionRepository,
@@ -441,6 +449,7 @@ export async function createLifeOsApplication(
       getLifeActionsForDecision,
       getHistoryForDateRange,
       getJournalTimeline,
+      correctJournalData,
       createLifeActionForDecision,
       startLifeActionSession,
       pauseActionSession,

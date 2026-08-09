@@ -1,10 +1,13 @@
 import {
   JOURNAL_ENTRY_TYPE,
+  JOURNAL_CORRECTION_FIELD,
   JOURNAL_SUBJECT_TYPE,
   DayDate,
   EntityId,
   JournalEntry,
   type JournalEntryType,
+  type JournalCorrectionData,
+  type JournalCorrectionField,
   type JournalMetadata,
   type JournalMetadataValue,
   type JournalSubjectType,
@@ -24,6 +27,18 @@ export class JournalEntryRecordMapper {
       sphereId: entry.sphereId?.toString() ?? null,
       labelAtEvent: entry.labelAtEvent,
       metadata: entry.metadata === null ? null : { ...entry.metadata },
+      correction:
+        entry.correction === null
+          ? null
+          : {
+              sourceEntryId: entry.correction.sourceEntryId.toString(),
+              previousCorrectionId: entry.correction.previousCorrectionId?.toString() ?? null,
+              field: entry.correction.field,
+              previousValue: entry.correction.previousValue,
+              newValue: entry.correction.newValue,
+              reason: entry.correction.reason,
+              commandId: entry.correction.commandId.toString(),
+            },
       createdAt: entry.createdAt.toISOString(),
     };
   }
@@ -44,9 +59,33 @@ export class JournalEntryRecordMapper {
       sphereId: readOptionalId(value.sphereId),
       labelAtEvent: readOptionalString(value.labelAtEvent),
       metadata: readMetadata(value.metadata),
+      correction: readCorrection(value.correction),
       createdAt: readDate(value, 'createdAt'),
     });
   }
+}
+
+function readCorrection(value: unknown): JournalCorrectionData | null {
+  if (value === null || value === undefined) return null;
+  if (!isRecord(value)) throw invalidRecord();
+  const field = value.field;
+  if (!isJournalCorrectionField(field)) throw invalidRecord();
+  return {
+    sourceEntryId: EntityId.create(readString(value, 'sourceEntryId')),
+    previousCorrectionId: readOptionalId(value.previousCorrectionId),
+    field,
+    previousValue: readOptionalString(value.previousValue),
+    newValue: readString(value, 'newValue'),
+    reason: readString(value, 'reason'),
+    commandId: EntityId.create(readString(value, 'commandId')),
+  };
+}
+
+function isJournalCorrectionField(value: unknown): value is JournalCorrectionField {
+  return (
+    typeof value === 'string' &&
+    Object.values(JOURNAL_CORRECTION_FIELD).includes(value as JournalCorrectionField)
+  );
 }
 
 function isJournalEntryType(value: unknown): value is JournalEntryType {

@@ -400,6 +400,36 @@ export class LifeAction extends Entity {
     );
   }
 
+  public correctActualResult(actualResult: ActionActualResult): boolean {
+    if (this.#status !== LIFE_ACTION_STATUS.completed) {
+      throw new DomainError(
+        'life_action.actual_result_correction_requires_completed',
+        'Исправить фактический результат можно только у завершённого действия.',
+      );
+    }
+    assertActualResult(actualResult);
+    if (this.#actualResult?.equals(actualResult) ?? false) return false;
+
+    this.#actualResult = actualResult;
+    this.#version += 1;
+    return true;
+  }
+
+  public correctCancellationReason(cancelReason: ActionCancelReason): boolean {
+    if (this.#status !== LIFE_ACTION_STATUS.cancelled) {
+      throw new DomainError(
+        'life_action.cancel_reason_correction_requires_cancelled',
+        'Исправить причину отмены можно только у отменённого действия.',
+      );
+    }
+    assertCancelReason(cancelReason);
+    if (this.#cancelReason?.equals(cancelReason) ?? false) return false;
+
+    this.#cancelReason = cancelReason;
+    this.#version += 1;
+    return true;
+  }
+
   public archive(occurredAt: Date, eventId: EntityId): void {
     if (this.#archivedAt !== null) {
       return;

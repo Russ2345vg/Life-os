@@ -1,10 +1,15 @@
 import {
   JOURNAL_SUBJECT_TYPE,
+  JOURNAL_CORRECTION_FIELD,
+  JOURNAL_ENTRY_TYPE,
+  DECISION_STATUS,
+  LIFE_ACTION_STATUS,
   EntityId,
   type DayDate,
   type Decision,
   type JournalEntry,
   type LifeAction,
+  type JournalCorrectionField,
 } from '../../domain';
 import type { DecisionRepository } from '../ports/DecisionRepository';
 import type { JournalRepository } from '../ports/JournalRepository';
@@ -21,6 +26,15 @@ export interface JournalTimelineItem {
   readonly sphereName: string | null;
   readonly decision: Decision | null;
   readonly lifeAction: LifeAction | null;
+  readonly correctionTarget: JournalCorrectionTarget | null;
+  readonly sourceEntry: JournalEntry | null;
+}
+
+export interface JournalCorrectionTarget {
+  readonly field: JournalCorrectionField;
+  readonly fieldLabel: string;
+  readonly entityLabel: string;
+  readonly currentValue: string | null;
 }
 
 export interface JournalTimelineResult {
@@ -67,7 +81,15 @@ export class GetJournalTimeline {
       this.resolveDecision(entry),
       this.resolveLifeAction(entry),
     ]);
-    return Object.freeze({ entry, sphereName, decision, lifeAction });
+    const sourceEntry = await this.resolveSourceEntry(entry);
+    return Object.freeze({
+      entry,
+      sphereName,
+      decision,
+      lifeAction,
+      correctionTarget: resolveCorrectionTarget(entry, decision, lifeAction),
+      sourceEntry,
+    });
   }
 
   private async resolveSphereName(entry: JournalEntry): Promise<string | null> {
@@ -92,4 +114,60 @@ export class GetJournalTimeline {
     if (typeof value !== 'string') return null;
     return this.#lifeActionRepository.findById(EntityId.create(value));
   }
+
+  private async resolveSourceEntry(entry: JournalEntry): Promise<JournalEntry | null> {
+    return entry.correction === null
+      ? null
+      : this.#journalRepository.findById(entry.correction.sourceEntryId);
+  }
+}
+
+function resolveCorrectionTarget(
+  entry: JournalEntry,
+  decision: Decision | null,
+  lifeAction: LifeAction | null,
+): JournalCorrectionTarget | null {
+  if (
+    entry.type === JOURNAL_ENTRY_TYPE.decisionCancelled &&
+    decision?.status === DECISION_STATUS.cancelled
+  ) {
+    return target(
+      JOURNAL_CORRECTION_FIELD.decisionCancelReason,
+      'Причина отмены решения',
+      decision.title.toString(),
+      decision.cancelReason?.toString() ?? null,
+    );
+  }
+  if (
+    entry.type === JOURNAL_ENTRY_TYPE.actionCompleted &&
+    lifeAction?.status === LIFE_ACTION_STATUS.completed
+  ) {
+    return target(
+      JOURNAL_CORRECTION_FIELD.lifeActionActualResult,
+      'Фактический результат действия',
+      lifeAction.title.toString(),
+      lifeAction.actualResult?.toString() ?? null,
+    );
+  }
+  if (
+    entry.type === JOURNAL_ENTRY_TYPE.actionCancelled &&
+    lifeAction?.status === LIFE_ACTION_STATUS.cancelled
+  ) {
+    return target(
+      JOURNAL_CORRECTION_FIELD.lifeActionCancelReason,
+      'Причина отмены действия',
+      lifeAction.title.toString(),
+      lifeAction.cancelReason?.toString() ?? null,
+    );
+  }
+  return null;
+}
+
+function target(
+  field: JournalCorrectionField,
+  fieldLabel: string,
+  entityLabel: string,
+  currentValue: string | null,
+): JournalCorrectionTarget {
+  return Object.freeze({ field, fieldLabel, entityLabel, currentValue });
 }

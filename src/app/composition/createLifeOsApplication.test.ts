@@ -53,6 +53,7 @@ describe('createLifeOsApplication', () => {
     expect(application.getLifeActionsForDate).toBeDefined();
     expect(application.getLifeActionsForDecision).toBeDefined();
     expect(application.getJournalTimeline).toBeDefined();
+    expect(application.correctJournalData).toBeDefined();
     expect(application.createLifeActionForDecision).toBeDefined();
     expect(application.startCurrentDay).toBeDefined();
     expect(application.getEveningReview).toBeDefined();

@@ -12,6 +12,7 @@ export const JOURNAL_TYPE_FILTER = {
   decision: JOURNAL_SUBJECT_TYPE.decision,
   lifeAction: JOURNAL_SUBJECT_TYPE.lifeAction,
   workSession: JOURNAL_SUBJECT_TYPE.workSession,
+  correction: JOURNAL_ENTRY_TYPE.dataCorrected,
 } as const;
 
 export type JournalTypeFilter = (typeof JOURNAL_TYPE_FILTER)[keyof typeof JOURNAL_TYPE_FILTER];
@@ -26,6 +27,7 @@ export const JOURNAL_STATE_FILTER = {
   interrupted: 'interrupted',
   rescheduled: 'rescheduled',
   cancelled: 'cancelled',
+  corrected: 'corrected',
 } as const;
 
 export type JournalStateFilter = (typeof JOURNAL_STATE_FILTER)[keyof typeof JOURNAL_STATE_FILTER];
@@ -68,17 +70,25 @@ export function filterJournalTimelineItems(
   const query = normalizeSearchValue(filters.query);
 
   return items.filter((item) => {
-    const label = normalizeSearchValue(item.entry.labelAtEvent ?? '');
+    const searchableText = normalizeSearchValue(
+      [
+        item.entry.labelAtEvent,
+        item.entry.correction?.previousValue,
+        item.entry.correction?.newValue,
+        item.entry.correction?.reason,
+      ]
+        .filter((value): value is string => value !== null && value !== undefined)
+        .join(' '),
+    );
     const dateMatches =
       filters.date.length === 0 || item.entry.effectiveDate.toString() === filters.date;
     const sphereMatches = matchesSphere(item, filters.sphere);
-    const typeMatches =
-      filters.type === JOURNAL_TYPE_FILTER.all || item.entry.subjectType === filters.type;
+    const typeMatches = matchesType(item, filters.type);
     const stateMatches =
       filters.state === JOURNAL_STATE_FILTER.all || journalItemState(item) === filters.state;
 
     return (
-      (query.length === 0 || label.includes(query)) &&
+      (query.length === 0 || searchableText.includes(query)) &&
       dateMatches &&
       sphereMatches &&
       typeMatches &&
@@ -179,7 +189,17 @@ const JOURNAL_ENTRY_STATE: Readonly<
   [JOURNAL_ENTRY_TYPE.actionCompleted]: JOURNAL_STATE_FILTER.completed,
   [JOURNAL_ENTRY_TYPE.actionCancelled]: JOURNAL_STATE_FILTER.cancelled,
   [JOURNAL_ENTRY_TYPE.dayCompleted]: JOURNAL_STATE_FILTER.completed,
+  [JOURNAL_ENTRY_TYPE.dataCorrected]: JOURNAL_STATE_FILTER.corrected,
 };
+
+function matchesType(item: JournalTimelineItem, filter: JournalTypeFilter): boolean {
+  if (filter === JOURNAL_TYPE_FILTER.all) return true;
+  if (filter === JOURNAL_TYPE_FILTER.correction) {
+    return item.entry.type === JOURNAL_ENTRY_TYPE.dataCorrected;
+  }
+  if (item.entry.type === JOURNAL_ENTRY_TYPE.dataCorrected) return false;
+  return item.entry.subjectType === filter;
+}
 
 function matchesSphere(item: JournalTimelineItem, filter: string): boolean {
   if (filter === JOURNAL_SPHERE_FILTER.all) return true;

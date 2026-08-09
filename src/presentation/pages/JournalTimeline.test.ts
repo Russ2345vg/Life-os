@@ -51,7 +51,8 @@ describe('Journal timeline presentation', () => {
     expect(markup).toContain('09:05');
     expect(markup).toContain('Очень длинное название решения');
     expect(markup).toContain('Сфера недоступна');
-    expect(markup).not.toContain('<button');
+    expect(markup).toContain('Связанная сущность недоступна');
+    expect(markup).not.toContain('<button type="button">«Очень длинное название решения');
   });
 });
 
@@ -68,5 +69,7 @@ function item(id: string, date: string, occurredAt: string): JournalTimelineItem
     sphereName: null,
     decision: null,
     lifeAction: null,
+    correctionTarget: null,
+    sourceEntry: null,
   };
 }

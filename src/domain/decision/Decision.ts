@@ -674,6 +674,26 @@ export class Decision extends Entity {
     );
   }
 
+  public correctCancellationReason(cancelReason: DecisionCancelReason): boolean {
+    if (this.#status !== DECISION_STATUS.cancelled) {
+      throw new DomainError(
+        'decision.correction_requires_cancelled',
+        'Исправить причину отмены можно только у отменённого решения.',
+      );
+    }
+    if (!(cancelReason instanceof DecisionCancelReason)) {
+      throw new DomainError(
+        'decision.invalid_correction_value',
+        'Новое значение причины отмены решения некорректно.',
+      );
+    }
+    if (this.#cancelReason?.equals(cancelReason) ?? false) return false;
+
+    this.#cancelReason = cancelReason;
+    this.#version += 1;
+    return true;
+  }
+
   public restore(input: DecisionRestoreInput): void {
     this.assertNotArchived();
 
