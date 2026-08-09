@@ -16,6 +16,7 @@ import type { DecisionRescheduleUnitOfWork } from '../ports/DecisionRescheduleUn
 import type { IdGenerator } from '../ports/IdGenerator';
 import type { LifeActionRepository } from '../ports/LifeActionRepository';
 import { domainFailure } from './decisionCommandResult';
+import { createDecisionJournalEntries } from '../journal/createJournalEntries';
 
 export interface RescheduleDecisionSafelyInput {
   readonly decisionId: EntityId;
@@ -200,6 +201,7 @@ export class RescheduleDecisionSafely {
         newDate: newPlannedDate,
         linkedLifeActionIds: linkedIds,
         movedLifeActions: actionChanges,
+        journalEntries: createDecisionJournalEntries(decision),
       });
 
       return success(decision);

@@ -12,6 +12,8 @@ import type { ActionSessionRepository } from '../ports/ActionSessionRepository';
 import type { Clock } from '../ports/Clock';
 import type { IdGenerator } from '../ports/IdGenerator';
 import type { LifeActionRepository } from '../ports/LifeActionRepository';
+import type { JournalUnitOfWork } from '../ports/JournalUnitOfWork';
+import { createLifeActionJournalEntries } from '../journal/createJournalEntries';
 import { lifeActionDomainFailure, lifeActionNotFound } from './lifeActionCommandResult';
 
 export interface VerifyLifeActionResultInput {
@@ -36,17 +38,20 @@ export class VerifyLifeActionResult {
   readonly #actionSessionRepository: ActionSessionRepository;
   readonly #clock: Clock;
   readonly #idGenerator: IdGenerator;
+  readonly #journalUnitOfWork: JournalUnitOfWork | null;
 
   public constructor(
     lifeActionRepository: LifeActionRepository,
     actionSessionRepository: ActionSessionRepository,
     clock: Clock,
     idGenerator: IdGenerator,
+    journalUnitOfWork?: JournalUnitOfWork,
   ) {
     this.#lifeActionRepository = lifeActionRepository;
     this.#actionSessionRepository = actionSessionRepository;
     this.#clock = clock;
     this.#idGenerator = idGenerator;
+    this.#journalUnitOfWork = journalUnitOfWork ?? null;
   }
 
   public async execute(
@@ -108,8 +113,16 @@ export class VerifyLifeActionResult {
     }
 
     try {
+      const expectedVersion = lifeAction.version;
       lifeAction.complete(input.actualResult, this.#clock.now(), this.#idGenerator.generate());
-      await this.#lifeActionRepository.save(lifeAction);
+      if (this.#journalUnitOfWork === null) {
+        await this.#lifeActionRepository.save(lifeAction);
+      } else {
+        await this.#journalUnitOfWork.commit({
+          lifeActions: [{ lifeAction, expectedVersion }],
+          journalEntries: createLifeActionJournalEntries(lifeAction),
+        });
+      }
       return success(lifeAction);
     } catch (error: unknown) {
       return lifeActionDomainFailure(error);

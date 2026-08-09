@@ -19,6 +19,7 @@ import { IndexedDbActionSessionRepository } from '../../infrastructure/persisten
 import { IndexedDbDayRepository } from '../../infrastructure/persistence/IndexedDbDayRepository';
 import { IndexedDbDecisionRepository } from '../../infrastructure/persistence/IndexedDbDecisionRepository';
 import { IndexedDbLifeActionRepository } from '../../infrastructure/persistence/IndexedDbLifeActionRepository';
+import { IndexedDbJournalRepository } from '../../infrastructure/persistence/IndexedDbJournalRepository';
 import { LifeOsIndexedDb } from '../../infrastructure/persistence/indexed-db/LifeOsIndexedDb';
 import { FakeClock, FakeCurrentDateProvider, FakeIdGenerator } from '../../test/helpers/Fakes';
 import {
@@ -41,6 +42,7 @@ describe('createLifeOsApplication', () => {
     expect(application.decisionRepository).toBeInstanceOf(IndexedDbDecisionRepository);
     expect(application.lifeActionRepository).toBeInstanceOf(IndexedDbLifeActionRepository);
     expect(application.actionSessionRepository).toBeInstanceOf(IndexedDbActionSessionRepository);
+    expect(application.journalRepository).toBeInstanceOf(IndexedDbJournalRepository);
     expect(application.clock).toBeInstanceOf(SystemClock);
     expect(application.currentDateProvider).toBeInstanceOf(SystemCurrentDateProvider);
     expect(application.idGenerator).toBeInstanceOf(CryptoIdGenerator);
@@ -50,6 +52,7 @@ describe('createLifeOsApplication', () => {
     expect(application.getDeletedDecisions).toBeDefined();
     expect(application.getLifeActionsForDate).toBeDefined();
     expect(application.getLifeActionsForDecision).toBeDefined();
+    expect(application.getJournalTimeline).toBeDefined();
     expect(application.createLifeActionForDecision).toBeDefined();
     expect(application.startCurrentDay).toBeDefined();
     expect(application.getEveningReview).toBeDefined();

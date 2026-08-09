@@ -13,6 +13,8 @@ import type { CurrentDateProvider } from '../ports/CurrentDateProvider';
 import type { DayRepository } from '../ports/DayRepository';
 import type { IdGenerator } from '../ports/IdGenerator';
 import type { LifeActionRepository } from '../ports/LifeActionRepository';
+import type { JournalUnitOfWork } from '../ports/JournalUnitOfWork';
+import { createWorkSessionJournalEntries } from '../journal/createJournalEntries';
 import { lifeActionNotFound } from './lifeActionCommandResult';
 
 export interface StartLifeActionSessionInput {
@@ -31,6 +33,7 @@ export class StartLifeActionSession {
   readonly #currentDateProvider: CurrentDateProvider;
   readonly #clock: Clock;
   readonly #idGenerator: IdGenerator;
+  readonly #journalUnitOfWork: JournalUnitOfWork | null;
 
   public constructor(
     lifeActionRepository: LifeActionRepository,
@@ -39,6 +42,7 @@ export class StartLifeActionSession {
     currentDateProvider: CurrentDateProvider,
     clock: Clock,
     idGenerator: IdGenerator,
+    journalUnitOfWork?: JournalUnitOfWork,
   ) {
     this.#lifeActionRepository = lifeActionRepository;
     this.#actionSessionRepository = actionSessionRepository;
@@ -46,6 +50,7 @@ export class StartLifeActionSession {
     this.#currentDateProvider = currentDateProvider;
     this.#clock = clock;
     this.#idGenerator = idGenerator;
+    this.#journalUnitOfWork = journalUnitOfWork ?? null;
   }
 
   public async execute(
@@ -114,6 +119,7 @@ export class StartLifeActionSession {
     }
 
     const startedAt = this.#clock.now();
+    const expectedLifeActionVersion = lifeAction.version;
 
     if (lifeAction.status === LIFE_ACTION_STATUS.ready) {
       const lifeActionEventId = this.#idGenerator.generate();
@@ -128,8 +134,16 @@ export class StartLifeActionSession {
         eventId: sessionEventId,
       });
 
-      await this.#lifeActionRepository.save(lifeAction);
-      await this.#actionSessionRepository.save(session);
+      if (this.#journalUnitOfWork === null) {
+        await this.#lifeActionRepository.save(lifeAction);
+        await this.#actionSessionRepository.save(session);
+      } else {
+        await this.#journalUnitOfWork.commit({
+          lifeActions: [{ lifeAction, expectedVersion: expectedLifeActionVersion }],
+          workSessions: [{ workSession: session, expectedVersion: null }],
+          journalEntries: createWorkSessionJournalEntries(session, lifeAction),
+        });
+      }
 
       return success(Object.freeze({ lifeAction, session }));
     }
@@ -143,7 +157,14 @@ export class StartLifeActionSession {
       eventId: sessionEventId,
     });
 
-    await this.#actionSessionRepository.save(session);
+    if (this.#journalUnitOfWork === null) {
+      await this.#actionSessionRepository.save(session);
+    } else {
+      await this.#journalUnitOfWork.commit({
+        workSessions: [{ workSession: session, expectedVersion: null }],
+        journalEntries: createWorkSessionJournalEntries(session, lifeAction),
+      });
+    }
 
     return success(Object.freeze({ lifeAction, session }));
   }

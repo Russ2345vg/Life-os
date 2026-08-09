@@ -15,6 +15,15 @@ export type {
 } from './DecisionRescheduleUnitOfWork';
 export type { IdGenerator } from './IdGenerator';
 export type { LifeActionRepository } from './LifeActionRepository';
+export type { JournalRepository } from './JournalRepository';
+export type {
+  CommitJournalStateInput,
+  JournalDayChange,
+  JournalDecisionChange,
+  JournalLifeActionChange,
+  JournalUnitOfWork,
+  JournalWorkSessionChange,
+} from './JournalUnitOfWork';
 export type { RoutineBlockRepository } from './RoutineBlockRepository';
 export type { RoutineOccurrenceOverrideRepository } from './RoutineOccurrenceOverrideRepository';
 export type { StartWalkPersistenceResult, WalkRepository } from './WalkRepository';

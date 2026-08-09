@@ -12,6 +12,7 @@ import { DomainError } from '../../shared/errors/DomainError';
 import { LIFE_OS_STORE, LifeOsIndexedDb } from './indexed-db/LifeOsIndexedDb';
 import { DecisionRecordMapper } from './mappers/DecisionRecordMapper';
 import { LifeActionRecordMapper } from './mappers/LifeActionRecordMapper';
+import { JournalEntryRecordMapper } from './mappers/JournalEntryRecordMapper';
 import type { ActionSessionRecord } from './records/ActionSessionRecord';
 import type { DecisionRecord } from './records/DecisionRecord';
 import type { LifeActionRecord } from './records/LifeActionRecord';
@@ -29,7 +30,12 @@ export class IndexedDbDecisionRescheduleUnitOfWork implements DecisionReschedule
 
     try {
       transaction = database.transaction(
-        [LIFE_OS_STORE.decisions, LIFE_OS_STORE.lifeActions, LIFE_OS_STORE.actionSessions],
+        [
+          LIFE_OS_STORE.decisions,
+          LIFE_OS_STORE.lifeActions,
+          LIFE_OS_STORE.actionSessions,
+          LIFE_OS_STORE.journal,
+        ],
         'readwrite',
       );
     } catch (error: unknown) {
@@ -42,6 +48,7 @@ export class IndexedDbDecisionRescheduleUnitOfWork implements DecisionReschedule
       const decisionStore = transaction.objectStore(LIFE_OS_STORE.decisions);
       const actionStore = transaction.objectStore(LIFE_OS_STORE.lifeActions);
       const sessionStore = transaction.objectStore(LIFE_OS_STORE.actionSessions);
+      const journalStore = transaction.objectStore(LIFE_OS_STORE.journal);
       const [storedDecision, targetDecisions, storedActions, runningSessions, pausedSessions] =
         await Promise.all([
           observeRequest<DecisionRecord | undefined>(
@@ -77,6 +84,10 @@ export class IndexedDbDecisionRescheduleUnitOfWork implements DecisionReschedule
         writes.push(
           observeRequest(actionStore.put(LifeActionRecordMapper.toRecord(change.lifeAction))),
         );
+      }
+
+      for (const entry of input.journalEntries ?? []) {
+        writes.push(observeRequest(journalStore.add(JournalEntryRecordMapper.toRecord(entry))));
       }
 
       await Promise.all(writes);

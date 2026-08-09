@@ -21,6 +21,11 @@ import type { Clock } from '../ports/Clock';
 import type { DayCompletionUnitOfWork } from '../ports/DayCompletionUnitOfWork';
 import type { IdGenerator } from '../ports/IdGenerator';
 import type { EveningReviewSnapshot, GetEveningReview } from '../queries/GetEveningReview';
+import {
+  createDayJournalEntries,
+  createDecisionJournalEntries,
+  createLifeActionJournalEntries,
+} from '../journal/createJournalEntries';
 
 export type EveningLifeActionResolution =
   | Readonly<{
@@ -123,6 +128,13 @@ export class CompleteCurrentDay {
         })),
         tomorrowDate: snapshot.tomorrowDate,
         newTomorrowDecisions: createdTomorrowDecisions,
+        journalEntries: [
+          ...createDayJournalEntries(completedDay),
+          ...resolvedLifeActions.flatMap(({ lifeAction }) =>
+            createLifeActionJournalEntries(lifeAction),
+          ),
+          ...createdTomorrowDecisions.flatMap(createDecisionJournalEntries),
+        ],
       });
 
       return success(

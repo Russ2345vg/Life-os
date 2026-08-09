@@ -1,4 +1,4 @@
-import type { DayDate, Decision, EntityId, LifeAction } from '../../domain';
+import type { DayDate, Decision, EntityId, JournalEntry, LifeAction } from '../../domain';
 
 export interface DecisionRescheduleLifeActionChange {
   readonly expectedVersion: number;
@@ -12,6 +12,7 @@ export interface CommitDecisionRescheduleInput {
   readonly newDate: DayDate;
   readonly linkedLifeActionIds: readonly EntityId[];
   readonly movedLifeActions: readonly DecisionRescheduleLifeActionChange[];
+  readonly journalEntries?: readonly JournalEntry[];
 }
 
 export interface DecisionRescheduleUnitOfWork {

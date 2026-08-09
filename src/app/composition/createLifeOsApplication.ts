@@ -21,6 +21,7 @@ import {
   GetLifeActionsForDate,
   GetLifeActionsForDecision,
   GetHistoryForDateRange,
+  GetJournalTimeline,
   GetActionSessionsForLifeAction,
   GetUnfinishedActionSession,
   GetOpenDayConflict,
@@ -79,6 +80,8 @@ import { IndexedDbDayRepository } from '../../infrastructure/persistence/Indexed
 import { IndexedDbDecisionRepository } from '../../infrastructure/persistence/IndexedDbDecisionRepository';
 import { IndexedDbDecisionRescheduleUnitOfWork } from '../../infrastructure/persistence/IndexedDbDecisionRescheduleUnitOfWork';
 import { IndexedDbLifeActionRepository } from '../../infrastructure/persistence/IndexedDbLifeActionRepository';
+import { IndexedDbJournalRepository } from '../../infrastructure/persistence/IndexedDbJournalRepository';
+import { IndexedDbJournalUnitOfWork } from '../../infrastructure/persistence/IndexedDbJournalUnitOfWork';
 import { IndexedDbRoutineBlockRepository } from '../../infrastructure/persistence/IndexedDbRoutineBlockRepository';
 import { IndexedDbRoutineOccurrenceOverrideRepository } from '../../infrastructure/persistence/IndexedDbRoutineOccurrenceOverrideRepository';
 import { IndexedDbRoutineOccurrenceExecutionRepository } from '../../infrastructure/persistence/IndexedDbRoutineOccurrenceExecutionRepository';
@@ -109,6 +112,8 @@ export async function createLifeOsApplication(
     const decisionRepository = new IndexedDbDecisionRepository(database);
     const lifeActionRepository = new IndexedDbLifeActionRepository(database);
     const actionSessionRepository = new IndexedDbActionSessionRepository(database);
+    const journalRepository = new IndexedDbJournalRepository(database);
+    const journalUnitOfWork = new IndexedDbJournalUnitOfWork(database);
     const routineBlockRepository = new IndexedDbRoutineBlockRepository(database);
     const routineOccurrenceOverrideRepository = new IndexedDbRoutineOccurrenceOverrideRepository(
       database,
@@ -140,6 +145,7 @@ export async function createLifeOsApplication(
       currentDateProvider,
       clock,
       idGenerator,
+      journalUnitOfWork,
     );
     const getEveningReview = new GetEveningReview(
       dayRepository,
@@ -167,6 +173,7 @@ export async function createLifeOsApplication(
       currentDateProvider,
       clock,
       idGenerator,
+      journalUnitOfWork,
     );
     const getDecisionsForDate = new GetDecisionsForDate(decisionRepository);
     const getDeletedDecisions = new GetDeletedDecisions(decisionRepository);
@@ -189,6 +196,12 @@ export async function createLifeOsApplication(
       lifeActionRepository,
       actionSessionRepository,
     );
+    const getJournalTimeline = new GetJournalTimeline(
+      journalRepository,
+      decisionRepository,
+      lifeActionRepository,
+      sphereRepository,
+    );
     const createLifeActionForDecision = new CreateLifeActionForDecision(
       decisionRepository,
       lifeActionRepository,
@@ -202,24 +215,41 @@ export async function createLifeOsApplication(
       currentDateProvider,
       clock,
       idGenerator,
+      journalUnitOfWork,
     );
-    const pauseActionSession = new PauseActionSession(actionSessionRepository, clock, idGenerator);
+    const pauseActionSession = new PauseActionSession(
+      actionSessionRepository,
+      clock,
+      idGenerator,
+      lifeActionRepository,
+      journalUnitOfWork,
+    );
     const resumeActionSession = new ResumeActionSession(
       actionSessionRepository,
       clock,
       idGenerator,
+      lifeActionRepository,
+      journalUnitOfWork,
     );
     const completeActionSession = new CompleteActionSession(
       actionSessionRepository,
       clock,
       idGenerator,
+      lifeActionRepository,
+      journalUnitOfWork,
     );
-    const completeLifeAction = new CompleteLifeAction(lifeActionRepository, clock, idGenerator);
+    const completeLifeAction = new CompleteLifeAction(
+      lifeActionRepository,
+      clock,
+      idGenerator,
+      journalUnitOfWork,
+    );
     const verifyLifeActionResult = new VerifyLifeActionResult(
       lifeActionRepository,
       actionSessionRepository,
       clock,
       idGenerator,
+      journalUnitOfWork,
     );
     const confirmDecisionFromActions = new ConfirmDecisionFromActions(
       decisionRepository,
@@ -246,6 +276,7 @@ export async function createLifeOsApplication(
       lifeActionRepository,
       clock,
       idGenerator,
+      journalUnitOfWork,
     );
     const updateLifeActionDetails = new UpdateLifeActionDetails(
       lifeActionRepository,
@@ -257,6 +288,7 @@ export async function createLifeOsApplication(
       actionSessionRepository,
       clock,
       idGenerator,
+      journalUnitOfWork,
     );
     const decisionRescheduleUnitOfWork = new IndexedDbDecisionRescheduleUnitOfWork(database);
     const rescheduleDecisionSafely = new RescheduleDecisionSafely(
@@ -274,6 +306,7 @@ export async function createLifeOsApplication(
       clock,
       idGenerator,
       currentDateProvider,
+      journalUnitOfWork,
     );
     const getActionSessionsForLifeAction = new GetActionSessionsForLifeAction(
       actionSessionRepository,
@@ -387,6 +420,7 @@ export async function createLifeOsApplication(
       routineOccurrenceExecutionRepository,
       walkRepository,
       sphereRepository,
+      journalRepository,
       clock,
       currentDateProvider,
       idGenerator,
@@ -406,6 +440,7 @@ export async function createLifeOsApplication(
       getLifeActionsForDate,
       getLifeActionsForDecision,
       getHistoryForDateRange,
+      getJournalTimeline,
       createLifeActionForDecision,
       startLifeActionSession,
       pauseActionSession,

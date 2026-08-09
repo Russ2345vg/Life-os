@@ -3214,6 +3214,113 @@ button.more-section-card.available:hover {
 }
 
 /* History timeline */
+.journal-timeline {
+  display: grid;
+  gap: var(--space-5);
+  min-width: 0;
+  margin-top: var(--space-5);
+}
+
+.journal-day {
+  min-width: 0;
+  padding: clamp(var(--space-4), 3vw, var(--space-6));
+  overflow: hidden;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-large);
+  background: var(--color-surface-raised);
+}
+
+.journal-day > h2 {
+  margin: 0 0 var(--space-5);
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.journal-event-list {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.journal-event {
+  display: grid;
+  grid-template-columns: 3.5rem 0.75rem minmax(0, 1fr);
+  gap: var(--space-3);
+  min-width: 0;
+  align-items: start;
+}
+
+.journal-event > time {
+  padding-top: 0.12rem;
+  color: #d7c178;
+  font-size: 0.88rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.journal-event-marker {
+  width: 0.62rem;
+  height: 0.62rem;
+  margin-top: 0.32rem;
+  border: 2px solid #6f805e;
+  border-radius: 50%;
+  background: var(--color-surface-raised);
+}
+
+.journal-event-content {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.journal-event-content strong,
+.journal-event-content button,
+.journal-subject-label,
+.journal-event-content p {
+  overflow-wrap: anywhere;
+}
+
+.journal-event-content button {
+  width: fit-content;
+  max-width: 100%;
+  padding: 0;
+  color: var(--color-text-primary);
+  text-align: left;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.journal-event-content button:hover {
+  color: #f0d995;
+}
+
+.journal-subject-label {
+  color: var(--color-text-primary);
+}
+
+.journal-sphere {
+  width: fit-content;
+  max-width: 100%;
+  padding: var(--space-1) var(--space-2);
+  color: #b5d8bd;
+  font-size: 0.75rem;
+  border: 1px solid #395c42;
+  border-radius: 999px;
+}
+
+.journal-event-content p {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
 .history-range-panel,
 .history-filter-panel,
 .history-timeline {
@@ -3463,6 +3570,19 @@ button.more-section-card.available:hover {
 }
 
 @media (max-width: 30rem) {
+  .journal-day {
+    padding-inline: var(--space-3);
+  }
+
+  .journal-event {
+    grid-template-columns: 3.15rem 0.6rem minmax(0, 1fr);
+    gap: var(--space-2);
+  }
+
+  .journal-event > time {
+    font-size: 0.8rem;
+  }
+
   .history-summary-grid {
     grid-template-columns: minmax(0, 1fr);
   }

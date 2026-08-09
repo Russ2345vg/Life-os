@@ -1,7 +1,7 @@
 import { DomainError } from '../../../shared/errors/DomainError';
 
 export const LIFE_OS_DATABASE_NAME = 'lifeos';
-export const LIFE_OS_DATABASE_VERSION = 7;
+export const LIFE_OS_DATABASE_VERSION = 8;
 
 export const LIFE_OS_STORE = {
   days: 'days',
@@ -13,6 +13,7 @@ export const LIFE_OS_STORE = {
   routineOccurrenceExecutions: 'routineOccurrenceExecutions',
   walks: 'walks',
   spheres: 'spheres',
+  journal: 'journal',
 } as const;
 
 export class LifeOsIndexedDb {
@@ -79,6 +80,7 @@ export class LifeOsIndexedDb {
           if (oldVersion < 5) createVersionFiveSchema(request.result);
           if (oldVersion < 6) createVersionSixSchema(request.transaction);
           if (oldVersion < 7) createVersionSevenSchema(request.result);
+          if (oldVersion < 8) createVersionEightSchema(request.result);
         } catch (error: unknown) {
           upgradeError = error;
           request.transaction?.abort();
@@ -121,6 +123,14 @@ export class LifeOsIndexedDb {
   }
 }
 
+function createVersionEightSchema(database: IDBDatabase): void {
+  const journal = database.createObjectStore(LIFE_OS_STORE.journal, { keyPath: 'id' });
+  journal.createIndex('byEffectiveDate', 'effectiveDate', { unique: false });
+  journal.createIndex('byOccurredAt', 'occurredAt', { unique: false });
+  journal.createIndex('bySubjectId', 'subjectId', { unique: false });
+  journal.createIndex('bySphereId', 'sphereId', { unique: false });
+}
+
 function createVersionSevenSchema(database: IDBDatabase): void {
   const spheres = database.createObjectStore(LIFE_OS_STORE.spheres, { keyPath: 'id' });
   spheres.createIndex('byNormalizedName', 'normalizedName', { unique: true });
@@ -134,7 +144,7 @@ function createVersionFiveSchema(database: IDBDatabase): void {
 
 function createVersionSixSchema(transaction: IDBTransaction | null): void {
   if (transaction === null) {
-    throw new Error('?????????? ?????????? IndexedDB ??????????.');
+    throw new Error('Транзакция обновления IndexedDB недоступна.');
   }
   transaction.objectStore(LIFE_OS_STORE.walks).createIndex('byStatus', 'status', { unique: false });
 }

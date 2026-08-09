@@ -22,6 +22,7 @@ import type {
   GetDecisionOverview,
   GetLifeActionsForDecision,
   GetHistoryForDateRange,
+  GetJournalTimeline,
   GetActionListsForDate,
   GetLifeActionsForDate,
   GetActionSessionsForLifeAction,
@@ -30,6 +31,7 @@ import type {
   ResolveOpenDayConflict,
   IdGenerator,
   LifeActionRepository,
+  JournalRepository,
   PauseActionSession,
   ResumeActionSession,
   RescheduleDecisionSafely,
@@ -91,6 +93,7 @@ interface LifeOsApplicationServices {
   readonly routineOccurrenceExecutionRepository: RoutineOccurrenceExecutionRepository;
   readonly walkRepository: WalkRepository;
   readonly sphereRepository: SphereRepository;
+  readonly journalRepository: JournalRepository;
   readonly clock: Clock;
   readonly currentDateProvider: CurrentDateProvider;
   readonly idGenerator: IdGenerator;
@@ -110,6 +113,7 @@ interface LifeOsApplicationServices {
   readonly getLifeActionsForDate: GetLifeActionsForDate;
   readonly getLifeActionsForDecision: GetLifeActionsForDecision;
   readonly getHistoryForDateRange: GetHistoryForDateRange;
+  readonly getJournalTimeline: GetJournalTimeline;
   readonly createLifeActionForDecision: CreateLifeActionForDecision;
   readonly startLifeActionSession: StartLifeActionSession;
   readonly pauseActionSession: PauseActionSession;
@@ -176,6 +180,7 @@ export class LifeOsApplication {
   public readonly routineOccurrenceExecutionRepository: RoutineOccurrenceExecutionRepository;
   public readonly walkRepository: WalkRepository;
   public readonly sphereRepository: SphereRepository;
+  public readonly journalRepository: JournalRepository;
   public readonly clock: Clock;
   public readonly currentDateProvider: CurrentDateProvider;
   public readonly idGenerator: IdGenerator;
@@ -195,6 +200,7 @@ export class LifeOsApplication {
   public readonly getLifeActionsForDate: GetLifeActionsForDate;
   public readonly getLifeActionsForDecision: GetLifeActionsForDecision;
   public readonly getHistoryForDateRange: GetHistoryForDateRange;
+  public readonly getJournalTimeline: GetJournalTimeline;
   public readonly createLifeActionForDecision: CreateLifeActionForDecision;
   public readonly startLifeActionSession: StartLifeActionSession;
   public readonly pauseActionSession: PauseActionSession;
@@ -261,6 +267,7 @@ export class LifeOsApplication {
     this.routineOccurrenceExecutionRepository = services.routineOccurrenceExecutionRepository;
     this.walkRepository = services.walkRepository;
     this.sphereRepository = services.sphereRepository;
+    this.journalRepository = services.journalRepository;
     this.clock = services.clock;
     this.currentDateProvider = services.currentDateProvider;
     this.idGenerator = services.idGenerator;
@@ -280,6 +287,7 @@ export class LifeOsApplication {
     this.getLifeActionsForDate = services.getLifeActionsForDate;
     this.getLifeActionsForDecision = services.getLifeActionsForDecision;
     this.getHistoryForDateRange = services.getHistoryForDateRange;
+    this.getJournalTimeline = services.getJournalTimeline;
     this.createLifeActionForDecision = services.createLifeActionForDecision;
     this.startLifeActionSession = services.startLifeActionSession;
     this.pauseActionSession = services.pauseActionSession;

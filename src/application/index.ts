@@ -125,6 +125,12 @@ export {
   type HistoryActionSession,
   type HistoryDateRangeResult,
 } from './queries/GetHistoryForDateRange';
+export {
+  GetJournalTimeline,
+  type GetJournalTimelineInput,
+  type JournalTimelineItem,
+  type JournalTimelineResult,
+} from './queries/GetJournalTimeline';
 export type { ActionSessionRepository } from './ports/ActionSessionRepository';
 export type { Clock } from './ports/Clock';
 export type { CurrentDateProvider } from './ports/CurrentDateProvider';
@@ -142,6 +148,15 @@ export type {
 } from './ports/DecisionRescheduleUnitOfWork';
 export type { IdGenerator } from './ports/IdGenerator';
 export type { LifeActionRepository } from './ports/LifeActionRepository';
+export type { JournalRepository } from './ports/JournalRepository';
+export type {
+  CommitJournalStateInput,
+  JournalDayChange,
+  JournalDecisionChange,
+  JournalLifeActionChange,
+  JournalUnitOfWork,
+  JournalWorkSessionChange,
+} from './ports/JournalUnitOfWork';
 export type { OpenDayConflictReader } from './ports/OpenDayConflictReader';
 export type { RoutineBlockRepository } from './ports/RoutineBlockRepository';
 export type { RoutineOccurrenceOverrideRepository } from './ports/RoutineOccurrenceOverrideRepository';
@@ -221,6 +236,10 @@ export { DeleteWalk, type DeleteWalkInput } from './commands/DeleteWalk';
 export { StartWalk, type StartWalkInput } from './commands/StartWalk';
 export { UpdateWalkPhoto, type UpdateWalkPhotoInput } from './commands/UpdateWalkPhoto';
 export { UpdateWalkSphere, type UpdateWalkSphereInput } from './commands/UpdateWalkSphere';
+export {
+  UpdateDayResultSphere,
+  type UpdateDayResultSphereInput,
+} from './commands/UpdateDayResultSphere';
 export { GetWalksForDate } from './queries/GetWalksForDate';
 export { GetRunningWalk } from './queries/GetRunningWalk';
 export {
@@ -234,10 +253,6 @@ export {
   pickWalkReflectionQuestion,
   type WalkReflectionQuestionPicker,
 } from './walk/WalkReflectionQuestions';
-export {
-  UpdateDayResultSphere,
-  type UpdateDayResultSphereInput,
-} from './commands/UpdateDayResultSphere';
 export type {
   RoutineOccurrenceCommandDependencies,
   RoutineOccurrenceCommandInput,

@@ -10,6 +10,8 @@ import type { ActionSessionRepository } from '../ports/ActionSessionRepository';
 import type { Clock } from '../ports/Clock';
 import type { IdGenerator } from '../ports/IdGenerator';
 import type { LifeActionRepository } from '../ports/LifeActionRepository';
+import type { JournalUnitOfWork } from '../ports/JournalUnitOfWork';
+import { createLifeActionJournalEntries } from '../journal/createJournalEntries';
 import { lifeActionDomainFailure, lifeActionNotFound } from './lifeActionCommandResult';
 
 export interface CancelLifeActionSafelyInput {
@@ -22,17 +24,20 @@ export class CancelLifeActionSafely {
   readonly #actionSessionRepository: ActionSessionRepository;
   readonly #clock: Clock;
   readonly #idGenerator: IdGenerator;
+  readonly #journalUnitOfWork: JournalUnitOfWork | null;
 
   public constructor(
     lifeActionRepository: LifeActionRepository,
     actionSessionRepository: ActionSessionRepository,
     clock: Clock,
     idGenerator: IdGenerator,
+    journalUnitOfWork?: JournalUnitOfWork,
   ) {
     this.#lifeActionRepository = lifeActionRepository;
     this.#actionSessionRepository = actionSessionRepository;
     this.#clock = clock;
     this.#idGenerator = idGenerator;
+    this.#journalUnitOfWork = journalUnitOfWork ?? null;
   }
 
   public async execute(
@@ -61,9 +66,17 @@ export class CancelLifeActionSafely {
     }
 
     try {
+      const expectedVersion = lifeAction.version;
       const reason = ActionCancelReason.create(input.reason?.trim() || 'Отменено пользователем');
       lifeAction.cancel(this.#clock.now(), this.#idGenerator.generate(), reason);
-      await this.#lifeActionRepository.save(lifeAction);
+      if (this.#journalUnitOfWork === null) {
+        await this.#lifeActionRepository.save(lifeAction);
+      } else {
+        await this.#journalUnitOfWork.commit({
+          lifeActions: [{ lifeAction, expectedVersion }],
+          journalEntries: createLifeActionJournalEntries(lifeAction),
+        });
+      }
       return success(lifeAction);
     } catch (error: unknown) {
       return lifeActionDomainFailure(error);

@@ -12,6 +12,8 @@ import type { Clock } from '../ports/Clock';
 import type { DecisionRepository } from '../ports/DecisionRepository';
 import type { IdGenerator } from '../ports/IdGenerator';
 import type { LifeActionRepository } from '../ports/LifeActionRepository';
+import type { JournalUnitOfWork } from '../ports/JournalUnitOfWork';
+import { createDecisionJournalEntries } from '../journal/createJournalEntries';
 import { domainFailure } from './decisionCommandResult';
 
 export interface CancelDecisionSafelyInput {
@@ -23,17 +25,20 @@ export class CancelDecisionSafely {
   readonly #lifeActionRepository: LifeActionRepository;
   readonly #clock: Clock;
   readonly #idGenerator: IdGenerator;
+  readonly #journalUnitOfWork: JournalUnitOfWork | null;
 
   public constructor(
     decisionRepository: DecisionRepository,
     lifeActionRepository: LifeActionRepository,
     clock: Clock,
     idGenerator: IdGenerator,
+    journalUnitOfWork?: JournalUnitOfWork,
   ) {
     this.#decisionRepository = decisionRepository;
     this.#lifeActionRepository = lifeActionRepository;
     this.#clock = clock;
     this.#idGenerator = idGenerator;
+    this.#journalUnitOfWork = journalUnitOfWork ?? null;
   }
 
   public async execute(input: CancelDecisionSafelyInput): Promise<Result<Decision, DomainError>> {
@@ -64,12 +69,20 @@ export class CancelDecisionSafely {
     }
 
     try {
+      const expectedVersion = decision.version;
       decision.cancel(
         this.#clock.now(),
         this.#idGenerator.generate(),
         DecisionCancelReason.create('Отменено пользователем'),
       );
-      await this.#decisionRepository.save(decision);
+      if (this.#journalUnitOfWork === null) {
+        await this.#decisionRepository.save(decision);
+      } else {
+        await this.#journalUnitOfWork.commit({
+          decisions: [{ decision, expectedVersion }],
+          journalEntries: createDecisionJournalEntries(decision),
+        });
+      }
       return success(decision);
     } catch (error: unknown) {
       return domainFailure(error);

@@ -5,6 +5,8 @@ export { IndexedDbActionSessionRepository } from './persistence/IndexedDbActionS
 export { IndexedDbDayRepository } from './persistence/IndexedDbDayRepository';
 export { IndexedDbDecisionRepository } from './persistence/IndexedDbDecisionRepository';
 export { IndexedDbLifeActionRepository } from './persistence/IndexedDbLifeActionRepository';
+export { IndexedDbJournalRepository } from './persistence/IndexedDbJournalRepository';
+export { IndexedDbJournalUnitOfWork } from './persistence/IndexedDbJournalUnitOfWork';
 export { IndexedDbRoutineBlockRepository } from './persistence/IndexedDbRoutineBlockRepository';
 export { IndexedDbRoutineOccurrenceOverrideRepository } from './persistence/IndexedDbRoutineOccurrenceOverrideRepository';
 export { IndexedDbRoutineOccurrenceExecutionRepository } from './persistence/IndexedDbRoutineOccurrenceExecutionRepository';
@@ -13,6 +15,7 @@ export { IndexedDbSphereRepository } from './persistence/IndexedDbSphereReposito
 export { InMemoryDecisionRepository } from './persistence/InMemoryDecisionRepository';
 export { InMemoryDayRepository } from './persistence/InMemoryDayRepository';
 export { InMemoryLifeActionRepository } from './persistence/InMemoryLifeActionRepository';
+export { InMemoryJournalRepository } from './persistence/InMemoryJournalRepository';
 export { InMemoryRoutineBlockRepository } from './persistence/InMemoryRoutineBlockRepository';
 export { InMemoryRoutineOccurrenceOverrideRepository } from './persistence/InMemoryRoutineOccurrenceOverrideRepository';
 export { InMemoryRoutineOccurrenceExecutionRepository } from './persistence/InMemoryRoutineOccurrenceExecutionRepository';
@@ -29,6 +32,7 @@ export {
   DayRecordMapper,
   DecisionRecordMapper,
   LifeActionRecordMapper,
+  JournalEntryRecordMapper,
   RoutineBlockRecordMapper,
   RoutineOccurrenceOverrideRecordMapper,
   RoutineOccurrenceExecutionRecordMapper,
@@ -40,6 +44,7 @@ export type {
   DayRecord,
   DecisionRecord,
   LifeActionRecord,
+  JournalEntryRecord,
   RoutineBlockRecord,
   RoutineOccurrenceOverrideRecord,
   RoutineOccurrenceExecutionRecord,

@@ -270,10 +270,11 @@ export function ApplicationShell() {
         <HistoryPage
           currentDate={application.currentDate}
           selectedDate={selectedDate}
-          getHistoryForDateRange={application.getHistoryForDateRange}
+          getJournalTimeline={application.getJournalTimeline}
           getDecisionById={application.getDecisionById}
           getDecisionOverview={application.getDecisionOverview}
           getLifeActionsForDecision={application.getLifeActionsForDecision}
+          getSpheres={application.getSpheres}
           createLifeActionForDecision={application.createLifeActionForDecision}
           confirmDecisionFromActions={application.confirmDecisionFromActions}
           updateDecisionDetails={application.updateDecisionDetails}

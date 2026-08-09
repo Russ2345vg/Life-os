@@ -8,6 +8,7 @@ import { LIFE_OS_STORE, LifeOsIndexedDb } from './indexed-db/LifeOsIndexedDb';
 import { DayRecordMapper } from './mappers/DayRecordMapper';
 import { DecisionRecordMapper } from './mappers/DecisionRecordMapper';
 import { LifeActionRecordMapper } from './mappers/LifeActionRecordMapper';
+import { JournalEntryRecordMapper } from './mappers/JournalEntryRecordMapper';
 import type { DayRecord } from './records/DayRecord';
 import type { DecisionRecord } from './records/DecisionRecord';
 import type { LifeActionRecord } from './records/LifeActionRecord';
@@ -25,7 +26,12 @@ export class IndexedDbDayCompletionUnitOfWork implements DayCompletionUnitOfWork
 
     try {
       transaction = database.transaction(
-        [LIFE_OS_STORE.days, LIFE_OS_STORE.lifeActions, LIFE_OS_STORE.decisions],
+        [
+          LIFE_OS_STORE.days,
+          LIFE_OS_STORE.lifeActions,
+          LIFE_OS_STORE.decisions,
+          LIFE_OS_STORE.journal,
+        ],
         'readwrite',
       );
     } catch (error: unknown) {
@@ -38,6 +44,7 @@ export class IndexedDbDayCompletionUnitOfWork implements DayCompletionUnitOfWork
       const dayStore = transaction.objectStore(LIFE_OS_STORE.days);
       const actionStore = transaction.objectStore(LIFE_OS_STORE.lifeActions);
       const decisionStore = transaction.objectStore(LIFE_OS_STORE.decisions);
+      const journalStore = transaction.objectStore(LIFE_OS_STORE.journal);
       const dayPromise = observeRequest<DayRecord | undefined>(
         dayStore.get(input.day.id.toString()),
       );
@@ -71,6 +78,10 @@ export class IndexedDbDayCompletionUnitOfWork implements DayCompletionUnitOfWork
 
       for (const decision of input.newTomorrowDecisions) {
         writes.push(observeRequest(decisionStore.add(DecisionRecordMapper.toRecord(decision))));
+      }
+
+      for (const entry of input.journalEntries ?? []) {
+        writes.push(observeRequest(journalStore.add(JournalEntryRecordMapper.toRecord(entry))));
       }
 
       await Promise.all(writes);

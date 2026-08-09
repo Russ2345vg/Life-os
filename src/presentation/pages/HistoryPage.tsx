@@ -10,10 +10,13 @@ import type {
   GetActionSessionsForLifeAction,
   GetDecisionById,
   GetDecisionOverview,
-  GetHistoryForDateRange,
+  GetJournalTimeline,
   GetLifeActionsForDecision,
+  GetSpheres,
   GetUnfinishedActionSession,
   HistoryDateRangeResult,
+  JournalTimelineItem,
+  JournalTimelineResult,
   PauseActionSession,
   RescheduleDecisionSafely,
   RescheduleLifeActionSafely,
@@ -23,9 +26,11 @@ import type {
   UpdateLifeActionDetails,
 } from '../../application';
 import {
+  JOURNAL_ENTRY_TYPE,
   SESSION_COMPLETION_KIND,
   type DayDate,
   type Decision,
+  type JournalEntryType,
   type LifeAction,
 } from '../../domain';
 import { DecisionDetailsController } from '../components/DecisionDetailsController';
@@ -53,14 +58,20 @@ import {
   lifeActionStatusLabel,
 } from '../entityPresentation';
 import { SectionError, SectionMessage } from './DecisionsPage';
+import { useSpheres } from '../components/sphereReferenceModel';
+
+const EMPTY_GET_SPHERES: Pick<GetSpheres, 'execute'> = {
+  execute: async () => ({ active: [], archived: [] }),
+};
 
 interface HistoryPageProps {
   readonly currentDate: DayDate;
   readonly selectedDate: DayDate;
-  readonly getHistoryForDateRange: Pick<GetHistoryForDateRange, 'execute'>;
+  readonly getJournalTimeline: Pick<GetJournalTimeline, 'execute'>;
   readonly getDecisionById: Pick<GetDecisionById, 'execute'>;
   readonly getDecisionOverview: Pick<GetDecisionOverview, 'execute'>;
   readonly getLifeActionsForDecision: Pick<GetLifeActionsForDecision, 'execute'>;
+  readonly getSpheres?: Pick<GetSpheres, 'execute'>;
   readonly createLifeActionForDecision: Pick<CreateLifeActionForDecision, 'execute'>;
   readonly confirmDecisionFromActions: Pick<ConfirmDecisionFromActions, 'execute'>;
   readonly updateDecisionDetails: Pick<UpdateDecisionDetails, 'execute'>;
@@ -83,10 +94,11 @@ interface HistoryPageProps {
 export function HistoryPage({
   currentDate,
   selectedDate,
-  getHistoryForDateRange,
+  getJournalTimeline,
   getDecisionById,
   getDecisionOverview,
   getLifeActionsForDecision,
+  getSpheres,
   createLifeActionForDecision,
   confirmDecisionFromActions,
   updateDecisionDetails,
@@ -105,22 +117,19 @@ export function HistoryPage({
   clock,
   onDateChange,
 }: HistoryPageProps) {
+  const spheres = useSpheres(getSpheres ?? EMPTY_GET_SPHERES);
   const [range, setRange] = useState<HistoryRange>(HISTORY_RANGE.day);
-  const [entityFilter, setEntityFilter] = useState<HistoryEntityFilter>(HISTORY_ENTITY_FILTER.all);
-  const [outcomeFilter, setOutcomeFilter] = useState<HistoryOutcomeFilter>(
-    HISTORY_OUTCOME_FILTER.all,
-  );
   const [selectedDecision, setSelectedDecision] = useState<Decision | null>(null);
   const [selectedAction, setSelectedAction] = useState<LifeAction | null>(null);
   const historyQuery = useMemo(
     () => ({
       execute: (endDate: DayDate) =>
-        getHistoryForDateRange.execute({
+        getJournalTimeline.execute({
           startDate: addDays(endDate, -(rangeLength(range) - 1)),
           endDate,
         }),
     }),
-    [getHistoryForDateRange, range],
+    [getJournalTimeline, range],
   );
   const { state, reload } = useDateQuery(selectedDate, historyQuery);
 
@@ -142,9 +151,9 @@ export function HistoryPage({
   return (
     <main className="section-page history-page">
       <SectionPageHeader
-        eyebrow="След результата"
+        eyebrow="Хронология LifeOS"
         title="История"
-        description="Хронология подтверждённых решений, завершённых действий и рабочих сессий. Раздел доступен только для просмотра."
+        description="Значимые события дня в порядке их фактического совершения. Журнал доступен только для просмотра."
       />
 
       <SectionDateNavigator
@@ -155,17 +164,13 @@ export function HistoryPage({
 
       <HistoryRangeSelector range={range} onChange={handleRangeChange} />
 
-      {state.status === 'loading' ? <SectionMessage>Загружаем историю…</SectionMessage> : null}
+      {state.status === 'loading' ? <SectionMessage>Загружаем журнал…</SectionMessage> : null}
       {state.status === 'error' ? (
-        <SectionError message="Не удалось загрузить историю" onRetry={() => void reload()} />
+        <SectionError message="Не удалось загрузить журнал" onRetry={() => void reload()} />
       ) : null}
       {state.status === 'ready' ? (
-        <HistoryPageContent
+        <JournalTimelineContent
           data={state.value}
-          entityFilter={entityFilter}
-          outcomeFilter={outcomeFilter}
-          onEntityFilterChange={setEntityFilter}
-          onOutcomeFilterChange={setOutcomeFilter}
           onOpenDecision={(decision) => {
             setSelectedAction(null);
             setSelectedDecision(decision);
@@ -178,6 +183,7 @@ export function HistoryPage({
       ) : null}
 
       <DecisionDetailsController
+        spheres={spheres}
         decision={selectedDecision}
         currentDate={currentDate}
         selectedDate={selectedDecision?.plannedDate ?? selectedDate}
@@ -206,6 +212,7 @@ export function HistoryPage({
       />
 
       <LifeActionDetailsController
+        spheres={spheres}
         lifeAction={selectedAction}
         currentDate={currentDate}
         readOnly
@@ -227,6 +234,153 @@ export function HistoryPage({
       />
     </main>
   );
+}
+
+interface JournalTimelineContentProps {
+  readonly data: JournalTimelineResult;
+  readonly onOpenDecision?: (decision: Decision) => void;
+  readonly onOpenAction?: (lifeAction: LifeAction) => void;
+}
+
+export function JournalTimelineContent({
+  data,
+  onOpenDecision = () => undefined,
+  onOpenAction = () => undefined,
+}: JournalTimelineContentProps) {
+  const groups = groupJournalItems(data.items);
+  if (groups.length === 0) {
+    return <SectionMessage>В выбранном диапазоне событий журнала пока нет</SectionMessage>;
+  }
+
+  return (
+    <section className="journal-timeline" aria-label="Хронология событий">
+      {groups.map((group) => (
+        <section className="journal-day" key={group.date}>
+          <h2>{formatJournalDate(group.date)}</h2>
+          <ol className="journal-event-list">
+            {group.items.map((item) => (
+              <JournalTimelineRow
+                item={item}
+                key={item.entry.id.toString()}
+                onOpenDecision={onOpenDecision}
+                onOpenAction={onOpenAction}
+              />
+            ))}
+          </ol>
+        </section>
+      ))}
+    </section>
+  );
+}
+
+function JournalTimelineRow({
+  item,
+  onOpenDecision,
+  onOpenAction,
+}: {
+  readonly item: JournalTimelineItem;
+  readonly onOpenDecision: (decision: Decision) => void;
+  readonly onOpenAction: (lifeAction: LifeAction) => void;
+}) {
+  const context = journalContext(item);
+  return (
+    <li className="journal-event">
+      <time dateTime={item.entry.occurredAt.toISOString()}>
+        {formatJournalTime(item.entry.occurredAt)}
+      </time>
+      <span className="journal-event-marker" aria-hidden="true" />
+      <div className="journal-event-content">
+        <strong>{JOURNAL_EVENT_LABELS[item.entry.type]}</strong>
+        {item.entry.labelAtEvent === null ? null : item.decision !== null ? (
+          <button type="button" onClick={() => onOpenDecision(item.decision!)}>
+            «{item.entry.labelAtEvent}»
+          </button>
+        ) : item.lifeAction !== null ? (
+          <button type="button" onClick={() => onOpenAction(item.lifeAction!)}>
+            «{item.entry.labelAtEvent}»
+          </button>
+        ) : (
+          <span className="journal-subject-label">«{item.entry.labelAtEvent}»</span>
+        )}
+        {item.entry.sphereId === null ? null : (
+          <span className="journal-sphere">{item.sphereName ?? 'Сфера недоступна'}</span>
+        )}
+        {context === null ? null : <p>{context}</p>}
+      </div>
+    </li>
+  );
+}
+
+const JOURNAL_EVENT_LABELS: Readonly<Record<JournalEntryType, string>> = {
+  [JOURNAL_ENTRY_TYPE.dayStarted]: 'Начало дня',
+  [JOURNAL_ENTRY_TYPE.decisionCreated]: 'Решение создано',
+  [JOURNAL_ENTRY_TYPE.workSessionStarted]: 'Действие начато',
+  [JOURNAL_ENTRY_TYPE.workSessionPaused]: 'Пауза',
+  [JOURNAL_ENTRY_TYPE.workSessionResumed]: 'Работа продолжена',
+  [JOURNAL_ENTRY_TYPE.workSessionCompleted]: 'Рабочая сессия завершена',
+  [JOURNAL_ENTRY_TYPE.decisionRescheduled]: 'Решение перенесено',
+  [JOURNAL_ENTRY_TYPE.decisionCancelled]: 'Решение отменено',
+  [JOURNAL_ENTRY_TYPE.actionRescheduled]: 'Действие перенесено',
+  [JOURNAL_ENTRY_TYPE.actionCompleted]: 'Действие завершено',
+  [JOURNAL_ENTRY_TYPE.actionCancelled]: 'Действие отменено',
+  [JOURNAL_ENTRY_TYPE.dayCompleted]: 'Вечерний контроль завершён',
+};
+
+interface JournalDayGroup {
+  readonly date: string;
+  readonly items: readonly JournalTimelineItem[];
+}
+
+export function groupJournalItems(
+  items: readonly JournalTimelineItem[],
+): readonly JournalDayGroup[] {
+  const byDate = new Map<string, JournalTimelineItem[]>();
+  for (const item of items) {
+    const date = item.entry.effectiveDate.toString();
+    const group = byDate.get(date) ?? [];
+    group.push(item);
+    byDate.set(date, group);
+  }
+  return [...byDate.entries()]
+    .sort(([left], [right]) => right.localeCompare(left))
+    .map(([date, group]) => ({
+      date,
+      items: group.sort(
+        (left, right) =>
+          left.entry.occurredAt.getTime() - right.entry.occurredAt.getTime() ||
+          left.entry.id.toString().localeCompare(right.entry.id.toString()),
+      ),
+    }));
+}
+
+function journalContext(item: JournalTimelineItem): string | null {
+  const metadata = item.entry.metadata;
+  if (metadata === null) return null;
+  if (
+    (item.entry.type === JOURNAL_ENTRY_TYPE.decisionRescheduled ||
+      item.entry.type === JOURNAL_ENTRY_TYPE.actionRescheduled) &&
+    typeof metadata.previousDate === 'string' &&
+    typeof metadata.newDate === 'string'
+  ) {
+    return `${formatJournalDate(metadata.previousDate)} → ${formatJournalDate(metadata.newDate)}`;
+  }
+  if (typeof metadata.reason === 'string') return metadata.reason;
+  if (typeof metadata.resultNote === 'string') return metadata.resultNote;
+  if (typeof metadata.summary === 'string') return metadata.summary;
+  return null;
+}
+
+function formatJournalTime(value: Date): string {
+  return new Intl.DateTimeFormat('ru-RU', { hour: '2-digit', minute: '2-digit' }).format(value);
+}
+
+function formatJournalDate(value: string): string {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Intl.DateTimeFormat('ru-RU', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(new Date(year!, month! - 1, day));
 }
 
 interface HistoryPageContentProps {

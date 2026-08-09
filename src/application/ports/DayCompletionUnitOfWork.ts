@@ -1,4 +1,4 @@
-import type { Day, DayDate, Decision, LifeAction } from '../../domain';
+import type { Day, DayDate, Decision, JournalEntry, LifeAction } from '../../domain';
 
 export interface DayCompletionLifeActionChange {
   readonly expectedVersion: number;
@@ -11,6 +11,7 @@ export interface CommitDayCompletionInput {
   readonly lifeActions: readonly DayCompletionLifeActionChange[];
   readonly tomorrowDate: DayDate;
   readonly newTomorrowDecisions: readonly Decision[];
+  readonly journalEntries?: readonly JournalEntry[];
 }
 
 export interface DayCompletionUnitOfWork {

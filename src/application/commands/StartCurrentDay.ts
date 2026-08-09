@@ -15,6 +15,8 @@ import type { DayRepository } from '../ports/DayRepository';
 import type { DecisionRepository } from '../ports/DecisionRepository';
 import type { IdGenerator } from '../ports/IdGenerator';
 import type { LifeActionRepository } from '../ports/LifeActionRepository';
+import type { JournalUnitOfWork } from '../ports/JournalUnitOfWork';
+import { createDayJournalEntries } from '../journal/createJournalEntries';
 
 export interface StartCurrentDayResult {
   readonly day: Day;
@@ -28,6 +30,7 @@ export class StartCurrentDay {
   readonly #currentDateProvider: CurrentDateProvider;
   readonly #clock: Clock;
   readonly #idGenerator: IdGenerator;
+  readonly #journalUnitOfWork: JournalUnitOfWork | null;
 
   public constructor(
     dayRepository: DayRepository,
@@ -36,6 +39,7 @@ export class StartCurrentDay {
     currentDateProvider: CurrentDateProvider,
     clock: Clock,
     idGenerator: IdGenerator,
+    journalUnitOfWork?: JournalUnitOfWork,
   ) {
     this.#dayRepository = dayRepository;
     this.#decisionRepository = decisionRepository;
@@ -43,6 +47,7 @@ export class StartCurrentDay {
     this.#currentDateProvider = currentDateProvider;
     this.#clock = clock;
     this.#idGenerator = idGenerator;
+    this.#journalUnitOfWork = journalUnitOfWork ?? null;
   }
 
   public async execute(): Promise<Result<StartCurrentDayResult, DomainError>> {
@@ -101,10 +106,18 @@ export class StartCurrentDay {
     }
 
     const firstLifeAction = await this.findFirstLifeAction(currentDate);
+    const expectedDayVersion = day.version;
 
     try {
       day.open(currentDate, this.#clock.now(), this.#idGenerator.generate());
-      await this.#dayRepository.save(day);
+      if (this.#journalUnitOfWork === null) {
+        await this.#dayRepository.save(day);
+      } else {
+        await this.#journalUnitOfWork.commit({
+          days: [{ day, expectedVersion: expectedDayVersion }],
+          journalEntries: createDayJournalEntries(day),
+        });
+      }
       return success(Object.freeze({ day, firstLifeAction }));
     } catch (error: unknown) {
       if (error instanceof DomainError) {

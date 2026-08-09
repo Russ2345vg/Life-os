@@ -71,6 +71,16 @@ export type { DomainEvent } from './shared/DomainEvent';
 export { Entity } from './shared/Entity';
 export { EntityId } from './shared/EntityId';
 export {
+  JOURNAL_ENTRY_TYPE,
+  JOURNAL_SUBJECT_TYPE,
+  JournalEntry,
+  type JournalEntryData,
+  type JournalEntryType,
+  type JournalMetadata,
+  type JournalMetadataValue,
+  type JournalSubjectType,
+} from './journal';
+export {
   MAX_SPHERE_DESCRIPTION_LENGTH,
   MAX_SPHERE_ICON_LENGTH,
   MAX_SPHERE_NAME_LENGTH,

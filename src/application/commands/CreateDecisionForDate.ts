@@ -19,6 +19,8 @@ import type { CurrentDateProvider } from '../ports/CurrentDateProvider';
 import type { DayRepository } from '../ports/DayRepository';
 import type { DecisionRepository } from '../ports/DecisionRepository';
 import type { IdGenerator } from '../ports/IdGenerator';
+import type { JournalUnitOfWork } from '../ports/JournalUnitOfWork';
+import { createDecisionJournalEntries } from '../journal/createJournalEntries';
 import { domainFailure } from './decisionCommandResult';
 
 export interface CreateDecisionForDateInput {
@@ -41,6 +43,7 @@ export class CreateDecisionForDate {
   readonly #currentDateProvider: CurrentDateProvider;
   readonly #clock: Clock;
   readonly #idGenerator: IdGenerator;
+  readonly #journalUnitOfWork: JournalUnitOfWork | null;
 
   public constructor(
     repository: DecisionRepository,
@@ -49,6 +52,7 @@ export class CreateDecisionForDate {
     currentDateProvider: CurrentDateProvider,
     clock: Clock,
     idGenerator: IdGenerator,
+    journalUnitOfWork?: JournalUnitOfWork,
   ) {
     this.#repository = repository;
     this.#dayRepository = dayRepository;
@@ -56,6 +60,7 @@ export class CreateDecisionForDate {
     this.#currentDateProvider = currentDateProvider;
     this.#clock = clock;
     this.#idGenerator = idGenerator;
+    this.#journalUnitOfWork = journalUnitOfWork ?? null;
   }
 
   public async execute(input: CreateDecisionForDateInput): Promise<Result<Decision, DomainError>> {
@@ -148,7 +153,14 @@ export class CreateDecisionForDate {
         eventId: plannedEventId,
       });
 
-      await this.#repository.save(decision);
+      if (this.#journalUnitOfWork === null) {
+        await this.#repository.save(decision);
+      } else {
+        await this.#journalUnitOfWork.commit({
+          decisions: [{ decision, expectedVersion: null }],
+          journalEntries: createDecisionJournalEntries(decision),
+        });
+      }
       return success(decision);
     } catch (error: unknown) {
       return domainFailure(error);
