@@ -116,6 +116,7 @@ describe('DecisionCreationFormState', () => {
       sacrifices: 'Отложить украшения',
       priority: DECISION_PRIORITY.high,
       projectReference: 'LifeOS',
+      projectId: null,
     });
     expect(execute.mock.calls[0]?.[0].plannedDate.toString()).toBe('2026-08-05');
   });

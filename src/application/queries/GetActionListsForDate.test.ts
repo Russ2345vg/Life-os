@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { ActionSessionRepository } from '../ports/ActionSessionRepository';
 import {
   ActionSession,
@@ -93,6 +93,8 @@ describe('GetActionListsForDate', () => {
     );
     await context.sessions.save(pausedSession);
     await context.sessions.save(completedSession);
+    const decisionFindAll = vi.spyOn(context.decisions, 'findAll');
+    const decisionFindById = vi.spyOn(context.decisions, 'findById');
 
     const snapshot = await context.query.execute(DATE);
 
@@ -109,6 +111,10 @@ describe('GetActionListsForDate', () => {
     expect(snapshot.items[1]?.totalWorkedDurationMs).toBe(30 * 60_000);
     expect(snapshot.items[3]?.completedSessionCount).toBe(1);
     expect(snapshot.items[3]?.totalWorkedDurationMs).toBe(45 * 60_000);
+    expect(context.sessions.findAllCount).toBe(1);
+    expect(context.sessions.findByLifeActionIdCount).toBe(0);
+    expect(decisionFindAll).toHaveBeenCalledTimes(1);
+    expect(decisionFindById).not.toHaveBeenCalled();
   });
 
   it('помещает действие с выполняющейся сессией в активный список', async () => {
@@ -165,15 +171,23 @@ function at(time: string): Date {
 
 class FakeActionSessionRepository implements ActionSessionRepository {
   readonly #sessions = new Map<string, ActionSession>();
+  public findAllCount = 0;
+  public findByLifeActionIdCount = 0;
 
   public async findById(id: EntityId): Promise<ActionSession | null> {
     return this.#sessions.get(id.toString()) ?? null;
   }
 
   public async findByLifeActionId(lifeActionId: EntityId): Promise<readonly ActionSession[]> {
+    this.findByLifeActionIdCount += 1;
     return [...this.#sessions.values()].filter((session) =>
       session.lifeActionId.equals(lifeActionId),
     );
+  }
+
+  public async findAll(): Promise<readonly ActionSession[]> {
+    this.findAllCount += 1;
+    return [...this.#sessions.values()];
   }
 
   public async findUnfinished(): Promise<ActionSession | null> {

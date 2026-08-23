@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import type {
   CancelDecisionSafely,
   DeleteDecisionSafely,
@@ -17,6 +17,7 @@ import type {
   GetDeletedDecisions,
   GetLifeActionsForDecision,
   GetSpheres,
+  GetProjects,
   SpheresSnapshot,
   GetUnfinishedActionSession,
   PauseActionSession,
@@ -27,7 +28,13 @@ import type {
   UpdateDecisionDetails,
   UpdateLifeActionDetails,
 } from '../../application';
-import { DECISION_KIND, DECISION_STATUS, type DayDate, type Decision } from '../../domain';
+import {
+  DECISION_KIND,
+  DECISION_STATUS,
+  EntityId,
+  type DayDate,
+  type Decision,
+} from '../../domain';
 import { DecisionDetailsController } from '../components/DecisionDetailsController';
 import { SphereBadge } from '../components/SphereReference';
 import {
@@ -38,6 +45,7 @@ import {
 import { SectionDateNavigator } from '../components/SectionDateNavigator';
 import { SectionPageHeader } from '../components/SectionPageHeader';
 import { DECISION_FILTER, filterDecisions, type DecisionFilter } from '../decisionFilters';
+import { useProjects } from '../management/projectReferenceModel';
 import { isPastDate } from '../date/selectedDate';
 import { useDateQuery } from '../date/useDateQuery';
 import {
@@ -46,7 +54,7 @@ import {
   decisionStatusLabel,
   statusTone,
 } from '../entityPresentation';
-import { DecisionCreationForm } from './DecisionCreationForm';
+import { DecisionCreationDialog } from './DecisionCreationForm';
 import { DecisionDeleteConfirmation, DecisionTrashPanel } from './DecisionTrashPanel';
 import {
   createDecisionCreationForm,
@@ -66,6 +74,7 @@ interface DecisionsPageProps {
   readonly getDecisionOverview: Pick<GetDecisionOverview, 'execute'>;
   readonly getLifeActionsForDecision: Pick<GetLifeActionsForDecision, 'execute'>;
   readonly getSpheres: Pick<GetSpheres, 'execute'>;
+  readonly getProjects: Pick<GetProjects, 'execute'>;
   readonly createLifeActionForDecision: Pick<CreateLifeActionForDecision, 'execute'>;
   readonly confirmDecisionFromActions: Pick<ConfirmDecisionFromActions, 'execute'>;
   readonly updateDecisionDetails: Pick<UpdateDecisionDetails, 'execute'>;
@@ -86,6 +95,8 @@ interface DecisionsPageProps {
   readonly clock: Pick<Clock, 'now'>;
   readonly onDateChange: (date: DayDate) => void;
   readonly onOpenToday: () => void;
+  readonly onOpenProject?: (projectId: string) => void;
+  readonly initialDecisionId?: string | null;
 }
 
 interface DateScopedFormState {
@@ -106,6 +117,7 @@ export function DecisionsPage({
   getDecisionOverview,
   getLifeActionsForDecision,
   getSpheres,
+  getProjects,
   createLifeActionForDecision,
   confirmDecisionFromActions,
   updateDecisionDetails,
@@ -126,9 +138,12 @@ export function DecisionsPage({
   clock,
   onDateChange,
   onOpenToday,
+  onOpenProject = () => undefined,
+  initialDecisionId = null,
 }: DecisionsPageProps) {
   const { state, reload } = useDateQuery(selectedDate, getDecisionsForDate);
   const spheres = useSpheres(getSpheres);
+  const projects = useProjects(getProjects);
   const [sphereFilter, setSphereFilter] = useState(SPHERE_FILTER_ALL);
   const selectedDateKey = selectedDate.toString();
   const selectedDateKeyRef = useRef(selectedDateKey);
@@ -171,6 +186,25 @@ export function DecisionsPage({
   const [deleting, setDeleting] = useState(false);
   const [restoringDecisionId, setRestoringDecisionId] = useState<string | null>(null);
   const operationRef = useRef(false);
+
+  useEffect(() => {
+    if (initialDecisionId === null) return;
+    let active = true;
+    void getDecisionById.execute(EntityId.create(initialDecisionId)).then((result) => {
+      if (!active || !result.ok || result.value.isDeleted()) return;
+      const decisionDate = result.value.plannedDate;
+      if (decisionDate === null) return;
+      const dateKey = decisionDate.toString();
+      setSelection({ dateKey, decision: result.value });
+      if (!decisionDate.equals(selectedDate)) {
+        selectedDateKeyRef.current = dateKey;
+        onDateChange(decisionDate);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [getDecisionById, initialDecisionId, onDateChange, selectedDate]);
 
   async function reloadTrash(): Promise<void> {
     setTrashState((current) => ({ status: 'loading', decisions: current.decisions }));
@@ -235,6 +269,7 @@ export function DecisionsPage({
         form: activeFormState.form,
         currentDate,
         createDecisionForDate,
+        projects,
       });
 
       if (submissionDateKey !== selectedDateKeyRef.current) {
@@ -415,11 +450,12 @@ export function DecisionsPage({
           )}
 
           {activeFormState.open ? (
-            <DecisionCreationForm
+            <DecisionCreationDialog
               currentDate={currentDate}
               form={activeFormState.form}
               isSaving={activeFormState.saving}
               spheres={spheres}
+              projects={projects}
               errors={activeFormState.errors}
               onChange={updateForm}
               onClose={() => setFormState(createClosedFormState(selectedDateKey, selectedDate))}
@@ -484,6 +520,7 @@ export function DecisionsPage({
         getDecisionOverview={getDecisionOverview}
         getLifeActionsForDecision={getLifeActionsForDecision}
         spheres={spheres}
+        projects={projects}
         createLifeActionForDecision={createLifeActionForDecision}
         confirmDecisionFromActions={confirmDecisionFromActions}
         updateDecisionDetails={updateDecisionDetails}
@@ -502,6 +539,7 @@ export function DecisionsPage({
         clock={clock}
         onClose={() => setSelection(null)}
         onDecisionChanged={viewMode === 'trash' ? () => void reloadTrash() : handleDecisionChanged}
+        onOpenProject={onOpenProject}
       />
     </main>
   );

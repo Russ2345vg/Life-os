@@ -3,13 +3,19 @@ import type { Clock, DecisionRepository } from '../../application';
 import {
   Day,
   DayDate,
+  DAY_STATUS,
   DECISION_KIND,
   DECISION_PRIORITY,
   DECISION_STATUS,
+  EntityId,
+  Project,
   type Decision,
-  type EntityId,
 } from '../../domain';
-import { InMemoryDayRepository, InMemoryDecisionRepository } from '../../infrastructure';
+import {
+  InMemoryDayRepository,
+  InMemoryDecisionRepository,
+  InMemoryProjectRepository,
+} from '../../infrastructure';
 import type { Result } from '../../shared/result/Result';
 import {
   cancelDecision,
@@ -213,6 +219,64 @@ describe('CreateDecisionForDate', () => {
     expect(decision.projectReference).toBe('LifeOS');
   });
 
+  it('связывает решение с проектом и наследует его сферу', async () => {
+    const context = createContext();
+    const project = Project.create({
+      id: EntityId.create('project-lifeos'),
+      sphereId: EntityId.create('sphere-development'),
+      title: 'LifeOS',
+      now: NOW,
+    });
+    await context.projectRepository.create(project);
+
+    const decision = unwrap(
+      await context.command.execute({
+        ...mainInput('Связанное решение'),
+        projectId: project.id.toString(),
+      }),
+    );
+
+    expect(decision.projectId?.equals(project.id)).toBe(true);
+    expect(decision.sphereId?.equals(project.sphereId!)).toBe(true);
+  });
+
+  it('отклоняет несовместимые сферы решения и проекта', async () => {
+    const context = createContext();
+    const project = Project.create({
+      id: EntityId.create('project-sphere'),
+      sphereId: EntityId.create('sphere-project'),
+      title: 'Проект',
+      now: NOW,
+    });
+    await context.projectRepository.create(project);
+
+    const result = await context.command.execute({
+      ...mainInput('Несовместимое решение'),
+      projectId: project.id.toString(),
+      sphereId: 'sphere-decision',
+    });
+
+    expectFailureCode(result, 'decision.project_sphere_mismatch');
+  });
+
+  it('не связывает новое решение с завершённым проектом', async () => {
+    const context = createContext();
+    const active = Project.create({
+      id: EntityId.create('project-completed'),
+      title: 'Завершённый проект',
+      now: NOW,
+    });
+    const completed = active.complete(new Date(NOW.getTime() + 1));
+    await context.projectRepository.create(completed);
+
+    const result = await context.command.execute({
+      ...mainInput('Позднее решение проекта'),
+      projectId: completed.id.toString(),
+    });
+
+    expectFailureCode(result, 'decision.project_unavailable');
+  });
+
   it('отклоняет создание на прошедшую дату до чтения решений и генерации идентификаторов', async () => {
     const context = createContext();
     context.currentDateProvider.setCurrentDate(DayDate.create('2026-08-03'));
@@ -225,7 +289,7 @@ describe('CreateDecisionForDate', () => {
     expect(context.clock.callCount).toBe(0);
   });
 
-  it('не изменяет завершённый день', async () => {
+  it('после закрытия дня сохраняет новую рабочую мысль на следующий день', async () => {
     const context = createContext();
     const day = Day.openCurrent({
       id: context.idGenerator.generate(),
@@ -240,10 +304,13 @@ describe('CreateDecisionForDate', () => {
 
     const result = await context.command.execute(mainInput('Позднее решение'));
 
-    expectFailureCode(result, 'decision.completed_day_is_immutable');
-    expect(context.repository.saveCount).toBe(0);
-    expect(context.idGenerator.generatedCount).toBe(generatedBeforeCommand);
-    expect(context.clock.callCount).toBe(0);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.plannedDate?.toString()).toBe('2026-08-03');
+    expect(day.status).toBe(DAY_STATUS.completed);
+    expect(day.version).toBeGreaterThan(0);
+    expect(context.repository.saveCount).toBe(1);
+    expect(context.idGenerator.generatedCount).toBeGreaterThan(generatedBeforeCommand);
   });
 
   it('отклоняет повтор того же активного решения на одной дате', async () => {
@@ -299,6 +366,7 @@ function createContext(): {
   readonly repository: CountingDecisionRepository;
   readonly dayRepository: InMemoryDayRepository;
   readonly currentDateProvider: FakeCurrentDateProvider;
+  readonly projectRepository: InMemoryProjectRepository;
   readonly command: CreateDecisionForDate;
   readonly clock: CountingClock;
   readonly idGenerator: FakeIdGenerator;
@@ -308,10 +376,12 @@ function createContext(): {
   const currentDateProvider = new FakeCurrentDateProvider(DATE);
   const clock = new CountingClock();
   const idGenerator = new FakeIdGenerator('create-for-date');
+  const projectRepository = new InMemoryProjectRepository();
   return {
     repository,
     dayRepository,
     currentDateProvider,
+    projectRepository,
     command: new CreateDecisionForDate(
       repository,
       dayRepository,
@@ -319,6 +389,8 @@ function createContext(): {
       currentDateProvider,
       clock,
       idGenerator,
+      undefined,
+      projectRepository,
     ),
     clock,
     idGenerator,

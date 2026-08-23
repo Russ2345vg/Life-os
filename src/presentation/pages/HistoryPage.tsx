@@ -14,6 +14,7 @@ import type {
   GetJournalTimeline,
   GetLifeActionsForDecision,
   GetSpheres,
+  GetProjects,
   GetUnfinishedActionSession,
   HistoryDateRangeResult,
   IdGenerator,
@@ -62,6 +63,7 @@ import {
 } from '../entityPresentation';
 import { SectionError, SectionMessage } from './DecisionsPage';
 import { useSpheres } from '../components/sphereReferenceModel';
+import { useProjects } from '../management/projectReferenceModel';
 import {
   DEFAULT_JOURNAL_TIMELINE_FILTERS,
   JOURNAL_STATE_FILTER,
@@ -89,6 +91,7 @@ interface HistoryPageProps {
   readonly getDecisionOverview: Pick<GetDecisionOverview, 'execute'>;
   readonly getLifeActionsForDecision: Pick<GetLifeActionsForDecision, 'execute'>;
   readonly getSpheres?: Pick<GetSpheres, 'execute'>;
+  readonly getProjects?: Pick<GetProjects, 'execute'>;
   readonly createLifeActionForDecision: Pick<CreateLifeActionForDecision, 'execute'>;
   readonly confirmDecisionFromActions: Pick<ConfirmDecisionFromActions, 'execute'>;
   readonly updateDecisionDetails: Pick<UpdateDecisionDetails, 'execute'>;
@@ -106,6 +109,7 @@ interface HistoryPageProps {
   readonly rescheduleLifeActionSafely: Pick<RescheduleLifeActionSafely, 'execute'>;
   readonly clock: Pick<Clock, 'now'>;
   readonly onDateChange: (date: DayDate) => void;
+  readonly onOpenProject?: (projectId: string) => void;
 }
 
 export function HistoryPage({
@@ -118,6 +122,7 @@ export function HistoryPage({
   getDecisionOverview,
   getLifeActionsForDecision,
   getSpheres,
+  getProjects,
   createLifeActionForDecision,
   confirmDecisionFromActions,
   updateDecisionDetails,
@@ -135,8 +140,10 @@ export function HistoryPage({
   rescheduleLifeActionSafely,
   clock,
   onDateChange,
+  onOpenProject = () => undefined,
 }: HistoryPageProps) {
   const spheres = useSpheres(getSpheres ?? EMPTY_GET_SPHERES);
+  const projects = useProjects(getProjects);
   const [range, setRange] = useState<HistoryRange>(HISTORY_RANGE.day);
   const [journalFilters, setJournalFilters] = useState<JournalTimelineFilters>(
     DEFAULT_JOURNAL_TIMELINE_FILTERS,
@@ -223,6 +230,7 @@ export function HistoryPage({
 
       <DecisionDetailsController
         spheres={spheres}
+        projects={projects}
         decision={selectedDecision}
         currentDate={currentDate}
         selectedDate={selectedDecision?.plannedDate ?? selectedDate}
@@ -248,6 +256,7 @@ export function HistoryPage({
         clock={clock}
         onClose={() => setSelectedDecision(null)}
         onDecisionChanged={() => undefined}
+        onOpenProject={onOpenProject}
       />
 
       <LifeActionDetailsController
@@ -257,6 +266,7 @@ export function HistoryPage({
         readOnly
         clock={clock}
         getDecisionById={getDecisionById}
+        projects={projects}
         getActionSessionsForLifeAction={getActionSessionsForLifeAction}
         getUnfinishedActionSession={getUnfinishedActionSession}
         startLifeActionSession={startLifeActionSession}
@@ -270,6 +280,7 @@ export function HistoryPage({
         backLabel="Назад к истории"
         onClose={() => setSelectedAction(null)}
         onActionChanged={() => undefined}
+        onOpenProject={onOpenProject}
       />
 
       <JournalCorrectionDialog
@@ -756,6 +767,7 @@ const JOURNAL_EVENT_LABELS: Readonly<Record<JournalEntryType, string>> = {
   [JOURNAL_ENTRY_TYPE.actionCancelled]: 'Действие отменено',
   [JOURNAL_ENTRY_TYPE.dayCompleted]: 'Вечерний контроль завершён',
   [JOURNAL_ENTRY_TYPE.dataCorrected]: 'Исправление данных',
+  [JOURNAL_ENTRY_TYPE.directionStrategicReviewed]: 'Стратегический обзор направления',
 };
 
 function journalContext(item: JournalTimelineItem): string | null {

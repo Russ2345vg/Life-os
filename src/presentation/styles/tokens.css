@@ -20,4 +20,11 @@
 
   --radius-small: 0.5rem;
   --radius-medium: 0.875rem;
+
+  --motion-fast: 120ms;
+  --motion-base: 160ms;
+  --motion-slow: 200ms;
+  --motion-feedback: 600ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasized: cubic-bezier(0.2, 0.8, 0.2, 1);
 }

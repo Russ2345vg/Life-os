@@ -1,5 +1,11 @@
 import type { JournalRepository } from '../../application';
-import { JOURNAL_ENTRY_TYPE, type DayDate, type EntityId, type JournalEntry } from '../../domain';
+import {
+  JOURNAL_ENTRY_TYPE,
+  type DayDate,
+  type EntityId,
+  type JournalEntry,
+  type JournalEntryType,
+} from '../../domain';
 import { DomainError } from '../../shared/errors/DomainError';
 
 export class InMemoryJournalRepository implements JournalRepository {
@@ -51,6 +57,17 @@ export class InMemoryJournalRepository implements JournalRepository {
       }
       inputIds.add(id);
     }
+  }
+
+  public async findLatestBySubjectAndType(
+    subjectId: EntityId,
+    type: JournalEntryType,
+  ): Promise<JournalEntry | null> {
+    return (
+      [...this.#entriesById.values()]
+        .filter((entry) => entry.type === type && entry.subjectId?.equals(subjectId) === true)
+        .sort((left, right) => right.occurredAt.getTime() - left.occurredAt.getTime())[0] ?? null
+    );
   }
 }
 

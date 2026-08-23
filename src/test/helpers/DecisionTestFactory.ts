@@ -20,6 +20,7 @@ export function decisionId(value: string): EntityId {
 export function createDecisionDraft(
   id: string,
   kind: DecisionKind = DECISION_KIND.additional,
+  projectId?: EntityId,
 ): Decision {
   return Decision.createDraft({
     id: decisionId(id),
@@ -28,6 +29,7 @@ export function createDecisionDraft(
     ...(kind === DECISION_KIND.main
       ? { expectedResult: ExpectedResult.create(`Результат ${id}`) }
       : {}),
+    ...(projectId === undefined ? {} : { projectId }),
     occurredAt: CREATED_AT,
     eventId: decisionId(`${id}-draft-event`),
   });
@@ -38,8 +40,9 @@ export function createPlannedDecision(
   date: DayDate,
   kind: DecisionKind = DECISION_KIND.main,
   order = 1,
+  projectId?: EntityId,
 ): Decision {
-  const decision = createDecisionDraft(id, kind);
+  const decision = createDecisionDraft(id, kind, projectId);
   decision.plan({
     plannedDate: date,
     kind,

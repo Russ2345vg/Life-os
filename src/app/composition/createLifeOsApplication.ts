@@ -1,6 +1,7 @@
 import type { Clock, CurrentDateProvider, IdGenerator } from '../../application';
 import {
   CompleteCurrentDay,
+  CompleteEveningCycle,
   CorrectJournalData,
   CreateDecisionForDate,
   CreateLifeActionForDecision,
@@ -14,8 +15,19 @@ import {
   ConfirmDecisionFromActions,
   EnsureCurrentDay,
   GetDecisionsForDate,
+  GetDecisionsForProject,
   GetDeletedDecisions,
   GetEveningReview,
+  GetEveningCycleReview,
+  GetEveningHistory,
+  GetEveningHistorySummary,
+  GetEveningAnalytics,
+  DetectEveningPatterns,
+  GetEveningSignals,
+  GetEveningRecommendations,
+  RecommendationApplicationService,
+  GetApplicationMode,
+  GetOpenLoopsForDay,
   GetDecisionById,
   GetDecisionOverview,
   GetActionListsForDate,
@@ -28,6 +40,7 @@ import {
   GetUnfinishedActionSession,
   GetOpenDayConflict,
   ResolveOpenDayConflict,
+  ResolveOpenLoop,
   MainDecisionLimitPolicy,
   PauseActionSession,
   ResumeActionSession,
@@ -72,7 +85,45 @@ import {
   RestoreSphere,
   EnsureDefaultSpheres,
   GetSpheres,
+  CreateDirection,
+  UpdateDirection,
+  ArchiveDirection,
+  RestoreDirection,
+  MakeDirectionMain,
+  GetDirections,
+  GetDirectionsForSphere,
+  GetDirectionsOverview,
+  GetDirectionDetails,
+  CreateProject,
+  UpdateProject,
+  ArchiveProject,
+  RestoreProject,
+  CompleteProject,
+  PauseProject,
+  ResumeProject,
+  MakeProjectMain,
+  EnsureSingleMainProject,
+  GetProjects,
+  GetProjectsForSphere,
+  GetProjectsForDirection,
+  GetProjectById,
+  GetProjectLifeActions,
+  GetManagementOverview,
+  CreateGoal,
+  UpdateGoal,
+  ArchiveGoal,
+  GetGoalById,
+  GetGoals,
+  ApplyDirectionStrategicReview,
+  GetMorningOverview,
+  MorningCycleApplicationService,
+  EveningCycleApplicationService,
+  GetReflectionContext,
+  ReflectionApplicationService,
+  TomorrowPlanService,
+  PreparationService,
 } from '../../application';
+import { ReflectionEngine } from '../../domain';
 import { SystemClock } from '../../infrastructure/clock/SystemClock';
 import { SystemCurrentDateProvider } from '../../infrastructure/clock/SystemCurrentDateProvider';
 import { CryptoIdGenerator } from '../../infrastructure/ids/CryptoIdGenerator';
@@ -89,8 +140,21 @@ import { IndexedDbRoutineOccurrenceOverrideRepository } from '../../infrastructu
 import { IndexedDbRoutineOccurrenceExecutionRepository } from '../../infrastructure/persistence/IndexedDbRoutineOccurrenceExecutionRepository';
 import { IndexedDbWalkRepository } from '../../infrastructure/persistence/IndexedDbWalkRepository';
 import { IndexedDbSphereRepository } from '../../infrastructure/persistence/IndexedDbSphereRepository';
+import { IndexedDbDirectionRepository } from '../../infrastructure/persistence/IndexedDbDirectionRepository';
+import { IndexedDbProjectRepository } from '../../infrastructure/persistence/IndexedDbProjectRepository';
+import { IndexedDbGoalRepository } from '../../infrastructure/persistence/IndexedDbGoalRepository';
 import { IndexedDbOpenDayConflictReader } from '../../infrastructure/persistence/IndexedDbOpenDayConflictReader';
 import { IndexedDbOpenDayRecoveryUnitOfWork } from '../../infrastructure/persistence/IndexedDbOpenDayRecoveryUnitOfWork';
+import { IndexedDbEveningCycleRepository } from '../../infrastructure/persistence/IndexedDbEveningCycleRepository';
+import { IndexedDbMorningCycleRepository } from '../../infrastructure/persistence/IndexedDbMorningCycleRepository';
+import { IndexedDbEveningHistoryReader } from '../../infrastructure/persistence/IndexedDbEveningHistoryReader';
+import { IndexedDbOpenLoopResolutionUnitOfWork } from '../../infrastructure/persistence/IndexedDbOpenLoopResolutionUnitOfWork';
+import { IndexedDbTomorrowPlanRepository } from '../../infrastructure/persistence/IndexedDbTomorrowPlanRepository';
+import { IndexedDbTomorrowPlanUnitOfWork } from '../../infrastructure/persistence/IndexedDbTomorrowPlanUnitOfWork';
+import { IndexedDbPreparationPlanRepository } from '../../infrastructure/persistence/IndexedDbPreparationPlanRepository';
+import { IndexedDbPreparationRuleRepository } from '../../infrastructure/persistence/IndexedDbPreparationRuleRepository';
+import { IndexedDbPreparationUnitOfWork } from '../../infrastructure/persistence/IndexedDbPreparationUnitOfWork';
+import { IndexedDbRecommendationApplicationRepository } from '../../infrastructure/persistence/IndexedDbRecommendationApplicationRepository';
 import { LifeOsIndexedDb } from '../../infrastructure/persistence/indexed-db/LifeOsIndexedDb';
 import { LifeOsApplication } from './LifeOsApplication';
 import { LifeOsApplicationInitializationError } from './LifeOsApplicationInitializationError';
@@ -114,6 +178,14 @@ export async function createLifeOsApplication(
     const decisionRepository = new IndexedDbDecisionRepository(database);
     const lifeActionRepository = new IndexedDbLifeActionRepository(database);
     const actionSessionRepository = new IndexedDbActionSessionRepository(database);
+    const morningCycleRepository = new IndexedDbMorningCycleRepository(database);
+    const eveningCycleRepository = new IndexedDbEveningCycleRepository(database);
+    const tomorrowPlanRepository = new IndexedDbTomorrowPlanRepository(database);
+    const preparationPlanRepository = new IndexedDbPreparationPlanRepository(database);
+    const preparationRuleRepository = new IndexedDbPreparationRuleRepository(database);
+    const recommendationApplicationRepository = new IndexedDbRecommendationApplicationRepository(
+      database,
+    );
     const journalRepository = new IndexedDbJournalRepository(database);
     const journalUnitOfWork = new IndexedDbJournalUnitOfWork(database);
     const routineBlockRepository = new IndexedDbRoutineBlockRepository(database);
@@ -125,12 +197,83 @@ export async function createLifeOsApplication(
     );
     const walkRepository = new IndexedDbWalkRepository(database);
     const sphereRepository = new IndexedDbSphereRepository(database);
+    const directionRepository = new IndexedDbDirectionRepository(database);
+    const projectRepository = new IndexedDbProjectRepository(database);
+    const goalRepository = new IndexedDbGoalRepository(database);
     const openDayConflictReader = new IndexedDbOpenDayConflictReader(database);
     const openDayRecoveryUnitOfWork = new IndexedDbOpenDayRecoveryUnitOfWork(database);
     const clock = dependencies.clock ?? new SystemClock();
     const currentDateProvider =
       dependencies.currentDateProvider ?? new SystemCurrentDateProvider(clock);
     const idGenerator = dependencies.idGenerator ?? new CryptoIdGenerator();
+    const morningCycle = new MorningCycleApplicationService(
+      morningCycleRepository,
+      dayRepository,
+      currentDateProvider,
+      clock,
+      idGenerator,
+    );
+    const eveningCycle = new EveningCycleApplicationService(
+      eveningCycleRepository,
+      dayRepository,
+      clock,
+      idGenerator,
+    );
+    const getReflectionContext = new GetReflectionContext(
+      eveningCycleRepository,
+      dayRepository,
+      decisionRepository,
+      lifeActionRepository,
+      actionSessionRepository,
+    );
+    const reflection = new ReflectionApplicationService(
+      eveningCycleRepository,
+      getReflectionContext,
+      new ReflectionEngine(),
+      clock,
+      idGenerator,
+    );
+    const tomorrowPlan = new TomorrowPlanService(
+      eveningCycleRepository,
+      tomorrowPlanRepository,
+      dayRepository,
+      decisionRepository,
+      lifeActionRepository,
+      currentDateProvider,
+      clock,
+      idGenerator,
+      new IndexedDbTomorrowPlanUnitOfWork(database),
+    );
+    const preparation = new PreparationService(
+      eveningCycleRepository,
+      tomorrowPlanRepository,
+      preparationPlanRepository,
+      preparationRuleRepository,
+      decisionRepository,
+      lifeActionRepository,
+      projectRepository,
+      clock,
+      idGenerator,
+      new IndexedDbPreparationUnitOfWork(database),
+    );
+    const getOpenLoopsForDay = new GetOpenLoopsForDay(
+      dayRepository,
+      decisionRepository,
+      lifeActionRepository,
+      actionSessionRepository,
+      eveningCycle,
+    );
+    const resolveOpenLoop = new ResolveOpenLoop(
+      getOpenLoopsForDay,
+      decisionRepository,
+      lifeActionRepository,
+      actionSessionRepository,
+      new IndexedDbOpenLoopResolutionUnitOfWork(database),
+      currentDateProvider,
+      clock,
+      idGenerator,
+    );
+    await new EnsureSingleMainProject(projectRepository, clock).execute();
     const ensureDefaultSpheres = new EnsureDefaultSpheres(sphereRepository, clock);
     await ensureDefaultSpheres.execute();
     const ensureCurrentDay = new EnsureCurrentDay(
@@ -149,7 +292,7 @@ export async function createLifeOsApplication(
       idGenerator,
       journalUnitOfWork,
     );
-    const getEveningReview = new GetEveningReview(
+    const getEveningCycleReview = new GetEveningCycleReview(
       dayRepository,
       decisionRepository,
       lifeActionRepository,
@@ -158,14 +301,42 @@ export async function createLifeOsApplication(
       routineBlockRepository,
       routineOccurrenceOverrideRepository,
       routineOccurrenceExecutionRepository,
+      eveningCycle,
+      ensureCurrentDay,
+    );
+    const getEveningReview = new GetEveningReview(getEveningCycleReview);
+    const getEveningHistory = new GetEveningHistory(new IndexedDbEveningHistoryReader(database));
+    const getEveningHistorySummary = new GetEveningHistorySummary(getEveningHistory);
+    const detectEveningPatterns = new DetectEveningPatterns(getEveningHistory);
+    const getEveningSignals = new GetEveningSignals(detectEveningPatterns);
+    const getEveningRecommendations = new GetEveningRecommendations(getEveningSignals);
+    const getEveningAnalytics = new GetEveningAnalytics(
+      getEveningHistory,
+      recommendationApplicationRepository,
+    );
+    const recommendationApplications = new RecommendationApplicationService(
+      getEveningRecommendations,
+      recommendationApplicationRepository,
+      tomorrowPlan,
+      preparationPlanRepository,
+      decisionRepository,
+      clock,
+    );
+    const getApplicationMode = new GetApplicationMode(
+      dayRepository,
+      eveningCycleRepository,
+      currentDateProvider,
     );
     const dayCompletionUnitOfWork = new IndexedDbDayCompletionUnitOfWork(database);
-    const completeCurrentDay = new CompleteCurrentDay(
-      getEveningReview,
+    const completeEveningCycle = new CompleteEveningCycle(
+      getEveningCycleReview,
       dayCompletionUnitOfWork,
       clock,
       idGenerator,
+      tomorrowPlanRepository,
+      preparationPlanRepository,
     );
+    const completeCurrentDay = new CompleteCurrentDay(completeEveningCycle);
     const updateDayResultSphere = new UpdateDayResultSphere(dayRepository);
     const mainDecisionLimitPolicy = new MainDecisionLimitPolicy(decisionRepository);
     const createDecisionForDate = new CreateDecisionForDate(
@@ -176,8 +347,16 @@ export async function createLifeOsApplication(
       clock,
       idGenerator,
       journalUnitOfWork,
+      projectRepository,
     );
     const getDecisionsForDate = new GetDecisionsForDate(decisionRepository);
+    const getDecisionsForProject = new GetDecisionsForProject(decisionRepository);
+    const getProjectLifeActions = new GetProjectLifeActions(
+      decisionRepository,
+      lifeActionRepository,
+      actionSessionRepository,
+      projectRepository,
+    );
     const getDeletedDecisions = new GetDeletedDecisions(decisionRepository);
     const getDecisionById = new GetDecisionById(decisionRepository);
     const getDecisionOverview = new GetDecisionOverview(
@@ -273,7 +452,12 @@ export async function createLifeOsApplication(
       clock,
       idGenerator,
     );
-    const updateDecisionDetails = new UpdateDecisionDetails(decisionRepository, clock, idGenerator);
+    const updateDecisionDetails = new UpdateDecisionDetails(
+      decisionRepository,
+      clock,
+      idGenerator,
+      projectRepository,
+    );
     const deleteDecisionSafely = new DeleteDecisionSafely(
       decisionRepository,
       lifeActionRepository,
@@ -355,6 +539,14 @@ export async function createLifeOsApplication(
       routineBlockRepository,
       routineOccurrenceOverrideRepository,
     );
+    const getMorningOverview = new GetMorningOverview(
+      morningCycleRepository,
+      tomorrowPlanRepository,
+      decisionRepository,
+      lifeActionRepository,
+      getRoutineBlocksForDate,
+      currentDateProvider,
+    );
     const getRoutinePlanFactForDate = new GetRoutinePlanFactForDate(
       getRoutineBlocksForDate,
       routineOccurrenceExecutionRepository,
@@ -426,16 +618,83 @@ export async function createLifeOsApplication(
     const archiveSphere = new ArchiveSphere(sphereRepository, clock);
     const restoreSphere = new RestoreSphere(sphereRepository, clock);
     const getSpheres = new GetSpheres(sphereRepository);
+    const createDirection = new CreateDirection(directionRepository, clock, idGenerator);
+    const updateDirection = new UpdateDirection(directionRepository, projectRepository, clock);
+    const archiveDirection = new ArchiveDirection(directionRepository, clock);
+    const restoreDirection = new RestoreDirection(directionRepository, clock);
+    const makeDirectionMain = new MakeDirectionMain(directionRepository, clock);
+    const getDirections = new GetDirections(directionRepository);
+    const getDirectionsForSphere = new GetDirectionsForSphere(directionRepository);
+    const getDirectionsOverview = new GetDirectionsOverview(directionRepository, projectRepository);
+    const getManagementOverview = new GetManagementOverview(
+      directionRepository,
+      projectRepository,
+      decisionRepository,
+      lifeActionRepository,
+      actionSessionRepository,
+    );
+    const getDirectionDetails = new GetDirectionDetails(
+      directionRepository,
+      projectRepository,
+      decisionRepository,
+      lifeActionRepository,
+      actionSessionRepository,
+      currentDateProvider,
+      journalRepository,
+    );
+    const applyDirectionStrategicReview = new ApplyDirectionStrategicReview(
+      directionRepository,
+      projectRepository,
+      journalUnitOfWork,
+      clock,
+      currentDateProvider,
+      idGenerator,
+    );
+    const createProject = new CreateProject(
+      projectRepository,
+      directionRepository,
+      clock,
+      idGenerator,
+    );
+    const updateProject = new UpdateProject(
+      projectRepository,
+      directionRepository,
+      clock,
+      decisionRepository,
+    );
+    const archiveProject = new ArchiveProject(projectRepository, clock);
+    const restoreProject = new RestoreProject(projectRepository, clock);
+    const completeProject = new CompleteProject(projectRepository, clock);
+    const pauseProject = new PauseProject(projectRepository, clock);
+    const resumeProject = new ResumeProject(projectRepository, clock);
+    const makeProjectMain = new MakeProjectMain(projectRepository, clock);
+    const getProjects = new GetProjects(projectRepository);
+    const getProjectsForSphere = new GetProjectsForSphere(projectRepository);
+    const getProjectsForDirection = new GetProjectsForDirection(projectRepository);
+    const getProjectById = new GetProjectById(projectRepository);
+    const createGoal = new CreateGoal(goalRepository, clock, idGenerator);
+    const updateGoal = new UpdateGoal(goalRepository, clock);
+    const archiveGoal = new ArchiveGoal(goalRepository, clock);
+    const getGoalById = new GetGoalById(goalRepository);
+    const getGoals = new GetGoals(goalRepository);
     const application = new LifeOsApplication({
       dayRepository,
       decisionRepository,
       lifeActionRepository,
       actionSessionRepository,
+      morningCycleRepository,
+      eveningCycleRepository,
+      tomorrowPlanRepository,
+      preparationPlanRepository,
+      recommendationApplicationRepository,
       routineBlockRepository,
       routineOccurrenceOverrideRepository,
       routineOccurrenceExecutionRepository,
       walkRepository,
       sphereRepository,
+      directionRepository,
+      projectRepository,
+      goalRepository,
       journalRepository,
       clock,
       currentDateProvider,
@@ -445,10 +704,30 @@ export async function createLifeOsApplication(
       currentDate: currentDay.date,
       startCurrentDay,
       getEveningReview,
+      getEveningCycleReview,
+      getEveningHistory,
+      getEveningHistorySummary,
+      detectEveningPatterns,
+      getEveningSignals,
+      getEveningRecommendations,
+      getEveningAnalytics,
+      recommendationApplications,
+      getApplicationMode,
+      getOpenLoopsForDay,
+      resolveOpenLoop,
+      morningCycle,
+      eveningCycle,
+      getReflectionContext,
+      reflection,
+      tomorrowPlan,
+      preparation,
+      completeEveningCycle,
       completeCurrentDay,
       updateDayResultSphere,
       createDecisionForDate,
       getDecisionsForDate,
+      getDecisionsForProject,
+      getProjectLifeActions,
       getDeletedDecisions,
       getDecisionById,
       getDecisionOverview,
@@ -483,6 +762,7 @@ export async function createLifeOsApplication(
       updateRoutineBlock,
       deleteRoutineBlock,
       getRoutineBlocksForDate,
+      getMorningOverview,
       getRoutineActionOptions,
       getRoutineActionDetails,
       delayRoutineOccurrence,
@@ -512,6 +792,34 @@ export async function createLifeOsApplication(
       archiveSphere,
       restoreSphere,
       getSpheres,
+      createDirection,
+      updateDirection,
+      archiveDirection,
+      restoreDirection,
+      makeDirectionMain,
+      getDirections,
+      getDirectionsForSphere,
+      getDirectionsOverview,
+      getManagementOverview,
+      getDirectionDetails,
+      applyDirectionStrategicReview,
+      createProject,
+      updateProject,
+      archiveProject,
+      restoreProject,
+      completeProject,
+      pauseProject,
+      resumeProject,
+      makeProjectMain,
+      getProjects,
+      getProjectsForSphere,
+      getProjectsForDirection,
+      getProjectById,
+      createGoal,
+      updateGoal,
+      archiveGoal,
+      getGoalById,
+      getGoals,
       closeDatabase: () => database.close(),
     });
 

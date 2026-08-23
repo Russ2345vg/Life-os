@@ -1,11 +1,17 @@
-import type { DecisionRepository } from '../../application';
+import type {
+  DecisionRepository,
+  DecisionsByProjectIdsReader,
+  DecisionsByProjectReader,
+} from '../../application';
 import type { DayDate, Decision, EntityId } from '../../domain';
 import { executeIndexedDbRequest } from './indexed-db/IndexedDbRequest';
 import { LIFE_OS_STORE, LifeOsIndexedDb } from './indexed-db/LifeOsIndexedDb';
 import { DecisionRecordMapper } from './mappers/DecisionRecordMapper';
 import type { DecisionRecord } from './records/DecisionRecord';
 
-export class IndexedDbDecisionRepository implements DecisionRepository {
+export class IndexedDbDecisionRepository
+  implements DecisionRepository, DecisionsByProjectReader, DecisionsByProjectIdsReader
+{
   readonly #indexedDb: LifeOsIndexedDb;
 
   public constructor(indexedDb: LifeOsIndexedDb = new LifeOsIndexedDb()) {
@@ -38,6 +44,35 @@ export class IndexedDbDecisionRepository implements DecisionRepository {
     );
 
     return storedRecords.map((record) => DecisionRecordMapper.fromRecord(record as DecisionRecord));
+  }
+
+  public async findByProjectId(projectId: EntityId): Promise<readonly Decision[]> {
+    const database = await this.#indexedDb.open();
+    const storedRecords = await executeIndexedDbRequest<unknown[]>(
+      database,
+      LIFE_OS_STORE.decisions,
+      'readonly',
+      (store) => store.index('byProjectId').getAll(projectId.toString()),
+    );
+
+    return storedRecords.map((record) => DecisionRecordMapper.fromRecord(record as DecisionRecord));
+  }
+
+  public async findByProjectIds(projectIds: readonly EntityId[]): Promise<readonly Decision[]> {
+    if (projectIds.length === 0) return [];
+    const acceptedIds = new Set(projectIds.map((projectId) => projectId.toString()));
+    const database = await this.#indexedDb.open();
+    const records = await executeIndexedDbRequest<unknown[]>(
+      database,
+      LIFE_OS_STORE.decisions,
+      'readonly',
+      (store) => store.getAll(),
+    );
+    return records
+      .map((record) => DecisionRecordMapper.fromRecord(record as DecisionRecord))
+      .filter((decision) =>
+        decision.projectId === null ? false : acceptedIds.has(decision.projectId.toString()),
+      );
   }
 
   public async findAll(): Promise<readonly Decision[]> {

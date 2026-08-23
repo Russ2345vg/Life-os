@@ -35,8 +35,9 @@ describe('ApplicationShellView', () => {
     expect(markup).toContain('Навигация LifeOS');
     expect(markup).toContain('Основные разделы');
     expect(markup).toContain('День');
-    expect(markup).toContain('Решения');
-    expect(markup).toContain('Действия');
+    expect(markup).toContain('Управление');
+    expect(markup).not.toContain('<span class="application-navigation-label">Решения</span>');
+    expect(markup).not.toContain('<span class="application-navigation-label">Действия</span>');
     expect(markup).toContain('Сферы');
     expect(markup).toContain('История');
     expect(markup).toContain('Ещё');
@@ -46,20 +47,32 @@ describe('ApplicationShellView', () => {
   });
 
   it('отмечает активный раздел через aria-current', () => {
-    const markup = renderShell(APP_SECTION.actions);
+    const markup = renderShell(APP_SECTION.management);
 
     expect(markup).toContain('aria-current="page"');
     expect(markup).toMatch(
-      /aria-current="page"[^>]*>[\s\S]*?<span class="application-navigation-label">Действия<\/span>/,
+      /aria-current="page"[^>]*>[\s\S]*?<span class="application-navigation-label">Управление<\/span>/,
+    );
+  });
+
+  it('подключает Управление как самостоятельный раздел desktop и mobile', () => {
+    const markup = renderShell(APP_SECTION.management);
+
+    expect(markup).toMatch(
+      /aria-current="page"[^>]*>[\s\S]*?<span class="application-navigation-label">Управление<\/span>/,
+    );
+    const mobileNavigation = markup.slice(markup.indexOf('Мобильная навигация'));
+    expect(mobileNavigation).toContain(
+      '<span class="application-navigation-label">Управление</span>',
     );
   });
 
   it('сворачивает панель до режима иконок, сохраняя подписи и кнопку разворачивания', () => {
-    const markup = renderShell(APP_SECTION.actions, true);
+    const markup = renderShell(APP_SECTION.management, true);
 
     expect(markup).toContain('application-sidebar-collapsed');
     expect(markup).toContain('aria-label="Развернуть боковое меню"');
-    expect(markup).toContain('data-tooltip="Действия"');
+    expect(markup).toContain('data-tooltip="Управление"');
     expect(markup).toContain('title="Локальный режим"');
     expect(markup).toContain('aria-current="page"');
   });
@@ -72,13 +85,27 @@ describe('ApplicationShellView', () => {
     expect(markup).toContain('<span class="application-navigation-label">День</span>');
   });
 
-  it('показывает мобильную навигацию и отдельную кнопку создания', () => {
+  it('сохраняет одноколоночное содержимое Сегодня при обоих состояниях бокового меню', () => {
+    const expanded = renderShell(APP_SECTION.today, false);
+    const collapsed = renderShell(APP_SECTION.today, true);
+
+    expect(expanded).toContain('Содержимое раздела');
+    expect(expanded).not.toContain('application-sidebar-collapsed');
+    expect(collapsed).toContain('Содержимое раздела');
+    expect(collapsed).toContain('application-sidebar-collapsed');
+  });
+
+  it('показывает мобильную навигацию без дублирующих входов и отдельную кнопку создания', () => {
     const markup = renderShell(APP_SECTION.history);
 
     expect(markup).toContain('Мобильная навигация');
     expect(markup).toContain('aria-label="Создать решение"');
     expect(markup).toContain('>Создать</span>');
     expect(markup).toContain('Перейти к содержимому');
+    const mobileNavigation = markup.slice(markup.indexOf('Мобильная навигация'));
+    expect(mobileNavigation).not.toContain(
+      '<span class="application-navigation-label">Действия</span>',
+    );
   });
 
   it('применяет плотность и уменьшение движения через классы оболочки', () => {
@@ -129,7 +156,7 @@ describe('ApplicationShellView', () => {
   it('готовит мобильное меню поверх страницы с управлением закрытием', () => {
     const markup = renderToStaticMarkup(
       createElement(ApplicationMobileMenu, {
-        activeSection: APP_SECTION.decisions,
+        activeSection: APP_SECTION.management,
         currentDayStatus: DAY_STATUS.open,
         onOpenSection: vi.fn(),
         onClose: vi.fn(),
@@ -141,6 +168,8 @@ describe('ApplicationShellView', () => {
     expect(markup).toContain('aria-modal="true"');
     expect(markup).toContain('aria-label="Закрыть меню"');
     expect(markup).toContain('aria-current="page"');
-    expect(markup).toContain('<span class="application-navigation-label">Решения</span>');
+    expect(markup).toContain('<span class="application-navigation-label">Управление</span>');
+    expect(markup).not.toContain('<span class="application-navigation-label">Решения</span>');
+    expect(markup).not.toContain('<span class="application-navigation-label">Действия</span>');
   });
 });

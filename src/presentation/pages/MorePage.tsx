@@ -1,7 +1,13 @@
 import { useState } from 'react';
 import { AppIcon, type AppIconName } from '../components/AppIcon';
 import { SectionPageHeader } from '../components/SectionPageHeader';
-import { APP_SECTION, APP_SECTION_LABELS, type AppSection } from '../navigation/AppSection';
+import {
+  APP_SECTION,
+  APP_SECTION_LABELS,
+  APP_SECTION_MENU_OPTIONS,
+  resolveMenuEntrySection,
+  type AppSection,
+} from '../navigation/AppSection';
 import {
   copyLocalSettings,
   DEFAULT_LOCAL_SETTINGS,
@@ -29,13 +35,6 @@ interface MoreSectionItem {
 
 const MORE_SECTIONS: readonly MoreSectionItem[] = [
   {
-    title: 'Решения',
-    description: 'Обзор главных и дополнительных решений по выбранной дате.',
-    icon: 'decisions',
-    available: true,
-    target: APP_SECTION.decisions,
-  },
-  {
     title: 'Настройки',
     description: 'Стартовый раздел, плотность интерфейса и параметры мобильной шапки.',
     icon: 'settings',
@@ -57,10 +56,11 @@ const MORE_SECTIONS: readonly MoreSectionItem[] = [
     target: APP_SECTION.walks,
   },
   {
-    title: 'Статистика',
-    description: 'Спокойный обзор результатов и фактически вложенного времени.',
+    title: 'Вечерняя аналитика',
+    description: 'Закономерности завершения дня, сигналы и рекомендации на завтра.',
     icon: 'statistics',
-    available: false,
+    available: true,
+    target: APP_SECTION.eveningAnalytics,
   },
   {
     title: 'Сферы',
@@ -142,7 +142,10 @@ export function LocalSettingsPage({
   onResetSettings,
   onBack,
 }: LocalSettingsPageProps) {
-  const [draft, setDraft] = useState<LocalSettings>(() => copyLocalSettings(settings));
+  const [draft, setDraft] = useState<LocalSettings>(() => ({
+    ...copyLocalSettings(settings),
+    defaultSection: resolveMenuEntrySection(settings.defaultSection),
+  }));
   const [message, setMessage] = useState<string | null>(
     settingsRecoveredFromInvalidValue
       ? 'Повреждённые настройки были заменены безопасными значениями.'
@@ -216,7 +219,7 @@ export function LocalSettingsPage({
                 }))
               }
             >
-              {Object.values(APP_SECTION).map((section) => (
+              {APP_SECTION_MENU_OPTIONS.map((section) => (
                 <option key={section} value={section}>
                   {APP_SECTION_LABELS[section]}
                 </option>

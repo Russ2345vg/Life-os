@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   DayDate,
   EntityId,
@@ -11,7 +11,12 @@ import {
   RoutineOccurrenceOverride,
   resolveRoutineOccurrencesForDate,
 } from '../../domain';
-import { resolveRoutinePlanFactPresentation } from './GetRoutinePlanFactForDate';
+import { InMemoryRoutineOccurrenceExecutionRepository } from '../../infrastructure';
+import { FakeClock } from '../../test/helpers/Fakes';
+import {
+  GetRoutinePlanFactForDate,
+  resolveRoutinePlanFactPresentation,
+} from './GetRoutinePlanFactForDate';
 
 const DATE = DayDate.create('2026-08-08');
 
@@ -102,5 +107,36 @@ describe('routine plan/fact presentation', () => {
       actualDurationMinutes: 40,
       durationDeviationMinutes: 0,
     });
+  });
+
+  it('loads all occurrence executions in one repository read', async () => {
+    const block = createBlock();
+    const occurrence = resolveRoutineOccurrencesForDate([block], [], DATE)[0]!;
+    const execution = RoutineOccurrenceExecution.rehydrate({
+      id: EntityId.create('execution-batched'),
+      routineBlockId: block.id,
+      occurrenceDate: DATE,
+      actualStartedAt: new Date('2026-08-08T08:05:00'),
+      actualEndedAt: null,
+      status: 'running',
+      note: null,
+      createdAt: new Date('2026-08-08T08:05:00'),
+      updatedAt: new Date('2026-08-08T08:05:00'),
+      version: 1,
+    });
+    const repository = new InMemoryRoutineOccurrenceExecutionRepository([execution]);
+    const findAll = vi.spyOn(repository, 'findAll');
+    const findByOccurrence = vi.spyOn(repository, 'findByOccurrence');
+    const query = new GetRoutinePlanFactForDate(
+      { execute: async () => [occurrence] },
+      repository,
+      new FakeClock(new Date('2026-08-08T08:10:00')),
+    );
+
+    const result = await query.execute(DATE);
+
+    expect(result[0]?.execution).toBe(execution);
+    expect(findAll).toHaveBeenCalledTimes(1);
+    expect(findByOccurrence).not.toHaveBeenCalled();
   });
 });

@@ -40,6 +40,7 @@ export interface DecisionDraftInput {
   readonly sacrifices?: string;
   readonly priority?: DecisionPriority;
   readonly projectReference?: string;
+  readonly projectId?: EntityId | null;
   readonly occurredAt: Date;
   readonly eventId: EntityId;
 }
@@ -70,6 +71,7 @@ export interface DecisionDetailsUpdateInput {
   readonly sacrifices?: string | null;
   readonly priority?: DecisionPriority;
   readonly projectReference?: string | null;
+  readonly projectId?: EntityId | null;
   readonly kind?: DecisionKind;
   readonly order?: number | null;
   readonly occurredAt: Date;
@@ -93,6 +95,7 @@ export interface DecisionRehydrationData {
   readonly sacrifices?: string | null;
   readonly priority?: DecisionPriority;
   readonly projectReference?: string | null;
+  readonly projectId?: EntityId | null;
   readonly expectedResult: ExpectedResult | null;
   readonly actualResultSummary: ActualResultSummary | null;
   readonly status: DecisionStatus;
@@ -125,6 +128,7 @@ export class Decision extends Entity {
   #sacrifices: string | null;
   #priority: DecisionPriority;
   #projectReference: string | null;
+  #projectId: EntityId | null;
   #expectedResult: ExpectedResult | null;
   #actualResultSummary: ActualResultSummary | null;
   #status: DecisionStatus;
@@ -175,6 +179,7 @@ export class Decision extends Entity {
       200,
       'decision.invalid_project_reference',
     );
+    this.#projectId = data.projectId ?? null;
     this.#expectedResult = data.expectedResult;
     this.#actualResultSummary = data.actualResultSummary;
     this.#status = data.status;
@@ -213,6 +218,7 @@ export class Decision extends Entity {
         sacrifices: input.sacrifices ?? null,
         priority: input.priority ?? DECISION_PRIORITY.normal,
         projectReference: input.projectReference ?? null,
+        projectId: input.projectId ?? null,
         expectedResult: input.expectedResult ?? null,
         actualResultSummary: null,
         status: DECISION_STATUS.draft,
@@ -294,6 +300,10 @@ export class Decision extends Entity {
 
   public get projectReference(): string | null {
     return this.#projectReference;
+  }
+
+  public get projectId(): EntityId | null {
+    return this.#projectId;
   }
 
   public get expectedResult(): ExpectedResult | null {
@@ -476,6 +486,7 @@ export class Decision extends Entity {
       200,
       'decision.invalid_project_reference',
     );
+    const projectId = input.projectId === undefined ? this.#projectId : input.projectId;
     const kind = input.kind ?? this.#kind;
     const order = input.order === undefined ? this.#order : input.order;
 
@@ -491,7 +502,8 @@ export class Decision extends Entity {
         this.#order !== order ||
         !sameOptionalEntityId(this.#sphereId, sphereId) ||
         this.#priority !== priority ||
-        this.#projectReference !== projectReference;
+        this.#projectReference !== projectReference ||
+        !sameOptionalEntityId(this.#projectId, projectId);
 
       if (changedLockedField) {
         throw new DomainError(
@@ -511,6 +523,7 @@ export class Decision extends Entity {
       this.#sacrifices === sacrifices &&
       this.#priority === priority &&
       this.#projectReference === projectReference &&
+      sameOptionalEntityId(this.#projectId, projectId) &&
       this.#kind === kind &&
       this.#order === order;
 
@@ -527,6 +540,7 @@ export class Decision extends Entity {
     this.#sacrifices = sacrifices;
     this.#priority = priority;
     this.#projectReference = projectReference;
+    this.#projectId = projectId;
     this.#kind = kind;
     this.#order = order;
     this.#version += 1;

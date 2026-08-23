@@ -21,9 +21,13 @@ import {
   type DomainEvent,
   type JournalMetadata,
   type LifeAction,
+  type EveningCycle,
 } from '../../domain';
 
-export function createDayJournalEntries(day: Day): readonly JournalEntry[] {
+export function createDayJournalEntries(
+  day: Day,
+  eveningCycle?: EveningCycle,
+): readonly JournalEntry[] {
   return day.getUncommittedEvents().flatMap((event) => {
     if (event instanceof DayOpened) {
       return [
@@ -40,7 +44,22 @@ export function createDayJournalEntries(day: Day): readonly JournalEntry[] {
           subjectId: day.id,
           sphereId: event.sphereId,
           effectiveDate: event.date,
-          ...(event.summary === null ? {} : { metadata: { summary: event.summary } }),
+          ...{
+            metadata: {
+              ...(event.summary === null ? {} : { summary: event.summary }),
+              ...(eveningCycle === undefined
+                ? {}
+                : {
+                    eveningMode: eveningCycle.mode,
+                    eveningCompletion: eveningCycle.completion,
+                    eveningStartedAt: eveningCycle.startedAt?.toISOString() ?? null,
+                    eveningCompletedAt: eveningCycle.completedAt?.toISOString() ?? null,
+                    eveningSkippedStages: eveningCycle.skippedStages
+                      .map((item) => `${item.stage}:${item.reason}`)
+                      .join(','),
+                  }),
+            },
+          },
         }),
       ];
     }

@@ -1,4 +1,4 @@
-import type { DayDate, EntityId, JournalEntry } from '../../domain';
+import type { DayDate, EntityId, JournalEntry, JournalEntryType } from '../../domain';
 
 export interface JournalRepository {
   append(entry: JournalEntry): Promise<void>;
@@ -6,4 +6,8 @@ export interface JournalRepository {
   findById(id: EntityId): Promise<JournalEntry | null>;
   findCorrectionsBySourceEntryId(sourceEntryId: EntityId): Promise<readonly JournalEntry[]>;
   findByEffectiveDateRange(startDate: DayDate, endDate: DayDate): Promise<readonly JournalEntry[]>;
+  findLatestBySubjectAndType(
+    subjectId: EntityId,
+    type: JournalEntryType,
+  ): Promise<JournalEntry | null>;
 }

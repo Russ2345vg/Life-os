@@ -82,6 +82,19 @@ describe('InMemoryActionSessionRepository', () => {
     await expect(repository.findByLifeActionId(id('action-1'))).resolves.toEqual([expected]);
   });
 
+  it('пакетно находит сессии нескольких LifeAction', async () => {
+    const repository = new InMemoryActionSessionRepository();
+    const first = createRunningSession('session-1', 'action-1');
+    const second = createCompletedSession('session-2', 'action-2');
+    await repository.save(first);
+    await repository.save(second);
+    await repository.save(createRunningSession('session-3', 'action-3'));
+
+    await expect(repository.findByLifeActionIds([id('action-1'), id('action-2')])).resolves.toEqual(
+      [first, second],
+    );
+  });
+
   it('возвращает отдельный массив результатов', async () => {
     const repository = new InMemoryActionSessionRepository();
     const session = createRunningSession('session-1', 'action-1');

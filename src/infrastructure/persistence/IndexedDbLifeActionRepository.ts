@@ -1,11 +1,13 @@
-import type { LifeActionRepository } from '../../application';
+import type { LifeActionRepository, LifeActionsByDecisionIdsReader } from '../../application';
 import type { DayDate, EntityId, LifeAction } from '../../domain';
 import { executeIndexedDbRequest } from './indexed-db/IndexedDbRequest';
 import { LIFE_OS_STORE, LifeOsIndexedDb } from './indexed-db/LifeOsIndexedDb';
 import { LifeActionRecordMapper } from './mappers/LifeActionRecordMapper';
 import type { LifeActionRecord } from './records/LifeActionRecord';
 
-export class IndexedDbLifeActionRepository implements LifeActionRepository {
+export class IndexedDbLifeActionRepository
+  implements LifeActionRepository, LifeActionsByDecisionIdsReader
+{
   readonly #indexedDb: LifeOsIndexedDb;
 
   public constructor(indexedDb: LifeOsIndexedDb = new LifeOsIndexedDb()) {
@@ -34,6 +36,25 @@ export class IndexedDbLifeActionRepository implements LifeActionRepository {
 
   public async findByDecisionId(decisionId: EntityId): Promise<readonly LifeAction[]> {
     return this.findByIndex('byDecisionId', decisionId.toString());
+  }
+
+  public async findByDecisionIds(decisionIds: readonly EntityId[]): Promise<readonly LifeAction[]> {
+    if (decisionIds.length === 0) return [];
+
+    const acceptedIds = new Set(decisionIds.map((decisionId) => decisionId.toString()));
+    const database = await this.#indexedDb.open();
+    const storedRecords = await executeIndexedDbRequest<unknown[]>(
+      database,
+      LIFE_OS_STORE.lifeActions,
+      'readonly',
+      (store) => store.getAll(),
+    );
+
+    return storedRecords
+      .map((record) => LifeActionRecordMapper.fromRecord(record as LifeActionRecord))
+      .filter((lifeAction) =>
+        lifeAction.decisionId === null ? false : acceptedIds.has(lifeAction.decisionId.toString()),
+      );
   }
 
   public async findAll(): Promise<readonly LifeAction[]> {

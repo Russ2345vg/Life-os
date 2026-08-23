@@ -65,6 +65,25 @@ describe('InMemoryLifeActionRepository', () => {
     await expect(repository.findByDecisionId(DECISION_ID)).resolves.toEqual([linked]);
   });
 
+  it('пакетно находит действия нескольких Decision и исключает самостоятельные', async () => {
+    const repository = new InMemoryLifeActionRepository();
+    const secondDecisionId = EntityId.create('decision-2');
+    const first = createLifeActionDraft('first-linked', { decisionId: DECISION_ID });
+    const second = createLifeActionDraft('second-linked', { decisionId: secondDecisionId });
+    const unrelated = createLifeActionDraft('unrelated', {
+      decisionId: EntityId.create('decision-3'),
+    });
+    const standalone = createLifeActionDraft('standalone');
+    await Promise.all(
+      [first, second, unrelated, standalone].map((lifeAction) => repository.save(lifeAction)),
+    );
+
+    await expect(repository.findByDecisionIds([DECISION_ID, secondDecisionId])).resolves.toEqual([
+      first,
+      second,
+    ]);
+  });
+
   it('возвращает независимые массивы результатов обоих списочных поисков', async () => {
     const repository = new InMemoryLifeActionRepository();
     const lifeAction = createReadyLifeAction('linked', DATE, { decisionId: DECISION_ID });

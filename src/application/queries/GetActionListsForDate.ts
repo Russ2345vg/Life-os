@@ -69,19 +69,35 @@ export class GetActionListsForDate {
   }
 
   public async execute(date: DayDate): Promise<ActionListsForDateSnapshot> {
-    const [lifeActions, unfinishedSession] = await Promise.all([
+    const [lifeActions, unfinishedSession, allSessions, allDecisions] = await Promise.all([
       this.#lifeActionRepository.findByDate(date),
       this.#actionSessionRepository.findUnfinished(),
+      this.#actionSessionRepository.findAll?.(),
+      this.#decisionRepository.findAll?.(),
     ]);
     const visibleActions = lifeActions.filter((lifeAction) => !lifeAction.isArchived());
     const now = this.#clock.now();
     const decisionMetadataPromises = new Map<string, Promise<DecisionMetadata>>();
+    const sessionsByActionId =
+      allSessions === undefined ? null : indexSessionsByActionId(allSessions);
+    const decisionMetadataById =
+      allDecisions === undefined
+        ? null
+        : new Map(
+            allDecisions.map((decision) => [
+              decision.id.toString(),
+              { title: decision.title.toString() },
+            ]),
+          );
 
     const items = await Promise.all(
       visibleActions.map(async (lifeAction): Promise<ActionListItem> => {
-        const sessions = (
-          await this.#actionSessionRepository.findByLifeActionId(lifeAction.id)
-        ).filter((session) => session.lifeActionId.equals(lifeAction.id));
+        const sessions =
+          sessionsByActionId === null
+            ? (await this.#actionSessionRepository.findByLifeActionId(lifeAction.id)).filter(
+                (session) => session.lifeActionId.equals(lifeAction.id),
+              )
+            : (sessionsByActionId.get(lifeAction.id.toString()) ?? []);
         const relatedUnfinishedSession =
           unfinishedSession !== null && unfinishedSession.lifeActionId.equals(lifeAction.id)
             ? unfinishedSession
@@ -89,6 +105,7 @@ export class GetActionListsForDate {
         const decisionMetadata = await this.resolveDecisionMetadata(
           lifeAction,
           decisionMetadataPromises,
+          decisionMetadataById,
         );
 
         return Object.freeze({
@@ -116,12 +133,17 @@ export class GetActionListsForDate {
   private async resolveDecisionMetadata(
     lifeAction: LifeAction,
     cache: Map<string, Promise<DecisionMetadata>>,
+    preloaded: ReadonlyMap<string, DecisionMetadata> | null,
   ): Promise<DecisionMetadata> {
     if (lifeAction.decisionId === null) {
       return EMPTY_DECISION_METADATA;
     }
 
     const key = lifeAction.decisionId.toString();
+    if (preloaded !== null) {
+      return preloaded.get(key) ?? EMPTY_DECISION_METADATA;
+    }
+
     let metadataPromise = cache.get(key);
 
     if (metadataPromise === undefined) {
@@ -135,6 +157,24 @@ export class GetActionListsForDate {
 
     return metadataPromise;
   }
+}
+
+function indexSessionsByActionId(
+  sessions: readonly ActionSession[],
+): ReadonlyMap<string, readonly ActionSession[]> {
+  const byActionId = new Map<string, ActionSession[]>();
+
+  for (const session of sessions) {
+    const key = session.lifeActionId.toString();
+    const indexed = byActionId.get(key);
+    if (indexed === undefined) {
+      byActionId.set(key, [session]);
+    } else {
+      indexed.push(session);
+    }
+  }
+
+  return byActionId;
 }
 
 export function resolveActionListGroup(

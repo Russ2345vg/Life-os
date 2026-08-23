@@ -13,7 +13,13 @@ const RESTORED_AT = new Date('2026-08-07T08:00:00.000+09:00');
 
 describe('RestoreDeletedDecision', () => {
   it('восстанавливает решение в исходном состоянии', async () => {
-    const decision = deleted(createPlannedDecision('restore-success', DATE));
+    const linked = createPlannedDecision('restore-success', DATE);
+    linked.updateDetails({
+      projectId: EntityId.create('project-restore'),
+      occurredAt: new Date('2026-08-06T19:00:00.000+09:00'),
+      eventId: EntityId.create('project-restore-event'),
+    });
+    const decision = deleted(linked);
     const context = await createContext([decision]);
     const version = decision.version;
 
@@ -29,7 +35,28 @@ describe('RestoreDeletedDecision', () => {
     expect(stored?.status).toBe('planned');
     expect(stored?.lastDeletedAt).toEqual(DELETED_AT);
     expect(stored?.restoredFromTrashAt).toEqual(RESTORED_AT);
+    expect(stored?.projectId?.toString()).toBe('project-restore');
     expect(stored?.version).toBe(version + 1);
+  });
+
+  it('preserves reschedule history when restoring a decision', async () => {
+    const rescheduled = createPlannedDecision('history-restore', DATE);
+    rescheduled.reschedule(
+      DayDate.create('2026-08-07'),
+      'Moved before deletion',
+      new Date('2026-08-06T18:00:00.000+09:00'),
+      EntityId.create('history-restore-rescheduled'),
+    );
+    const history = rescheduled.rescheduleHistory;
+    const decision = deleted(rescheduled);
+    const context = await createContext([decision]);
+
+    const result = await context.command.execute({ decisionId: decision.id });
+
+    expect(result.ok).toBe(true);
+    const stored = await context.repository.findById(decision.id);
+    expect(stored?.rescheduleCount).toBe(1);
+    expect(stored?.rescheduleHistory).toEqual(history);
   });
 
   it('назначает свободную позицию, если прежняя позиция главного решения уже занята', async () => {

@@ -12,6 +12,7 @@ import {
   type DecisionStatus,
   type LifeAction,
   type LifeActionStatus,
+  type Project,
 } from '../../domain';
 import type {
   DecisionDetailsState,
@@ -35,6 +36,7 @@ interface DecisionDetailsPanelProps {
   readonly currentDate: DayDate;
   readonly readOnly: boolean;
   readonly spheres: SpheresSnapshot;
+  readonly projects?: readonly Project[];
   readonly now: Date;
   readonly isFormOpen: boolean;
   readonly isSaving: boolean;
@@ -82,6 +84,7 @@ interface DecisionDetailsPanelProps {
   readonly onRescheduleReasonChange: (reason: string) => void;
   readonly onRescheduleSubmit: (event: FormEvent<HTMLFormElement>) => void;
   readonly onOpenLifeAction: (lifeAction: LifeAction) => void;
+  readonly onOpenProject?: (projectId: string) => void;
 }
 
 export function DecisionDetailsPanel({
@@ -89,6 +92,7 @@ export function DecisionDetailsPanel({
   currentDate,
   readOnly,
   spheres,
+  projects = [],
   now,
   isFormOpen,
   isSaving,
@@ -136,6 +140,7 @@ export function DecisionDetailsPanel({
   onRescheduleReasonChange,
   onRescheduleSubmit,
   onOpenLifeAction,
+  onOpenProject = () => undefined,
 }: DecisionDetailsPanelProps) {
   if (details.status === 'closed') {
     return null;
@@ -180,6 +185,10 @@ export function DecisionDetailsPanel({
         session.status === ACTION_SESSION_STATUS.paused,
     ),
   );
+  const linkedProject =
+    details.status === 'ready' && details.decision.projectId !== null
+      ? (projects.find((project) => project.id.equals(details.decision.projectId!)) ?? null)
+      : null;
 
   return (
     <div className="decision-details-backdrop">
@@ -292,6 +301,26 @@ export function DecisionDetailsPanel({
                     <dd>{details.decision.sacrifices ?? 'Не указаны'}</dd>
                   </div>
                   <div>
+                    <dt>Проект</dt>
+                    <dd>
+                      {linkedProject === null ? (
+                        details.decision.projectId === null ? (
+                          'Не указан'
+                        ) : (
+                          'Проект недоступен'
+                        )
+                      ) : (
+                        <button
+                          className="decision-project-link"
+                          type="button"
+                          onClick={() => onOpenProject(linkedProject.id.toString())}
+                        >
+                          {linkedProject.title} →
+                        </button>
+                      )}
+                    </dd>
+                  </div>
+                  <div>
                     <dt>Связь с проектом</dt>
                     <dd>{details.decision.projectReference ?? 'Не указана'}</dd>
                   </div>
@@ -323,6 +352,7 @@ export function DecisionDetailsPanel({
                     decision={details.decision}
                     form={editForm}
                     spheres={spheres}
+                    projects={projects}
                     isSaving={isEditing}
                     error={editError}
                     onTextChange={onEditTextChange}
@@ -755,6 +785,7 @@ interface DecisionEditFormProps {
   readonly decision: Extract<DecisionDetailsState, { readonly status: 'ready' }>['decision'];
   readonly form: DecisionEditFormState;
   readonly spheres: SpheresSnapshot;
+  readonly projects: readonly Project[];
   readonly isSaving: boolean;
   readonly error: string | null;
   readonly onTextChange: (field: DecisionEditTextField, value: string) => void;
@@ -768,6 +799,7 @@ function DecisionEditForm({
   decision,
   form,
   spheres,
+  projects,
   isSaving,
   error,
   onTextChange,
@@ -897,17 +929,46 @@ function DecisionEditForm({
           />
         </label>
         <label>
-          <span>Связь с проектом</span>
-          <input
-            value={form.projectReference ?? ''}
+          <span>Проект</span>
+          <select
+            value={form.projectId ?? ''}
             disabled={isSaving || started}
-            maxLength={200}
-            onChange={(event: ChangeEvent<HTMLInputElement>) =>
-              onTextChange('projectReference', event.target.value)
-            }
-          />
+            onChange={(event: ChangeEvent<HTMLSelectElement>) => {
+              const projectId = event.target.value;
+              const project = projects.find((item) => item.id.toString() === projectId);
+              onTextChange('projectId', projectId);
+              if ((form.sphereId ?? '') === '' && project?.sphereId !== null) {
+                onTextChange('sphereId', project?.sphereId.toString() ?? '');
+              }
+            }}
+          >
+            <option value="">Без проекта</option>
+            {projects
+              .filter(
+                (project) =>
+                  (project.status !== 'completed' && project.status !== 'archived') ||
+                  project.id.toString() === form.projectId,
+              )
+              .map((project) => (
+                <option key={project.id.toString()} value={project.id.toString()}>
+                  {project.title}
+                </option>
+              ))}
+          </select>
         </label>
       </div>
+
+      <label>
+        <span>Старая ссылка на проект</span>
+        <input
+          value={form.projectReference ?? ''}
+          disabled={isSaving || started}
+          maxLength={200}
+          onChange={(event: ChangeEvent<HTMLInputElement>) =>
+            onTextChange('projectReference', event.target.value)
+          }
+        />
+      </label>
 
       <label>
         <span>Цена решения</span>

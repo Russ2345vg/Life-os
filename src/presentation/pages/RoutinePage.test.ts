@@ -11,6 +11,7 @@ import {
 import {
   DayDate,
   EntityId,
+  EVENING_CYCLE_STATE,
   ROUTINE_BLOCK_CATEGORY,
   ROUTINE_BLOCK_RECURRENCE,
   RoutineBlock,
@@ -26,7 +27,15 @@ import { RoutineBlockForm } from '../routine/RoutineBlockForm';
 import { createEmptyRoutineBlockForm } from '../routine/RoutineBlockFormState';
 import { findRoutineBlockOverlaps } from '../routine/RoutineBlockOverlaps';
 import { deviationLabel, deviationTitle } from '../routine/RoutineDeviationPresentation';
-import { RoutinePage, RoutinePlanFact, RoutineRecoveryPanel } from './RoutinePage';
+import { ROUTINE_SECTION } from '../routine/RoutineNavigation';
+import { eveningBlockStatus } from '../routine/RoutineEveningPresentation';
+import {
+  EveningBlockCard,
+  RoutinePage,
+  RoutinePlanFact,
+  RoutineRecoveryPanel,
+  RoutineSectionNavigation,
+} from './RoutinePage';
 
 const DATE = DayDate.create('2026-08-08');
 
@@ -60,8 +69,58 @@ describe('RoutinePage', () => {
       }),
     );
     expect(markup).toContain('routine-page');
+    expect(markup).toContain('Подразделы распорядка');
+    expect(markup).toContain('Утро');
+    expect(markup).toContain('День');
+    expect(markup).toContain('Вечер');
+    expect(markup).toContain('Вечерний блок');
+    expect(markup).toContain('Не начат');
+    expect(markup).toContain('Открыть вечер →');
     expect(markup).toContain('На этот день распорядок пока не составлен.');
     expect(markup.match(/Создать блок/g)?.length).toBe(2);
+  });
+
+  it('keeps the evening entry independent from an empty ordinary routine', () => {
+    const repository = new InMemoryRoutineBlockRepository();
+    const clock = new FakeClock(new Date('2026-08-08T00:00:00.000Z'));
+    const markup = renderToStaticMarkup(
+      createElement(RoutinePage, {
+        currentDate: DATE,
+        selectedDate: DATE,
+        activeSection: ROUTINE_SECTION.evening,
+        onDateChange: () => undefined,
+        onSectionChange: () => undefined,
+        createRoutineBlock: new CreateRoutineBlock(repository, clock, new FakeIdGenerator()),
+        updateRoutineBlock: new UpdateRoutineBlock(repository, clock),
+        deleteRoutineBlock: new DeleteRoutineBlock(repository),
+        getRoutineBlocksForDate: new GetRoutineBlocksForDate(repository),
+      }),
+    );
+
+    expect(markup).toContain('aria-selected="true">Вечер</button>');
+    expect(markup).toContain('Вечерний блок');
+    expect(markup).not.toContain('На этот день распорядок пока не составлен.');
+  });
+
+  it('renders explicit routine subsections and all evening block statuses', () => {
+    const navigation = renderToStaticMarkup(
+      createElement(RoutineSectionNavigation, {
+        activeSection: ROUTINE_SECTION.morning,
+        onSelect: () => undefined,
+      }),
+    );
+    expect(navigation.match(/role="tab"/g)).toHaveLength(3);
+    expect(navigation).toContain('aria-selected="true">Утро</button>');
+
+    const labels = (['notStarted', 'inProgress', 'completed'] as const).map((status) =>
+      renderToStaticMarkup(createElement(EveningBlockCard, { status, onOpen: () => undefined })),
+    );
+    expect(labels[0]).toContain('Не начат');
+    expect(labels[1]).toContain('В процессе');
+    expect(labels[2]).toContain('Завершён');
+    expect(eveningBlockStatus(null)).toBe('notStarted');
+    expect(eveningBlockStatus(EVENING_CYCLE_STATE.reflecting)).toBe('inProgress');
+    expect(eveningBlockStatus(EVENING_CYCLE_STATE.completed)).toBe('completed');
   });
 
   it('identifies and names conflicting intervals without blocking them', () => {

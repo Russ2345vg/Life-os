@@ -39,19 +39,26 @@ import type {
   GetRoutinePlanFactForDate,
   GetRunningRoutineOccurrence,
   GetSpheres,
+  GetProjects,
   RunningRoutineOccurrence,
   StartRoutineOccurrence,
   CompleteRoutineOccurrence,
   AbandonRoutineOccurrence,
   RoutinePlanFactPresentation,
+  ResolveOpenLoop,
+  ReflectionApplicationService,
+  TomorrowPlanService,
+  PreparationService,
+  EveningCycleApplicationService,
 } from '../../application';
 import {
-  DAY_STATUS,
   DECISION_STATUS,
   DayDate,
   EntityId,
+  EVENING_CYCLE_STATE,
   LIFE_ACTION_STATUS,
   ROUTINE_BLOCK_ASSIGNMENT,
+  ROUTINE_BLOCK_CATEGORY,
   ROUTINE_OCCURRENCE_OVERRIDE_TYPE,
   ROUTINE_EXECUTION_STATUS,
   type Day,
@@ -60,6 +67,7 @@ import {
   type RoutineBlock,
   type RoutineBlockAssignmentKind,
   type EffectiveRoutineOccurrence,
+  type EveningCycleState,
   type RoutineOccurrenceOverrideType,
 } from '../../domain';
 import { DecisionDetailsController } from '../components/DecisionDetailsController';
@@ -88,8 +96,15 @@ import {
 import { RoutineSubmissionGuard } from '../routine/RoutineSubmissionGuard';
 import { openRoutineAssignmentSection } from '../routine/RoutineAssignmentNavigation';
 import { findRoutineBlockOverlaps } from '../routine/RoutineBlockOverlaps';
+import {
+  eveningBlockStatus,
+  eveningBlockStatusLabel,
+  type EveningBlockStatus,
+} from '../routine/RoutineEveningPresentation';
+import { ROUTINE_SECTION, type RoutineSection } from '../routine/RoutineNavigation';
 import { EveningReviewPanel } from './EveningReviewPanel';
 import { useSpheres } from '../components/sphereReferenceModel';
+import { useProjects } from '../management/projectReferenceModel';
 
 const EMPTY_GET_SPHERES: Pick<GetSpheres, 'execute'> = {
   execute: async () => ({ active: [], archived: [] }),
@@ -99,6 +114,8 @@ interface RoutinePageProps {
   readonly currentDate: DayDate;
   readonly selectedDate: DayDate;
   readonly onDateChange: (date: DayDate) => void;
+  readonly activeSection?: RoutineSection;
+  readonly onSectionChange?: (section: RoutineSection) => void;
   readonly onCurrentDayChange?: (day: Day) => void;
   readonly createRoutineBlock: CreateRoutineBlock;
   readonly updateRoutineBlock: UpdateRoutineBlock;
@@ -125,7 +142,36 @@ export interface RoutinePageWorkflowServices {
   readonly getDecisionsForDate: Pick<GetDecisionsForDate, 'execute'>;
   readonly getEveningReview: Pick<GetEveningReview, 'execute'>;
   readonly completeCurrentDay: Pick<CompleteCurrentDay, 'execute'>;
+  readonly eveningCycle?: Pick<
+    EveningCycleApplicationService,
+    'get' | 'start' | 'selectMode' | 'skipPreparation'
+  >;
+  readonly resolveOpenLoop?: Pick<ResolveOpenLoop, 'execute'>;
+  readonly reflection?: Pick<
+    ReflectionApplicationService,
+    'getSession' | 'answer' | 'skip' | 'createCorrection'
+  >;
+  readonly tomorrowPlan?: Pick<
+    TomorrowPlanService,
+    | 'getByTargetDate'
+    | 'getOrCreate'
+    | 'setVector'
+    | 'assignPrimaryDecision'
+    | 'createPrimaryDecision'
+    | 'setOutcomes'
+    | 'setFirstAttentionItem'
+    | 'assignFirstAction'
+    | 'createFirstAction'
+    | 'setSupportingDecisions'
+    | 'createSupportingDecision'
+    | 'complete'
+  >;
+  readonly preparation?: Pick<
+    PreparationService,
+    'getOrGenerate' | 'completeItem' | 'skipItem' | 'continueToShutdown'
+  >;
   readonly getSpheres?: Pick<GetSpheres, 'execute'>;
+  readonly getProjects?: Pick<GetProjects, 'execute'>;
   readonly getDecisionById: Pick<GetDecisionById, 'execute'>;
   readonly getDecisionOverview: Pick<GetDecisionOverview, 'execute'>;
   readonly getLifeActionsForDecision: Pick<GetLifeActionsForDecision, 'execute'>;
@@ -145,6 +191,7 @@ export interface RoutinePageWorkflowServices {
   readonly cancelLifeActionSafely: Pick<CancelLifeActionSafely, 'execute'>;
   readonly rescheduleLifeActionSafely: Pick<RescheduleLifeActionSafely, 'execute'>;
   readonly clock: Pick<Clock, 'now'>;
+  readonly onOpenProject?: (projectId: string) => void;
 }
 
 interface PendingActionLink {
@@ -159,7 +206,10 @@ type RunningRoutineState =
 
 export function RoutinePage(props: RoutinePageProps) {
   const spheres = useSpheres(props.workflow?.getSpheres ?? EMPTY_GET_SPHERES);
+  const projects = useProjects(props.workflow?.getProjects);
   const workflow = props.workflow;
+  const [localSection, setLocalSection] = useState<RoutineSection>(ROUTINE_SECTION.day);
+  const activeSection = props.activeSection ?? localSection;
   const [blocks, setBlocks] = useState<readonly EffectiveRoutineOccurrence[]>([]);
   const [planFacts, setPlanFacts] = useState<ReadonlyMap<string, RoutinePlanFactPresentation>>(
     new Map(),
@@ -178,6 +228,7 @@ export function RoutinePage(props: RoutinePageProps) {
   const [reminderBlock, setReminderBlock] = useState<RoutineBlock | null>(null);
   const [selectedAction, setSelectedAction] = useState<LifeAction | null>(null);
   const [eveningReviewDate, setEveningReviewDate] = useState<DayDate | null>(null);
+  const [eveningCycleState, setEveningCycleState] = useState<EveningCycleState | null>(null);
   const [activationMessage, setActivationMessage] = useState<string | null>(null);
   const [executionError, setExecutionError] = useState<string | null>(null);
   const [isFinishingExecution, setIsFinishingExecution] = useState(false);
@@ -259,6 +310,44 @@ export function RoutinePage(props: RoutinePageProps) {
       active = false;
     };
   }, [props.getRunningRoutineOccurrence]);
+
+  useEffect(() => {
+    let active = true;
+    const cycles = workflow?.eveningCycle;
+    if (cycles === undefined) {
+      return () => {
+        active = false;
+      };
+    }
+
+    void cycles.get(props.selectedDate).then(
+      (cycle) => {
+        if (active) setEveningCycleState(cycle?.state ?? null);
+      },
+      () => {
+        if (active) setEveningCycleState(null);
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [props.selectedDate, workflow?.eveningCycle]);
+
+  function selectSection(section: RoutineSection): void {
+    if (props.onSectionChange === undefined) setLocalSection(section);
+    props.onSectionChange?.(section);
+  }
+
+  function closeEveningCenter(): void {
+    setEveningReviewDate(null);
+    if (activeSection === ROUTINE_SECTION.evening) selectSection(ROUTINE_SECTION.day);
+    void workflow?.eveningCycle?.get(props.selectedDate).then(
+      (cycle) => {
+        setEveningCycleState(cycle?.state ?? null);
+      },
+      () => undefined,
+    );
+  }
 
   async function reload(): Promise<void> {
     const [nextBlocks, nextOptions] = await Promise.all([
@@ -510,24 +599,7 @@ export function RoutinePage(props: RoutinePageProps) {
         }
         case ROUTINE_BLOCK_ASSIGNMENT.eveningReview: {
           if (workflow === undefined) return;
-          try {
-            const snapshot = await workflow.getEveningReview.execute(props.selectedDate);
-            if (snapshot.day.status === DAY_STATUS.completed) {
-              setActivationMessage('День уже завершён. Вечерний контроль доступен в истории дня.');
-              return;
-            }
-            if (snapshot.day.status !== DAY_STATUS.open) {
-              setActivationMessage('Вечерний контроль доступен только после начала дня.');
-              return;
-            }
-            setEveningReviewDate(props.selectedDate);
-          } catch (error: unknown) {
-            setActivationMessage(
-              error instanceof Error
-                ? error.message
-                : 'Вечерний контроль для этой даты недоступен.',
-            );
-          }
+          setEveningReviewDate(props.selectedDate);
           return;
         }
         case ROUTINE_BLOCK_ASSIGNMENT.walk:
@@ -613,7 +685,11 @@ export function RoutinePage(props: RoutinePageProps) {
     await reload();
   }
 
-  const overlaps = findRoutineBlockOverlaps(blocks);
+  const visibleBlocks =
+    activeSection === ROUTINE_SECTION.morning
+      ? blocks.filter((block) => block.category === ROUTINE_BLOCK_CATEGORY.morning)
+      : blocks;
+  const overlaps = findRoutineBlockOverlaps(visibleBlocks);
   const unavailableActionLabel =
     editing?.assignment.kind === ROUTINE_BLOCK_ASSIGNMENT.existingAction
       ? describeUnavailableAction(actionDetails.get(editing.assignment.actionId.toString()) ?? null)
@@ -625,6 +701,33 @@ export function RoutinePage(props: RoutinePageProps) {
       ? runningRoutine.item
       : null;
   const startBlocked = runningRoutine.status !== 'ready' || runningRoutine.item !== null;
+  const activeEveningReviewDate =
+    eveningReviewDate ?? (activeSection === ROUTINE_SECTION.evening ? props.selectedDate : null);
+
+  if (activeEveningReviewDate !== null && workflow !== undefined) {
+    return (
+      <main className="section-page routine-page routine-evening-command-page">
+        <EveningReviewPanel
+          getEveningReview={workflow.getEveningReview}
+          {...(workflow.getSpheres === undefined ? {} : { getSpheres: workflow.getSpheres })}
+          completeCurrentDay={workflow.completeCurrentDay}
+          {...(workflow.eveningCycle === undefined ? {} : { eveningCycle: workflow.eveningCycle })}
+          {...(workflow.resolveOpenLoop === undefined
+            ? {}
+            : { resolveOpenLoop: workflow.resolveOpenLoop })}
+          {...(workflow.reflection === undefined ? {} : { reflection: workflow.reflection })}
+          {...(workflow.tomorrowPlan === undefined ? {} : { tomorrowPlan: workflow.tomorrowPlan })}
+          {...(workflow.preparation === undefined ? {} : { preparation: workflow.preparation })}
+          reviewDate={activeEveningReviewDate}
+          onClose={closeEveningCenter}
+          onCompleted={(result) => {
+            setEveningCycleState(EVENING_CYCLE_STATE.completed);
+            if (result.day.date.equals(props.currentDate)) props.onCurrentDayChange?.(result.day);
+          }}
+        />
+      </main>
+    );
+  }
 
   return (
     <main className="section-page routine-page">
@@ -638,11 +741,18 @@ export function RoutinePage(props: RoutinePageProps) {
           </button>
         }
       />
+      <RoutineSectionNavigation activeSection={activeSection} onSelect={selectSection} />
       <SectionDateNavigator
         currentDate={props.currentDate}
         selectedDate={props.selectedDate}
         onDateChange={props.onDateChange}
       />
+      {activeSection === ROUTINE_SECTION.day || activeSection === ROUTINE_SECTION.evening ? (
+        <EveningBlockCard
+          status={eveningBlockStatus(eveningCycleState)}
+          onOpen={() => selectSection(ROUTINE_SECTION.evening)}
+        />
+      ) : null}
       {loadError === null ? null : (
         <p className="routine-message error" role="alert">
           {loadError}
@@ -668,7 +778,7 @@ export function RoutinePage(props: RoutinePageProps) {
           onAbandon={() => void finishExecution(recoveredRunning, 'abandon')}
         />
       )}
-      {overlaps.length === 0 ? null : (
+      {activeSection === ROUTINE_SECTION.evening || overlaps.length === 0 ? null : (
         <aside className="routine-overlap-warning" role="status">
           <strong>В распорядке есть пересечения</strong>
           <ul>
@@ -679,16 +789,21 @@ export function RoutinePage(props: RoutinePageProps) {
           <p>Сохранение разрешено: скорректируйте интервалы вручную, если это необходимо.</p>
         </aside>
       )}
-      {blocks.length === 0 && loadError === null ? (
+      {activeSection === ROUTINE_SECTION.evening ? null : visibleBlocks.length === 0 &&
+        loadError === null ? (
         <section className="routine-empty">
-          <h2>На этот день распорядок пока не составлен.</h2>
+          <h2>
+            {activeSection === ROUTINE_SECTION.morning
+              ? 'На этот день утренние блоки пока не составлены.'
+              : 'На этот день распорядок пока не составлен.'}
+          </h2>
           <button className="primary-button" type="button" onClick={openCreate}>
             Создать блок
           </button>
         </section>
       ) : (
         <section className="routine-list" aria-label="Блоки распорядка">
-          {blocks.map((block) => {
+          {visibleBlocks.map((block) => {
             const details = actionDetailsForBlock(block, actionDetails);
             const planFact = planFacts.get(planFactKey(block));
             const executionStatus =
@@ -1077,6 +1192,7 @@ export function RoutinePage(props: RoutinePageProps) {
       {workflow === undefined ? null : (
         <DecisionDetailsController
           spheres={spheres}
+          projects={projects}
           decision={creationDecision}
           currentDate={props.currentDate}
           selectedDate={props.selectedDate}
@@ -1106,6 +1222,7 @@ export function RoutinePage(props: RoutinePageProps) {
             setCreateTarget(null);
           }}
           onDecisionChanged={setCreationDecision}
+          onOpenProject={workflow.onOpenProject ?? (() => undefined)}
           onLifeActionCreated={(lifeAction) => {
             if (createTarget !== null) setPendingLink({ block: createTarget, lifeAction });
             setCreationDecision(null);
@@ -1146,6 +1263,7 @@ export function RoutinePage(props: RoutinePageProps) {
           readOnly={selectedAction.plannedDate?.isBefore(props.currentDate) ?? false}
           clock={workflow.clock}
           getDecisionById={workflow.getDecisionById}
+          projects={projects}
           getActionSessionsForLifeAction={workflow.getActionSessionsForLifeAction}
           getUnfinishedActionSession={workflow.getUnfinishedActionSession}
           startLifeActionSession={workflow.startLifeActionSession}
@@ -1162,24 +1280,69 @@ export function RoutinePage(props: RoutinePageProps) {
             setSelectedAction(lifeAction);
             void reload();
           }}
-        />
-      )}
-      {eveningReviewDate === null || workflow === undefined ? null : (
-        <EveningReviewPanel
-          getEveningReview={workflow.getEveningReview}
-          {...(workflow.getSpheres === undefined ? {} : { getSpheres: workflow.getSpheres })}
-          completeCurrentDay={workflow.completeCurrentDay}
-          reviewDate={eveningReviewDate}
-          onClose={() => setEveningReviewDate(null)}
-          onCompleted={(result) => {
-            if (result.day.date.equals(props.currentDate)) props.onCurrentDayChange?.(result.day);
-            setEveningReviewDate(null);
-          }}
+          onOpenProject={workflow.onOpenProject ?? (() => undefined)}
         />
       )}
     </main>
   );
 }
+
+export function RoutineSectionNavigation({
+  activeSection,
+  onSelect,
+}: {
+  readonly activeSection: RoutineSection;
+  readonly onSelect: (section: RoutineSection) => void;
+}) {
+  return (
+    <nav className="routine-section-navigation" aria-label="Подразделы распорядка">
+      <div role="tablist">
+        {ROUTINE_SECTION_OPTIONS.map((item) => (
+          <button
+            className="routine-section-tab"
+            type="button"
+            role="tab"
+            key={item.section}
+            aria-selected={activeSection === item.section}
+            onClick={() => onSelect(item.section)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+    </nav>
+  );
+}
+
+export function EveningBlockCard({
+  status,
+  onOpen,
+}: {
+  readonly status: EveningBlockStatus;
+  readonly onOpen: () => void;
+}) {
+  return (
+    <section className="routine-evening-card" aria-labelledby="routine-evening-card-title">
+      <div>
+        <p className="section-kicker gold">Завершение дня</p>
+        <h2 id="routine-evening-card-title">Вечерний блок</h2>
+        <p className={`routine-evening-status is-${status}`}>{eveningBlockStatusLabel(status)}</p>
+      </div>
+      <button className="secondary-button" type="button" onClick={onOpen}>
+        Открыть вечер →
+      </button>
+    </section>
+  );
+}
+
+const ROUTINE_SECTION_OPTIONS: readonly {
+  readonly section: RoutineSection;
+  readonly label: string;
+}[] = Object.freeze([
+  { section: ROUTINE_SECTION.morning, label: 'Утро' },
+  { section: ROUTINE_SECTION.day, label: 'День' },
+  { section: ROUTINE_SECTION.evening, label: 'Вечер' },
+]);
 
 export function RoutineRecoveryPanel({
   item,

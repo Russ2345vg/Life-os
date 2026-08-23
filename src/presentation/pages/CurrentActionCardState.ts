@@ -8,7 +8,7 @@ import {
 
 export const CURRENT_ACTION_COMMAND = {
   startSession: 'start_session',
-  pauseSession: 'pause_session',
+  completeSession: 'complete_session',
   resumeSession: 'resume_session',
 } as const;
 
@@ -55,8 +55,8 @@ export function resolveCurrentActionCardState(
       lifeAction: input.lifeAction,
       decisionTitle: decision?.title.toString() ?? null,
       statusLabel: 'Сессия идёт',
-      primaryCommand: CURRENT_ACTION_COMMAND.pauseSession,
-      primaryLabel: 'Приостановить',
+      primaryCommand: CURRENT_ACTION_COMMAND.completeSession,
+      primaryLabel: 'Завершить',
       unfinishedSession,
       sessions,
       canManageAction: false,
@@ -81,7 +81,7 @@ export function resolveCurrentActionCardState(
     decisionTitle: decision?.title.toString() ?? null,
     statusLabel: input.lifeAction.status === LIFE_ACTION_STATUS.inProgress ? 'В работе' : 'Готово',
     primaryCommand: CURRENT_ACTION_COMMAND.startSession,
-    primaryLabel: 'Начать сессию',
+    primaryLabel: 'Начать',
     unfinishedSession: null,
     sessions,
     canManageAction: true,

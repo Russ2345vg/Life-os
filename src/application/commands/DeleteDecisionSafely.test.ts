@@ -25,7 +25,13 @@ const NOW = new Date('2026-08-06T20:00:00.000+09:00');
 
 describe('DeleteDecisionSafely', () => {
   it('перемещает решение в корзину с проверкой версии', async () => {
-    const context = await createContext(createPlannedDecision('delete-success', DATE));
+    const linked = createPlannedDecision('delete-success', DATE);
+    linked.updateDetails({
+      projectId: EntityId.create('project-delete'),
+      occurredAt: new Date('2026-08-06T19:00:00.000+09:00'),
+      eventId: EntityId.create('project-delete-event'),
+    });
+    const context = await createContext(linked);
     const version = context.decision.version;
 
     const result = await context.command.execute({
@@ -40,6 +46,28 @@ describe('DeleteDecisionSafely', () => {
     expect((await context.decisionRepository.findById(context.decision.id))?.version).toBe(
       version + 1,
     );
+    expect(
+      (await context.decisionRepository.findById(context.decision.id))?.projectId?.toString(),
+    ).toBe('project-delete');
+  });
+
+  it('preserves reschedule history when moving a decision to trash', async () => {
+    const decision = createPlannedDecision('history-delete', DATE);
+    decision.reschedule(
+      DayDate.create('2026-08-07'),
+      'Moved to tomorrow',
+      new Date('2026-08-06T18:00:00.000+09:00'),
+      EntityId.create('history-delete-rescheduled'),
+    );
+    const history = decision.rescheduleHistory;
+    const context = await createContext(decision);
+
+    const result = await context.command.execute({ decisionId: decision.id });
+
+    expect(result.ok).toBe(true);
+    const stored = await context.decisionRepository.findById(decision.id);
+    expect(stored?.rescheduleCount).toBe(1);
+    expect(stored?.rescheduleHistory).toEqual(history);
   });
 
   it.each(['running', 'paused'] as const)(

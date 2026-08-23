@@ -6,6 +6,7 @@ import {
   type Decision,
   type DecisionKind,
   type DecisionPriority,
+  type Project,
 } from '../../domain';
 
 export interface DecisionCreationFormState {
@@ -19,6 +20,7 @@ export interface DecisionCreationFormState {
   readonly sacrifices: string;
   readonly priority: DecisionPriority;
   readonly projectReference: string;
+  readonly projectId: string;
 }
 
 export interface DecisionCreationFormErrors {
@@ -32,6 +34,7 @@ export interface DecisionCreationFormErrors {
   readonly sacrifices: string | null;
   readonly priority: string | null;
   readonly projectReference: string | null;
+  readonly projectId: string | null;
   readonly form: string | null;
 }
 
@@ -43,18 +46,22 @@ export type DecisionCreationSubmissionResult =
   | { readonly ok: true; readonly decision: Decision }
   | { readonly ok: false; readonly errors: DecisionCreationFormErrors };
 
-export function createDecisionCreationForm(plannedDate: DayDate): DecisionCreationFormState {
+export function createDecisionCreationForm(
+  plannedDate: DayDate,
+  defaults: { readonly projectId?: string; readonly sphereId?: string } = {},
+): DecisionCreationFormState {
   return {
     kind: DECISION_KIND.main,
     plannedDate: plannedDate.toString(),
     title: '',
     reason: '',
     expectedResult: '',
-    sphereId: '',
+    sphereId: defaults.sphereId ?? '',
     price: '',
     sacrifices: '',
     priority: DECISION_PRIORITY.normal,
     projectReference: '',
+    projectId: defaults.projectId ?? '',
   };
 }
 
@@ -70,6 +77,7 @@ export function createEmptyDecisionCreationErrors(): DecisionCreationFormErrors 
     sacrifices: null,
     priority: null,
     projectReference: null,
+    projectId: null,
     form: null,
   };
 }
@@ -77,6 +85,7 @@ export function createEmptyDecisionCreationErrors(): DecisionCreationFormErrors 
 export function validateDecisionCreationForm(
   form: DecisionCreationFormState,
   currentDate: DayDate,
+  projects: readonly Project[] = [],
 ): DecisionCreationValidation {
   let plannedDate: DayDate | null = null;
   let plannedDateError: string | null = null;
@@ -122,6 +131,7 @@ export function validateDecisionCreationForm(
       200,
       'Связь с проектом не может быть длиннее 200 символов',
     ),
+    projectId: validateProjectSelection(form, projects),
     form: null,
   };
 
@@ -136,8 +146,9 @@ export async function submitDecisionCreation(input: {
   readonly form: DecisionCreationFormState;
   readonly currentDate: DayDate;
   readonly createDecisionForDate: Pick<CreateDecisionForDate, 'execute'>;
+  readonly projects?: readonly Project[];
 }): Promise<DecisionCreationSubmissionResult> {
-  const validation = validateDecisionCreationForm(input.form, input.currentDate);
+  const validation = validateDecisionCreationForm(input.form, input.currentDate, input.projects);
   if (!validation.ok) {
     return validation;
   }
@@ -153,6 +164,7 @@ export async function submitDecisionCreation(input: {
     sacrifices: input.form.sacrifices,
     priority: input.form.priority,
     projectReference: input.form.projectReference,
+    projectId: input.form.projectId || null,
   });
 
   if (!result.ok) {
@@ -184,6 +196,12 @@ export function errorsForDecisionCreationCode(code: string): DecisionCreationFor
       return { ...errors, priority: 'Выберите приоритет решения' };
     case 'decision.invalid_project_reference':
       return { ...errors, projectReference: 'Проверьте связь с проектом' };
+    case 'decision.project_not_found':
+      return { ...errors, projectId: 'Выбранный проект не найден' };
+    case 'decision.project_unavailable':
+      return { ...errors, projectId: 'Завершённый или архивный проект недоступен' };
+    case 'decision.project_sphere_mismatch':
+      return { ...errors, projectId: 'Сфера решения не совпадает со сферой проекта' };
     case 'decision.planned_date_in_past':
       return { ...errors, plannedDate: 'Нельзя создать решение на прошедшую дату' };
     case 'decision.completed_day_is_immutable':
@@ -195,6 +213,26 @@ export function errorsForDecisionCreationCode(code: string): DecisionCreationFor
     default:
       return { ...errors, form: 'Не удалось создать решение' };
   }
+}
+
+function validateProjectSelection(
+  form: DecisionCreationFormState,
+  projects: readonly Project[],
+): string | null {
+  if (form.projectId === '') return null;
+  const project = projects.find((item) => item.id.toString() === form.projectId);
+  if (project === undefined) return projects.length === 0 ? null : 'Выберите доступный проект';
+  if (project.status === 'completed' || project.status === 'archived') {
+    return 'Завершённый или архивный проект недоступен';
+  }
+  if (
+    project.sphereId !== null &&
+    form.sphereId !== '' &&
+    project.sphereId.toString() !== form.sphereId
+  ) {
+    return 'Сфера решения не совпадает со сферой проекта';
+  }
+  return null;
 }
 
 function validateRequiredText(

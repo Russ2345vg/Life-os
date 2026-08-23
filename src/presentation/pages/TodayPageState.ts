@@ -17,6 +17,7 @@ import type {
 import {
   ActionActualResult,
   DECISION_KIND,
+  DECISION_STATUS,
   SESSION_COMPLETION_KIND,
   type ActionSession,
   type DayDate,
@@ -50,7 +51,14 @@ export interface DecisionConfirmationFormState {
 }
 
 export type DecisionEditTextField =
-  'title' | 'reason' | 'expectedResult' | 'sphereId' | 'price' | 'sacrifices' | 'projectReference';
+  | 'title'
+  | 'reason'
+  | 'expectedResult'
+  | 'sphereId'
+  | 'price'
+  | 'sacrifices'
+  | 'projectReference'
+  | 'projectId';
 
 export interface DecisionEditFormState {
   readonly title: string;
@@ -60,6 +68,7 @@ export interface DecisionEditFormState {
   readonly price?: string;
   readonly sacrifices?: string;
   readonly projectReference?: string;
+  readonly projectId?: string;
   readonly kind?: DecisionKind;
   readonly priority?: DecisionPriority;
   readonly expectedVersion?: number;
@@ -582,6 +591,7 @@ export function todayPageReducer(state: TodayPageState, action: TodayPageAction)
           price: state.details.decision.price ?? '',
           sacrifices: state.details.decision.sacrifices ?? '',
           projectReference: state.details.decision.projectReference ?? '',
+          projectId: state.details.decision.projectId?.toString() ?? '',
           kind: state.details.decision.kind,
           priority: state.details.decision.priority,
           expectedVersion: state.details.decision.version,
@@ -1174,6 +1184,30 @@ export async function loadSelectedDateDecisions(input: {
   }
 }
 
+export async function loadTomorrowPlanSummaryData(input: {
+  readonly targetDate: DayDate;
+  readonly getDecisionsForDate: Pick<GetDecisionsForDate, 'execute'>;
+  readonly getPlanPrepared: (targetDate: DayDate) => Promise<boolean>;
+}): Promise<{ readonly prepared: boolean; readonly mainDecisionCount: number }> {
+  const [decisions, sharedPlanPrepared] = await Promise.all([
+    input.getDecisionsForDate.execute(input.targetDate),
+    input.getPlanPrepared(input.targetDate),
+  ]);
+  const mainDecisionCount = decisions.filter(
+    (decision) =>
+      decision.kind === DECISION_KIND.main &&
+      !decision.isArchived() &&
+      !decision.isDeleted() &&
+      decision.status !== DECISION_STATUS.draft &&
+      decision.status !== DECISION_STATUS.cancelled,
+  ).length;
+
+  return {
+    prepared: sharedPlanPrepared,
+    mainDecisionCount: Math.min(mainDecisionCount, 3),
+  };
+}
+
 export function validateLifeActionForm(form: LifeActionFormState): string | null {
   if (form.title.trim().length === 0) {
     return 'Введите название действия';
@@ -1433,6 +1467,12 @@ export async function updateDecisionDetailsResult(input: {
     ...(input.form.projectReference === undefined
       ? {}
       : { projectReference: input.form.projectReference }),
+    ...(input.form.projectId === undefined
+      ? {}
+      : {
+          projectId:
+            input.form.projectId.trim().length === 0 ? null : EntityId.create(input.form.projectId),
+        }),
     ...(input.form.kind === undefined ? {} : { kind: input.form.kind }),
     ...(input.form.priority === undefined ? {} : { priority: input.form.priority }),
   });
@@ -1461,6 +1501,12 @@ export function decisionEditErrorMessage(code: string): string {
       return 'Такое решение уже существует на эту дату';
     case 'decision.main_limit_reached':
       return 'На эту дату уже назначены три главных решения';
+    case 'decision.project_not_found':
+      return 'Выбранный проект не найден';
+    case 'decision.project_unavailable':
+      return 'Завершённый или архивный проект недоступен';
+    case 'decision.project_sphere_mismatch':
+      return 'Сфера решения должна совпадать со сферой проекта';
     default:
       return 'Не удалось сохранить изменения';
   }

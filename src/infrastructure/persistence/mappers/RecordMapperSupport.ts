@@ -72,6 +72,14 @@ export function readNumber(record: UnknownRecord, field: string): number {
   return value;
 }
 
+export function readBoolean(record: UnknownRecord, field: string): boolean {
+  const value = readRequired(record, field);
+  if (typeof value !== 'boolean') {
+    throw invalidRecord(`Поле ${field} должно быть логическим значением.`);
+  }
+  return value;
+}
+
 export function readNullableNumber(record: UnknownRecord, field: string): number | null {
   const value = readRequired(record, field);
   if (value !== null && (typeof value !== 'number' || !Number.isFinite(value))) {

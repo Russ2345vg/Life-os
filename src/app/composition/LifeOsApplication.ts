@@ -2,6 +2,7 @@ import type {
   ActionSessionRepository,
   Clock,
   CompleteCurrentDay,
+  CompleteEveningCycle,
   CorrectJournalData,
   CompleteActionSession,
   CompleteLifeAction,
@@ -16,9 +17,21 @@ import type {
   CurrentDateProvider,
   DayRepository,
   DecisionRepository,
+  DetectEveningPatterns,
+  GetEveningSignals,
+  GetEveningRecommendations,
+  GetEveningAnalytics,
+  RecommendationApplicationRepository,
+  RecommendationApplicationService,
   GetDecisionsForDate,
+  GetDecisionsForProject,
   GetDeletedDecisions,
   GetEveningReview,
+  GetEveningCycleReview,
+  GetEveningHistory,
+  GetEveningHistorySummary,
+  GetApplicationMode,
+  GetOpenLoopsForDay,
   GetDecisionById,
   GetDecisionOverview,
   GetLifeActionsForDecision,
@@ -31,6 +44,7 @@ import type {
   GetUnfinishedActionSession,
   GetOpenDayConflict,
   ResolveOpenDayConflict,
+  ResolveOpenLoop,
   IdGenerator,
   LifeActionRepository,
   JournalRepository,
@@ -81,6 +95,49 @@ import type {
   ArchiveSphere,
   RestoreSphere,
   GetSpheres,
+  DirectionRepository,
+  ProjectRepository,
+  CreateDirection,
+  UpdateDirection,
+  ArchiveDirection,
+  RestoreDirection,
+  MakeDirectionMain,
+  GetDirections,
+  GetDirectionsForSphere,
+  GetDirectionsOverview,
+  GetDirectionDetails,
+  CreateProject,
+  UpdateProject,
+  ArchiveProject,
+  RestoreProject,
+  CompleteProject,
+  PauseProject,
+  ResumeProject,
+  MakeProjectMain,
+  GetProjects,
+  GetProjectsForSphere,
+  GetProjectsForDirection,
+  GetProjectById,
+  GetProjectLifeActions,
+  GetManagementOverview,
+  GoalRepository,
+  CreateGoal,
+  UpdateGoal,
+  ArchiveGoal,
+  GetGoalById,
+  GetGoals,
+  ApplyDirectionStrategicReview,
+  GetMorningOverview,
+  MorningCycleApplicationService,
+  MorningCycleRepository,
+  EveningCycleApplicationService,
+  EveningCycleRepository,
+  GetReflectionContext,
+  ReflectionApplicationService,
+  TomorrowPlanRepository,
+  TomorrowPlanService,
+  PreparationPlanRepository,
+  PreparationService,
 } from '../../application';
 import { EnsureCurrentDay } from '../../application';
 import type { Day, DayDate } from '../../domain';
@@ -90,11 +147,19 @@ interface LifeOsApplicationServices {
   readonly decisionRepository: DecisionRepository;
   readonly lifeActionRepository: LifeActionRepository;
   readonly actionSessionRepository: ActionSessionRepository;
+  readonly morningCycleRepository: MorningCycleRepository;
+  readonly eveningCycleRepository: EveningCycleRepository;
+  readonly tomorrowPlanRepository: TomorrowPlanRepository;
+  readonly preparationPlanRepository: PreparationPlanRepository;
+  readonly recommendationApplicationRepository: RecommendationApplicationRepository;
   readonly routineBlockRepository: RoutineBlockRepository;
   readonly routineOccurrenceOverrideRepository: RoutineOccurrenceOverrideRepository;
   readonly routineOccurrenceExecutionRepository: RoutineOccurrenceExecutionRepository;
   readonly walkRepository: WalkRepository;
   readonly sphereRepository: SphereRepository;
+  readonly directionRepository: DirectionRepository;
+  readonly projectRepository: ProjectRepository;
+  readonly goalRepository: GoalRepository;
   readonly journalRepository: JournalRepository;
   readonly clock: Clock;
   readonly currentDateProvider: CurrentDateProvider;
@@ -104,10 +169,30 @@ interface LifeOsApplicationServices {
   readonly currentDate: DayDate;
   readonly startCurrentDay: StartCurrentDay;
   readonly getEveningReview: GetEveningReview;
+  readonly getEveningCycleReview: GetEveningCycleReview;
+  readonly getEveningHistory: GetEveningHistory;
+  readonly getEveningHistorySummary: GetEveningHistorySummary;
+  readonly detectEveningPatterns: DetectEveningPatterns;
+  readonly getEveningSignals: GetEveningSignals;
+  readonly getEveningRecommendations: GetEveningRecommendations;
+  readonly getEveningAnalytics: GetEveningAnalytics;
+  readonly recommendationApplications: RecommendationApplicationService;
+  readonly getApplicationMode: GetApplicationMode;
+  readonly getOpenLoopsForDay: GetOpenLoopsForDay;
+  readonly resolveOpenLoop: ResolveOpenLoop;
+  readonly morningCycle: MorningCycleApplicationService;
+  readonly eveningCycle: EveningCycleApplicationService;
+  readonly getReflectionContext: GetReflectionContext;
+  readonly reflection: ReflectionApplicationService;
+  readonly tomorrowPlan: TomorrowPlanService;
+  readonly preparation: PreparationService;
+  readonly completeEveningCycle: CompleteEveningCycle;
   readonly completeCurrentDay: CompleteCurrentDay;
   readonly updateDayResultSphere: UpdateDayResultSphere;
   readonly createDecisionForDate: CreateDecisionForDate;
   readonly getDecisionsForDate: GetDecisionsForDate;
+  readonly getDecisionsForProject: GetDecisionsForProject;
+  readonly getProjectLifeActions: GetProjectLifeActions;
   readonly getDeletedDecisions: GetDeletedDecisions;
   readonly getDecisionById: GetDecisionById;
   readonly getDecisionOverview: GetDecisionOverview;
@@ -142,6 +227,7 @@ interface LifeOsApplicationServices {
   readonly updateRoutineBlock: UpdateRoutineBlock;
   readonly deleteRoutineBlock: DeleteRoutineBlock;
   readonly getRoutineBlocksForDate: GetRoutineBlocksForDate;
+  readonly getMorningOverview: GetMorningOverview;
   readonly getRoutineActionOptions: GetRoutineActionOptions;
   readonly getRoutineActionDetails: GetRoutineActionDetails;
   readonly delayRoutineOccurrence: DelayRoutineOccurrence;
@@ -171,6 +257,34 @@ interface LifeOsApplicationServices {
   readonly archiveSphere: ArchiveSphere;
   readonly restoreSphere: RestoreSphere;
   readonly getSpheres: GetSpheres;
+  readonly createDirection: CreateDirection;
+  readonly updateDirection: UpdateDirection;
+  readonly archiveDirection: ArchiveDirection;
+  readonly restoreDirection: RestoreDirection;
+  readonly makeDirectionMain: MakeDirectionMain;
+  readonly getDirections: GetDirections;
+  readonly getDirectionsForSphere: GetDirectionsForSphere;
+  readonly getDirectionsOverview: GetDirectionsOverview;
+  readonly getManagementOverview: GetManagementOverview;
+  readonly getDirectionDetails: GetDirectionDetails;
+  readonly applyDirectionStrategicReview: ApplyDirectionStrategicReview;
+  readonly createProject: CreateProject;
+  readonly updateProject: UpdateProject;
+  readonly archiveProject: ArchiveProject;
+  readonly restoreProject: RestoreProject;
+  readonly completeProject: CompleteProject;
+  readonly pauseProject: PauseProject;
+  readonly resumeProject: ResumeProject;
+  readonly makeProjectMain: MakeProjectMain;
+  readonly getProjects: GetProjects;
+  readonly getProjectsForSphere: GetProjectsForSphere;
+  readonly getProjectsForDirection: GetProjectsForDirection;
+  readonly getProjectById: GetProjectById;
+  readonly createGoal: CreateGoal;
+  readonly updateGoal: UpdateGoal;
+  readonly archiveGoal: ArchiveGoal;
+  readonly getGoalById: GetGoalById;
+  readonly getGoals: GetGoals;
   readonly closeDatabase: () => void;
 }
 
@@ -179,11 +293,19 @@ export class LifeOsApplication {
   public readonly decisionRepository: DecisionRepository;
   public readonly lifeActionRepository: LifeActionRepository;
   public readonly actionSessionRepository: ActionSessionRepository;
+  public readonly morningCycleRepository: MorningCycleRepository;
+  public readonly eveningCycleRepository: EveningCycleRepository;
+  public readonly tomorrowPlanRepository: TomorrowPlanRepository;
+  public readonly preparationPlanRepository: PreparationPlanRepository;
+  public readonly recommendationApplicationRepository: RecommendationApplicationRepository;
   public readonly routineBlockRepository: RoutineBlockRepository;
   public readonly routineOccurrenceOverrideRepository: RoutineOccurrenceOverrideRepository;
   public readonly routineOccurrenceExecutionRepository: RoutineOccurrenceExecutionRepository;
   public readonly walkRepository: WalkRepository;
   public readonly sphereRepository: SphereRepository;
+  public readonly directionRepository: DirectionRepository;
+  public readonly projectRepository: ProjectRepository;
+  public readonly goalRepository: GoalRepository;
   public readonly journalRepository: JournalRepository;
   public readonly clock: Clock;
   public readonly currentDateProvider: CurrentDateProvider;
@@ -193,10 +315,30 @@ export class LifeOsApplication {
   public readonly currentDate: DayDate;
   public readonly startCurrentDay: StartCurrentDay;
   public readonly getEveningReview: GetEveningReview;
+  public readonly getEveningCycleReview: GetEveningCycleReview;
+  public readonly getEveningHistory: GetEveningHistory;
+  public readonly getEveningHistorySummary: GetEveningHistorySummary;
+  public readonly detectEveningPatterns: DetectEveningPatterns;
+  public readonly getEveningSignals: GetEveningSignals;
+  public readonly getEveningRecommendations: GetEveningRecommendations;
+  public readonly getEveningAnalytics: GetEveningAnalytics;
+  public readonly recommendationApplications: RecommendationApplicationService;
+  public readonly getApplicationMode: GetApplicationMode;
+  public readonly getOpenLoopsForDay: GetOpenLoopsForDay;
+  public readonly resolveOpenLoop: ResolveOpenLoop;
+  public readonly morningCycle: MorningCycleApplicationService;
+  public readonly eveningCycle: EveningCycleApplicationService;
+  public readonly getReflectionContext: GetReflectionContext;
+  public readonly reflection: ReflectionApplicationService;
+  public readonly tomorrowPlan: TomorrowPlanService;
+  public readonly preparation: PreparationService;
+  public readonly completeEveningCycle: CompleteEveningCycle;
   public readonly completeCurrentDay: CompleteCurrentDay;
   public readonly updateDayResultSphere: UpdateDayResultSphere;
   public readonly createDecisionForDate: CreateDecisionForDate;
   public readonly getDecisionsForDate: GetDecisionsForDate;
+  public readonly getDecisionsForProject: GetDecisionsForProject;
+  public readonly getProjectLifeActions: GetProjectLifeActions;
   public readonly getDeletedDecisions: GetDeletedDecisions;
   public readonly getDecisionById: GetDecisionById;
   public readonly getDecisionOverview: GetDecisionOverview;
@@ -231,6 +373,7 @@ export class LifeOsApplication {
   public readonly updateRoutineBlock: UpdateRoutineBlock;
   public readonly deleteRoutineBlock: DeleteRoutineBlock;
   public readonly getRoutineBlocksForDate: GetRoutineBlocksForDate;
+  public readonly getMorningOverview: GetMorningOverview;
   public readonly getRoutineActionOptions: GetRoutineActionOptions;
   public readonly getRoutineActionDetails: GetRoutineActionDetails;
   public readonly delayRoutineOccurrence: DelayRoutineOccurrence;
@@ -260,6 +403,34 @@ export class LifeOsApplication {
   public readonly archiveSphere: ArchiveSphere;
   public readonly restoreSphere: RestoreSphere;
   public readonly getSpheres: GetSpheres;
+  public readonly createDirection: CreateDirection;
+  public readonly updateDirection: UpdateDirection;
+  public readonly archiveDirection: ArchiveDirection;
+  public readonly restoreDirection: RestoreDirection;
+  public readonly makeDirectionMain: MakeDirectionMain;
+  public readonly getDirections: GetDirections;
+  public readonly getDirectionsForSphere: GetDirectionsForSphere;
+  public readonly getDirectionsOverview: GetDirectionsOverview;
+  public readonly getManagementOverview: GetManagementOverview;
+  public readonly getDirectionDetails: GetDirectionDetails;
+  public readonly applyDirectionStrategicReview: ApplyDirectionStrategicReview;
+  public readonly createProject: CreateProject;
+  public readonly updateProject: UpdateProject;
+  public readonly archiveProject: ArchiveProject;
+  public readonly restoreProject: RestoreProject;
+  public readonly completeProject: CompleteProject;
+  public readonly pauseProject: PauseProject;
+  public readonly resumeProject: ResumeProject;
+  public readonly makeProjectMain: MakeProjectMain;
+  public readonly getProjects: GetProjects;
+  public readonly getProjectsForSphere: GetProjectsForSphere;
+  public readonly getProjectsForDirection: GetProjectsForDirection;
+  public readonly getProjectById: GetProjectById;
+  public readonly createGoal: CreateGoal;
+  public readonly updateGoal: UpdateGoal;
+  public readonly archiveGoal: ArchiveGoal;
+  public readonly getGoalById: GetGoalById;
+  public readonly getGoals: GetGoals;
 
   readonly #closeDatabase: () => void;
 
@@ -268,11 +439,19 @@ export class LifeOsApplication {
     this.decisionRepository = services.decisionRepository;
     this.lifeActionRepository = services.lifeActionRepository;
     this.actionSessionRepository = services.actionSessionRepository;
+    this.morningCycleRepository = services.morningCycleRepository;
+    this.eveningCycleRepository = services.eveningCycleRepository;
+    this.tomorrowPlanRepository = services.tomorrowPlanRepository;
+    this.preparationPlanRepository = services.preparationPlanRepository;
+    this.recommendationApplicationRepository = services.recommendationApplicationRepository;
     this.routineBlockRepository = services.routineBlockRepository;
     this.routineOccurrenceOverrideRepository = services.routineOccurrenceOverrideRepository;
     this.routineOccurrenceExecutionRepository = services.routineOccurrenceExecutionRepository;
     this.walkRepository = services.walkRepository;
     this.sphereRepository = services.sphereRepository;
+    this.directionRepository = services.directionRepository;
+    this.projectRepository = services.projectRepository;
+    this.goalRepository = services.goalRepository;
     this.journalRepository = services.journalRepository;
     this.clock = services.clock;
     this.currentDateProvider = services.currentDateProvider;
@@ -282,10 +461,30 @@ export class LifeOsApplication {
     this.currentDate = services.currentDate;
     this.startCurrentDay = services.startCurrentDay;
     this.getEveningReview = services.getEveningReview;
+    this.getEveningCycleReview = services.getEveningCycleReview;
+    this.getEveningHistory = services.getEveningHistory;
+    this.getEveningHistorySummary = services.getEveningHistorySummary;
+    this.detectEveningPatterns = services.detectEveningPatterns;
+    this.getEveningSignals = services.getEveningSignals;
+    this.getEveningRecommendations = services.getEveningRecommendations;
+    this.getEveningAnalytics = services.getEveningAnalytics;
+    this.recommendationApplications = services.recommendationApplications;
+    this.getApplicationMode = services.getApplicationMode;
+    this.getOpenLoopsForDay = services.getOpenLoopsForDay;
+    this.resolveOpenLoop = services.resolveOpenLoop;
+    this.morningCycle = services.morningCycle;
+    this.eveningCycle = services.eveningCycle;
+    this.getReflectionContext = services.getReflectionContext;
+    this.reflection = services.reflection;
+    this.tomorrowPlan = services.tomorrowPlan;
+    this.preparation = services.preparation;
+    this.completeEveningCycle = services.completeEveningCycle;
     this.completeCurrentDay = services.completeCurrentDay;
     this.updateDayResultSphere = services.updateDayResultSphere;
     this.createDecisionForDate = services.createDecisionForDate;
     this.getDecisionsForDate = services.getDecisionsForDate;
+    this.getDecisionsForProject = services.getDecisionsForProject;
+    this.getProjectLifeActions = services.getProjectLifeActions;
     this.getDeletedDecisions = services.getDeletedDecisions;
     this.getDecisionById = services.getDecisionById;
     this.getDecisionOverview = services.getDecisionOverview;
@@ -320,6 +519,7 @@ export class LifeOsApplication {
     this.updateRoutineBlock = services.updateRoutineBlock;
     this.deleteRoutineBlock = services.deleteRoutineBlock;
     this.getRoutineBlocksForDate = services.getRoutineBlocksForDate;
+    this.getMorningOverview = services.getMorningOverview;
     this.getRoutineActionOptions = services.getRoutineActionOptions;
     this.getRoutineActionDetails = services.getRoutineActionDetails;
     this.delayRoutineOccurrence = services.delayRoutineOccurrence;
@@ -349,6 +549,34 @@ export class LifeOsApplication {
     this.archiveSphere = services.archiveSphere;
     this.restoreSphere = services.restoreSphere;
     this.getSpheres = services.getSpheres;
+    this.createDirection = services.createDirection;
+    this.updateDirection = services.updateDirection;
+    this.archiveDirection = services.archiveDirection;
+    this.restoreDirection = services.restoreDirection;
+    this.makeDirectionMain = services.makeDirectionMain;
+    this.getDirections = services.getDirections;
+    this.getDirectionsForSphere = services.getDirectionsForSphere;
+    this.getDirectionsOverview = services.getDirectionsOverview;
+    this.getManagementOverview = services.getManagementOverview;
+    this.getDirectionDetails = services.getDirectionDetails;
+    this.applyDirectionStrategicReview = services.applyDirectionStrategicReview;
+    this.createProject = services.createProject;
+    this.updateProject = services.updateProject;
+    this.archiveProject = services.archiveProject;
+    this.restoreProject = services.restoreProject;
+    this.completeProject = services.completeProject;
+    this.pauseProject = services.pauseProject;
+    this.resumeProject = services.resumeProject;
+    this.makeProjectMain = services.makeProjectMain;
+    this.getProjects = services.getProjects;
+    this.getProjectsForSphere = services.getProjectsForSphere;
+    this.getProjectsForDirection = services.getProjectsForDirection;
+    this.getProjectById = services.getProjectById;
+    this.createGoal = services.createGoal;
+    this.updateGoal = services.updateGoal;
+    this.archiveGoal = services.archiveGoal;
+    this.getGoalById = services.getGoalById;
+    this.getGoals = services.getGoals;
     this.#closeDatabase = services.closeDatabase;
   }
 

@@ -1,6 +1,28 @@
 export { CorrectJournalData, type CorrectJournalDataInput } from './commands/CorrectJournalData';
 export {
+  DecisionHasOpenActionsError,
+  OPEN_LOOP_BLOCKING_REASON,
+  ResolveOpenLoop,
+  isDecisionHasOpenActionsError,
+  type ResolveOpenLoopInput,
+  type ResolveOpenLoopResult,
+} from './commands/ResolveOpenLoop';
+export {
+  EveningCycleApplicationService,
+  cloneEveningCycle,
+  isSpecialEveningCycleMode,
+} from './evening-cycle';
+export { MorningCycleApplicationService, cloneMorningCycle } from './morning-cycle';
+export type { GoalRepository } from './ports/GoalRepository';
+export { CreateGoal, type CreateGoalInput } from './commands/CreateGoal';
+export { UpdateGoal, type UpdateGoalInput } from './commands/UpdateGoal';
+export { ArchiveGoal, type ArchiveGoalInput } from './commands/ArchiveGoal';
+export { GetGoalById } from './queries/GetGoalById';
+export { GetGoals } from './queries/GetGoals';
+export type { MorningCycleRepository } from './ports/MorningCycleRepository';
+export {
   CompleteCurrentDay,
+  CompleteEveningCycle,
   type CompleteCurrentDayInput,
   type CompleteCurrentDayResult,
   type EveningLifeActionResolution,
@@ -91,12 +113,29 @@ export {
 } from './commands/StartLifeActionSession';
 export { MainDecisionLimitPolicy } from './decision/MainDecisionLimitPolicy';
 export { GetDecisionsForDate } from './queries/GetDecisionsForDate';
+export { GetDecisionsForProject } from './queries/GetDecisionsForProject';
+export {
+  GetManagementOverview,
+  MANAGEMENT_SIGNAL_KIND,
+  type ManagementOverviewFocus,
+  type ManagementOverviewSignal,
+  type ManagementOverviewSnapshot,
+  type ManagementOverviewToday,
+  type ManagementSignalKind,
+} from './queries/GetManagementOverview';
 export { GetDeletedDecisions } from './queries/GetDeletedDecisions';
 export {
   GetEveningReview,
+  GetEveningCycleReview,
   type EveningReviewSnapshot,
   type EveningRoutineSummary,
 } from './queries/GetEveningReview';
+export {
+  APPLICATION_MODE,
+  GetApplicationMode,
+  type ApplicationMode,
+  type ApplicationModeSnapshot,
+} from './queries/GetApplicationMode';
 export { GetDecisionById } from './queries/GetDecisionById';
 export {
   GetDecisionOverview,
@@ -146,15 +185,19 @@ export {
   type WalkStatisticsMetrics,
 } from './queries/GetStatistics';
 export type { ActionSessionRepository } from './ports/ActionSessionRepository';
+export type { ActionSessionsByLifeActionIdsReader } from './ports/ActionSessionsByLifeActionIdsReader';
 export type { Clock } from './ports/Clock';
 export type { CurrentDateProvider } from './ports/CurrentDateProvider';
 export type { DayRepository } from './ports/DayRepository';
+export type { EveningCycleRepository } from './ports/EveningCycleRepository';
 export type {
   CommitDayCompletionInput,
   DayCompletionLifeActionChange,
   DayCompletionUnitOfWork,
 } from './ports/DayCompletionUnitOfWork';
 export type { DecisionRepository } from './ports/DecisionRepository';
+export type { DecisionsByProjectReader } from './ports/DecisionsByProjectReader';
+export type { DirectionRepository, DirectionVersionedUpdate } from './ports/DirectionRepository';
 export type {
   CommitDecisionRescheduleInput,
   DecisionRescheduleLifeActionChange,
@@ -162,6 +205,14 @@ export type {
 } from './ports/DecisionRescheduleUnitOfWork';
 export type { IdGenerator } from './ports/IdGenerator';
 export type { LifeActionRepository } from './ports/LifeActionRepository';
+export type { LifeActionsByDecisionIdsReader } from './ports/LifeActionsByDecisionIdsReader';
+export type { TomorrowPlanRepository } from './ports/TomorrowPlanRepository';
+export type {
+  CommitTomorrowPlanInput,
+  RecommendationApplicationCommit,
+  TomorrowPlanUnitOfWork,
+} from './ports/TomorrowPlanUnitOfWork';
+export type { ProjectRepository } from './ports/ProjectRepository';
 export type { JournalRepository } from './ports/JournalRepository';
 export type {
   CommitJournalStateInput,
@@ -170,6 +221,8 @@ export type {
   JournalLifeActionChange,
   JournalUnitOfWork,
   JournalWorkSessionChange,
+  JournalDirectionChange,
+  JournalProjectChange,
 } from './ports/JournalUnitOfWork';
 export type { OpenDayConflictReader } from './ports/OpenDayConflictReader';
 export type { RoutineBlockRepository } from './ports/RoutineBlockRepository';
@@ -190,6 +243,54 @@ export {
   type DefaultSphereDefinition,
 } from './commands/EnsureDefaultSpheres';
 export { GetSpheres, type SpheresSnapshot } from './queries/GetSpheres';
+export { CreateDirection, type CreateDirectionInput } from './commands/CreateDirection';
+export {
+  ApplyDirectionStrategicReview,
+  type ApplyDirectionStrategicReviewInput,
+  type ApplyDirectionStrategicReviewResult,
+  type DirectionStrategicReviewNewProject,
+  type DirectionStrategicReviewProjectChange,
+  type StrategicReviewProjectStatus,
+} from './commands/ApplyDirectionStrategicReview';
+export { UpdateDirection, type UpdateDirectionInput } from './commands/UpdateDirection';
+export { ArchiveDirection, type ArchiveDirectionInput } from './commands/ArchiveDirection';
+export { RestoreDirection, type RestoreDirectionInput } from './commands/RestoreDirection';
+export { MakeDirectionMain, type MakeDirectionMainInput } from './commands/MakeDirectionMain';
+export { CreateProject, type CreateProjectInput } from './commands/CreateProject';
+export { UpdateProject, type UpdateProjectInput } from './commands/UpdateProject';
+export { ArchiveProject, type ArchiveProjectInput } from './commands/ArchiveProject';
+export { RestoreProject, type RestoreProjectInput } from './commands/RestoreProject';
+export { CompleteProject, type CompleteProjectInput } from './commands/CompleteProject';
+export { PauseProject, type PauseProjectInput } from './commands/PauseProject';
+export { ResumeProject, type ResumeProjectInput } from './commands/ResumeProject';
+export { MakeProjectMain, type MakeProjectMainInput } from './commands/MakeProjectMain';
+export { EnsureSingleMainProject } from './commands/EnsureSingleMainProject';
+export { GetDirections } from './queries/GetDirections';
+export { GetDirectionsForSphere } from './queries/GetDirectionsForSphere';
+export { GetDirectionsOverview, type DirectionOverviewItem } from './queries/GetDirectionsOverview';
+export { GetDirectionDetails, type DirectionDetailsSnapshot } from './queries/GetDirectionDetails';
+export {
+  DIRECTION_BASE_PERIOD_DAYS,
+  DIRECTION_OPERATIONAL_STATE,
+  GetDirectionPortfolio,
+  type DirectionBasePeriodDays,
+  type DirectionOperationalState,
+  type DirectionPortfolioSnapshot,
+  type DirectionPulse,
+} from './queries/GetDirectionPortfolio';
+export type { DecisionsByProjectIdsReader } from './ports/DecisionsByProjectIdsReader';
+export { GetProjects } from './queries/GetProjects';
+export { GetProjectsForSphere } from './queries/GetProjectsForSphere';
+export { GetProjectsForDirection } from './queries/GetProjectsForDirection';
+export { GetProjectById } from './queries/GetProjectById';
+export {
+  GetProjectLifeActions,
+  PROJECT_HISTORY_EVENT_KIND,
+  type ProjectHistoryEvent,
+  type ProjectHistoryEventKind,
+  type ProjectHistorySummary,
+  type ProjectLifeActionsSnapshot,
+} from './queries/GetProjectLifeActions';
 export type {
   RoutineOccurrenceExecutionRepository,
   StartRoutineExecutionResult,
@@ -198,6 +299,15 @@ export { CreateRoutineBlock, type CreateRoutineBlockInput } from './commands/Cre
 export { UpdateRoutineBlock, type UpdateRoutineBlockInput } from './commands/UpdateRoutineBlock';
 export { DeleteRoutineBlock, type DeleteRoutineBlockInput } from './commands/DeleteRoutineBlock';
 export { GetRoutineBlocksForDate } from './queries/GetRoutineBlocksForDate';
+export {
+  GetMorningOverview,
+  MORNING_NEXT_STEP,
+  resolveMorningOverview,
+  type MorningMainActionPresentation,
+  type MorningNextStep,
+  type MorningOverview,
+  type MorningOverviewSource,
+} from './queries/GetMorningOverview';
 export {
   GetRoutinePlanFactForDate,
   resolveRoutinePlanFactPresentation,
@@ -284,3 +394,124 @@ export type {
   OpenDayRecoveryUnitOfWork,
   OpenDayVersionExpectation,
 } from './ports/OpenDayRecoveryUnitOfWork';
+export type {
+  CommitOpenLoopResolutionInput,
+  OpenLoopDecisionChange,
+  OpenLoopLifeActionChange,
+  OpenLoopResolutionUnitOfWork,
+  OpenLoopSessionChange,
+} from './ports/OpenLoopResolutionUnitOfWork';
+export {
+  GetOpenLoopsForDay,
+  type OpenLoopItem,
+  type OpenLoopsForDaySnapshot,
+} from './queries/GetOpenLoopsForDay';
+export { GetReflectionContext } from './queries/GetReflectionContext';
+export {
+  ReflectionApplicationService,
+  type AnswerReflectionQuestionInput,
+  type CreateReflectionCorrectionInput,
+  type ReflectionSession,
+  type SkipReflectionQuestionInput,
+} from './reflection';
+export {
+  TomorrowPlanService,
+  cloneTomorrowPlan,
+  type NewTomorrowDecisionInput,
+  type NewTomorrowFirstActionInput,
+  type NewSupportingDecisionInput,
+  type TomorrowPlanSnapshot,
+} from './tomorrow-plan';
+export {
+  PreparationService,
+  clonePreparationPlan,
+  type CreatePreparationRuleInput,
+  type PreparationSnapshot,
+} from './preparation';
+export type { PreparationPlanRepository } from './ports/PreparationPlanRepository';
+export type {
+  EveningHistoryReader,
+  EveningHistoryReadRange,
+  EveningHistorySourceData,
+} from './ports/EveningHistoryReader';
+export {
+  EVENING_HISTORY_PREPARATION_STATE,
+  EVENING_HISTORY_RANGE_KIND,
+  GetEveningHistory,
+  resolveEveningHistoryRange,
+  type EveningHistoryItem,
+  type EveningHistoryPreparationState,
+  type EveningHistoryRange,
+  type EveningHistoryRangeKind,
+  type EveningHistoryReflectionAnswer,
+  type EveningHistoryReflectionSignal,
+  type EveningHistoryResolution,
+  type EveningHistoryResolutionCounts,
+  type EveningHistoryResolutionReason,
+  type EveningHistoryResult,
+  type EveningHistorySkippedStage,
+  type ResolvedEveningHistoryRange,
+} from './queries/GetEveningHistory';
+export {
+  GetEveningHistorySummary,
+  summarizeEveningHistory,
+  type EveningHistorySummary,
+} from './queries/GetEveningHistorySummary';
+export {
+  DetectEveningPatterns,
+  EVENING_PATTERN_SEVERITY,
+  EVENING_PATTERN_TYPE,
+  detectEveningPatterns,
+  type EveningPattern,
+  type EveningPatternDetectionResult,
+  type EveningPatternRange,
+  type EveningPatternSeverity,
+  type EveningPatternSourceEntity,
+  type EveningPatternType,
+} from './queries/DetectEveningPatterns';
+export {
+  EVENING_SIGNAL_SEVERITY,
+  GetEveningSignals,
+  getEveningSignals,
+  type EveningSignal,
+  type EveningSignalEvidence,
+  type EveningSignalSeverity,
+  type EveningSignalsResult,
+} from './queries/GetEveningSignals';
+export {
+  EVENING_RECOMMENDATION_APPLICABILITY,
+  EVENING_RECOMMENDATION_PRIORITY,
+  EVENING_RECOMMENDATION_TYPE,
+  GetEveningRecommendations,
+  getEveningRecommendations,
+  type EveningRecommendation,
+  type EveningRecommendationApplicability,
+  type EveningRecommendationPriority,
+  type EveningRecommendationProposedAction,
+  type EveningRecommendationsResult,
+  type EveningRecommendationType,
+} from './queries/GetEveningRecommendations';
+export { GetEveningAnalytics, type EveningAnalyticsResult } from './queries/GetEveningAnalytics';
+export type { PreparationRuleRepository } from './ports/PreparationRuleRepository';
+export type { RecommendationApplicationRepository } from './ports/RecommendationApplicationRepository';
+export {
+  RECOMMENDATION_APPLICATION_STATUS,
+  RECOMMENDATION_APPLICATION_TARGET_TYPE,
+  RECOMMENDATION_PREVIEW_KIND,
+  RecommendationApplicationService,
+  buildEveningRecommendationCards,
+  applyRecommendationApplication,
+  dismissRecommendationApplication,
+  isRecommendationApplicationStatus,
+  isRecommendationApplicationTargetType,
+  pendingRecommendationApplication,
+  type ApplyRecommendationInput,
+  type EveningRecommendationCard,
+  type EveningRecommendationPreview,
+  type RecommendationApplication,
+  type RecommendationApplicationStatus,
+  type RecommendationApplicationTargetType,
+  type RecommendationPreviewContext,
+  type RecommendationPreviewKind,
+} from './recommendations';
+export type { CommitPreparationInput, PreparationUnitOfWork } from './ports/PreparationUnitOfWork';

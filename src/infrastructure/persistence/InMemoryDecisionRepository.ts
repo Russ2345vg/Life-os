@@ -1,7 +1,13 @@
-import type { DecisionRepository } from '../../application';
+import type {
+  DecisionRepository,
+  DecisionsByProjectIdsReader,
+  DecisionsByProjectReader,
+} from '../../application';
 import type { DayDate, Decision, EntityId } from '../../domain';
 
-export class InMemoryDecisionRepository implements DecisionRepository {
+export class InMemoryDecisionRepository
+  implements DecisionRepository, DecisionsByProjectReader, DecisionsByProjectIdsReader
+{
   readonly #decisionsById = new Map<string, Decision>();
   readonly #persistedVersions = new Map<string, number>();
 
@@ -11,6 +17,19 @@ export class InMemoryDecisionRepository implements DecisionRepository {
 
   public async findByDate(date: DayDate): Promise<readonly Decision[]> {
     return [...this.#decisionsById.values()].filter((decision) => decision.isScheduledFor(date));
+  }
+
+  public async findByProjectId(projectId: EntityId): Promise<readonly Decision[]> {
+    return [...this.#decisionsById.values()].filter((decision) =>
+      decision.projectId?.equals(projectId),
+    );
+  }
+
+  public async findByProjectIds(projectIds: readonly EntityId[]): Promise<readonly Decision[]> {
+    const acceptedIds = new Set(projectIds.map((projectId) => projectId.toString()));
+    return [...this.#decisionsById.values()].filter((decision) =>
+      decision.projectId === null ? false : acceptedIds.has(decision.projectId.toString()),
+    );
   }
 
   public async findAll(): Promise<readonly Decision[]> {

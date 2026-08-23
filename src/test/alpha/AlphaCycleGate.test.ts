@@ -14,6 +14,7 @@ import { LifeOsIndexedDb } from '../../infrastructure/persistence/indexed-db/Lif
 import { DomainError } from '../../shared/errors/DomainError';
 import type { Result } from '../../shared/result/Result';
 import { FakeClock, FakeCurrentDateProvider, FakeIdGenerator } from '../helpers/Fakes';
+import { answerAllReflectionQuestions } from '../helpers/ReflectionTestHelper';
 
 const FIRST_DAY = '2026-08-05';
 const CYCLE_COUNT = 20;
@@ -173,17 +174,74 @@ describe('Alpha 0.1 — выпускной барьер полного цикл�
         ];
 
         restoredClock.setTime(atLocalTime(currentDate, 20, 30));
+        for (const resolution of actionResolutions) {
+          const result = await restoredApplication.resolveOpenLoop.execute({
+            dateKey: currentDate,
+            entityType: 'LIFE_ACTION',
+            entityId: resolution.lifeActionId,
+            resolution:
+              resolution.kind === 'complete'
+                ? 'COMPLETE'
+                : resolution.kind === 'reschedule'
+                  ? 'CARRY_FORWARD'
+                  : 'DROP',
+            ...(resolution.kind === 'complete'
+              ? { actualResult: resolution.actualResult }
+              : resolution.kind === 'cancel'
+                ? { reason: resolution.reason }
+                : {}),
+          });
+          expect(result.ok).toBe(true);
+        }
+        const decisionResolution = await restoredApplication.resolveOpenLoop.execute({
+          dateKey: currentDate,
+          entityType: 'DECISION',
+          entityId: mainDecision.id,
+          resolution: cycleIndex === CYCLE_COUNT - 1 ? 'COMPLETE' : 'CARRY_FORWARD',
+          actualResult: `Итог решения цикла ${cycleIndex + 1}`,
+        });
+        expect(decisionResolution.ok).toBe(true);
+        await answerAllReflectionQuestions(restoredApplication, currentDate);
+        let tomorrowPlan = await restoredApplication.tomorrowPlan.getOrCreate(currentDate);
+        if (tomorrowPlan.plan.primaryDecisionId === null) {
+          tomorrowPlan = await restoredApplication.tomorrowPlan.createPrimaryDecision(currentDate, {
+            title: `Главное решение дня ${cycleIndex + 2}`,
+            expectedResult: `Полный цикл ${cycleIndex + 2} завершён`,
+          });
+        }
+        await restoredApplication.tomorrowPlan.setOutcomes(
+          currentDate,
+          `Минимум цикла ${cycleIndex + 2} достигнут`,
+        );
+        const existingFirstAction = tomorrowPlan.targetLifeActions.find((action) =>
+          action.decisionId?.equals(tomorrowPlan.plan.primaryDecisionId!),
+        );
+        if (existingFirstAction === undefined) {
+          await restoredApplication.tomorrowPlan.createFirstAction(currentDate, {
+            title: `Открыть цикл ${cycleIndex + 2}`,
+            expectedResult: `Цикл ${cycleIndex + 2} открыт`,
+          });
+        } else {
+          await restoredApplication.tomorrowPlan.assignFirstAction(
+            currentDate,
+            existingFirstAction.id,
+          );
+        }
+        await restoredApplication.tomorrowPlan.complete(currentDate, true);
+        const preparation = await restoredApplication.preparation.getOrGenerate(currentDate);
+        for (const item of preparation.plan.activeItems.filter((candidate) => candidate.required)) {
+          await restoredApplication.preparation.skipItem(
+            currentDate,
+            item.id,
+            'Тестовый осознанный пропуск',
+          );
+        }
+        await restoredApplication.preparation.continueToShutdown(currentDate);
         const completion = unwrap(
           await restoredApplication.completeCurrentDay.execute({
             summary: `Итог полного цикла ${cycleIndex + 1}`,
-            actionResolutions,
-            tomorrowDecisions: [
-              {
-                kind: DECISION_KIND.main,
-                title: `Главное решение дня ${cycleIndex + 2}`,
-                expectedResult: `Полный цикл ${cycleIndex + 2} завершён`,
-              },
-            ],
+            actionResolutions: [],
+            tomorrowDecisions: [],
           }),
         );
         expect(completion.day.status).toBe(DAY_STATUS.completed);
@@ -193,7 +251,7 @@ describe('Alpha 0.1 — выпускной барьер полного цикл�
           actionResolutions: [],
           tomorrowDecisions: [],
         });
-        expect(errorCode(repeatedCompletion)).toBe('day.already_completed');
+        expect(repeatedCompletion.ok).toBe(true);
         restoredApplication.close();
 
         const verificationApplication = await createApplication(

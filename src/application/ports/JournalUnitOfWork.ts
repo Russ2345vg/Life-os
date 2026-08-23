@@ -1,4 +1,12 @@
-import type { ActionSession, Day, Decision, JournalEntry, LifeAction } from '../../domain';
+import type {
+  ActionSession,
+  Day,
+  Decision,
+  Direction,
+  JournalEntry,
+  LifeAction,
+  Project,
+} from '../../domain';
 
 export interface JournalDayChange {
   readonly day: Day;
@@ -20,11 +28,23 @@ export interface JournalWorkSessionChange {
   readonly expectedVersion: number | null;
 }
 
+export interface JournalDirectionChange {
+  readonly direction: Direction;
+  readonly expectedVersion: number;
+}
+
+export interface JournalProjectChange {
+  readonly project: Project;
+  readonly expectedVersion: number | null;
+}
+
 export interface CommitJournalStateInput {
   readonly days?: readonly JournalDayChange[];
   readonly decisions?: readonly JournalDecisionChange[];
   readonly lifeActions?: readonly JournalLifeActionChange[];
   readonly workSessions?: readonly JournalWorkSessionChange[];
+  readonly directions?: readonly JournalDirectionChange[];
+  readonly projects?: readonly JournalProjectChange[];
   readonly journalEntries: readonly JournalEntry[];
 }
 

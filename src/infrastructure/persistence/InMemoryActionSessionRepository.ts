@@ -1,8 +1,13 @@
-import type { ActionSessionRepository } from '../../application';
+import type {
+  ActionSessionRepository,
+  ActionSessionsByLifeActionIdsReader,
+} from '../../application';
 import type { ActionSession, EntityId } from '../../domain';
 import { DomainError } from '../../shared/errors/DomainError';
 
-export class InMemoryActionSessionRepository implements ActionSessionRepository {
+export class InMemoryActionSessionRepository
+  implements ActionSessionRepository, ActionSessionsByLifeActionIdsReader
+{
   readonly #sessionsById = new Map<string, ActionSession>();
 
   public async findById(id: EntityId): Promise<ActionSession | null> {
@@ -12,6 +17,15 @@ export class InMemoryActionSessionRepository implements ActionSessionRepository 
   public async findByLifeActionId(lifeActionId: EntityId): Promise<readonly ActionSession[]> {
     return [...this.#sessionsById.values()].filter((session) =>
       session.lifeActionId.equals(lifeActionId),
+    );
+  }
+
+  public async findByLifeActionIds(
+    lifeActionIds: readonly EntityId[],
+  ): Promise<readonly ActionSession[]> {
+    const acceptedIds = new Set(lifeActionIds.map((lifeActionId) => lifeActionId.toString()));
+    return [...this.#sessionsById.values()].filter((session) =>
+      acceptedIds.has(session.lifeActionId.toString()),
     );
   }
 

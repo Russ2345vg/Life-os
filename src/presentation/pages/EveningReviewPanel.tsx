@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -12,7 +13,14 @@ import type {
   EveningReviewSnapshot,
   GetEveningReview,
   GetSpheres,
+  ResolveOpenLoop,
+  ReflectionApplicationService,
+  ReflectionSession,
   SpheresSnapshot,
+  TomorrowPlanService,
+  PreparationService,
+  EveningCycleApplicationService,
+  TomorrowPlanSnapshot,
 } from '../../application';
 import {
   ACTION_SESSION_STATUS,
@@ -20,6 +28,14 @@ import {
   type DayDate,
   type DecisionKind,
   type LifeAction,
+  type OpenLoopEntityType,
+  type OpenLoopResolutionKind,
+  EVENING_CYCLE_STATE,
+  EVENING_CYCLE_MODE,
+  EVENING_MODE_REASON,
+  type EveningCycleMode,
+  REFLECTION_QUESTION_TYPE,
+  type ReflectionQuestion,
   EntityId,
 } from '../../domain';
 import {
@@ -43,20 +59,84 @@ import {
 } from './EveningReviewPanelState';
 import { SphereSelect } from '../components/SphereReference';
 import { useSpheres } from '../components/sphereReferenceModel';
+import { EveningVisualIcon } from '../components/EveningVisualIcon';
+import { TomorrowComposer } from './TomorrowComposer';
+import { PreparationPanel } from './PreparationPanel';
+import { EveningCommandCenter } from './EveningCommandCenter';
+import {
+  buildEveningKpis,
+  buildEveningNotStartedSceneModel,
+  defaultEveningView,
+  isEveningViewAvailable,
+  selectEveningView,
+  type SelectedEveningView,
+} from './EveningCommandCenterPresentation';
+import { EveningResolvingScene } from './EveningResolvingScene';
+import {
+  createResolutionFeedback,
+  createTechnicalResolutionFeedback,
+  tryBeginOpenLoopResolution,
+  type EveningResolutionFeedback,
+  type PendingOpenLoopResolution,
+} from './EveningResolvingPresentation';
+import { EveningReflectionScene } from './EveningReflectionScene';
+import {
+  EMPTY_EVENING_TOMORROW_PREVIEW,
+  buildEveningRecoverySceneModel,
+  buildEveningShutdownSceneModel,
+  eveningTomorrowPreviewFromPlan,
+  type EveningTomorrowPreview,
+} from './EveningFinalPresentation';
+import {
+  EveningRecoveryScene,
+  EveningShutdownScene,
+  type ShutdownSceneError,
+} from './EveningShutdownScene';
+import { loadEveningReviewState, type EveningReviewLoadState } from './EveningReviewLoadState';
+import {
+  EveningReflectionHistoryScene,
+  EveningTodayHistoryScene,
+} from './EveningCompletedHistoryScenes';
+import { tryBeginEveningStart } from './EveningStartupPresentation';
 
 interface EveningReviewPanelProps {
   readonly getEveningReview: Pick<GetEveningReview, 'execute'>;
   readonly completeCurrentDay: Pick<CompleteCurrentDay, 'execute'>;
+  readonly eveningCycle?: Pick<
+    EveningCycleApplicationService,
+    'start' | 'selectMode' | 'skipPreparation'
+  >;
+  readonly resolveOpenLoop?: Pick<ResolveOpenLoop, 'execute'>;
+  readonly reflection?: Pick<
+    ReflectionApplicationService,
+    'getSession' | 'answer' | 'skip' | 'createCorrection'
+  >;
   readonly getSpheres?: Pick<GetSpheres, 'execute'>;
+  readonly tomorrowPlan?: Pick<
+    TomorrowPlanService,
+    | 'getByTargetDate'
+    | 'getOrCreate'
+    | 'setVector'
+    | 'assignPrimaryDecision'
+    | 'createPrimaryDecision'
+    | 'setOutcomes'
+    | 'setFirstAttentionItem'
+    | 'assignFirstAction'
+    | 'createFirstAction'
+    | 'setSupportingDecisions'
+    | 'createSupportingDecision'
+    | 'complete'
+  >;
+  readonly preparation?: Pick<
+    PreparationService,
+    'getOrGenerate' | 'completeItem' | 'skipItem' | 'continueToShutdown'
+  >;
   readonly reviewDate?: DayDate;
   readonly onClose: () => void;
   readonly onCompleted: (result: CompleteCurrentDayResult) => void;
 }
 
-type LoadState =
-  | Readonly<{ status: 'loading' }>
-  | Readonly<{ status: 'error'; message: string }>
-  | Readonly<{ status: 'ready'; snapshot: EveningReviewSnapshot }>;
+type LoadState = EveningReviewLoadState;
 
 const EMPTY_GET_SPHERES: Pick<GetSpheres, 'execute'> = {
   execute: async () => ({ active: [], archived: [] }),
@@ -65,7 +145,12 @@ const EMPTY_GET_SPHERES: Pick<GetSpheres, 'execute'> = {
 export function EveningReviewPanel({
   getEveningReview,
   completeCurrentDay,
+  eveningCycle,
+  resolveOpenLoop,
+  reflection,
   getSpheres,
+  tomorrowPlan,
+  preparation,
   reviewDate,
   onClose,
   onCompleted,
@@ -78,50 +163,264 @@ export function EveningReviewPanel({
   const [tomorrowForms, setTomorrowForms] = useState<readonly TomorrowDecisionForm[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [shutdownError, setShutdownError] = useState<ShutdownSceneError | null>(null);
+  const [tomorrowPreview, setTomorrowPreview] = useState<EveningTomorrowPreview>(
+    EMPTY_EVENING_TOMORROW_PREVIEW,
+  );
+  const [tomorrowPreviewDateKey, setTomorrowPreviewDateKey] = useState<string | null>(null);
+  const [isCompletionTransitioning, setIsCompletionTransitioning] = useState(false);
+  const [openLoopNotes, setOpenLoopNotes] = useState<Readonly<Record<string, string>>>({});
+  const [resolutionFeedback, setResolutionFeedback] = useState<EveningResolutionFeedback | null>(
+    null,
+  );
+  const [pendingResolution, setPendingResolution] = useState<PendingOpenLoopResolution | null>(
+    null,
+  );
+  const [preferredOpenLoopKey, setPreferredOpenLoopKey] = useState<string | null>(null);
+  const [reflectionSession, setReflectionSession] = useState<ReflectionSession | null>(null);
+  const [reflectionText, setReflectionText] = useState('');
+  const [reflectionChoices, setReflectionChoices] = useState<readonly string[]>([]);
+  const [lastAnsweredQuestionId, setLastAnsweredQuestionId] = useState<string | null>(null);
+  const [correctionAction, setCorrectionAction] = useState('');
+  const [selectedEveningView, setSelectedEveningView] = useState<SelectedEveningView | null>(null);
   const nextTomorrowFormId = useRef(2);
+  const completionRequestRef = useRef(false);
+  const startRequestRef = useRef(false);
+  const resolutionRequestRef = useRef(false);
+  const lastResolutionRequestRef = useRef<{
+    readonly entityType: OpenLoopEntityType;
+    readonly entityId: string;
+    readonly resolution: OpenLoopResolutionKind;
+  } | null>(null);
+  const previousPresentedCycleState = useRef<string | null>(null);
 
-  async function load(): Promise<void> {
-    setLoadState({ status: 'loading' });
+  const presentedCycleState =
+    loadState.status === 'ready'
+      ? (reflectionSession?.cycle ?? loadState.snapshot.cycle).state
+      : null;
+
+  useEffect(() => {
+    if (presentedCycleState === null) return;
+    const stateChanged = previousPresentedCycleState.current !== presentedCycleState;
+    previousPresentedCycleState.current = presentedCycleState;
+    setSelectedEveningView((current) => {
+      if (
+        stateChanged ||
+        current === null ||
+        !isEveningViewAvailable(presentedCycleState, current)
+      ) {
+        return defaultEveningView(presentedCycleState);
+      }
+      return current;
+    });
+  }, [presentedCycleState]);
+
+  async function load(silent = false): Promise<boolean> {
+    if (!silent) setLoadState({ status: 'loading' });
     setSubmitError(null);
+    setShutdownError(null);
+    const result = await loadEveningReviewState(getEveningReview, reviewDate);
+    if (result.status === 'error') {
+      if (silent) {
+        setSubmitError('Изменение сохранено, но не удалось обновить вечерний центр.');
+        return false;
+      }
+      setLoadState(result);
+      return false;
+    }
     try {
-      const snapshot = await getEveningReview.execute(reviewDate);
+      const snapshot = result.snapshot;
+      const adaptiveSession = await loadReflectionSession(snapshot);
       setActionForms(createInitialEveningActionForms(snapshot));
       setTomorrowForms(createInitialTomorrowDecisionForms(snapshot));
+      applyReflectionSession(adaptiveSession);
       setLoadState({ status: 'ready', snapshot });
+      return true;
     } catch {
+      if (silent) {
+        setSubmitError('Изменение сохранено, но не удалось обновить вечерний центр.');
+        return false;
+      }
       setLoadState({
         status: 'error',
         message: 'Не удалось загрузить данные вечернего контроля',
       });
+      return false;
     }
   }
+
+  const loadReflectionSession = useCallback(
+    async (snapshot: EveningReviewSnapshot): Promise<ReflectionSession | null> => {
+      if (reflection === undefined) return null;
+      if (
+        snapshot.cycle.state !== EVENING_CYCLE_STATE.reflecting &&
+        snapshot.cycle.reflectionQuestions.length === 0
+      ) {
+        return null;
+      }
+      return reflection.getSession(snapshot.cycle.id);
+    },
+    [reflection],
+  );
+
+  const applyReflectionSession = useCallback((session: ReflectionSession | null): void => {
+    setReflectionSession(session);
+    setReflectionText('');
+    setReflectionChoices([]);
+    if (session?.complete === true) setSummary(buildReflectionSummary(session));
+  }, []);
 
   useEffect(() => {
     let isCancelled = false;
 
-    void getEveningReview
-      .execute(reviewDate)
-      .then((snapshot) => {
-        if (isCancelled) {
-          return;
+    void loadEveningReviewState(getEveningReview, reviewDate).then((result) => {
+      if (isCancelled) return;
+      if (result.status === 'error') {
+        setLoadState(result);
+        return;
+      }
+      const snapshot = result.snapshot;
+      if (isCancelled) {
+        return;
+      }
+      void loadReflectionSession(snapshot)
+        .then((adaptiveSession) => {
+          if (isCancelled) return;
+          setActionForms(createInitialEveningActionForms(snapshot));
+          setTomorrowForms(createInitialTomorrowDecisionForms(snapshot));
+          applyReflectionSession(adaptiveSession);
+          setLoadState({ status: 'ready', snapshot });
+        })
+        .catch(() => {
+          if (!isCancelled) {
+            setLoadState({ status: 'error', message: 'Не удалось загрузить осмысление дня' });
+          }
+        });
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [applyReflectionSession, getEveningReview, loadReflectionSession, reviewDate]);
+
+  useEffect(() => {
+    let isCancelled = false;
+    const snapshot = loadState.status === 'ready' ? loadState.snapshot : null;
+    const isFinalScene =
+      snapshot !== null &&
+      (snapshot.cycle.state === EVENING_CYCLE_STATE.shutdown ||
+        snapshot.cycle.state === EVENING_CYCLE_STATE.completed);
+
+    if (!isFinalScene || tomorrowPlan === undefined) {
+      return () => {
+        isCancelled = true;
+      };
+    }
+
+    void tomorrowPlan
+      .getByTargetDate(snapshot.tomorrowDate)
+      .then((plan) => {
+        if (!isCancelled) {
+          setTomorrowPreview(eveningTomorrowPreviewFromPlan(plan));
+          setTomorrowPreviewDateKey(snapshot.tomorrowDate.toString());
         }
-        setActionForms(createInitialEveningActionForms(snapshot));
-        setTomorrowForms(createInitialTomorrowDecisionForms(snapshot));
-        setLoadState({ status: 'ready', snapshot });
       })
       .catch(() => {
-        if (!isCancelled) {
-          setLoadState({
-            status: 'error',
-            message: 'Не удалось загрузить данные вечернего контроля',
-          });
-        }
+        // Preview is secondary: the final scene stays usable if this read fails.
       });
 
     return () => {
       isCancelled = true;
     };
-  }, [getEveningReview, reviewDate]);
+  }, [loadState, tomorrowPlan]);
+
+  async function handleReflectionAnswer(): Promise<void> {
+    const sessionState = reflectionSession;
+    const question = sessionState?.currentQuestion;
+    if (
+      reflection === undefined ||
+      sessionState === null ||
+      question === null ||
+      question === undefined ||
+      isSubmitting
+    ) {
+      return;
+    }
+    setIsSubmitting(true);
+    setSubmitError(null);
+    try {
+      const answer =
+        question.type === REFLECTION_QUESTION_TYPE.multiChoice ? reflectionChoices : reflectionText;
+      const session = await reflection.answer({
+        cycleId: sessionState.cycle.id,
+        questionId: question.id,
+        answer,
+      });
+      setLastAnsweredQuestionId(question.id);
+      applyReflectionSession(session);
+    } catch (error: unknown) {
+      setSubmitError(error instanceof Error ? error.message : 'Не удалось сохранить ответ.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleReflectionSkip(): Promise<void> {
+    const sessionState = reflectionSession;
+    const question = sessionState?.currentQuestion;
+    if (
+      reflection === undefined ||
+      sessionState === null ||
+      question === null ||
+      question === undefined ||
+      isSubmitting
+    ) {
+      return;
+    }
+    setIsSubmitting(true);
+    setSubmitError(null);
+    try {
+      const session = await reflection.skip({
+        cycleId: sessionState.cycle.id,
+        questionId: question.id,
+      });
+      setLastAnsweredQuestionId(null);
+      applyReflectionSession(session);
+    } catch (error: unknown) {
+      setSubmitError(error instanceof Error ? error.message : 'Не удалось пропустить вопрос.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleCreateCorrection(): Promise<void> {
+    if (
+      reflection === undefined ||
+      reflectionSession === null ||
+      lastAnsweredQuestionId === null ||
+      correctionAction.trim().length === 0 ||
+      isSubmitting
+    ) {
+      return;
+    }
+    setIsSubmitting(true);
+    setSubmitError(null);
+    try {
+      await reflection.createCorrection({
+        cycleId: reflectionSession.cycle.id,
+        questionId: lastAnsweredQuestionId,
+        action: correctionAction,
+      });
+      setCorrectionAction('');
+      setLastAnsweredQuestionId(null);
+    } catch (error: unknown) {
+      setSubmitError(
+        error instanceof Error ? error.message : 'Не удалось сохранить корректировку.',
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
 
   function updateActionForm(
     actionId: string,
@@ -195,6 +494,182 @@ export function EveningReviewPanel({
     }
   }
 
+  async function handleShutdownComplete(): Promise<void> {
+    if (completionRequestRef.current || isSubmitting || loadState.status !== 'ready') return;
+    completionRequestRef.current = true;
+    setIsSubmitting(true);
+    setSubmitError(null);
+    setShutdownError(null);
+    try {
+      const result = await completeCurrentDay.execute(
+        {
+          summary,
+          actionResolutions: [],
+          tomorrowDecisions: [],
+        },
+        loadState.snapshot.cycle.dateKey,
+      );
+      if (!result.ok) {
+        setShutdownError({ kind: 'blocking', message: result.error.message });
+        return;
+      }
+      onCompleted(result.value);
+      setIsCompletionTransitioning(true);
+      await waitForCompletionTransition();
+      await load(true);
+    } catch {
+      setShutdownError({
+        kind: 'technical',
+        message: 'Не удалось завершить день. Данные не потеряны.',
+      });
+    } finally {
+      completionRequestRef.current = false;
+      setIsCompletionTransitioning(false);
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleModeChange(mode: EveningCycleMode): Promise<void> {
+    if (eveningCycle === undefined || loadState.status !== 'ready' || isSubmitting) return;
+    if (
+      mode === EVENING_CYCLE_MODE.emergency &&
+      !window.confirm(
+        'Перейти к позднему завершению? LifeOS сохранит спокойный минимум, остальное можно уточнить утром.',
+      )
+    ) {
+      return;
+    }
+    setIsSubmitting(true);
+    setSubmitError(null);
+    try {
+      await eveningCycle.selectMode(
+        loadState.snapshot.cycle.dateKey,
+        mode,
+        EVENING_MODE_REASON.userSelected,
+      );
+      await load();
+    } catch (error: unknown) {
+      setSubmitError(error instanceof Error ? error.message : 'Не удалось переключить режим.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleStartEvening(): Promise<void> {
+    if (
+      eveningCycle === undefined ||
+      loadState.status !== 'ready' ||
+      loadState.snapshot.cycle.state !== EVENING_CYCLE_STATE.notStarted ||
+      !tryBeginEveningStart(startRequestRef)
+    ) {
+      return;
+    }
+    setIsSubmitting(true);
+    setSubmitError(null);
+    try {
+      await eveningCycle.start(loadState.snapshot.currentDate);
+      await load();
+    } catch (error: unknown) {
+      setSubmitError(error instanceof Error ? error.message : 'Не удалось начать вечер.');
+    } finally {
+      startRequestRef.current = false;
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleEmergencyPreparationSkip(): Promise<void> {
+    if (eveningCycle === undefined || loadState.status !== 'ready' || isSubmitting) return;
+    setIsSubmitting(true);
+    setSubmitError(null);
+    try {
+      await eveningCycle.skipPreparation(loadState.snapshot.cycle.dateKey);
+      await load();
+    } catch (error: unknown) {
+      setSubmitError(error instanceof Error ? error.message : 'Не удалось продолжить завершение.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleOpenLoopResolution(
+    entityType: OpenLoopEntityType,
+    entityId: string,
+    resolution: OpenLoopResolutionKind,
+  ): Promise<void> {
+    if (
+      resolveOpenLoop === undefined ||
+      loadState.status !== 'ready' ||
+      isSubmitting ||
+      !tryBeginOpenLoopResolution(resolutionRequestRef)
+    ) {
+      return;
+    }
+    const request = { entityType, entityId, resolution };
+    lastResolutionRequestRef.current = request;
+    setPendingResolution({ key: `${entityType}:${entityId}`, resolution });
+    setIsSubmitting(true);
+    setSubmitError(null);
+    setResolutionFeedback(null);
+    try {
+      const note = openLoopNotes[`${entityType}:${entityId}`] ?? '';
+      const result = await resolveOpenLoop.execute({
+        dateKey: loadState.snapshot.currentDate,
+        entityType,
+        entityId: EntityId.create(entityId),
+        resolution,
+        actualResult: note,
+        reason: note,
+      });
+      if (!result.ok) {
+        setResolutionFeedback(createResolutionFeedback(result.error));
+        return;
+      }
+      if (result.value.requiresRevision) {
+        setResolutionFeedback({
+          kind: 'business',
+          message: 'Измените элемент в его карточке, затем вернитесь к разбору.',
+        });
+        return;
+      }
+      setPreferredOpenLoopKey(null);
+      const refreshed = await load(true);
+      if (!refreshed) setResolutionFeedback(createTechnicalResolutionFeedback());
+    } catch {
+      setResolutionFeedback(createTechnicalResolutionFeedback());
+    } finally {
+      resolutionRequestRef.current = false;
+      setPendingResolution(null);
+      setIsSubmitting(false);
+    }
+  }
+
+  function handleResolveOpenAction(actionIds: readonly string[]): void {
+    if (loadState.status !== 'ready') return;
+    const target = actionIds.find((actionId) =>
+      loadState.snapshot.openLoops?.items.some(
+        (item) =>
+          item.entityType === 'LIFE_ACTION' &&
+          item.entityId === actionId &&
+          item.resolution === null,
+      ),
+    );
+    if (target === undefined) {
+      setResolutionFeedback({
+        kind: 'business',
+        message: 'Откройте незакрытое действие в разделе «Действия», затем вернитесь к Решению.',
+      });
+      return;
+    }
+    setPreferredOpenLoopKey(`LIFE_ACTION:${target}`);
+    setResolutionFeedback(null);
+  }
+
+  function handleResolutionRetry(): void {
+    const request = lastResolutionRequestRef.current;
+    if (request === null) return;
+    void handleOpenLoopResolution(request.entityType, request.entityId, request.resolution);
+  }
+
   if (loadState.status === 'loading') {
     return (
       <EveningReviewFrame title="Вечерний контроль" onClose={onClose}>
@@ -218,7 +693,189 @@ export function EveningReviewPanel({
     );
   }
 
-  return (
+  const activeCycle = reflectionSession?.cycle ?? loadState.snapshot.cycle;
+  const activeCycleState = activeCycle.state;
+  const activeDomainView = defaultEveningView(activeCycleState);
+  const activeSelectedView = selectedEveningView ?? defaultEveningView(activeCycleState);
+  const isTomorrowPreviewLoaded =
+    tomorrowPreviewDateKey === loadState.snapshot.tomorrowDate.toString();
+  const activeTomorrowPreview = isTomorrowPreviewLoaded
+    ? tomorrowPreview
+    : EMPTY_EVENING_TOMORROW_PREVIEW;
+  const renderScene = (scene: ReactNode) => (
+    <EveningCommandCenter
+      cycle={activeCycle}
+      isRecoveryReview={loadState.snapshot.isRecoveryReview}
+      modeChangeDisabled={
+        isSubmitting ||
+        eveningCycle === undefined ||
+        activeCycleState === EVENING_CYCLE_STATE.completed
+      }
+      kpis={buildEveningKpis(loadState.snapshot, reflectionSession)}
+      onModeChange={(mode) => void handleModeChange(mode)}
+      selectedView={activeSelectedView}
+      onSelectView={(requested) =>
+        setSelectedEveningView((current) =>
+          selectEveningView(activeCycleState, current ?? activeSelectedView, requested),
+        )
+      }
+      onClose={onClose}
+      isTransitioning={isCompletionTransitioning}
+    >
+      {scene}
+    </EveningCommandCenter>
+  );
+
+  if (activeSelectedView !== activeDomainView) {
+    if (activeSelectedView === 'today') {
+      return renderScene(<EveningTodayHistoryScene snapshot={loadState.snapshot} />);
+    }
+    if (activeSelectedView === 'reflection') {
+      return renderScene(<EveningReflectionHistoryScene session={reflectionSession} />);
+    }
+    if (activeSelectedView === 'tomorrow') {
+      return renderScene(
+        tomorrowPlan === undefined ? (
+          <EveningUnavailableHistoryScene title="Завтра" />
+        ) : (
+          <TomorrowComposer
+            cycleDate={loadState.snapshot.cycle.dateKey}
+            service={tomorrowPlan}
+            onPrepared={() => setSelectedEveningView(activeDomainView)}
+            onClose={onClose}
+            mode={activeCycle.mode}
+            completedActionLabel="Вернуться к текущему этапу"
+            historyView
+            embedded
+          />
+        ),
+      );
+    }
+    if (activeSelectedView === 'preparation') {
+      return renderScene(
+        preparation === undefined ? (
+          <EveningUnavailableHistoryScene title="Подготовка" />
+        ) : (
+          <PreparationPanel
+            cycleDate={loadState.snapshot.cycle.dateKey}
+            service={preparation}
+            onContinued={() => {
+              setSelectedEveningView(activeDomainView);
+              void load(true);
+            }}
+            onClose={onClose}
+            mode={activeCycle.mode}
+            completedReview
+            embedded
+          />
+        ),
+      );
+    }
+    if (activeSelectedView === 'shutdown') {
+      return renderScene(
+        <EveningShutdownScene
+          model={buildEveningShutdownSceneModel(
+            loadState.snapshot,
+            activeTomorrowPreview,
+            isTomorrowPreviewLoaded,
+          )}
+          isSubmitting={false}
+          error={null}
+          readOnly
+          onComplete={() => undefined}
+          onResolveBlocker={onClose}
+        />,
+      );
+    }
+  }
+
+  if (activeCycleState === EVENING_CYCLE_STATE.notStarted) {
+    return renderScene(
+      <EveningNotStartedScene
+        snapshot={loadState.snapshot}
+        busy={isSubmitting}
+        error={submitError}
+        startDisabled={eveningCycle === undefined}
+        onStart={() => void handleStartEvening()}
+      />,
+    );
+  }
+
+  if (activeCycleState === EVENING_CYCLE_STATE.completed) {
+    return renderScene(
+      <EveningRecoveryScene
+        model={buildEveningRecoverySceneModel(loadState.snapshot, activeTomorrowPreview)}
+        onClose={onClose}
+      />,
+    );
+  }
+
+  if (activeCycleState === EVENING_CYCLE_STATE.shutdown) {
+    return renderScene(
+      <EveningShutdownScene
+        model={buildEveningShutdownSceneModel(
+          loadState.snapshot,
+          activeTomorrowPreview,
+          isTomorrowPreviewLoaded,
+        )}
+        isSubmitting={isSubmitting}
+        error={shutdownError}
+        onComplete={() => void handleShutdownComplete()}
+        onResolveBlocker={onClose}
+      />,
+    );
+  }
+
+  if (activeCycleState === EVENING_CYCLE_STATE.planningTomorrow && tomorrowPlan !== undefined) {
+    if (activeCycle.mode === EVENING_CYCLE_MODE.emergency) {
+      return renderScene(
+        <EmergencyTomorrowPanel
+          cycleDate={loadState.snapshot.cycle.dateKey}
+          service={tomorrowPlan}
+          onPrepared={() => void load()}
+          onClose={onClose}
+          embedded
+        />,
+      );
+    }
+    return renderScene(
+      <TomorrowComposer
+        cycleDate={loadState.snapshot.cycle.dateKey}
+        service={tomorrowPlan}
+        onPrepared={() => void load()}
+        onClose={onClose}
+        mode={activeCycle.mode}
+        completedActionLabel="Перейти к подготовке →"
+        embedded
+      />,
+    );
+  }
+
+  if (activeCycleState === EVENING_CYCLE_STATE.preparing && preparation !== undefined) {
+    if (activeCycle.mode === EVENING_CYCLE_MODE.emergency) {
+      return renderScene(
+        <EmergencyPreparationSkipPanel
+          busy={isSubmitting}
+          error={submitError}
+          onContinue={() => void handleEmergencyPreparationSkip()}
+          onClose={onClose}
+          embedded
+        />,
+      );
+    }
+    return renderScene(
+      <PreparationPanel
+        cycleDate={loadState.snapshot.cycle.dateKey}
+        service={preparation}
+        onContinued={() => void load()}
+        onClose={onClose}
+        mode={activeCycle.mode}
+        embedded
+      />,
+    );
+  }
+
+  return renderScene(
     <EveningReviewPanelView
       snapshot={loadState.snapshot}
       summary={summary}
@@ -234,6 +891,18 @@ export function EveningReviewPanel({
         setSummary(value);
         setSubmitError(null);
       }}
+      reflectionSession={reflectionSession}
+      adaptiveReflectionEnabled={reflection !== undefined}
+      reflectionText={reflectionText}
+      reflectionChoices={reflectionChoices}
+      correctionAction={correctionAction}
+      lastAnsweredQuestionId={lastAnsweredQuestionId}
+      onReflectionTextChange={setReflectionText}
+      onReflectionChoicesChange={setReflectionChoices}
+      onReflectionAnswer={() => void handleReflectionAnswer()}
+      onReflectionSkip={() => void handleReflectionSkip()}
+      onCorrectionActionChange={setCorrectionAction}
+      onCreateCorrection={() => void handleCreateCorrection()}
       onActionKindChange={(actionId, kind) => updateActionForm(actionId, { kind })}
       onActionActualResultChange={(actionId, actualResult) =>
         updateActionForm(actionId, { actualResult })
@@ -242,11 +911,250 @@ export function EveningReviewPanel({
         updateActionForm(actionId, { newPlannedDate })
       }
       onActionReasonChange={(actionId, reason) => updateActionForm(actionId, { reason })}
+      openLoopNotes={openLoopNotes}
+      resolutionFeedback={resolutionFeedback}
+      pendingResolution={pendingResolution}
+      preferredOpenLoopKey={preferredOpenLoopKey}
+      onOpenLoopNoteChange={(key, value) =>
+        setOpenLoopNotes((current) => ({ ...current, [key]: value }))
+      }
+      onResolveOpenLoop={(entityType, entityId, resolution) =>
+        void handleOpenLoopResolution(entityType, entityId, resolution)
+      }
+      onResolveOpenAction={handleResolveOpenAction}
+      onResolutionRetry={handleResolutionRetry}
       onAddTomorrowDecision={addTomorrowDecision}
       onUpdateTomorrowDecision={updateTomorrowDecision}
       onRemoveTomorrowDecision={removeTomorrowDecision}
       onSubmit={(event) => void handleSubmit(event)}
-    />
+      onContinueResolving={() => void load(true)}
+      embedded
+    />,
+  );
+}
+
+interface EveningNotStartedSceneProps {
+  readonly snapshot: EveningReviewSnapshot;
+  readonly busy: boolean;
+  readonly error: string | null;
+  readonly startDisabled: boolean;
+  readonly onStart: () => void;
+}
+
+export function EveningNotStartedScene({
+  snapshot,
+  busy,
+  error,
+  startDisabled,
+  onStart,
+}: EveningNotStartedSceneProps) {
+  const model = buildEveningNotStartedSceneModel(snapshot);
+
+  return (
+    <section className="evening-e9-scene evening-not-started" aria-labelledby="evening-start-title">
+      <article className="evening-not-started-card">
+        <p className="evening-not-started-kicker">{model.eyebrow}</p>
+
+        <div className="evening-not-started-hero">
+          <span className="evening-not-started-hero-icon" aria-hidden="true">
+            <EveningVisualIcon name="sun" size={38} />
+          </span>
+          <div className="evening-not-started-hero-copy">
+            <h3 id="evening-start-title">{model.title}</h3>
+            <p>{model.description}</p>
+          </div>
+        </div>
+
+        <ul className="evening-not-started-summary" aria-label="Ключевой контекст вечера">
+          {model.facts.map((fact) => (
+            <li data-tone={fact.tone} key={fact.label}>
+              <span className="evening-not-started-fact-icon" aria-hidden="true">
+                <EveningVisualIcon name={fact.icon} size={18} />
+              </span>
+              <span className="evening-not-started-fact-copy">
+                <span>{fact.label}</span>
+                <strong>{fact.value}</strong>
+                <small>{fact.meta}</small>
+              </span>
+            </li>
+          ))}
+        </ul>
+
+        {error === null ? null : (
+          <p className="form-error evening-not-started-error" role="alert">
+            {error}
+          </p>
+        )}
+        <button
+          className="primary-button evening-not-started-primary"
+          type="button"
+          aria-busy={busy}
+          disabled={busy || startDisabled}
+          onClick={onStart}
+        >
+          <span>{busy ? 'Начинаем…' : 'Начать вечер'}</span>
+          {busy ? (
+            <span className="evening-not-started-loading-indicator" aria-hidden="true" />
+          ) : (
+            <EveningVisualIcon name="arrow-right" size={20} />
+          )}
+        </button>
+      </article>
+    </section>
+  );
+}
+
+function EveningUnavailableHistoryScene({ title }: { readonly title: string }) {
+  return (
+    <section className="evening-e9-scene evening-history-scene">
+      <div className="evening-e9-card evening-e9-empty-card">
+        <p className="section-kicker gold">{title}</p>
+        <h3>Сохранённые данные временно недоступны.</h3>
+        <p>Состояние завершённого вечернего цикла не изменено.</p>
+      </div>
+    </section>
+  );
+}
+
+type EmergencyPlanLoad =
+  | Readonly<{ status: 'loading' }>
+  | Readonly<{ status: 'error'; message: string }>
+  | Readonly<{ status: 'ready'; snapshot: TomorrowPlanSnapshot }>;
+
+function EmergencyTomorrowPanel({
+  cycleDate,
+  service,
+  onPrepared,
+  onClose,
+  embedded,
+}: {
+  readonly cycleDate: DayDate;
+  readonly service: Pick<TomorrowPlanService, 'getOrCreate' | 'setFirstAttentionItem' | 'complete'>;
+  readonly onPrepared: () => void;
+  readonly onClose: () => void;
+  readonly embedded: boolean;
+}) {
+  const [load, setLoad] = useState<EmergencyPlanLoad>({ status: 'loading' });
+  const [attention, setAttention] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void service
+      .getOrCreate(cycleDate)
+      .then((snapshot) => {
+        if (cancelled) return;
+        setAttention(snapshot.plan.firstAttentionItem ?? '');
+        setLoad({ status: 'ready', snapshot });
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setLoad({
+            status: 'error',
+            message: error instanceof Error ? error.message : 'Не удалось загрузить план.',
+          });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [cycleDate, service]);
+
+  async function completeMinimalPlan(): Promise<void> {
+    if (load.status !== 'ready' || busy) return;
+    setBusy(true);
+    try {
+      if (attention.trim() !== (load.snapshot.plan.firstAttentionItem ?? '')) {
+        await service.setFirstAttentionItem(cycleDate, attention.trim() || null);
+      }
+      await service.complete(cycleDate);
+      onPrepared();
+    } catch (error: unknown) {
+      setLoad({
+        status: 'error',
+        message: error instanceof Error ? error.message : 'Не удалось сохранить минимум.',
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <EveningReviewFrame title="Завтра" onClose={onClose} embedded={embedded}>
+      <section className="evening-e9-card shutdown-panel emergency-tomorrow-scene">
+        <p className="section-kicker gold">Позднее завершение · Завтра</p>
+        <h3>Сохраним только необходимое.</h3>
+        {load.status === 'loading' ? <p>Загружаем безопасный минимум…</p> : null}
+        {load.status === 'error' ? (
+          <p className="form-error" role="alert">
+            {load.message}
+          </p>
+        ) : null}
+        {load.status === 'ready' ? (
+          <>
+            <p>Остальной план можно уточнить утром.</p>
+            {load.snapshot.primaryDecision === null ? null : (
+              <div className="emergency-tomorrow-primary">
+                <span>Главное</span>
+                <strong>{load.snapshot.primaryDecision.title.toString()}</strong>
+              </div>
+            )}
+            <label>
+              {load.snapshot.primaryDecision === null
+                ? 'Главное на завтра'
+                : 'Первый объект внимания — при необходимости'}
+              <input
+                value={attention}
+                onChange={(event) => setAttention(event.target.value)}
+                placeholder="Например, продолжить LifeOS"
+              />
+            </label>
+            <button
+              className="primary-button"
+              type="button"
+              disabled={
+                busy || (load.snapshot.primaryDecision === null && attention.trim().length === 0)
+              }
+              onClick={() => void completeMinimalPlan()}
+            >
+              {busy ? 'Сохраняем…' : 'Сохранить и продолжить'}
+            </button>
+          </>
+        ) : null}
+      </section>
+    </EveningReviewFrame>
+  );
+}
+
+function EmergencyPreparationSkipPanel({
+  busy,
+  error,
+  onContinue,
+  onClose,
+  embedded,
+}: {
+  readonly busy: boolean;
+  readonly error: string | null;
+  readonly onContinue: () => void;
+  readonly onClose: () => void;
+  readonly embedded: boolean;
+}) {
+  return (
+    <EveningReviewFrame title="Позднее завершение" onClose={onClose} embedded={embedded}>
+      <section className="evening-e9-card shutdown-panel emergency-preparation-scene">
+        <p className="section-kicker gold">Позднее завершение · Подготовка</p>
+        <h3>Сохраним спокойный минимум.</h3>
+        <p>Подготовка среды не будет придумана автоматически. Её можно уточнить утром.</p>
+        {error === null ? null : (
+          <p className="form-error" role="alert">
+            {error}
+          </p>
+        )}
+        <button className="primary-button" type="button" disabled={busy} onClick={onContinue}>
+          {busy ? 'Сохраняем…' : 'Перейти к завершению'}
+        </button>
+      </section>
+    </EveningReviewFrame>
   );
 }
 
@@ -262,10 +1170,34 @@ interface EveningReviewPanelViewProps {
   readonly error: string | null;
   readonly onClose: () => void;
   readonly onSummaryChange: (value: string) => void;
+  readonly reflectionSession?: ReflectionSession | null;
+  readonly adaptiveReflectionEnabled?: boolean;
+  readonly reflectionText?: string;
+  readonly reflectionChoices?: readonly string[];
+  readonly correctionAction?: string;
+  readonly lastAnsweredQuestionId?: string | null;
+  readonly onReflectionTextChange?: (value: string) => void;
+  readonly onReflectionChoicesChange?: (values: readonly string[]) => void;
+  readonly onReflectionAnswer?: () => void;
+  readonly onReflectionSkip?: () => void;
+  readonly onCorrectionActionChange?: (value: string) => void;
+  readonly onCreateCorrection?: () => void;
   readonly onActionKindChange: (actionId: string, kind: EveningActionResolutionKind) => void;
   readonly onActionActualResultChange: (actionId: string, value: string) => void;
   readonly onActionDateChange: (actionId: string, value: string) => void;
   readonly onActionReasonChange: (actionId: string, value: string) => void;
+  readonly openLoopNotes?: Readonly<Record<string, string>>;
+  readonly resolutionFeedback?: EveningResolutionFeedback | null;
+  readonly pendingResolution?: PendingOpenLoopResolution | null;
+  readonly preferredOpenLoopKey?: string | null;
+  readonly onOpenLoopNoteChange?: (key: string, value: string) => void;
+  readonly onResolveOpenLoop?: (
+    entityType: OpenLoopEntityType,
+    entityId: string,
+    resolution: OpenLoopResolutionKind,
+  ) => void;
+  readonly onResolveOpenAction?: (actionIds: readonly string[]) => void;
+  readonly onResolutionRetry?: () => void;
   readonly onAddTomorrowDecision: () => void;
   readonly onUpdateTomorrowDecision: (
     formId: string,
@@ -273,6 +1205,8 @@ interface EveningReviewPanelViewProps {
   ) => void;
   readonly onRemoveTomorrowDecision: (formId: string) => void;
   readonly onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  readonly onContinueResolving?: () => void;
+  readonly embedded?: boolean;
 }
 
 export function EveningReviewPanelView({
@@ -287,14 +1221,36 @@ export function EveningReviewPanelView({
   error,
   onClose,
   onSummaryChange,
+  reflectionSession,
+  adaptiveReflectionEnabled = false,
+  reflectionText = '',
+  reflectionChoices = [],
+  correctionAction = '',
+  lastAnsweredQuestionId = null,
+  onReflectionTextChange,
+  onReflectionChoicesChange,
+  onReflectionAnswer,
+  onReflectionSkip,
+  onCorrectionActionChange,
+  onCreateCorrection,
   onActionKindChange,
   onActionActualResultChange,
   onActionDateChange,
   onActionReasonChange,
+  openLoopNotes = {},
+  resolutionFeedback = null,
+  pendingResolution = null,
+  preferredOpenLoopKey = null,
+  onOpenLoopNoteChange,
+  onResolveOpenLoop,
+  onResolveOpenAction,
+  onResolutionRetry,
   onAddTomorrowDecision,
   onUpdateTomorrowDecision,
   onRemoveTomorrowDecision,
   onSubmit,
+  onContinueResolving,
+  embedded = false,
 }: EveningReviewPanelViewProps) {
   const unfinishedActions = snapshot.lifeActions.filter(isUnfinishedAction);
   const completedActions = snapshot.lifeActions.filter((action) => !isUnfinishedAction(action));
@@ -306,6 +1262,57 @@ export function EveningReviewPanelView({
     snapshot.actionSessions.length > 0 ||
     (snapshot.routineSummary?.plannedCount ?? 0) > 0;
 
+  if (
+    embedded &&
+    (snapshot.cycle.state === EVENING_CYCLE_STATE.windingDown ||
+      snapshot.cycle.state === EVENING_CYCLE_STATE.resolving)
+  ) {
+    return (
+      <EveningResolvingScene
+        snapshot={snapshot}
+        notes={openLoopNotes}
+        disabled={isSubmitting || onResolveOpenLoop === undefined}
+        error={error}
+        feedback={resolutionFeedback}
+        pendingResolution={pendingResolution}
+        preferredKey={preferredOpenLoopKey}
+        onNoteChange={(key, value) => onOpenLoopNoteChange?.(key, value)}
+        onResolve={(entityType, entityId, resolution) =>
+          onResolveOpenLoop?.(entityType, entityId, resolution)
+        }
+        onReturnToWork={onClose}
+        onContinue={() => onContinueResolving?.()}
+        onResolveOpenAction={(actionIds) => onResolveOpenAction?.(actionIds)}
+        onRetry={() => onResolutionRetry?.()}
+      />
+    );
+  }
+
+  if (
+    embedded &&
+    reflectionSession !== undefined &&
+    reflectionSession !== null &&
+    reflectionSession.cycle.state === EVENING_CYCLE_STATE.reflecting
+  ) {
+    return (
+      <EveningReflectionScene
+        session={reflectionSession}
+        text={reflectionText}
+        choices={reflectionChoices}
+        correctionAction={correctionAction}
+        lastAnsweredQuestionId={lastAnsweredQuestionId}
+        disabled={isSubmitting}
+        error={error}
+        onTextChange={(value) => onReflectionTextChange?.(value)}
+        onChoicesChange={(values) => onReflectionChoicesChange?.(values)}
+        onAnswer={() => onReflectionAnswer?.()}
+        onSkip={() => onReflectionSkip?.()}
+        onCorrectionActionChange={(value) => onCorrectionActionChange?.(value)}
+        onCreateCorrection={() => onCreateCorrection?.()}
+      />
+    );
+  }
+
   return (
     <EveningReviewFrame
       title={
@@ -314,10 +1321,80 @@ export function EveningReviewPanelView({
           : 'Вечерний контроль и завершение дня'
       }
       onClose={onClose}
+      embedded={embedded}
     >
       <form className="evening-review-form" onSubmit={onSubmit} noValidate>
         <div className="evening-review-scroll-region">
-          <EveningReviewSteps readiness={readiness} isRecoveryReview={snapshot.isRecoveryReview} />
+          {embedded ? null : (
+            <EveningReviewSteps
+              readiness={readiness}
+              isRecoveryReview={snapshot.isRecoveryReview}
+            />
+          )}
+
+          {snapshot.openLoops === undefined ? null : (
+            <section className="evening-review-section" aria-labelledby="open-loop-heading">
+              <div className="section-heading">
+                <div>
+                  <p className="section-kicker gold">Разбор дня</p>
+                  <h3 id="open-loop-heading">
+                    {snapshot.openLoops.remaining} элементов требуют решения
+                  </h3>
+                </div>
+                <strong>
+                  {snapshot.openLoops.resolved} / {snapshot.openLoops.total}
+                </strong>
+              </div>
+              <div className="evening-action-review-list">
+                {snapshot.openLoops.items.map((item) => {
+                  const key = `${item.entityType}:${item.entityId}`;
+                  return (
+                    <article className="evening-action-card" key={key}>
+                      <div className="evening-action-card-heading">
+                        <div>
+                          <strong>{item.title}</strong>
+                          <p>
+                            {item.requirement === 'INFORMATIONAL'
+                              ? `Для сведения: ${item.status}`
+                              : item.resolution === null
+                                ? item.status
+                                : `Разобрано: ${openLoopResolutionLabel(item.resolution, item.entityType)}`}
+                          </p>
+                        </div>
+                      </div>
+                      {item.requirement === 'INFORMATIONAL' || item.resolution !== null ? null : (
+                        <>
+                          <label className="evening-review-field">
+                            <span>Итог или причина</span>
+                            <input
+                              value={openLoopNotes[key] ?? ''}
+                              disabled={isSubmitting}
+                              onChange={(event) => onOpenLoopNoteChange?.(key, event.target.value)}
+                            />
+                          </label>
+                          <div className="evening-action-choice-grid">
+                            {item.allowedResolutions.map((resolution) => (
+                              <button
+                                className="secondary-button"
+                                type="button"
+                                key={resolution}
+                                disabled={isSubmitting || onResolveOpenLoop === undefined}
+                                onClick={() =>
+                                  onResolveOpenLoop?.(item.entityType, item.entityId, resolution)
+                                }
+                              >
+                                {openLoopResolutionLabel(resolution, item.entityType)}
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          )}
 
           <section className="evening-review-overview" aria-labelledby="evening-overview-title">
             <div className="section-heading">
@@ -442,90 +1519,122 @@ export function EveningReviewPanelView({
             )}
           </section>
 
-          <section className="evening-review-section" aria-labelledby="evening-summary-title">
-            <div className="section-heading">
-              <div>
-                <p className="section-kicker green">Итог</p>
-                <h3 id="evening-summary-title">Что стало результатом дня?</h3>
+          {adaptiveReflectionEnabled &&
+          (reflectionSession === undefined || reflectionSession === null) ? (
+            <section className="evening-review-section" aria-labelledby="adaptive-reflection-title">
+              <div className="section-heading">
+                <div>
+                  <p className="section-kicker green">Осмысление дня</p>
+                  <h3 id="adaptive-reflection-title">Сначала завершите разбор дня</h3>
+                </div>
               </div>
-            </div>
-            <label className="evening-review-field">
-              <span>Итог дня *</span>
-              <textarea
-                value={summary}
-                rows={4}
-                maxLength={4000}
-                disabled={isSubmitting}
-                onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
-                  onSummaryChange(event.target.value)
-                }
-              />
-            </label>
-            <label className="evening-review-field">
-              <span>Сфера результата дня</span>
-              <SphereSelect
-                value={sphereId}
-                snapshot={spheres}
-                disabled={isSubmitting}
-                onChange={onSphereChange}
-              />
-            </label>
-          </section>
-
-          <section className="evening-review-section" aria-labelledby="tomorrow-decisions-title">
-            <div className="section-heading">
-              <div>
-                <p className="section-kicker gold">Следующий цикл</p>
-                <h3 id="tomorrow-decisions-title">
-                  {snapshot.isRecoveryReview ? 'Решения для продолжения' : 'Решения на завтра'}
-                </h3>
-                <p>{snapshot.tomorrowDate.toString()}</p>
-              </div>
-              <button
-                className="secondary-button"
-                type="button"
-                disabled={isSubmitting}
-                onClick={onAddTomorrowDecision}
-              >
-                Добавить решение
-              </button>
-            </div>
-
-            {snapshot.tomorrowDecisions.length === 0 ? (
               <p className="page-message">
-                {snapshot.isRecoveryReview
-                  ? 'Сохранённых решений на текущую дату пока нет'
-                  : 'Сохранённых решений на завтра пока нет'}
+                Вопросы появятся после обработки незавершённых элементов.
               </p>
-            ) : (
-              <div className="evening-review-list">
-                {snapshot.tomorrowDecisions.map((decision) => (
-                  <article className="evening-review-row" key={decision.id.toString()}>
-                    <div>
-                      <strong>{decision.title.toString()}</strong>
-                      <p>{decisionKindLabel(decision.kind)}</p>
-                    </div>
-                    <span className="entity-status-chip">
-                      {decisionStatusLabel(decision.status)}
-                    </span>
-                  </article>
+            </section>
+          ) : reflectionSession === undefined || reflectionSession === null ? (
+            <section className="evening-review-section" aria-labelledby="evening-summary-title">
+              <div className="section-heading">
+                <div>
+                  <p className="section-kicker green">Итог</p>
+                  <h3 id="evening-summary-title">Что стало результатом дня?</h3>
+                </div>
+              </div>
+              <label className="evening-review-field">
+                <span>Итог дня *</span>
+                <textarea
+                  value={summary}
+                  rows={4}
+                  maxLength={4000}
+                  disabled={isSubmitting}
+                  onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
+                    onSummaryChange(event.target.value)
+                  }
+                />
+              </label>
+              <label className="evening-review-field">
+                <span>Сфера результата дня</span>
+                <SphereSelect
+                  value={sphereId}
+                  snapshot={spheres}
+                  disabled={isSubmitting}
+                  onChange={onSphereChange}
+                />
+              </label>
+            </section>
+          ) : (
+            <AdaptiveReflectionSection
+              session={reflectionSession}
+              text={reflectionText}
+              choices={reflectionChoices}
+              correctionAction={correctionAction}
+              lastAnsweredQuestionId={lastAnsweredQuestionId}
+              disabled={isSubmitting}
+              onTextChange={onReflectionTextChange}
+              onChoicesChange={onReflectionChoicesChange}
+              onAnswer={onReflectionAnswer}
+              onSkip={onReflectionSkip}
+              onCorrectionActionChange={onCorrectionActionChange}
+              onCreateCorrection={onCreateCorrection}
+            />
+          )}
+
+          {adaptiveReflectionEnabled && reflectionSession?.complete !== true ? null : (
+            <section className="evening-review-section" aria-labelledby="tomorrow-decisions-title">
+              <div className="section-heading">
+                <div>
+                  <p className="section-kicker gold">Следующий цикл</p>
+                  <h3 id="tomorrow-decisions-title">
+                    {snapshot.isRecoveryReview ? 'Решения для продолжения' : 'Решения на завтра'}
+                  </h3>
+                  <p>{snapshot.tomorrowDate.toString()}</p>
+                </div>
+                <button
+                  className="secondary-button"
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={onAddTomorrowDecision}
+                >
+                  Добавить решение
+                </button>
+              </div>
+
+              {snapshot.tomorrowDecisions.length === 0 ? (
+                <p className="page-message">
+                  {snapshot.isRecoveryReview
+                    ? 'Сохранённых решений на текущую дату пока нет'
+                    : 'Сохранённых решений на завтра пока нет'}
+                </p>
+              ) : (
+                <div className="evening-review-list">
+                  {snapshot.tomorrowDecisions.map((decision) => (
+                    <article className="evening-review-row" key={decision.id.toString()}>
+                      <div>
+                        <strong>{decision.title.toString()}</strong>
+                        <p>{decisionKindLabel(decision.kind)}</p>
+                      </div>
+                      <span className="entity-status-chip">
+                        {decisionStatusLabel(decision.status)}
+                      </span>
+                    </article>
+                  ))}
+                </div>
+              )}
+
+              <div className="tomorrow-decision-form-list">
+                {tomorrowForms.map((form, index) => (
+                  <TomorrowDecisionFormCard
+                    key={form.formId}
+                    index={index}
+                    form={form}
+                    disabled={isSubmitting}
+                    onUpdate={onUpdateTomorrowDecision}
+                    onRemove={onRemoveTomorrowDecision}
+                  />
                 ))}
               </div>
-            )}
-
-            <div className="tomorrow-decision-form-list">
-              {tomorrowForms.map((form, index) => (
-                <TomorrowDecisionFormCard
-                  key={form.formId}
-                  index={index}
-                  form={form}
-                  disabled={isSubmitting}
-                  onUpdate={onUpdateTomorrowDecision}
-                  onRemove={onRemoveTomorrowDecision}
-                />
-              ))}
-            </div>
-          </section>
+            </section>
+          )}
 
           {error === null ? null : (
             <p className="form-error evening-review-error" role="alert">
@@ -563,6 +1672,199 @@ export function EveningReviewPanelView({
       </form>
     </EveningReviewFrame>
   );
+}
+
+interface AdaptiveReflectionSectionProps {
+  readonly session: ReflectionSession;
+  readonly text: string;
+  readonly choices: readonly string[];
+  readonly correctionAction: string;
+  readonly lastAnsweredQuestionId: string | null;
+  readonly disabled: boolean;
+  readonly onTextChange?: ((value: string) => void) | undefined;
+  readonly onChoicesChange?: ((values: readonly string[]) => void) | undefined;
+  readonly onAnswer?: (() => void) | undefined;
+  readonly onSkip?: (() => void) | undefined;
+  readonly onCorrectionActionChange?: ((value: string) => void) | undefined;
+  readonly onCreateCorrection?: (() => void) | undefined;
+}
+
+function AdaptiveReflectionSection({
+  session,
+  text,
+  choices,
+  correctionAction,
+  lastAnsweredQuestionId,
+  disabled,
+  onTextChange,
+  onChoicesChange,
+  onAnswer,
+  onSkip,
+  onCorrectionActionChange,
+  onCreateCorrection,
+}: AdaptiveReflectionSectionProps) {
+  const question = session.currentQuestion;
+  return (
+    <section className="evening-review-section" aria-labelledby="adaptive-reflection-title">
+      <div className="section-heading">
+        <div>
+          <p className="section-kicker green">Осмысление дня</p>
+          <h3 id="adaptive-reflection-title">
+            {session.complete
+              ? 'Осмысление завершено'
+              : `Вопрос ${session.processed + 1} из ${session.total}`}
+          </h3>
+        </div>
+        <strong>
+          {session.processed} / {session.total}
+        </strong>
+      </div>
+
+      {question === null ? (
+        <p className="evening-review-check evening-review-check-ok">
+          Ответы сохранены. Можно переходить к формированию завтра.
+        </p>
+      ) : (
+        <ReflectionQuestionForm
+          question={question}
+          text={text}
+          choices={choices}
+          disabled={disabled}
+          onTextChange={onTextChange}
+          onChoicesChange={onChoicesChange}
+          onAnswer={onAnswer}
+          onSkip={onSkip}
+        />
+      )}
+
+      {lastAnsweredQuestionId === null ? null : (
+        <div className="evening-action-card">
+          <label className="evening-review-field">
+            <span>Корректировка по последнему ответу</span>
+            <textarea
+              rows={2}
+              value={correctionAction}
+              disabled={disabled}
+              placeholder="Например: перед рабочей сессией убирать телефон со стола"
+              onChange={(event) => onCorrectionActionChange?.(event.target.value)}
+            />
+          </label>
+          <button
+            className="secondary-button"
+            type="button"
+            disabled={disabled || correctionAction.trim().length === 0}
+            onClick={onCreateCorrection}
+          >
+            Сохранить корректировку
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ReflectionQuestionForm({
+  question,
+  text,
+  choices,
+  disabled,
+  onTextChange,
+  onChoicesChange,
+  onAnswer,
+  onSkip,
+}: {
+  readonly question: ReflectionQuestion;
+  readonly text: string;
+  readonly choices: readonly string[];
+  readonly disabled: boolean;
+  readonly onTextChange?: ((value: string) => void) | undefined;
+  readonly onChoicesChange?: ((values: readonly string[]) => void) | undefined;
+  readonly onAnswer?: (() => void) | undefined;
+  readonly onSkip?: (() => void) | undefined;
+}) {
+  const singleChoice = question.type === REFLECTION_QUESTION_TYPE.singleChoice ? text : '';
+  const canAnswer =
+    question.type === REFLECTION_QUESTION_TYPE.multiChoice
+      ? choices.length > 0
+      : text.trim().length > 0;
+  return (
+    <div className="evening-action-card">
+      <p>{question.context}</p>
+      <h4>{question.prompt}</h4>
+      {question.type === REFLECTION_QUESTION_TYPE.singleChoice ||
+      question.type === REFLECTION_QUESTION_TYPE.multiChoice ? (
+        <div className="evening-action-choice-grid">
+          {question.options.map((option) => {
+            const checked =
+              question.type === REFLECTION_QUESTION_TYPE.singleChoice
+                ? singleChoice === option.value
+                : choices.includes(option.value);
+            return (
+              <label key={option.value} className="evening-review-check">
+                <input
+                  type={
+                    question.type === REFLECTION_QUESTION_TYPE.singleChoice ? 'radio' : 'checkbox'
+                  }
+                  name={question.id}
+                  checked={checked}
+                  disabled={disabled}
+                  onChange={() => {
+                    if (question.type === REFLECTION_QUESTION_TYPE.singleChoice) {
+                      onTextChange?.(option.value);
+                    } else {
+                      onChoicesChange?.(
+                        checked
+                          ? choices.filter((value) => value !== option.value)
+                          : [...choices, option.value],
+                      );
+                    }
+                  }}
+                />
+                {option.label}
+              </label>
+            );
+          })}
+        </div>
+      ) : (
+        <label className="evening-review-field">
+          <span>{question.required ? 'Ответ *' : 'Ответ (необязательно)'}</span>
+          <textarea
+            rows={3}
+            maxLength={2000}
+            value={text}
+            disabled={disabled}
+            onChange={(event) => onTextChange?.(event.target.value)}
+          />
+        </label>
+      )}
+      <div className="evening-action-choice-grid">
+        {!question.required ? (
+          <button className="secondary-button" type="button" disabled={disabled} onClick={onSkip}>
+            Пропустить
+          </button>
+        ) : null}
+        <button
+          className="primary-button"
+          type="button"
+          disabled={disabled || !canAnswer}
+          onClick={onAnswer}
+        >
+          Продолжить
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function buildReflectionSummary(session: ReflectionSession): string {
+  const questions = new Map(session.questions.map((question) => [question.id, question]));
+  const lines = session.cycle.reflectionResults.flatMap((result) => {
+    if (result.answer === null) return [];
+    const question = questions.get(result.questionId);
+    const answer = typeof result.answer === 'string' ? result.answer : result.answer.join(', ');
+    return [`${question?.prompt ?? 'Осмысление'}: ${answer}`];
+  });
+  return (lines.length === 0 ? 'Осмысление дня завершено.' : lines.join('\n')).slice(0, 4_000);
 }
 
 function EveningReviewSteps({
@@ -640,29 +1942,37 @@ function EveningReviewFrame({
   title,
   onClose,
   children,
+  embedded = false,
 }: {
   readonly title: string;
   readonly onClose: () => void;
   readonly children: ReactNode;
+  readonly embedded?: boolean;
 }) {
+  if (embedded) {
+    return <div className="evening-command-center-scene-content">{children}</div>;
+  }
   return (
-    <div className="details-backdrop evening-review-backdrop" role="presentation">
+    <div className="evening-command-center-page">
       <section
-        className="details-panel evening-review-panel"
-        role="dialog"
-        aria-modal="true"
+        className="evening-command-center evening-command-center-loading"
         aria-labelledby="evening-review-title"
       >
-        <header className="details-panel-header">
+        <header className="evening-command-center-header">
           <div>
-            <p className="section-kicker gold">Этап 9.9</p>
-            <h2 id="evening-review-title">{title}</h2>
+            <h2 id="evening-review-title">Вечерний центр</h2>
+            <p>{title}</p>
           </div>
-          <button className="icon-button" type="button" aria-label="Закрыть" onClick={onClose}>
+          <button
+            className="evening-command-center-close"
+            type="button"
+            aria-label="Закрыть"
+            onClick={onClose}
+          >
             ×
           </button>
         </header>
-        <div className="details-panel-content evening-review-content">{children}</div>
+        <div className="evening-command-center-loading-content">{children}</div>
       </section>
     </div>
   );
@@ -845,4 +2155,27 @@ function TomorrowDecisionFormCard({
       </label>
     </article>
   );
+}
+
+function openLoopResolutionLabel(
+  resolution: OpenLoopResolutionKind,
+  entityType: OpenLoopEntityType,
+): string {
+  if (entityType === 'ACTION_SESSION') {
+    if (resolution === 'COMPLETE') return 'Завершить сессию';
+    if (resolution === 'CARRY_FORWARD') return 'Остановить / сохранить';
+    if (resolution === 'REVISE') return 'Вернуться к действию';
+    return 'Отказаться';
+  }
+  if (resolution === 'COMPLETE') return 'Завершить';
+  if (resolution === 'CARRY_FORWARD') return 'Перенести';
+  if (resolution === 'REVISE') return 'Изменить';
+  return 'Отказаться';
+}
+
+function waitForCompletionTransition(): Promise<void> {
+  const reduceMotion =
+    typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduceMotion) return Promise.resolve();
+  return new Promise((resolve) => window.setTimeout(resolve, 280));
 }

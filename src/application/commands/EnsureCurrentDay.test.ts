@@ -96,6 +96,16 @@ describe('EnsureCurrentDay', () => {
     expect(context.idGenerator.generatedCount).toBe(2);
     expect(secondResult.getUncommittedEvents()).toHaveLength(1);
   });
+
+  it('обеспечивает явно выбранную дату, не подменяя её системной', async () => {
+    const context = createContext();
+
+    const day = await context.command.execute(YESTERDAY);
+
+    expect(day.date.equals(YESTERDAY)).toBe(true);
+    expect(day.date.equals(TODAY)).toBe(false);
+    expect(context.repository.size).toBe(1);
+  });
 });
 
 function createContext(): {

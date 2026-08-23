@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { ActionSession, DayDate, EntityId, type LifeAction } from '../../domain';
+import { ActionSession, DayDate, EntityId, Project, type LifeAction } from '../../domain';
 import { createPlannedDecision } from '../../test/helpers/DecisionTestFactory';
 import {
   createReadyLifeAction,
@@ -33,11 +33,11 @@ describe('CurrentActionCardState', () => {
     expect(state.decisionTitle).toBe('Решение card-decision');
     expect(state.statusLabel).toBe('Готово');
     expect(state.primaryCommand).toBe(CURRENT_ACTION_COMMAND.startSession);
-    expect(state.primaryLabel).toBe('Начать сессию');
+    expect(state.primaryLabel).toBe('Начать');
     expect(state.canManageAction).toBe(true);
   });
 
-  it('делает паузу единственной главной командой работающей сессии', () => {
+  it('делает завершение главной командой работающей сессии', () => {
     const lifeAction = markLifeActionInProgress(createReadyLifeAction('running-card', DATE));
     const session = createSession('running-session', lifeAction);
 
@@ -48,8 +48,8 @@ describe('CurrentActionCardState', () => {
       unfinishedSession: session,
     });
 
-    expect(state.primaryCommand).toBe(CURRENT_ACTION_COMMAND.pauseSession);
-    expect(state.primaryLabel).toBe('Приостановить');
+    expect(state.primaryCommand).toBe(CURRENT_ACTION_COMMAND.completeSession);
+    expect(state.primaryLabel).toBe('Завершить');
     expect(state.statusLabel).toBe('Сессия идёт');
     expect(state.canManageAction).toBe(false);
   });
@@ -83,7 +83,8 @@ describe('CurrentActionCardState', () => {
 
     expect(markup).toContain('Сессия идёт');
     expect(markup).toContain('00:00');
-    expect(markup).toContain('Приостановить');
+    expect(markup).toContain('Завершить');
+    expect(markup).toContain('Пауза');
   });
 
   it('делает продолжение единственной главной командой приостановленной сессии', () => {
@@ -170,11 +171,60 @@ describe('CurrentActionCardState', () => {
     expect(markup).toContain('Решение markup-decision');
     expect(markup).toContain('Ожидаемый результат');
     expect(markup).toContain('Учтённое время');
-    expect(markup).toContain('Начать сессию');
+    expect(markup).toContain('Начать');
     expect(markup.match(/current-action-primary-button/g)).toHaveLength(1);
     expect(markup).toContain('>Открыть<');
     expect(markup).toContain('>Перенести<');
     expect(markup).toContain('>Отменить<');
+    expect(markup).toContain('Последняя сессия');
+    expect(markup).toContain('Сессий пока нет');
+  });
+
+  it('показывает Project-контекст действия и последнюю завершённую сессию', () => {
+    const project = Project.create({
+      id: EntityId.create('current-action-project'),
+      title: 'Полноценный День',
+      now: new Date('2026-08-05T08:00:00.000+09:00'),
+    });
+    const decision = createPlannedDecision('project-card-decision', DATE, undefined, 1, project.id);
+    const lifeAction = createReadyLifeAction('project-card-action', DATE, {
+      decisionId: decision.id,
+    });
+    const session = createSession('last-project-session', lifeAction);
+    session.complete({
+      completedAt: new Date('2026-08-05T10:20:00.000+09:00'),
+      completionKind: 'completed',
+      eventId: EntityId.create('last-project-session-completed'),
+    });
+    const state = resolveCurrentActionCardState({
+      lifeAction,
+      decisions: [decision],
+      sessions: [session],
+      unfinishedSession: null,
+    });
+
+    const markup = renderToStaticMarkup(
+      createElement(CurrentActionCard, {
+        state,
+        project,
+        onOpenProject: NOOP,
+        clock: { now: () => NOW },
+        isMutating: false,
+        error: null,
+        onStart: NOOP,
+        onPause: NOOP,
+        onResume: NOOP,
+        onCompleteSession: NOOP,
+        onOpen: NOOP,
+        onReschedule: NOOP,
+        onCancel: NOOP,
+      }),
+    );
+
+    expect(markup).toContain('Полноценный День');
+    expect(markup).toContain('today-project-link');
+    expect(markup).toContain('Последняя сессия');
+    expect(markup).toContain('20:00');
   });
 
   it('блокирует перенос и отмену во время сессии, сохраняя завершение доступным', () => {
@@ -203,8 +253,8 @@ describe('CurrentActionCardState', () => {
       }),
     );
 
-    expect(markup).toContain('Приостановить');
-    expect(markup).toContain('Завершить сессию');
+    expect(markup).toContain('Завершить');
+    expect(markup).toContain('Пауза');
     expect(markup).toContain('Перенос и отмена доступны после завершения текущей сессии.');
     expect(markup.match(/disabled=""/g)).toHaveLength(2);
   });

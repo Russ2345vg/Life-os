@@ -12,6 +12,7 @@ export const JOURNAL_TYPE_FILTER = {
   decision: JOURNAL_SUBJECT_TYPE.decision,
   lifeAction: JOURNAL_SUBJECT_TYPE.lifeAction,
   workSession: JOURNAL_SUBJECT_TYPE.workSession,
+  direction: JOURNAL_SUBJECT_TYPE.direction,
   correction: JOURNAL_ENTRY_TYPE.dataCorrected,
 } as const;
 
@@ -28,6 +29,7 @@ export const JOURNAL_STATE_FILTER = {
   rescheduled: 'rescheduled',
   cancelled: 'cancelled',
   corrected: 'corrected',
+  reviewed: 'reviewed',
 } as const;
 
 export type JournalStateFilter = (typeof JOURNAL_STATE_FILTER)[keyof typeof JOURNAL_STATE_FILTER];
@@ -190,6 +192,7 @@ const JOURNAL_ENTRY_STATE: Readonly<
   [JOURNAL_ENTRY_TYPE.actionCancelled]: JOURNAL_STATE_FILTER.cancelled,
   [JOURNAL_ENTRY_TYPE.dayCompleted]: JOURNAL_STATE_FILTER.completed,
   [JOURNAL_ENTRY_TYPE.dataCorrected]: JOURNAL_STATE_FILTER.corrected,
+  [JOURNAL_ENTRY_TYPE.directionStrategicReviewed]: JOURNAL_STATE_FILTER.reviewed,
 };
 
 function matchesType(item: JournalTimelineItem, filter: JournalTypeFilter): boolean {

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { DayDate, EntityId } from '../../domain';
 import { InMemoryDecisionRepository, InMemoryLifeActionRepository } from '../../infrastructure';
 import {
@@ -30,6 +30,8 @@ describe('routine action queries', () => {
     await Promise.all(
       [draft, ready, completed, cancelled].map((action) => actionRepository.save(action)),
     );
+    const findAllDecisions = vi.spyOn(decisionRepository, 'findAll');
+    const findDecisionById = vi.spyOn(decisionRepository, 'findById');
 
     const options = await new GetRoutineActionOptions(
       actionRepository,
@@ -41,6 +43,8 @@ describe('routine action queries', () => {
       'routine-ready',
     ]);
     expect(options.every((option) => option.decision?.id.equals(decision.id))).toBe(true);
+    expect(findAllDecisions).toHaveBeenCalledTimes(1);
+    expect(findDecisionById).not.toHaveBeenCalled();
   });
 
   it('resolves a completed action for a safe historical card and returns null when deleted', async () => {

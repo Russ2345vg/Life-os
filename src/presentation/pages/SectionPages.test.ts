@@ -189,7 +189,7 @@ describe('section overview pages', () => {
     expect(markup).toContain('Действие отменённое действие');
   });
 
-  it('раздел «Ещё» открывает решения и настройки и честно отмечает будущие разделы', () => {
+  it('раздел «Ещё» не дублирует управление и честно показывает дополнительные разделы', () => {
     const onOpenSection = vi.fn();
     const markup = render(
       createElement(MorePage, {
@@ -204,11 +204,11 @@ describe('section overview pages', () => {
 
     expect(markup).toContain('Распорядок');
     expect(markup).toContain('Прогулки');
-    expect(markup).toContain('Статистика');
+    expect(markup).toContain('Вечерняя аналитика');
     expect(markup).toContain('Сферы');
     expect(markup).toContain('Настройки');
+    expect(markup).not.toContain('Обзор главных и дополнительных решений');
     expect(markup).toContain('Стартовый раздел');
-    expect(markup).toContain('Следующий этап');
     expect(markup).toContain('Открыть');
     expect(markup).toContain('Локальный режим активен');
   });
@@ -234,6 +234,9 @@ describe('section overview pages', () => {
     expect(markup).toContain('Сохранить настройки');
     expect(markup).toContain('Сбросить настройки');
     expect(markup).toContain('Предметные записи не изменяются');
+    expect(markup).toContain('<option value="management">Управление</option>');
+    expect(markup).not.toContain('<option value="decisions">Решения</option>');
+    expect(markup).not.toContain('<option value="actions">Действия</option>');
   });
 
   it('пустые обзоры показывают понятные сообщения', () => {
@@ -271,18 +274,19 @@ describe('section overview pages', () => {
     expect(historyMarkup).toContain('В выбранном диапазоне завершённой истории пока нет');
   });
 
-  it('готовый раздел решений доступен из «Ещё»', () => {
-    const onOpenSection = vi.fn();
-    const element = createElement(MorePage, {
-      settings: DEFAULT_LOCAL_SETTINGS,
-      settingsStorageAvailable: true,
-      settingsRecoveredFromInvalidValue: false,
-      onOpenSection,
-      onSaveSettings: vi.fn(() => true),
-      onResetSettings: vi.fn(() => true),
-    });
+  it('перенаправляет устаревший стартовый вход действий в Управление', () => {
+    const markup = render(
+      createElement(LocalSettingsPage, {
+        settings: { ...DEFAULT_LOCAL_SETTINGS, defaultSection: APP_SECTION.actions },
+        settingsStorageAvailable: true,
+        settingsRecoveredFromInvalidValue: false,
+        onOpenSection: vi.fn(),
+        onSaveSettings: vi.fn(() => true),
+        onResetSettings: vi.fn(() => true),
+        onBack: vi.fn(),
+      }),
+    );
 
-    render(element);
-    expect(APP_SECTION.decisions).toBe('decisions');
+    expect(markup).toContain('<option value="management" selected="">Управление</option>');
   });
 });

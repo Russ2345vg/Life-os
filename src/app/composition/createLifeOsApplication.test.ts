@@ -19,9 +19,12 @@ import { IndexedDbActionSessionRepository } from '../../infrastructure/persisten
 import { IndexedDbDayRepository } from '../../infrastructure/persistence/IndexedDbDayRepository';
 import { IndexedDbDecisionRepository } from '../../infrastructure/persistence/IndexedDbDecisionRepository';
 import { IndexedDbLifeActionRepository } from '../../infrastructure/persistence/IndexedDbLifeActionRepository';
+import { IndexedDbMorningCycleRepository } from '../../infrastructure/persistence/IndexedDbMorningCycleRepository';
+import { IndexedDbGoalRepository } from '../../infrastructure/persistence/IndexedDbGoalRepository';
 import { IndexedDbJournalRepository } from '../../infrastructure/persistence/IndexedDbJournalRepository';
 import { LifeOsIndexedDb } from '../../infrastructure/persistence/indexed-db/LifeOsIndexedDb';
 import { FakeClock, FakeCurrentDateProvider, FakeIdGenerator } from '../../test/helpers/Fakes';
+import { answerAllReflectionQuestions } from '../../test/helpers/ReflectionTestHelper';
 import {
   TODAY_SCREEN_STATE,
   resolveTodayScreenState,
@@ -43,6 +46,15 @@ describe('createLifeOsApplication', () => {
     expect(application.lifeActionRepository).toBeInstanceOf(IndexedDbLifeActionRepository);
     expect(application.actionSessionRepository).toBeInstanceOf(IndexedDbActionSessionRepository);
     expect(application.journalRepository).toBeInstanceOf(IndexedDbJournalRepository);
+    expect(application.morningCycleRepository).toBeInstanceOf(IndexedDbMorningCycleRepository);
+    expect(application.goalRepository).toBeInstanceOf(IndexedDbGoalRepository);
+    expect(application.createGoal).toBeDefined();
+    expect(application.getGoalById).toBeDefined();
+    expect(application.getGoals).toBeDefined();
+    expect(application.updateGoal).toBeDefined();
+    expect(application.archiveGoal).toBeDefined();
+    expect(application.morningCycle).toBeDefined();
+    expect(application.getMorningOverview).toBeDefined();
     expect(application.clock).toBeInstanceOf(SystemClock);
     expect(application.currentDateProvider).toBeInstanceOf(SystemCurrentDateProvider);
     expect(application.idGenerator).toBeInstanceOf(CryptoIdGenerator);
@@ -58,7 +70,18 @@ describe('createLifeOsApplication', () => {
     expect(application.createLifeActionForDecision).toBeDefined();
     expect(application.startCurrentDay).toBeDefined();
     expect(application.getEveningReview).toBeDefined();
+    expect(application.getEveningCycleReview).toBeDefined();
+    expect(application.getEveningHistory).toBeDefined();
+    expect(application.getEveningHistorySummary).toBeDefined();
+    expect(application.detectEveningPatterns).toBeDefined();
+    expect(application.getEveningSignals).toBeDefined();
+    expect(application.getEveningRecommendations).toBeDefined();
+    expect(application.getEveningAnalytics).toBeDefined();
+    expect(application.recommendationApplications).toBeDefined();
+    expect(application.recommendationApplicationRepository).toBeDefined();
+    expect(application.getApplicationMode).toBeDefined();
     expect(application.completeCurrentDay).toBeDefined();
+    expect(application.completeEveningCycle).toBeDefined();
     expect(application.startLifeActionSession).toBeDefined();
     expect(application.pauseActionSession).toBeDefined();
     expect(application.resumeActionSession).toBeDefined();
@@ -219,30 +242,64 @@ describe('createLifeOsApplication', () => {
     ).toBe(true);
 
     clock.setTime(new Date('2026-08-02T20:30:00.000+09:00'));
+    expect(
+      (
+        await firstApplication.resolveOpenLoop.execute({
+          dateKey: TODAY,
+          entityType: 'LIFE_ACTION',
+          entityId: completingResult.value.id,
+          resolution: 'COMPLETE',
+          actualResult: 'Вечерний цикл проверен',
+        })
+      ).ok,
+    ).toBe(true);
+    expect(
+      (
+        await firstApplication.resolveOpenLoop.execute({
+          dateKey: TODAY,
+          entityType: 'LIFE_ACTION',
+          entityId: movingResult.value.id,
+          resolution: 'CARRY_FORWARD',
+        })
+      ).ok,
+    ).toBe(true);
+    expect(
+      (
+        await firstApplication.resolveOpenLoop.execute({
+          dateKey: TODAY,
+          entityType: 'DECISION',
+          entityId: decisionResult.value.id,
+          resolution: 'CARRY_FORWARD',
+        })
+      ).ok,
+    ).toBe(true);
+    await answerAllReflectionQuestions(firstApplication, TODAY);
+    const preparedTomorrow = await firstApplication.tomorrowPlan.getOrCreate(TODAY);
+    if (preparedTomorrow.plan.primaryDecisionId === null) {
+      await firstApplication.tomorrowPlan.assignPrimaryDecision(TODAY, decisionResult.value.id);
+    }
+    await firstApplication.tomorrowPlan.setOutcomes(
+      TODAY,
+      'Решение доступно после перезагрузки',
+      'Проверен следующий день',
+    );
+    await firstApplication.tomorrowPlan.createFirstAction(TODAY, {
+      title: 'Открыть следующий день',
+      expectedResult: 'Следующий день открыт',
+    });
+    await firstApplication.tomorrowPlan.complete(TODAY);
+    const preparation = await firstApplication.preparation.getOrGenerate(TODAY);
+    for (const item of preparation.plan.activeItems.filter((candidate) => candidate.required)) {
+      await firstApplication.preparation.skipItem(TODAY, item.id, 'Тестовый осознанный пропуск');
+    }
+    await firstApplication.preparation.continueToShutdown(TODAY);
     const completion = await firstApplication.completeCurrentDay.execute({
       summary: 'Полный цикл завершён без ручного изменения данных',
-      actionResolutions: [
-        {
-          kind: 'complete',
-          lifeActionId: completingResult.value.id,
-          actualResult: 'Вечерний цикл проверен',
-        },
-        {
-          kind: 'reschedule',
-          lifeActionId: movingResult.value.id,
-          newPlannedDate: '2026-08-03',
-        },
-      ],
-      tomorrowDecisions: [
-        {
-          kind: DECISION_KIND.main,
-          title: 'Проверить следующий день',
-          expectedResult: 'Решение доступно после перезагрузки',
-        },
-      ],
+      actionResolutions: [],
+      tomorrowDecisions: [],
     });
 
-    expect(completion.ok).toBe(true);
+    if (!completion.ok) throw completion.error;
     if (!completion.ok) return;
     expect(completion.value.day.status).toBe(DAY_STATUS.completed);
     firstApplication.close();
@@ -266,18 +323,38 @@ describe('createLifeOsApplication', () => {
     expect(restoredDay?.summary).toBe('Полный цикл завершён без ручного изменения данных');
     expect(restoredTodayActions).toHaveLength(1);
     expect(restoredTodayActions[0]?.status).toBe(LIFE_ACTION_STATUS.completed);
-    expect(restoredTomorrowActions.map((action) => action.id.toString())).toEqual([
+    expect(restoredTomorrowActions.map((action) => action.id.toString())).toContain(
       movingResult.value.id.toString(),
-    ]);
+    );
+    expect(restoredTomorrowActions).toHaveLength(2);
     expect(tomorrowDecisions.map((decision) => decision.title.toString())).toEqual([
-      'Проверить следующий день',
+      'Главное решение текущего дня',
     ]);
+    expect((await restoredApplication.getApplicationMode.execute()).mode).toBe('RECOVERY');
+    const journalBeforeRepeat =
+      await restoredApplication.journalRepository.findByEffectiveDateRange(TODAY, tomorrow);
     const repeated = await restoredApplication.completeCurrentDay.execute({
       summary: 'Повтор',
       actionResolutions: [],
       tomorrowDecisions: [],
     });
-    expect(repeated.ok ? null : repeated.error.code).toBe('day.already_completed');
+    expect(repeated.ok).toBe(true);
+    if (repeated.ok) {
+      expect(
+        repeated.value.createdTomorrowDecisions.map((decision) => decision.id.toString()),
+      ).toEqual(
+        completion.value.createdTomorrowDecisions.map((decision) => decision.id.toString()),
+      );
+      expect(
+        repeated.value.resolvedLifeActions.map((action) => action.id.toString()).sort(),
+      ).toEqual(completion.value.resolvedLifeActions.map((action) => action.id.toString()).sort());
+    }
+    const [journalAfterRepeat, decisionsAfterRepeat] = await Promise.all([
+      restoredApplication.journalRepository.findByEffectiveDateRange(TODAY, tomorrow),
+      restoredApplication.getDecisionsForDate.execute(tomorrow),
+    ]);
+    expect(journalAfterRepeat).toHaveLength(journalBeforeRepeat.length);
+    expect(decisionsAfterRepeat).toHaveLength(tomorrowDecisions.length);
     restoredApplication.close();
   });
 
@@ -324,7 +401,46 @@ describe('createLifeOsApplication', () => {
     expect(review.tomorrowDecisions.map((decision) => decision.title.toString())).toContain(
       'Главное решение сегодняшнего дня',
     );
+    if (staleDecision.ok) {
+      expect(
+        (
+          await recoveryApplication.resolveOpenLoop.execute({
+            dateKey: staleDate,
+            entityType: 'DECISION',
+            entityId: staleDecision.value.id,
+            resolution: 'DROP',
+            reason: 'Закрыто при восстановлении',
+          })
+        ).ok,
+      ).toBe(true);
+    }
 
+    await answerAllReflectionQuestions(recoveryApplication, staleDate);
+    await recoveryApplication.tomorrowPlan.getOrCreate(staleDate);
+    if (currentDecision.ok) {
+      await recoveryApplication.tomorrowPlan.assignPrimaryDecision(
+        staleDate,
+        currentDecision.value.id,
+      );
+    }
+    await recoveryApplication.tomorrowPlan.setOutcomes(
+      staleDate,
+      'Сегодняшний день остаётся готовым к старту',
+    );
+    await recoveryApplication.tomorrowPlan.createFirstAction(staleDate, {
+      title: 'Открыть сегодняшний день',
+      expectedResult: 'Сегодняшний день открыт',
+    });
+    await recoveryApplication.tomorrowPlan.complete(staleDate);
+    const preparation = await recoveryApplication.preparation.getOrGenerate(staleDate);
+    for (const item of preparation.plan.activeItems.filter((candidate) => candidate.required)) {
+      await recoveryApplication.preparation.skipItem(
+        staleDate,
+        item.id,
+        'Тестовый осознанный пропуск',
+      );
+    }
+    await recoveryApplication.preparation.continueToShutdown(staleDate);
     const completion = await recoveryApplication.completeCurrentDay.execute(
       {
         summary: 'Прошлый день завершён через безопасное восстановление',
@@ -333,7 +449,7 @@ describe('createLifeOsApplication', () => {
       },
       staleDate,
     );
-    expect(completion.ok).toBe(true);
+    if (!completion.ok) throw completion.error;
     recoveryApplication.close();
 
     const restoredApplication = await createLifeOsApplication({

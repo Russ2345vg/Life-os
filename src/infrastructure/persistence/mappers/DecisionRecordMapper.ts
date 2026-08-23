@@ -44,6 +44,7 @@ export class DecisionRecordMapper {
       sacrifices: entity.sacrifices,
       priority: entity.priority,
       projectReference: entity.projectReference,
+      projectId: entity.projectId?.toString() ?? null,
       expectedResult: entity.expectedResult?.toString() ?? null,
       actualResultSummary: entity.actualResultSummary?.toString() ?? null,
       status: entity.status,
@@ -88,6 +89,7 @@ export class DecisionRecordMapper {
         DECISION_PRIORITY.normal,
       ) as DecisionPriority,
       projectReference: readOptionalNullableString(record, 'projectReference'),
+      projectId: readOptionalNullableEntityId(record, 'projectId'),
       expectedResult: createNullableValueObject(record, 'expectedResult', ExpectedResult.create),
       actualResultSummary: createNullableValueObject(
         record,

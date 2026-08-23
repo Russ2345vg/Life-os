@@ -1,4 +1,7 @@
-import type { ActionSessionRepository } from '../../application';
+import type {
+  ActionSessionRepository,
+  ActionSessionsByLifeActionIdsReader,
+} from '../../application';
 import type { ActionSession, EntityId } from '../../domain';
 import { DomainError } from '../../shared/errors/DomainError';
 import { executeIndexedDbRequest } from './indexed-db/IndexedDbRequest';
@@ -6,7 +9,9 @@ import { LIFE_OS_STORE, LifeOsIndexedDb } from './indexed-db/LifeOsIndexedDb';
 import { ActionSessionRecordMapper } from './mappers/ActionSessionRecordMapper';
 import type { ActionSessionRecord } from './records/ActionSessionRecord';
 
-export class IndexedDbActionSessionRepository implements ActionSessionRepository {
+export class IndexedDbActionSessionRepository
+  implements ActionSessionRepository, ActionSessionsByLifeActionIdsReader
+{
   readonly #indexedDb: LifeOsIndexedDb;
 
   public constructor(indexedDb: LifeOsIndexedDb = new LifeOsIndexedDb()) {
@@ -39,6 +44,25 @@ export class IndexedDbActionSessionRepository implements ActionSessionRepository
     );
 
     return mapRecords(storedRecords);
+  }
+
+  public async findByLifeActionIds(
+    lifeActionIds: readonly EntityId[],
+  ): Promise<readonly ActionSession[]> {
+    if (lifeActionIds.length === 0) return [];
+
+    const acceptedIds = new Set(lifeActionIds.map((lifeActionId) => lifeActionId.toString()));
+    const database = await this.#indexedDb.open();
+    const storedRecords = await executeIndexedDbRequest<unknown[]>(
+      database,
+      LIFE_OS_STORE.actionSessions,
+      'readonly',
+      (store) => store.getAll(),
+    );
+
+    return mapRecords(storedRecords).filter((session) =>
+      acceptedIds.has(session.lifeActionId.toString()),
+    );
   }
 
   public async findAll(): Promise<readonly ActionSession[]> {

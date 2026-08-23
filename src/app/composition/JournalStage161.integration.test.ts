@@ -9,6 +9,7 @@ import {
 } from '../../domain';
 import { LifeOsIndexedDb } from '../../infrastructure/persistence/indexed-db/LifeOsIndexedDb';
 import { FakeClock, FakeCurrentDateProvider, FakeIdGenerator } from '../../test/helpers/Fakes';
+import { answerAllReflectionQuestions } from '../../test/helpers/ReflectionTestHelper';
 import { createLifeOsApplication } from './createLifeOsApplication';
 
 const TODAY = DayDate.create('2026-08-09');
@@ -175,16 +176,35 @@ describe('Stage 16.1 journal integration', () => {
     ).toBe(true);
 
     clock.setTime(at('22:15'));
+    const resolvedDecision = await application.resolveOpenLoop.execute({
+      dateKey: TODAY,
+      entityType: 'DECISION',
+      entityId: decision.value.id,
+      resolution: 'COMPLETE',
+      actualResult: 'Интерфейс исправлен и проверен',
+    });
+    if (!resolvedDecision.ok) throw resolvedDecision.error;
+    await answerAllReflectionQuestions(application, TODAY);
+    await application.tomorrowPlan.getOrCreate(TODAY);
+    await application.tomorrowPlan.createPrimaryDecision(TODAY, {
+      title: 'Продолжить развитие LifeOS',
+      expectedResult: 'Определён следующий результат',
+    });
+    await application.tomorrowPlan.setOutcomes(TODAY, 'Определён следующий результат');
+    await application.tomorrowPlan.createFirstAction(TODAY, {
+      title: 'Открыть следующий результат',
+      expectedResult: 'Следующий результат открыт',
+    });
+    await application.tomorrowPlan.complete(TODAY);
+    const preparation = await application.preparation.getOrGenerate(TODAY);
+    for (const item of preparation.plan.activeItems.filter((candidate) => candidate.required)) {
+      await application.preparation.skipItem(TODAY, item.id, 'Тестовый осознанный пропуск');
+    }
+    await application.preparation.continueToShutdown(TODAY);
     const completedDay = await application.completeCurrentDay.execute({
       summary: 'Выпускной цикл завершён',
       actionResolutions: [],
-      tomorrowDecisions: [
-        {
-          title: 'Продолжить развитие LifeOS',
-          kind: DECISION_KIND.main,
-          expectedResult: 'Определён следующий результат',
-        },
-      ],
+      tomorrowDecisions: [],
     });
     expect(completedDay.ok).toBe(true);
 

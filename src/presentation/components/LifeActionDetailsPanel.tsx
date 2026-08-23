@@ -6,6 +6,7 @@ import {
   type ActionSession,
   type DayDate,
   type LifeActionStatus,
+  type Project,
   type SessionCompletionKind,
 } from '../../domain';
 import {
@@ -32,6 +33,7 @@ interface LifeActionDetailsPanelProps {
   readonly sessionRecoveryMode?: boolean;
   readonly decisionTitle: string | null;
   readonly decisionPlannedDate: DayDate | null;
+  readonly project?: Project | null;
   readonly clock: Pick<Clock, 'now'>;
   readonly isMutating: boolean;
   readonly error: string | null;
@@ -42,6 +44,7 @@ interface LifeActionDetailsPanelProps {
   readonly onClose: () => void;
   readonly onBack: () => void;
   readonly onRetry: () => void;
+  readonly onOpenProject?: (projectId: string) => void;
   readonly onStart: () => void;
   readonly onPause: (session: ActionSession) => void;
   readonly onResume: (session: ActionSession) => void;
@@ -88,6 +91,7 @@ export function LifeActionDetailsPanel({
   sessionRecoveryMode = false,
   decisionTitle,
   decisionPlannedDate,
+  project = null,
   clock,
   isMutating,
   error,
@@ -98,6 +102,7 @@ export function LifeActionDetailsPanel({
   onClose,
   onBack,
   onRetry,
+  onOpenProject = () => undefined,
   onStart,
   onPause,
   onResume,
@@ -209,6 +214,7 @@ export function LifeActionDetailsPanel({
                   {decisionTitle === null ? 'Без связанного решения' : `Решение «${decisionTitle}»`}
                 </dd>
               </div>
+              <ActionProjectReference project={project} onOpenProject={onOpenProject} />
               <div>
                 <dt>Сфера</dt>
                 <dd>
@@ -306,6 +312,28 @@ export function LifeActionDetailsPanel({
           </div>
         ) : null}
       </aside>
+    </div>
+  );
+}
+
+export function ActionProjectReference(props: {
+  readonly project: Project | null;
+  readonly onOpenProject: (projectId: string) => void;
+}) {
+  const project = props.project;
+  if (project === null) return null;
+  return (
+    <div>
+      <dt>Проект</dt>
+      <dd>
+        <button
+          className="action-project-link"
+          type="button"
+          onClick={() => props.onOpenProject(project.id.toString())}
+        >
+          {project.title} →
+        </button>
+      </dd>
     </div>
   );
 }

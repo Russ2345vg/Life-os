@@ -59,6 +59,8 @@ describe('GetDecisionOverview', () => {
     const decisionSave = vi.spyOn(decisionRepository, 'save');
     const actionSave = vi.spyOn(actionRepository, 'save');
     const sessionSave = vi.spyOn(sessionRepository, 'save');
+    const findAllSessions = vi.spyOn(sessionRepository, 'findAll');
+    const findSessionsByAction = vi.spyOn(sessionRepository, 'findByLifeActionId');
 
     const result = await new GetDecisionOverview(
       decisionRepository,
@@ -82,6 +84,8 @@ describe('GetDecisionOverview', () => {
     expect(decisionSave).not.toHaveBeenCalled();
     expect(actionSave).not.toHaveBeenCalled();
     expect(sessionSave).not.toHaveBeenCalled();
+    expect(findAllSessions).toHaveBeenCalledTimes(1);
+    expect(findSessionsByAction).not.toHaveBeenCalled();
   });
 
   it('returns decision.not_found and does not read actions for an unknown decision', async () => {
@@ -159,6 +163,10 @@ class FakeActionSessionRepository implements ActionSessionRepository {
 
   public async findByLifeActionId(lifeActionId: EntityId): Promise<readonly ActionSession[]> {
     return this.#sessions.filter((session) => session.lifeActionId.equals(lifeActionId));
+  }
+
+  public async findAll(): Promise<readonly ActionSession[]> {
+    return this.#sessions;
   }
 
   public async findUnfinished(): Promise<ActionSession | null> {

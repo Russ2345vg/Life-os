@@ -323,6 +323,7 @@ function cloneDecision(decision: Decision): Decision {
     sacrifices: decision.sacrifices,
     priority: decision.priority,
     projectReference: decision.projectReference,
+    projectId: decision.projectId,
     expectedResult: decision.expectedResult,
     actualResultSummary: decision.actualResultSummary,
     status: decision.status,

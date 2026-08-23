@@ -1,398 +1,384 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type {
   CommitDayCompletionInput,
   DayCompletionUnitOfWork,
 } from '../ports/DayCompletionUnitOfWork';
+import type { PreparationPlanRepository } from '../ports/PreparationPlanRepository';
+import type { TomorrowPlanRepository } from '../ports/TomorrowPlanRepository';
 import {
+  ACTION_SESSION_STATUS,
   ActionSession,
   DAY_STATUS,
-  DECISION_KIND,
   Day,
   DayDate,
   EntityId,
-  LIFE_ACTION_STATUS,
-  SESSION_COMPLETION_KIND,
-  RoutineOccurrenceExecution,
-  type LifeAction,
+  EVENING_CYCLE_MODE,
+  EVENING_CYCLE_STATE,
+  EveningCycle,
+  OPEN_LOOP_ENTITY_TYPE,
+  OPEN_LOOP_REQUIREMENT,
+  OpenLoopReference,
+  PreparationPlan,
+  REFLECTION_DAY_SIGNAL,
+  REFLECTION_QUESTION_KIND,
+  REFLECTION_QUESTION_TYPE,
+  ReflectionQuestion,
+  ReflectionResult,
+  TomorrowPlan,
+  type EveningCycleState,
 } from '../../domain';
 import { DomainError } from '../../shared/errors/DomainError';
 import { FakeClock, FakeIdGenerator } from '../../test/helpers/Fakes';
-import { createPlannedDecision } from '../../test/helpers/DecisionTestFactory';
-import {
-  completeLifeAction,
-  createReadyLifeAction,
-  markLifeActionInProgress,
-} from '../../test/helpers/LifeActionTestFactory';
 import type { EveningReviewSnapshot } from '../queries/GetEveningReview';
-import { CompleteCurrentDay } from './CompleteCurrentDay';
+import { CompleteCurrentDay, CompleteEveningCycle } from './CompleteCurrentDay';
 
-const TODAY = DayDate.create('2026-08-05');
-const TOMORROW = DayDate.create('2026-08-06');
-const NOW = new Date('2026-08-05T20:30:00.000+09:00');
+const DAY_DATE = DayDate.create('2026-08-05');
+const TARGET_DATE = DayDate.create('2026-08-06');
+const STARTED_AT = new Date('2026-08-05T23:50:00.000+09:00');
+const COMPLETED_AT = new Date('2026-08-06T00:05:00.000+09:00');
 
 class FakeDayCompletionUnitOfWork implements DayCompletionUnitOfWork {
-  public commits: CommitDayCompletionInput[] = [];
+  public readonly commits: CommitDayCompletionInput[] = [];
   public error: DomainError | null = null;
 
   public async commit(input: CommitDayCompletionInput): Promise<void> {
-    if (this.error !== null) {
-      throw this.error;
-    }
+    if (this.error !== null) throw this.error;
     this.commits.push(input);
   }
 }
 
-describe('CompleteCurrentDay', () => {
-  it('атомарно завершает, переносит и отменяет остатки, сохраняет итог и решения на завтра', async () => {
-    const completing = markLifeActionInProgress(createReadyLifeAction('complete', TODAY));
-    const rescheduling = createReadyLifeAction('move', TODAY);
-    const cancelling = createReadyLifeAction('cancel', TODAY);
-    const alreadyCompleted = completeLifeAction(
-      markLifeActionInProgress(createReadyLifeAction('history', TODAY)),
-    );
-    const completedSession = createCompletedSession(completing);
-    const snapshot = createSnapshot({
-      lifeActions: [completing, rescheduling, cancelling, alreadyCompleted],
-      actionSessions: [completedSession],
-    });
-    const unitOfWork = new FakeDayCompletionUnitOfWork();
-    const command = createCommand(snapshot, unitOfWork);
-
-    const result = await command.execute({
-      summary: '  День дал проверенный результат  ',
-      actionResolutions: [
-        {
-          kind: 'complete',
-          lifeActionId: completing.id,
-          actualResult: 'Готов рабочий вечерний цикл',
-        },
-        {
-          kind: 'reschedule',
-          lifeActionId: rescheduling.id,
-          newPlannedDate: TOMORROW.toString(),
-        },
-        {
-          kind: 'cancel',
-          lifeActionId: cancelling.id,
-          reason: 'Потеряло актуальность',
-        },
-      ],
-      tomorrowDecisions: [
-        {
-          kind: DECISION_KIND.main,
-          title: 'Проверить сохранение после F5',
-          expectedResult: 'Данные восстановлены без расхождений',
-        },
-      ],
-    });
+describe('CompleteEveningCycle shutdown', () => {
+  it('атомарно завершает SHUTDOWN и возвращает единый ShutdownRecord', async () => {
+    const context = createContext();
+    const result = await context.command.execute(completionInput(), DAY_DATE);
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(unitOfWork.commits).toHaveLength(1);
-    const commit = unitOfWork.commits[0]!;
-    expect(commit.expectedDayVersion).toBe(snapshot.day.version);
+    expect(context.unitOfWork.commits).toHaveLength(1);
+    const commit = context.unitOfWork.commits[0]!;
+    expect(commit.eveningCycle.state).toBe(EVENING_CYCLE_STATE.completed);
     expect(commit.day.status).toBe(DAY_STATUS.completed);
-    expect(commit.day.summary).toBe('День дал проверенный результат');
-    expect(commit.lifeActions).toHaveLength(3);
-    expect(commit.lifeActions.map((change) => change.lifeAction.status)).toEqual([
-      LIFE_ACTION_STATUS.completed,
-      LIFE_ACTION_STATUS.ready,
-      LIFE_ACTION_STATUS.cancelled,
-    ]);
-    expect(commit.lifeActions[1]!.lifeAction.plannedDate?.equals(TOMORROW)).toBe(true);
-    expect(commit.newTomorrowDecisions).toHaveLength(1);
-    expect(commit.newTomorrowDecisions[0]!.plannedDate?.equals(TOMORROW)).toBe(true);
-    expect(commit.newTomorrowDecisions[0]!.order).toBe(1);
-    expect(result.value.resolvedLifeActions).toHaveLength(3);
-    expect(alreadyCompleted.status).toBe(LIFE_ACTION_STATUS.completed);
-    expect(completedSession.status).toBe('completed');
+    expect(commit.tomorrowPlan).toBe(context.tomorrowPlan);
+    expect(commit.preparationPlan).toBe(context.preparationPlan);
+    expect(commit.journalEntries).toHaveLength(1);
+    expect(commit.newTomorrowDecisions).toHaveLength(0);
+    expect(result.value.shutdownRecord).toMatchObject({
+      cycleId: context.snapshot.cycle.id,
+      dayId: context.snapshot.day.id,
+      mode: EVENING_CYCLE_MODE.normal,
+      startedAt: STARTED_AT,
+      completedAt: COMPLETED_AT,
+    });
   });
 
-  it.each(['running', 'paused'] as const)('запрещает завершение при %s-сессии', async (status) => {
-    const action = markLifeActionInProgress(createReadyLifeAction('active', TODAY));
-    const session = ActionSession.start({
-      id: id(`session-${status}`),
-      lifeActionId: action.id,
-      startedAt: new Date('2026-08-05T19:00:00.000+09:00'),
-      eventId: id(`session-${status}-started`),
-    });
-    if (status === 'paused') {
-      session.pause(new Date('2026-08-05T19:30:00.000+09:00'), id('paused-event'));
+  it('повторный complete безопасен и не создаёт повторную транзакцию', async () => {
+    const context = createContext();
+    const first = await context.command.execute(completionInput(), DAY_DATE);
+    expect(first.ok).toBe(true);
+    const commit = context.unitOfWork.commits[0]!;
+    const completedSnapshot: EveningReviewSnapshot = {
+      ...context.snapshot,
+      day: commit.day,
+      cycle: commit.eveningCycle,
+    };
+    const repeatedUnitOfWork = new FakeDayCompletionUnitOfWork();
+    const repeated = await createCommand(
+      completedSnapshot,
+      repeatedUnitOfWork,
+      context.tomorrowPlan,
+      context.preparationPlan,
+    ).execute(completionInput(), DAY_DATE);
+
+    expect(repeated.ok).toBe(true);
+    expect(repeatedUnitOfWork.commits).toHaveLength(0);
+    if (first.ok && repeated.ok) {
+      expect(repeated.value.shutdownRecord).toEqual(first.value.shutdownRecord);
+      expect(repeated.value.createdTomorrowDecisions).toEqual([]);
     }
-    const snapshot = createSnapshot({ lifeActions: [action], unfinishedSession: session });
-    const unitOfWork = new FakeDayCompletionUnitOfWork();
-
-    const result = await createCommand(snapshot, unitOfWork).execute({
-      summary: 'Итог',
-      actionResolutions: [{ kind: 'cancel', lifeActionId: action.id, reason: 'Отмена' }],
-      tomorrowDecisions: [mainTomorrowDraft()],
-    });
-
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error.code).toBe('day.unfinished_session');
-    expect(unitOfWork.commits).toHaveLength(0);
   });
 
-  it('blocks day completion while a routine occurrence is running', async () => {
-    const runningExecution = RoutineOccurrenceExecution.start({
-      id: id('running-routine'),
-      routineBlockId: id('routine-block'),
-      occurrenceDate: TODAY,
-      occurredAt: new Date('2026-08-05T19:00:00.000+09:00'),
-    });
-    const snapshot = createSnapshot({
-      routineSummary: {
-        plannedCount: 2,
-        startedCount: 1,
-        completedCount: 0,
-        runningExecution,
-      },
-    });
-    const unitOfWork = new FakeDayCompletionUnitOfWork();
-    const result = await createCommand(snapshot, unitOfWork).execute({
-      summary: 'Итог',
-      actionResolutions: [],
-      tomorrowDecisions: [mainTomorrowDraft()],
-    });
-    expect(result).toMatchObject({
-      ok: false,
-      error: { code: 'day.running_routine_execution' },
-    });
-    expect(unitOfWork.commits).toHaveLength(0);
+  it.each([
+    EVENING_CYCLE_STATE.reflecting,
+    EVENING_CYCLE_STATE.planningTomorrow,
+    EVENING_CYCLE_STATE.preparing,
+  ] as const)('запрещает преждевременное завершение из %s', async (state) => {
+    const context = createContext({ cycle: cycleInState(state) });
+    const result = await context.command.execute(completionInput(), DAY_DATE);
+    expect(result.ok ? null : result.error.code).toBe('shutdown.requires_completed_preparation');
+    expect(context.unitOfWork.commits).toHaveLength(0);
   });
 
-  it('does not block day completion for planned occurrences without execution', async () => {
-    const snapshot = createSnapshot({
-      routineSummary: {
-        plannedCount: 3,
-        startedCount: 0,
-        completedCount: 0,
-        runningExecution: null,
-      },
-    });
-    const result = await createCommand(snapshot).execute({
-      summary: 'Итог',
-      actionResolutions: [],
-      tomorrowDecisions: [mainTomorrowDraft()],
-    });
-    expect(result.ok).toBe(true);
+  it.each([ACTION_SESSION_STATUS.running, ACTION_SESSION_STATUS.paused] as const)(
+    'отклоняет %s Сессию действия',
+    async (status) => {
+      const session = ActionSession.start({
+        id: id(`session-${status}`),
+        lifeActionId: id('active-action'),
+        startedAt: STARTED_AT,
+        eventId: id('session-started'),
+      });
+      if (status === ACTION_SESSION_STATUS.paused) session.pause(STARTED_AT, id('paused'));
+      const context = createContext({ unfinishedSession: session });
+      const result = await context.command.execute(completionInput(), DAY_DATE);
+      expect(result.ok ? null : result.error.code).toBe('day.unfinished_session');
+      expect(context.unitOfWork.commits).toHaveLength(0);
+    },
+  );
+
+  it('повторно проверяет обязательные open loops', async () => {
+    const context = createContext({ cycle: shutdownCycleWithOpenLoop() });
+    const result = await context.command.execute(completionInput(), DAY_DATE);
+    expect(result.ok ? null : result.error.code).toBe('shutdown.open_loops_remaining');
   });
 
-  it('запрещает повторное завершение дня', async () => {
-    const day = createOpenDay();
-    day.complete(NOW, id('day-completed'), 'Итог');
-    const snapshot = createSnapshot({ day });
-    const unitOfWork = new FakeDayCompletionUnitOfWork();
-
-    const result = await createCommand(snapshot, unitOfWork).execute({
-      summary: 'Ещё один итог',
-      actionResolutions: [],
-      tomorrowDecisions: [mainTomorrowDraft()],
-    });
-
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error.code).toBe('day.already_completed');
-    expect(unitOfWork.commits).toHaveLength(0);
-  });
-
-  it('требует отдельное решение для каждого незавершённого действия', async () => {
-    const first = createReadyLifeAction('first', TODAY);
-    const second = createReadyLifeAction('second', TODAY);
-    const snapshot = createSnapshot({ lifeActions: [first, second] });
-
-    const result = await createCommand(snapshot).execute({
-      summary: 'Итог',
-      actionResolutions: [{ kind: 'cancel', lifeActionId: first.id, reason: 'Отмена' }],
-      tomorrowDecisions: [mainTomorrowDraft()],
-    });
-
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error.code).toBe('day.action_resolution_required');
-  });
-
-  it('не принимает два решения по одному действию или постороннее действие', async () => {
-    const action = createReadyLifeAction('one', TODAY);
-    const command = createCommand(createSnapshot({ lifeActions: [action] }));
-    const duplicate = await command.execute({
-      summary: 'Итог',
-      actionResolutions: [
-        { kind: 'cancel', lifeActionId: action.id, reason: 'Первое' },
-        { kind: 'reschedule', lifeActionId: action.id, newPlannedDate: TOMORROW.toString() },
-      ],
-      tomorrowDecisions: [mainTomorrowDraft()],
-    });
-    const unknown = await command.execute({
-      summary: 'Итог',
-      actionResolutions: [{ kind: 'cancel', lifeActionId: id('other'), reason: 'Постороннее' }],
-      tomorrowDecisions: [mainTomorrowDraft()],
-    });
-
-    expect(duplicate.ok ? null : duplicate.error.code).toBe('day.duplicate_action_resolution');
-    expect(unknown.ok ? null : unknown.error.code).toBe('day.unknown_action_resolution');
-  });
-
-  it('не завершает готовое действие без начатого выполнения и подтверждённой сессии', async () => {
-    const ready = createReadyLifeAction('ready', TODAY);
-    const result = await createCommand(createSnapshot({ lifeActions: [ready] })).execute({
-      summary: 'Итог',
-      actionResolutions: [{ kind: 'complete', lifeActionId: ready.id, actualResult: 'Сделано' }],
-      tomorrowDecisions: [mainTomorrowDraft()],
-    });
-
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error.code).toBe('day.action_completion_requires_in_progress');
-  });
-
-  it('не завершает выполняемое действие без завершённой рабочей сессии', async () => {
-    const action = markLifeActionInProgress(createReadyLifeAction('without-session', TODAY));
-    const result = await createCommand(createSnapshot({ lifeActions: [action] })).execute({
-      summary: 'Итог',
-      actionResolutions: [{ kind: 'complete', lifeActionId: action.id, actualResult: 'Сделано' }],
-      tomorrowDecisions: [mainTomorrowDraft()],
-    });
-
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error.code).toBe('day.action_completion_requires_session');
-  });
-
-  it('требует итог дня и главное решение на завтра', async () => {
-    const noSummary = await createCommand(createSnapshot()).execute({
-      summary: ' ',
-      actionResolutions: [],
-      tomorrowDecisions: [mainTomorrowDraft()],
-    });
-    const noTomorrow = await createCommand(createSnapshot()).execute({
-      summary: 'Итог',
-      actionResolutions: [],
-      tomorrowDecisions: [],
-    });
-
-    expect(noSummary.ok ? null : noSummary.error.code).toBe('day.summary_required');
-    expect(noTomorrow.ok ? null : noTomorrow.error.code).toBe(
-      'day.tomorrow_main_decision_required',
+  it('требует готовые завершённые TomorrowPlan и PreparationPlan', async () => {
+    const context = createContext();
+    const missingTomorrow = await createCommand(
+      context.snapshot,
+      new FakeDayCompletionUnitOfWork(),
+      null,
+      context.preparationPlan,
+    ).execute(completionInput(), DAY_DATE);
+    const missingPreparation = await createCommand(
+      context.snapshot,
+      new FakeDayCompletionUnitOfWork(),
+      context.tomorrowPlan,
+      null,
+    ).execute(completionInput(), DAY_DATE);
+    expect(missingTomorrow.ok ? null : missingTomorrow.error.code).toBe(
+      'shutdown.tomorrow_plan_not_ready',
+    );
+    expect(missingPreparation.ok ? null : missingPreparation.error.code).toBe(
+      'shutdown.preparation_not_ready',
     );
   });
 
-  it('не требует новое решение, если главное решение на завтра уже существует', async () => {
-    const existing = createPlannedDecision('existing', TOMORROW, DECISION_KIND.main, 2);
-    const unitOfWork = new FakeDayCompletionUnitOfWork();
-    const result = await createCommand(
-      createSnapshot({ tomorrowDecisions: [existing] }),
-      unitOfWork,
-    ).execute({ summary: 'Итог', actionResolutions: [], tomorrowDecisions: [] });
-
+  it('завершает исходный dayId после пересечения полуночи', async () => {
+    const context = createContext();
+    const result = await context.command.execute(completionInput(), DAY_DATE);
     expect(result.ok).toBe(true);
-    expect(unitOfWork.commits[0]?.newTomorrowDecisions).toHaveLength(0);
+    if (!result.ok) return;
+    expect(result.value.day.id.equals(context.snapshot.cycle.dayId)).toBe(true);
+    expect(result.value.day.date.equals(DAY_DATE)).toBe(true);
+    expect(result.value.day.completedAt).toEqual(COMPLETED_AT);
   });
 
-  it('сохраняет исходные сущности неизменными при отказе атомарной записи', async () => {
-    const day = createOpenDay();
-    const action = createReadyLifeAction('rollback', TODAY);
-    const unitOfWork = new FakeDayCompletionUnitOfWork();
-    unitOfWork.error = new DomainError('persistence.transaction_failed', 'Сбой');
-
-    const result = await createCommand(
-      createSnapshot({ day, lifeActions: [action] }),
-      unitOfWork,
-    ).execute({
-      summary: 'Итог',
-      actionResolutions: [
-        { kind: 'reschedule', lifeActionId: action.id, newPlannedDate: TOMORROW.toString() },
-      ],
-      tomorrowDecisions: [mainTomorrowDraft()],
-    });
-
+  it('не изменяет исходные агрегаты при rollback UoW', async () => {
+    const context = createContext();
+    context.unitOfWork.error = new DomainError('persistence.transaction_failed', 'Сбой');
+    const result = await context.command.execute(completionInput(), DAY_DATE);
     expect(result.ok).toBe(false);
-    expect(day.status).toBe(DAY_STATUS.open);
-    expect(day.summary).toBeNull();
-    expect(action.status).toBe(LIFE_ACTION_STATUS.ready);
-    expect(action.plannedDate?.equals(TODAY)).toBe(true);
+    expect(context.snapshot.day.status).toBe(DAY_STATUS.open);
+    expect(context.snapshot.cycle.state).toBe(EVENING_CYCLE_STATE.shutdown);
   });
 
-  it('разрешает перенос только на будущую дату', async () => {
-    const action = createReadyLifeAction('move-invalid', TODAY);
-    const result = await createCommand(createSnapshot({ lifeActions: [action] })).execute({
-      summary: 'Итог',
-      actionResolutions: [
-        { kind: 'reschedule', lifeActionId: action.id, newPlannedDate: TODAY.toString() },
-      ],
-      tomorrowDecisions: [mainTomorrowDraft()],
-    });
-
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error.code).toBe('day.action_reschedule_requires_future_date');
+  it('CompleteCurrentDay остаётся тонким адаптером', async () => {
+    const execute = vi.fn().mockResolvedValue({ ok: true });
+    const adapter = new CompleteCurrentDay({ execute });
+    await adapter.execute(completionInput(), DAY_DATE);
+    expect(execute).toHaveBeenCalledOnce();
+    expect(execute).toHaveBeenCalledWith(completionInput(), DAY_DATE);
   });
 });
 
+function createContext(overrides: Partial<EveningReviewSnapshot> = {}) {
+  const snapshot = createSnapshot(overrides);
+  const tomorrowPlan = completedTomorrowPlan(snapshot.cycle, snapshot.day);
+  const preparationPlan = completedPreparationPlan(snapshot.cycle, tomorrowPlan);
+  const unitOfWork = new FakeDayCompletionUnitOfWork();
+  return {
+    snapshot,
+    tomorrowPlan,
+    preparationPlan,
+    unitOfWork,
+    command: createCommand(snapshot, unitOfWork, tomorrowPlan, preparationPlan),
+  };
+}
+
 function createCommand(
   snapshot: EveningReviewSnapshot,
-  unitOfWork: FakeDayCompletionUnitOfWork = new FakeDayCompletionUnitOfWork(),
-): CompleteCurrentDay {
-  return new CompleteCurrentDay(
+  unitOfWork: FakeDayCompletionUnitOfWork,
+  tomorrowPlan: TomorrowPlan | null,
+  preparationPlan: PreparationPlan | null,
+): CompleteEveningCycle {
+  return new CompleteEveningCycle(
     { execute: async () => snapshot },
     unitOfWork,
-    new FakeClock(NOW),
-    new FakeIdGenerator('evening'),
+    new FakeClock(COMPLETED_AT),
+    new FakeIdGenerator('shutdown'),
+    tomorrowRepository(tomorrowPlan),
+    preparationRepository(preparationPlan),
   );
 }
 
 function createSnapshot(overrides: Partial<EveningReviewSnapshot> = {}): EveningReviewSnapshot {
+  const day = overrides.day ?? createOpenDay();
   return {
-    day: overrides.day ?? createOpenDay(),
-    currentDate: TODAY,
-    tomorrowDate: TOMORROW,
-    isRecoveryReview: overrides.isRecoveryReview ?? false,
-    decisions: overrides.decisions ?? [createPlannedDecision('today-main', TODAY)],
-    lifeActions: overrides.lifeActions ?? [],
-    actionSessions: overrides.actionSessions ?? [],
-    unfinishedSession: overrides.unfinishedSession ?? null,
-    tomorrowDecisions: overrides.tomorrowDecisions ?? [],
-    routineSummary: overrides.routineSummary ?? {
+    cycle: overrides.cycle ?? createShutdownCycle(day),
+    day,
+    currentDate: DAY_DATE,
+    tomorrowDate: TARGET_DATE,
+    isRecoveryReview: false,
+    decisions: [],
+    lifeActions: [],
+    actionSessions: [],
+    unfinishedSession: null,
+    tomorrowDecisions: [],
+    routineSummary: {
       plannedCount: 0,
       startedCount: 0,
       completedCount: 0,
       runningExecution: null,
     },
+    ...overrides,
   };
 }
 
 function createOpenDay(): Day {
   return Day.openCurrent({
     id: id('day'),
-    currentDate: TODAY,
+    currentDate: DAY_DATE,
     occurredAt: new Date('2026-08-05T08:00:00.000+09:00'),
-    createdEventId: id('day-created'),
-    openedEventId: id('day-opened'),
+    createdEventId: id('created'),
+    openedEventId: id('opened'),
   });
 }
 
-function createCompletedSession(lifeAction: LifeAction): ActionSession {
-  const session = ActionSession.start({
-    id: id(`session-${lifeAction.id.toString()}`),
-    lifeActionId: lifeAction.id,
-    startedAt: new Date('2026-08-05T18:00:00.000+09:00'),
-    eventId: id(`session-${lifeAction.id.toString()}-started`),
+function createShutdownCycle(day = createOpenDay()): EveningCycle {
+  const cycle = EveningCycle.create({
+    id: id('cycle'),
+    dayId: day.id,
+    dateKey: day.date,
+    occurredAt: STARTED_AT,
   });
-  session.complete({
-    completedAt: new Date('2026-08-05T19:00:00.000+09:00'),
-    completionKind: SESSION_COMPLETION_KIND.completed,
-    eventId: id(`session-${lifeAction.id.toString()}-completed`),
-  });
-  return session;
+  cycle.start(STARTED_AT);
+  cycle.beginResolving(STARTED_AT);
+  cycle.completeResolving(STARTED_AT);
+  completeReflection(cycle);
+  cycle.completeReflection(STARTED_AT);
+  cycle.completeTomorrowPlanning(STARTED_AT);
+  cycle.completePreparation(STARTED_AT);
+  return cycle;
 }
 
-function mainTomorrowDraft() {
+function cycleInState(state: EveningCycleState): EveningCycle {
+  const day = createOpenDay();
+  const cycle = EveningCycle.create({
+    id: id(`cycle-${state}`),
+    dayId: day.id,
+    dateKey: day.date,
+    occurredAt: STARTED_AT,
+  });
+  cycle.start(STARTED_AT);
+  cycle.beginResolving(STARTED_AT);
+  cycle.completeResolving(STARTED_AT);
+  if (state === EVENING_CYCLE_STATE.reflecting) return cycle;
+  completeReflection(cycle);
+  cycle.completeReflection(STARTED_AT);
+  if (state === EVENING_CYCLE_STATE.planningTomorrow) return cycle;
+  cycle.completeTomorrowPlanning(STARTED_AT);
+  return cycle;
+}
+
+function completeReflection(cycle: EveningCycle): void {
+  const question = ReflectionQuestion.create({
+    id: 'GENERAL_LEARNING:shutdown',
+    kind: REFLECTION_QUESTION_KIND.generalLearning,
+    signal: REFLECTION_DAY_SIGNAL.learning,
+    type: REFLECTION_QUESTION_TYPE.optionalText,
+    prompt: 'Что сохранить?',
+    context: 'Контекст',
+    required: false,
+    sourceEntityIds: [],
+  });
+  cycle.initializeReflection([question], STARTED_AT);
+  cycle.recordReflectionResult(
+    ReflectionResult.skip(cycle.id, question, STARTED_AT),
+    null,
+    STARTED_AT,
+  );
+}
+
+function shutdownCycleWithOpenLoop(): EveningCycle {
+  const cycle = createShutdownCycle();
+  return EveningCycle.rehydrate({
+    id: cycle.id,
+    dayId: cycle.dayId,
+    dateKey: cycle.dateKey,
+    state: cycle.state,
+    mode: cycle.mode,
+    startedAt: cycle.startedAt,
+    updatedAt: cycle.updatedAt,
+    completedAt: cycle.completedAt,
+    openLoopReferences: [
+      OpenLoopReference.create({
+        entityType: OPEN_LOOP_ENTITY_TYPE.lifeAction,
+        entityId: id('unresolved'),
+        requirement: OPEN_LOOP_REQUIREMENT.requiresResolution,
+      }),
+    ],
+    reflectionQuestions: cycle.reflectionQuestions,
+    reflectionResults: cycle.reflectionResults,
+    version: cycle.version,
+  });
+}
+
+function completedTomorrowPlan(cycle: EveningCycle, day: Day): TomorrowPlan {
+  const plan = TomorrowPlan.create({
+    id: id(`tomorrow-${cycle.id.toString()}`),
+    cycleId: cycle.id,
+    sourceDayId: day.id,
+    targetDayId: id('target-day'),
+    targetDateKey: TARGET_DATE,
+    createdAt: STARTED_AT,
+  });
+  plan.assignPrimaryDecision(id('primary-decision'), STARTED_AT);
+  plan.setOutcomes('Минимум готов', null, null, STARTED_AT);
+  plan.assignFirstAction(id('first-action'), STARTED_AT);
+  plan.complete(STARTED_AT);
+  return plan;
+}
+
+function completedPreparationPlan(
+  cycle: EveningCycle,
+  tomorrowPlan: TomorrowPlan,
+): PreparationPlan {
+  const plan = PreparationPlan.create({
+    id: id(`preparation-${cycle.id.toString()}`),
+    cycleId: cycle.id,
+    tomorrowPlanId: tomorrowPlan.id,
+    targetDayId: tomorrowPlan.targetDayId,
+    sourceVersion: tomorrowPlan.version,
+    generationSignature: 'ready',
+    createdAt: STARTED_AT,
+  });
+  plan.complete(STARTED_AT);
+  return plan;
+}
+
+function tomorrowRepository(plan: TomorrowPlan | null): TomorrowPlanRepository {
   return {
-    kind: DECISION_KIND.main,
-    title: 'Главное решение на завтра',
-    expectedResult: 'Понятный результат на завтра',
-  } as const;
+    findById: async () => plan,
+    findByCycleId: async () => plan,
+    findByTargetDate: async () => plan,
+    createIfAbsent: async (candidate) => candidate,
+    saveIfVersionMatches: async () => true,
+  };
+}
+
+function preparationRepository(plan: PreparationPlan | null): PreparationPlanRepository {
+  return {
+    findById: async () => plan,
+    findByCycleId: async () => plan,
+    findByTomorrowPlanId: async () => plan,
+    findByTargetDayId: async () => plan,
+    createIfAbsent: async (candidate) => candidate,
+    saveIfVersionMatches: async () => true,
+  };
+}
+
+function completionInput() {
+  return { summary: 'Всё важное сохранено', actionResolutions: [], tomorrowDecisions: [] } as const;
 }
 
 function id(value: string): EntityId {

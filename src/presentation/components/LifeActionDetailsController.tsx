@@ -14,7 +14,13 @@ import type {
   UpdateLifeActionDetails,
   SpheresSnapshot,
 } from '../../application';
-import type { ActionSession, DayDate, LifeAction, SessionCompletionKind } from '../../domain';
+import type {
+  ActionSession,
+  DayDate,
+  LifeAction,
+  Project,
+  SessionCompletionKind,
+} from '../../domain';
 import { LifeActionDetailsPanel } from './LifeActionDetailsPanel';
 import {
   completeSessionWorkflow,
@@ -36,6 +42,7 @@ import {
 interface LifeActionDecisionContext {
   readonly title: string;
   readonly plannedDate: DayDate | null;
+  readonly projectId: string | null;
 }
 
 interface LifeActionDetailsControllerProps {
@@ -43,6 +50,7 @@ interface LifeActionDetailsControllerProps {
   readonly currentDate: DayDate;
   readonly readOnly: boolean;
   readonly spheres?: SpheresSnapshot;
+  readonly projects?: readonly Project[];
   readonly clock: Pick<Clock, 'now'>;
   readonly getDecisionById: Pick<GetDecisionById, 'execute'>;
   readonly getActionSessionsForLifeAction: Pick<GetActionSessionsForLifeAction, 'execute'>;
@@ -58,6 +66,7 @@ interface LifeActionDetailsControllerProps {
   readonly backLabel: string;
   readonly onClose: () => void;
   readonly onActionChanged: (lifeAction: LifeAction) => void;
+  readonly onOpenProject?: (projectId: string) => void;
 }
 
 export function LifeActionDetailsController({
@@ -65,6 +74,7 @@ export function LifeActionDetailsController({
   currentDate,
   readOnly,
   spheres = { active: [], archived: [] },
+  projects = [],
   clock,
   getDecisionById,
   getActionSessionsForLifeAction,
@@ -80,6 +90,7 @@ export function LifeActionDetailsController({
   backLabel,
   onClose,
   onActionChanged,
+  onOpenProject = () => undefined,
 }: LifeActionDetailsControllerProps) {
   const [state, dispatch] = useReducer(todayPageReducer, INITIAL_TODAY_PAGE_STATE);
   const [decisionContext, setDecisionContext] = useState<LifeActionDecisionContext | null>(null);
@@ -438,6 +449,7 @@ export function LifeActionDetailsController({
       spheres={spheres}
       decisionTitle={decisionContext?.title ?? null}
       decisionPlannedDate={decisionContext?.plannedDate ?? null}
+      project={findProject(projects, decisionContext?.projectId ?? null)}
       clock={clock}
       isMutating={state.isSessionMutating}
       error={state.sessionError}
@@ -452,6 +464,7 @@ export function LifeActionDetailsController({
           void loadLifeActionDetails(state.actionDetails.lifeAction);
         }
       }}
+      onOpenProject={onOpenProject}
       onStart={() => void handleStartSession()}
       onPause={(session) => void handlePauseSession(session)}
       onResume={(session) => void handleResumeSession(session)}
@@ -524,5 +537,11 @@ async function loadDecisionContext(
   return {
     title: result.value.title.toString(),
     plannedDate: result.value.plannedDate,
+    projectId: result.value.projectId?.toString() ?? null,
   };
+}
+
+function findProject(projects: readonly Project[], projectId: string | null): Project | null {
+  if (projectId === null) return null;
+  return projects.find((project) => project.id.toString() === projectId) ?? null;
 }

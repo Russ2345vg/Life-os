@@ -21,7 +21,7 @@ import type {
   UpdateLifeActionDetails,
   SpheresSnapshot,
 } from '../../application';
-import type { DayDate, Decision, EntityId, LifeAction } from '../../domain';
+import type { DayDate, Decision, EntityId, LifeAction, Project } from '../../domain';
 import { DecisionDetailsPanel } from './DecisionDetailsPanel';
 import { LifeActionDetailsController } from './LifeActionDetailsController';
 import {
@@ -44,6 +44,7 @@ interface DecisionDetailsControllerProps {
   readonly selectedDate: DayDate;
   readonly readOnly: boolean;
   readonly spheres?: SpheresSnapshot;
+  readonly projects?: readonly Project[];
   readonly getDecisionById: Pick<GetDecisionById, 'execute'>;
   readonly getDecisionOverview: Pick<GetDecisionOverview, 'execute'>;
   readonly getLifeActionsForDecision: Pick<GetLifeActionsForDecision, 'execute'>;
@@ -67,6 +68,7 @@ interface DecisionDetailsControllerProps {
   readonly onDecisionChanged: (decision: Decision) => void;
   readonly initialLifeActionFormOpen?: boolean;
   readonly onLifeActionCreated?: (lifeAction: LifeAction) => void;
+  readonly onOpenProject?: (projectId: string) => void;
 }
 
 export function DecisionDetailsController({
@@ -75,6 +77,7 @@ export function DecisionDetailsController({
   selectedDate,
   readOnly,
   spheres = { active: [], archived: [] },
+  projects = [],
   getDecisionById,
   getDecisionOverview,
   getLifeActionsForDecision,
@@ -98,6 +101,7 @@ export function DecisionDetailsController({
   onDecisionChanged,
   initialLifeActionFormOpen = false,
   onLifeActionCreated,
+  onOpenProject = () => undefined,
 }: DecisionDetailsControllerProps) {
   const [state, dispatch] = useReducer(todayPageReducer, INITIAL_TODAY_PAGE_STATE);
   const [selectedAction, setSelectedAction] = useState<LifeAction | null>(null);
@@ -408,6 +412,8 @@ export function DecisionDetailsController({
         rescheduleLifeActionSafely={rescheduleLifeActionSafely}
         backLabel="Назад к решению"
         spheres={spheres}
+        projects={projects}
+        onOpenProject={onOpenProject}
         onClose={() => setSelectedAction(null)}
         onActionChanged={handleActionChanged}
       />
@@ -420,6 +426,7 @@ export function DecisionDetailsController({
       currentDate={currentDate}
       readOnly={readOnly}
       spheres={spheres}
+      projects={projects}
       now={clock.now()}
       isFormOpen={state.isLifeActionFormOpen}
       isSaving={state.isLifeActionSaving}
@@ -485,6 +492,7 @@ export function DecisionDetailsController({
       }
       onRescheduleSubmit={(event) => void handleDecisionReschedule(event)}
       onOpenLifeAction={setSelectedAction}
+      onOpenProject={onOpenProject}
     />
   );
 }

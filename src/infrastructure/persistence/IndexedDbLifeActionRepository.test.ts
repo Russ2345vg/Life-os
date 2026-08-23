@@ -91,6 +91,25 @@ describe('IndexedDbLifeActionRepository', () => {
     database.close();
   });
 
+  it('пакетно находит действия нескольких Decision и исключает самостоятельные', async () => {
+    const { database, repository } = createContext();
+    const secondDecisionId = EntityId.create('decision-2');
+    await repository.save(createLifeActionDraft('first-linked', { decisionId: DECISION_ID }));
+    await repository.save(createLifeActionDraft('second-linked', { decisionId: secondDecisionId }));
+    await repository.save(
+      createLifeActionDraft('unrelated', { decisionId: EntityId.create('decision-3') }),
+    );
+    await repository.save(createLifeActionDraft('standalone'));
+
+    const found = await repository.findByDecisionIds([DECISION_ID, secondDecisionId]);
+
+    expect(found.map((lifeAction) => lifeAction.id.toString())).toEqual([
+      'first-linked',
+      'second-linked',
+    ]);
+    database.close();
+  });
+
   it('восстанавливает completed, cancelled, archived и version полностью', async () => {
     const { database, repository } = createContext();
     const completedAndArchived = archiveLifeAction(

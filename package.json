@@ -11,6 +11,7 @@
     "test": "vitest run",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "verify": "npm run typecheck && npm run lint && npm run test && npm run build && npm run format:check && git diff --check",
     "test:alpha": "vitest run src/test/alpha/AlphaCycleGate.test.ts"
   },
   "dependencies": {

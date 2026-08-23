@@ -1,5 +1,11 @@
 import type { JournalRepository } from '../../application';
-import { JOURNAL_ENTRY_TYPE, type DayDate, type EntityId, type JournalEntry } from '../../domain';
+import {
+  JOURNAL_ENTRY_TYPE,
+  type DayDate,
+  type EntityId,
+  type JournalEntry,
+  type JournalEntryType,
+} from '../../domain';
 import { executeIndexedDbRequest } from './indexed-db/IndexedDbRequest';
 import { LIFE_OS_STORE, LifeOsIndexedDb } from './indexed-db/LifeOsIndexedDb';
 import { JournalEntryRecordMapper } from './mappers/JournalEntryRecordMapper';
@@ -80,6 +86,25 @@ export class IndexedDbJournalRepository implements JournalRepository {
           entry.correction?.sourceEntryId.equals(sourceEntryId) === true,
       )
       .sort(compareJournalEntries);
+  }
+
+  public async findLatestBySubjectAndType(
+    subjectId: EntityId,
+    type: JournalEntryType,
+  ): Promise<JournalEntry | null> {
+    const database = await this.#indexedDb.open();
+    const records = await executeIndexedDbRequest<unknown[]>(
+      database,
+      LIFE_OS_STORE.journal,
+      'readonly',
+      (store) => store.index('bySubjectId').getAll(subjectId.toString()),
+    );
+    return (
+      records
+        .map(JournalEntryRecordMapper.fromRecord)
+        .filter((entry) => entry.type === type)
+        .sort((left, right) => right.occurredAt.getTime() - left.occurredAt.getTime())[0] ?? null
+    );
   }
 }
 

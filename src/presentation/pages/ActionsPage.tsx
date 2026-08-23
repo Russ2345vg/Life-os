@@ -11,6 +11,7 @@ import type {
   GetDecisionById,
   GetUnfinishedActionSession,
   GetSpheres,
+  GetProjects,
   SpheresSnapshot,
   PauseActionSession,
   RescheduleLifeActionSafely,
@@ -40,6 +41,7 @@ import { isPastDate } from '../date/selectedDate';
 import { useDateQuery } from '../date/useDateQuery';
 import { SectionError, SectionMessage } from './DecisionsPage';
 import type { ActionListFiltersStore } from './ActionListFiltersStore';
+import { useProjects } from '../management/projectReferenceModel';
 
 interface ActionsPageProps {
   readonly currentDate: DayDate;
@@ -49,6 +51,7 @@ interface ActionsPageProps {
   readonly getActionSessionsForLifeAction: Pick<GetActionSessionsForLifeAction, 'execute'>;
   readonly getUnfinishedActionSession: Pick<GetUnfinishedActionSession, 'execute'>;
   readonly getSpheres: Pick<GetSpheres, 'execute'>;
+  readonly getProjects?: Pick<GetProjects, 'execute'>;
   readonly startLifeActionSession: Pick<StartLifeActionSession, 'execute'>;
   readonly pauseActionSession: Pick<PauseActionSession, 'execute'>;
   readonly resumeActionSession: Pick<ResumeActionSession, 'execute'>;
@@ -61,6 +64,7 @@ interface ActionsPageProps {
   readonly actionListFiltersStore: ActionListFiltersStore;
   readonly onDateChange: (date: DayDate) => void;
   readonly onOpenToday: () => void;
+  readonly onOpenProject?: (projectId: string) => void;
 }
 
 interface ActionOperationState {
@@ -85,6 +89,7 @@ export function ActionsPage({
   getActionSessionsForLifeAction,
   getUnfinishedActionSession,
   getSpheres,
+  getProjects,
   startLifeActionSession,
   pauseActionSession,
   resumeActionSession,
@@ -97,9 +102,11 @@ export function ActionsPage({
   actionListFiltersStore,
   onDateChange,
   onOpenToday,
+  onOpenProject = () => undefined,
 }: ActionsPageProps) {
   const { state, reload } = useDateQuery(selectedDate, getActionListsForDate);
   const spheres = useSpheres(getSpheres);
+  const projects = useProjects(getProjects);
   const [filters, setFilters] = useState<ActionListFilters>(() => actionListFiltersStore.load());
   const selectedDateKey = selectedDate.toString();
   const [selection, setSelection] = useState<{
@@ -305,6 +312,7 @@ export function ActionsPage({
         readOnly={isPastDate(selectedDate, currentDate)}
         clock={clock}
         getDecisionById={getDecisionById}
+        projects={projects}
         getActionSessionsForLifeAction={getActionSessionsForLifeAction}
         getUnfinishedActionSession={getUnfinishedActionSession}
         startLifeActionSession={startLifeActionSession}
@@ -318,6 +326,7 @@ export function ActionsPage({
         backLabel="Назад к спискам действий"
         onClose={() => setSelection(null)}
         onActionChanged={handleActionChanged}
+        onOpenProject={onOpenProject}
       />
     </main>
   );

@@ -5,6 +5,7 @@ import {
   DECISION_PRIORITY,
   DECISION_STATUS,
   EntityId,
+  Project,
   type Decision,
 } from '../../domain';
 import { DomainError } from '../../shared/errors/DomainError';
@@ -17,6 +18,7 @@ import {
   markDecisionInProgress,
 } from '../../test/helpers/DecisionTestFactory';
 import { FakeClock, FakeIdGenerator } from '../../test/helpers/Fakes';
+import { InMemoryProjectRepository } from '../../infrastructure';
 import type { DecisionRepository } from '../ports/DecisionRepository';
 import { UpdateDecisionDetails } from './UpdateDecisionDetails';
 
@@ -97,6 +99,30 @@ describe('UpdateDecisionDetails', () => {
     expect(context.idGenerator.generatedCount).toBe(1);
   });
 
+  it('preserves reschedule history when editing a decision', async () => {
+    const decision = createPlannedDecision('history-edit', DATE);
+    decision.reschedule(
+      DayDate.create('2026-08-03'),
+      'Changed priorities',
+      new Date('2026-08-02T10:00:00.000+09:00'),
+      EntityId.create('history-edit-rescheduled'),
+    );
+    decision.clearUncommittedEvents();
+    const history = decision.rescheduleHistory;
+    const context = createContext([decision]);
+
+    const result = await context.command.execute({
+      decisionId: decision.id,
+      title: 'Updated after reschedule',
+      expectedResult: decision.expectedResult?.toString() ?? '',
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw result.error;
+    expect(result.value.rescheduleCount).toBe(1);
+    expect(result.value.rescheduleHistory).toEqual(history);
+  });
+
   it('разрешает очистить ожидаемый результат дополнительного решения', async () => {
     const decision = createPlannedDecision('additional', DATE, DECISION_KIND.additional);
     const context = createContext([decision]);
@@ -112,6 +138,30 @@ describe('UpdateDecisionDetails', () => {
       throw result.error;
     }
     expect(result.value.expectedResult).toBeNull();
+  });
+
+  it('назначает проект и наследует его сферу при редактировании', async () => {
+    const decision = createPlannedDecision('project-edit', DATE, DECISION_KIND.additional);
+    const project = Project.create({
+      id: EntityId.create('project-edit-target'),
+      sphereId: EntityId.create('sphere-project'),
+      title: 'Проект редактирования',
+      now: NOW,
+    });
+    const context = createContext([decision], [project]);
+
+    const result = await context.command.execute({
+      decisionId: decision.id,
+      title: decision.title.toString(),
+      expectedResult: '',
+      projectId: project.id,
+      sphereId: null,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw result.error;
+    expect(result.value.projectId?.equals(project.id)).toBe(true);
+    expect(result.value.sphereId?.toString()).toBe('sphere-project');
   });
 
   it('одинаковые нормализованные данные идемпотентны и не используют сохранение', async () => {
@@ -338,13 +388,19 @@ describe('UpdateDecisionDetails', () => {
   });
 });
 
-function createContext(decisions: readonly Decision[]) {
+function createContext(decisions: readonly Decision[], projects: readonly Project[] = []) {
   const repository = new TrackingDecisionRepository(decisions);
   const idGenerator = new FakeIdGenerator('details-event');
+  const projectRepository = new InMemoryProjectRepository(projects);
   return {
     repository,
     idGenerator,
-    command: new UpdateDecisionDetails(repository, new FakeClock(NOW), idGenerator),
+    command: new UpdateDecisionDetails(
+      repository,
+      new FakeClock(NOW),
+      idGenerator,
+      projectRepository,
+    ),
   };
 }
 

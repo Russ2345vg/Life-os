@@ -9,6 +9,8 @@ import { DayRecordMapper } from './mappers/DayRecordMapper';
 import { DecisionRecordMapper } from './mappers/DecisionRecordMapper';
 import { JournalEntryRecordMapper } from './mappers/JournalEntryRecordMapper';
 import { LifeActionRecordMapper } from './mappers/LifeActionRecordMapper';
+import { DirectionRecordMapper } from './mappers/DirectionRecordMapper';
+import { ProjectRecordMapper } from './mappers/ProjectRecordMapper';
 import type { DecisionRecord } from './records/DecisionRecord';
 
 interface VersionedRecord {
@@ -70,6 +72,24 @@ export class IndexedDbJournalUnitOfWork implements JournalUnitOfWork {
           ),
         );
       }
+      for (const change of input.directions ?? []) {
+        writes.push(
+          observeRequest(
+            transaction
+              .objectStore(LIFE_OS_STORE.directions)
+              .put(DirectionRecordMapper.toRecord(change.direction)),
+          ),
+        );
+      }
+      for (const change of input.projects ?? []) {
+        writes.push(
+          observeRequest(
+            transaction
+              .objectStore(LIFE_OS_STORE.projects)
+              .put(ProjectRecordMapper.toRecord(change.project)),
+          ),
+        );
+      }
       const journalStore = transaction.objectStore(LIFE_OS_STORE.journal);
       for (const entry of input.journalEntries) {
         writes.push(observeRequest(journalStore.add(JournalEntryRecordMapper.toRecord(entry))));
@@ -120,6 +140,24 @@ async function validateExpectedState(
     const store = transaction.objectStore(LIFE_OS_STORE.actionSessions);
     checks.push(validateVersion(store, change.workSession.id.toString(), change.expectedVersion));
     if (change.expectedVersion === null) checks.push(validateNoUnfinishedSession(store));
+  }
+  for (const change of input.directions ?? []) {
+    checks.push(
+      validateVersion(
+        transaction.objectStore(LIFE_OS_STORE.directions),
+        change.direction.id.toString(),
+        change.expectedVersion,
+      ),
+    );
+  }
+  for (const change of input.projects ?? []) {
+    checks.push(
+      validateVersion(
+        transaction.objectStore(LIFE_OS_STORE.projects),
+        change.project.id.toString(),
+        change.expectedVersion,
+      ),
+    );
   }
   await Promise.all(checks);
 }
@@ -176,6 +214,8 @@ function collectStores(input: CommitJournalStateInput): string[] {
   if ((input.decisions?.length ?? 0) > 0) stores.add(LIFE_OS_STORE.decisions);
   if ((input.lifeActions?.length ?? 0) > 0) stores.add(LIFE_OS_STORE.lifeActions);
   if ((input.workSessions?.length ?? 0) > 0) stores.add(LIFE_OS_STORE.actionSessions);
+  if ((input.directions?.length ?? 0) > 0) stores.add(LIFE_OS_STORE.directions);
+  if ((input.projects?.length ?? 0) > 0) stores.add(LIFE_OS_STORE.projects);
   return [...stores];
 }
 

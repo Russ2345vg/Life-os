@@ -17,6 +17,7 @@ export const JOURNAL_ENTRY_TYPE = {
   actionCancelled: 'actionCancelled',
   dayCompleted: 'dayCompleted',
   dataCorrected: 'dataCorrected',
+  directionStrategicReviewed: 'directionStrategicReviewed',
 } as const;
 
 export type JournalEntryType = (typeof JOURNAL_ENTRY_TYPE)[keyof typeof JOURNAL_ENTRY_TYPE];
@@ -26,6 +27,7 @@ export const JOURNAL_SUBJECT_TYPE = {
   decision: 'Decision',
   lifeAction: 'LifeAction',
   workSession: 'WorkSession',
+  direction: 'Direction',
 } as const;
 
 export type JournalSubjectType = (typeof JOURNAL_SUBJECT_TYPE)[keyof typeof JOURNAL_SUBJECT_TYPE];

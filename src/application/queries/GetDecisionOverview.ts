@@ -42,19 +42,42 @@ export class GetDecisionOverview {
     const lifeActions = sortLifeActions(
       await this.#lifeActionRepository.findByDecisionId(decisionId),
     );
+    const allSessions = await this.#actionSessionRepository.findAll?.();
+    const sessionsByActionId =
+      allSessions === undefined ? null : indexSessionsByActionId(allSessions);
     const actions = await Promise.all(
       lifeActions.map(async (lifeAction): Promise<DecisionActionOverview> => ({
         lifeAction,
         sessions: sortSessions(
-          (await this.#actionSessionRepository.findByLifeActionId(lifeAction.id)).filter(
-            (session) => session.lifeActionId.equals(lifeAction.id),
-          ),
+          sessionsByActionId === null
+            ? (await this.#actionSessionRepository.findByLifeActionId(lifeAction.id)).filter(
+                (session) => session.lifeActionId.equals(lifeAction.id),
+              )
+            : (sessionsByActionId.get(lifeAction.id.toString()) ?? []),
         ),
       })),
     );
 
     return success({ decision, actions });
   }
+}
+
+function indexSessionsByActionId(
+  sessions: readonly ActionSession[],
+): ReadonlyMap<string, readonly ActionSession[]> {
+  const byActionId = new Map<string, ActionSession[]>();
+
+  for (const session of sessions) {
+    const key = session.lifeActionId.toString();
+    const indexed = byActionId.get(key);
+    if (indexed === undefined) {
+      byActionId.set(key, [session]);
+    } else {
+      indexed.push(session);
+    }
+  }
+
+  return byActionId;
 }
 
 function sortLifeActions(lifeActions: readonly LifeAction[]): readonly LifeAction[] {

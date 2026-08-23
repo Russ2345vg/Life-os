@@ -34,21 +34,32 @@ export class GetRoutinePlanFactForDate {
   ) {}
 
   public async execute(date: DayDate): Promise<readonly RoutinePlanFactPresentation[]> {
-    const occurrences = await this.getRoutineBlocksForDate.execute(date);
-    const presentations = await Promise.all(
-      occurrences.map(async (occurrence) =>
-        resolveRoutinePlanFactPresentation(
-          occurrence,
-          await this.executionRepository.findByOccurrence(
-            occurrence.sourceBlockId,
-            occurrence.occurrenceDate,
-          ),
-          this.clock.now(),
-        ),
+    const [occurrences, executions] = await Promise.all([
+      this.getRoutineBlocksForDate.execute(date),
+      this.executionRepository.findAll(),
+    ]);
+    const executionByOccurrence = new Map(
+      executions.map((execution) => [
+        occurrenceKey(execution.routineBlockId.toString(), execution.occurrenceDate),
+        execution,
+      ]),
+    );
+    const now = this.clock.now();
+    const presentations = occurrences.map((occurrence) =>
+      resolveRoutinePlanFactPresentation(
+        occurrence,
+        executionByOccurrence.get(
+          occurrenceKey(occurrence.sourceBlockId.toString(), occurrence.occurrenceDate),
+        ) ?? null,
+        now,
       ),
     );
     return Object.freeze(presentations);
   }
+}
+
+function occurrenceKey(blockId: string, date: DayDate): string {
+  return `${blockId}\u0000${date.toString()}`;
 }
 
 export function resolveRoutinePlanFactPresentation(

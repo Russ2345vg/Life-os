@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Clock } from '../../application';
-import type { ActionSession, LifeAction } from '../../domain';
+import type { ActionSession, LifeAction, Project } from '../../domain';
 import {
   formatDuration,
   resolveSafeSessionNow,
@@ -17,6 +17,8 @@ interface CurrentActionCardProps {
   readonly clock: Pick<Clock, 'now'>;
   readonly isMutating: boolean;
   readonly error: string | null;
+  readonly project?: Project | null;
+  readonly onOpenProject?: (projectId: string) => void;
   readonly onStart: (lifeAction: LifeAction) => void;
   readonly onPause: (session: ActionSession) => void;
   readonly onResume: (session: ActionSession) => void;
@@ -31,6 +33,8 @@ export function CurrentActionCard({
   clock,
   isMutating,
   error,
+  project = null,
+  onOpenProject = () => undefined,
   onStart,
   onPause,
   onResume,
@@ -43,16 +47,21 @@ export function CurrentActionCard({
   const totalWorked = totalWorkedDurationAt(state.sessions, now);
   const currentSessionWorked =
     state.unfinishedSession === null ? null : state.unfinishedSession.workedDurationAt(now);
+  const lastSession = state.sessions.reduce<ActionSession | null>(
+    (latest, session) =>
+      latest === null || session.startedAt.getTime() > latest.startedAt.getTime()
+        ? session
+        : latest,
+    null,
+  );
 
   function runPrimaryCommand(): void {
     switch (state.primaryCommand) {
       case CURRENT_ACTION_COMMAND.startSession:
         onStart(state.lifeAction);
         return;
-      case CURRENT_ACTION_COMMAND.pauseSession:
-        if (state.unfinishedSession !== null) {
-          onPause(state.unfinishedSession);
-        }
+      case CURRENT_ACTION_COMMAND.completeSession:
+        onCompleteSession(state.lifeAction);
         return;
       case CURRENT_ACTION_COMMAND.resumeSession:
         if (state.unfinishedSession !== null) {
@@ -77,7 +86,18 @@ export function CurrentActionCard({
       <dl className="current-action-facts">
         <div>
           <dt>Связанное решение</dt>
-          <dd>{state.decisionTitle ?? 'Без связанного решения'}</dd>
+          <dd>
+            <span>{state.decisionTitle ?? 'Без связанного решения'}</span>
+            {project === null ? null : (
+              <button
+                className="today-project-link"
+                type="button"
+                onClick={() => onOpenProject(project.id.toString())}
+              >
+                {project.title} →
+              </button>
+            )}
+          </dd>
         </div>
         <div>
           <dt>Ожидаемый результат</dt>
@@ -87,12 +107,16 @@ export function CurrentActionCard({
           <dt>Учтённое время</dt>
           <dd>{formatDuration(totalWorked)}</dd>
         </div>
-        {currentSessionWorked === null ? null : (
-          <div>
-            <dt>Текущая сессия</dt>
-            <dd className="current-action-timer">{formatDuration(currentSessionWorked)}</dd>
-          </div>
-        )}
+        <div>
+          <dt>{currentSessionWorked === null ? 'Последняя сессия' : 'Текущая сессия'}</dt>
+          <dd className="current-action-timer">
+            {currentSessionWorked === null
+              ? lastSession === null
+                ? 'Сессий пока нет'
+                : formatDuration(lastSession.workedDurationAt(now))
+              : formatDuration(currentSessionWorked)}
+          </dd>
+        </div>
       </dl>
 
       {error === null ? null : (
@@ -116,16 +140,21 @@ export function CurrentActionCard({
         <button className="secondary-button" type="button" onClick={() => onOpen(state.lifeAction)}>
           Открыть
         </button>
-        {state.unfinishedSession === null ? null : (
+        {state.primaryCommand === CURRENT_ACTION_COMMAND.completeSession &&
+        state.unfinishedSession !== null ? (
           <button
             className="secondary-button"
             type="button"
             disabled={isMutating}
-            onClick={() => onCompleteSession(state.lifeAction)}
+            onClick={() => {
+              if (state.unfinishedSession !== null) {
+                onPause(state.unfinishedSession);
+              }
+            }}
           >
-            Завершить сессию
+            Пауза
           </button>
-        )}
+        ) : null}
         <button
           className="secondary-button"
           type="button"
@@ -156,7 +185,7 @@ function useCardTimer(state: CurrentActionCardState, clock: Pick<Clock, 'now'>):
   const [now, setNow] = useState(() => clock.now());
 
   useEffect(() => {
-    if (state.primaryCommand !== CURRENT_ACTION_COMMAND.pauseSession) {
+    if (state.primaryCommand !== CURRENT_ACTION_COMMAND.completeSession) {
       return;
     }
 
@@ -165,7 +194,7 @@ function useCardTimer(state: CurrentActionCardState, clock: Pick<Clock, 'now'>):
 
   const currentClockTime = clock.now();
   const candidateNow =
-    state.primaryCommand === CURRENT_ACTION_COMMAND.pauseSession ? now : currentClockTime;
+    state.primaryCommand === CURRENT_ACTION_COMMAND.completeSession ? now : currentClockTime;
 
   return resolveSafeSessionNow(state.unfinishedSession, candidateNow, currentClockTime);
 }

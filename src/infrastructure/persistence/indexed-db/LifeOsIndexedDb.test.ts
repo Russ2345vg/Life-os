@@ -20,12 +20,21 @@ describe('LifeOsIndexedDb', () => {
       LIFE_OS_STORE.actionSessions,
       LIFE_OS_STORE.days,
       LIFE_OS_STORE.decisions,
+      LIFE_OS_STORE.directions,
+      LIFE_OS_STORE.eveningCycles,
+      LIFE_OS_STORE.goals,
       LIFE_OS_STORE.journal,
       LIFE_OS_STORE.lifeActions,
+      LIFE_OS_STORE.morningCycles,
+      LIFE_OS_STORE.preparationPlans,
+      LIFE_OS_STORE.preparationRules,
+      LIFE_OS_STORE.projects,
+      LIFE_OS_STORE.recommendationApplications,
       LIFE_OS_STORE.routineBlocks,
       LIFE_OS_STORE.routineOccurrenceExecutions,
       LIFE_OS_STORE.routineOccurrenceOverrides,
       LIFE_OS_STORE.spheres,
+      LIFE_OS_STORE.tomorrowPlans,
       LIFE_OS_STORE.walks,
     ]);
 
@@ -47,6 +56,7 @@ describe('LifeOsIndexedDb', () => {
     });
     expect(indexesOf(transaction.objectStore(LIFE_OS_STORE.decisions))).toEqual({
       byPlannedDate: false,
+      byProjectId: false,
     });
     expect(indexesOf(transaction.objectStore(LIFE_OS_STORE.lifeActions))).toEqual({
       byDecisionId: false,
@@ -80,6 +90,42 @@ describe('LifeOsIndexedDb', () => {
       byOccurredAt: false,
       bySphereId: false,
       bySubjectId: false,
+    });
+    expect(indexesOf(transaction.objectStore(LIFE_OS_STORE.directions))).toEqual({
+      bySphereId: false,
+      byStatus: false,
+    });
+    expect(indexesOf(transaction.objectStore(LIFE_OS_STORE.projects))).toEqual({
+      byDirectionId: false,
+      bySphereId: false,
+      byStatus: false,
+    });
+    expect(indexesOf(transaction.objectStore(LIFE_OS_STORE.eveningCycles))).toEqual({
+      byDateKey: true,
+      byDayId: true,
+      byState: false,
+    });
+    expect(indexesOf(transaction.objectStore(LIFE_OS_STORE.tomorrowPlans))).toEqual({
+      byCycleId: true,
+      byStatus: false,
+      byTargetDateKey: true,
+    });
+    expect(indexesOf(transaction.objectStore(LIFE_OS_STORE.preparationPlans))).toEqual({
+      byCycleId: true,
+      byStatus: false,
+      byTargetDayId: true,
+      byTomorrowPlanId: true,
+    });
+    expect(indexesOf(transaction.objectStore(LIFE_OS_STORE.preparationRules))).toEqual({});
+    expect(indexesOf(transaction.objectStore(LIFE_OS_STORE.recommendationApplications))).toEqual({
+      byStatus: false,
+    });
+    expect(indexesOf(transaction.objectStore(LIFE_OS_STORE.morningCycles))).toEqual({
+      byDateKey: true,
+      byDayId: true,
+    });
+    expect(indexesOf(transaction.objectStore(LIFE_OS_STORE.goals))).toEqual({
+      byStatus: false,
     });
 
     indexedDb.close();
@@ -118,7 +164,7 @@ describe('LifeOsIndexedDb', () => {
     const secondConnection = await indexedDb.open();
 
     expect(secondConnection).not.toBe(firstConnection);
-    expect([...secondConnection.objectStoreNames]).toHaveLength(10);
+    expect([...secondConnection.objectStoreNames]).toHaveLength(19);
     indexedDb.close();
   });
 
@@ -158,12 +204,42 @@ describe('LifeOsIndexedDb', () => {
       (store) => store.get('day-legacy'),
     );
 
-    expect(upgraded.version).toBe(8);
+    expect(upgraded.version).toBe(LIFE_OS_DATABASE_VERSION);
     expect([...upgraded.objectStoreNames]).toContain(LIFE_OS_STORE.routineBlocks);
     expect([...upgraded.objectStoreNames]).toContain(LIFE_OS_STORE.routineOccurrenceOverrides);
     expect([...upgraded.objectStoreNames]).toContain(LIFE_OS_STORE.routineOccurrenceExecutions);
     expect([...upgraded.objectStoreNames]).toContain(LIFE_OS_STORE.walks);
     expect(restored).toMatchObject({ id: 'day-legacy', date: '2026-08-01' });
+    indexedDb.close();
+  });
+
+  it('migrates the E10.4 version 13 database and keeps existing data', async () => {
+    const factory = new IDBFactory();
+    const legacy = await openVersion13Database(factory);
+    const transaction = legacy.transaction(LIFE_OS_STORE.days, 'readwrite');
+    transaction.objectStore(LIFE_OS_STORE.days).put({ id: 'day-before-e10-5' });
+    await transactionDone(transaction);
+    legacy.close();
+
+    const indexedDb = new LifeOsIndexedDb(factory);
+    const upgraded = await indexedDb.open();
+    const restored = await executeIndexedDbRequest(
+      upgraded,
+      LIFE_OS_STORE.days,
+      'readonly',
+      (store) => store.get('day-before-e10-5'),
+    );
+
+    expect(upgraded.version).toBe(LIFE_OS_DATABASE_VERSION);
+    expect(restored).toEqual({ id: 'day-before-e10-5' });
+    expect([...upgraded.objectStoreNames]).toContain(LIFE_OS_STORE.recommendationApplications);
+    expect(
+      indexesOf(
+        upgraded
+          .transaction(LIFE_OS_STORE.recommendationApplications)
+          .objectStore(LIFE_OS_STORE.recommendationApplications),
+      ),
+    ).toEqual({ byStatus: false });
     indexedDb.close();
   });
 
@@ -198,7 +274,7 @@ describe('LifeOsIndexedDb', () => {
       'readonly',
       (store) => store.get('routine-13-2'),
     );
-    expect(upgraded.version).toBe(8);
+    expect(upgraded.version).toBe(LIFE_OS_DATABASE_VERSION);
     expect(restored).toMatchObject({ id: 'routine-13-2', title: 'Старый блок' });
     expect([...upgraded.objectStoreNames]).toContain(LIFE_OS_STORE.routineOccurrenceOverrides);
     expect([...upgraded.objectStoreNames]).toContain(LIFE_OS_STORE.routineOccurrenceExecutions);
@@ -227,7 +303,7 @@ describe('LifeOsIndexedDb', () => {
       'readonly',
       (store) => store.get('override-13-3'),
     );
-    expect(upgraded.version).toBe(8);
+    expect(upgraded.version).toBe(LIFE_OS_DATABASE_VERSION);
     expect(restored).toMatchObject({ id: 'override-13-3', type: 'skipped' });
     expect([...upgraded.objectStoreNames]).toContain(LIFE_OS_STORE.routineOccurrenceExecutions);
     indexedDb.close();
@@ -256,7 +332,7 @@ describe('LifeOsIndexedDb', () => {
       (store) => store.get('execution-stage-13'),
     );
 
-    expect(upgraded.version).toBe(8);
+    expect(upgraded.version).toBe(LIFE_OS_DATABASE_VERSION);
     expect(restored).toMatchObject({ id: 'execution-stage-13', status: 'completed' });
     expect([...upgraded.objectStoreNames]).toContain(LIFE_OS_STORE.walks);
     const walkStore = upgraded.transaction(LIFE_OS_STORE.walks).objectStore(LIFE_OS_STORE.walks);
@@ -289,7 +365,7 @@ describe('LifeOsIndexedDb', () => {
       (store) => store.get('walk-stage-14-1'),
     );
 
-    expect(upgraded.version).toBe(8);
+    expect(upgraded.version).toBe(LIFE_OS_DATABASE_VERSION);
     expect(
       indexesOf(upgraded.transaction(LIFE_OS_STORE.walks).objectStore(LIFE_OS_STORE.walks)),
     ).toEqual({ byDate: false, byStatus: false });
@@ -338,7 +414,7 @@ describe('LifeOsIndexedDb', () => {
       (store) => store.get('walk-stage-14'),
     );
 
-    expect(upgraded.version).toBe(8);
+    expect(upgraded.version).toBe(LIFE_OS_DATABASE_VERSION);
     expect(restored).toMatchObject({ id: 'walk-stage-14', type: 'physical', version: 1 });
     expect(
       indexesOf(upgraded.transaction(LIFE_OS_STORE.spheres).objectStore(LIFE_OS_STORE.spheres)),
@@ -373,12 +449,77 @@ describe('LifeOsIndexedDb', () => {
       (store) => store.getAll(),
     );
 
-    expect(upgraded.version).toBe(8);
+    expect(upgraded.version).toBe(LIFE_OS_DATABASE_VERSION);
     expect(restored).toMatchObject({ id: 'decision-stage-15' });
     expect(journal).toEqual([]);
     indexedDb.close();
   });
+
+  it('migrates a database version 15 without losing existing records and adds goals', async () => {
+    const factory = new IDBFactory();
+    const legacy = await openDatabaseVersion15(factory);
+    const transaction = legacy.transaction('decisions', 'readwrite');
+    transaction.objectStore('decisions').put({
+      id: 'decision-before-goals',
+      title: 'Существующее решение',
+    });
+    await transactionDone(transaction);
+    legacy.close();
+
+    const indexedDb = new LifeOsIndexedDb(factory);
+    const upgraded = await indexedDb.open();
+    const restored = await executeIndexedDbRequest(
+      upgraded,
+      LIFE_OS_STORE.decisions,
+      'readonly',
+      (store) => store.get('decision-before-goals'),
+    );
+
+    expect(upgraded.version).toBe(LIFE_OS_DATABASE_VERSION);
+    expect(restored).toEqual({
+      id: 'decision-before-goals',
+      title: 'Существующее решение',
+    });
+    expect([...upgraded.objectStoreNames]).toContain(LIFE_OS_STORE.goals);
+    expect(
+      indexesOf(upgraded.transaction(LIFE_OS_STORE.goals).objectStore(LIFE_OS_STORE.goals)),
+    ).toEqual({ byStatus: false });
+    indexedDb.close();
+  });
 });
+
+function openDatabaseVersion15(factory: IDBFactory): Promise<IDBDatabase> {
+  const legacyStores = [
+    'days',
+    'decisions',
+    'lifeActions',
+    'actionSessions',
+    'routineBlocks',
+    'routineOccurrenceOverrides',
+    'routineOccurrenceExecutions',
+    'walks',
+    'spheres',
+    'journal',
+    'directions',
+    'projects',
+    'eveningCycles',
+    'tomorrowPlans',
+    'preparationPlans',
+    'preparationRules',
+    'recommendationApplications',
+    'morningCycles',
+  ] as const;
+  return new Promise((resolve, reject) => {
+    const request = factory.open(LIFE_OS_DATABASE_NAME, 15);
+    request.addEventListener('upgradeneeded', () => {
+      for (const storeName of legacyStores) {
+        request.result.createObjectStore(storeName, { keyPath: 'id' });
+      }
+    });
+    request.addEventListener('success', () => resolve(request.result));
+    request.addEventListener('error', () => reject(request.error));
+  });
+}
 
 function openLegacyDatabase(factory: IDBFactory): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -388,6 +529,25 @@ function openLegacyDatabase(factory: IDBFactory): Promise<IDBDatabase> {
       request.result.createObjectStore(LIFE_OS_STORE.decisions, { keyPath: 'id' });
       request.result.createObjectStore(LIFE_OS_STORE.lifeActions, { keyPath: 'id' });
       request.result.createObjectStore(LIFE_OS_STORE.actionSessions, { keyPath: 'id' });
+    });
+    request.addEventListener('success', () => resolve(request.result));
+    request.addEventListener('error', () => reject(request.error));
+  });
+}
+
+function openVersion13Database(factory: IDBFactory): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = factory.open(LIFE_OS_DATABASE_NAME, 13);
+    request.addEventListener('upgradeneeded', () => {
+      for (const storeName of Object.values(LIFE_OS_STORE)) {
+        if (
+          storeName !== LIFE_OS_STORE.recommendationApplications &&
+          storeName !== LIFE_OS_STORE.morningCycles &&
+          storeName !== LIFE_OS_STORE.goals
+        ) {
+          request.result.createObjectStore(storeName, { keyPath: 'id' });
+        }
+      }
     });
     request.addEventListener('success', () => resolve(request.result));
     request.addEventListener('error', () => reject(request.error));

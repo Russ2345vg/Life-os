@@ -5,6 +5,7 @@ import {
   type DayDate,
   type DecisionKind,
   type DecisionPriority,
+  type Project,
 } from '../../domain';
 import type {
   DecisionCreationFormErrors,
@@ -19,9 +20,35 @@ interface DecisionCreationFormProps {
   readonly errors: DecisionCreationFormErrors;
   readonly isSaving: boolean;
   readonly spheres?: SpheresSnapshot;
+  readonly projects?: readonly Project[];
+  readonly lockedProjectId?: string;
   readonly onChange: (form: DecisionCreationFormState) => void;
   readonly onClose: () => void;
   readonly onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}
+
+export function DecisionCreationDialog(props: DecisionCreationFormProps) {
+  return (
+    <div className="management-dialog-backdrop" role="presentation">
+      <div
+        className="management-dialog premium-form-dialog decision-form-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="section-decision-form-title"
+      >
+        <button
+          className="management-dialog-close"
+          type="button"
+          aria-label="Закрыть форму решения"
+          disabled={props.isSaving}
+          onClick={props.onClose}
+        >
+          ×
+        </button>
+        <DecisionCreationForm {...props} />
+      </div>
+    </div>
+  );
 }
 
 export function DecisionCreationForm({
@@ -30,6 +57,8 @@ export function DecisionCreationForm({
   errors,
   isSaving,
   spheres = { active: [], archived: [] },
+  projects = [],
+  lockedProjectId,
   onChange,
   onClose,
   onSubmit,
@@ -38,12 +67,12 @@ export function DecisionCreationForm({
 
   return (
     <section
-      className="decision-form-panel section-decision-create decision-creation-panel"
+      className="decision-form-panel section-decision-create decision-creation-panel premium-form-content"
       aria-labelledby="section-decision-form-title"
     >
-      <div className="section-heading decision-creation-heading">
+      <div className="section-heading decision-creation-heading premium-form-heading">
         <div>
-          <p className="section-kicker">Новое решение</p>
+          <p className="section-kicker premium-form-eyebrow">Новое решение</p>
           <h2 id="section-decision-form-title">Создать решение</h2>
           <p className="decision-creation-intro">
             Зафиксируйте смысл решения, ожидаемый итог и цену, которую вы готовы принять.
@@ -56,7 +85,11 @@ export function DecisionCreationForm({
         </span>
       </div>
 
-      <form className="decision-form decision-creation-form" onSubmit={onSubmit} noValidate>
+      <form
+        className="decision-form decision-creation-form premium-form-grid"
+        onSubmit={onSubmit}
+        noValidate
+      >
         <DecisionField label="Вид решения" error={errors.kind} fieldId="decision-kind">
           <select
             id="decision-kind"
@@ -110,7 +143,7 @@ export function DecisionCreationForm({
           />
         </DecisionField>
 
-        <DecisionField label="Причина" error={errors.reason} fieldId="decision-reason" wide>
+        <DecisionField label="Причина" error={errors.reason} fieldId="decision-reason">
           <textarea
             id="decision-reason"
             value={form.reason}
@@ -130,7 +163,6 @@ export function DecisionCreationForm({
           label={`Ожидаемый результат${isMain ? ' *' : ''}`}
           error={errors.expectedResult}
           fieldId="decision-expected-result"
-          wide
         >
           <textarea
             id="decision-expected-result"
@@ -158,6 +190,37 @@ export function DecisionCreationForm({
           />
         </DecisionField>
 
+        <DecisionField label="Проект" error={errors.projectId} fieldId="decision-project">
+          <select
+            id="decision-project"
+            value={form.projectId}
+            disabled={isSaving || lockedProjectId !== undefined}
+            aria-invalid={errors.projectId !== null}
+            aria-describedby={errorId('decision-project', errors.projectId)}
+            onChange={(event: ChangeEvent<HTMLSelectElement>) => {
+              const projectId = event.target.value;
+              const project = projects.find((item) => item.id.toString() === projectId);
+              onChange({
+                ...form,
+                projectId,
+                sphereId:
+                  form.sphereId === '' && project?.sphereId !== null
+                    ? (project?.sphereId.toString() ?? '')
+                    : form.sphereId,
+              });
+            }}
+          >
+            <option value="">Без проекта</option>
+            {projects
+              .filter((project) => project.status !== 'completed' && project.status !== 'archived')
+              .map((project) => (
+                <option key={project.id.toString()} value={project.id.toString()}>
+                  {project.title}
+                </option>
+              ))}
+          </select>
+        </DecisionField>
+
         <DecisionField label="Приоритет" error={errors.priority} fieldId="decision-priority">
           <select
             id="decision-priority"
@@ -175,7 +238,7 @@ export function DecisionCreationForm({
           </select>
         </DecisionField>
 
-        <DecisionField label="Цена решения" error={errors.price} fieldId="decision-price" wide>
+        <DecisionField label="Цена решения" error={errors.price} fieldId="decision-price">
           <textarea
             id="decision-price"
             value={form.price}
@@ -191,7 +254,7 @@ export function DecisionCreationForm({
           />
         </DecisionField>
 
-        <DecisionField label="Жертвы" error={errors.sacrifices} fieldId="decision-sacrifices" wide>
+        <DecisionField label="Жертвы" error={errors.sacrifices} fieldId="decision-sacrifices">
           <textarea
             id="decision-sacrifices"
             value={form.sacrifices}
@@ -233,8 +296,8 @@ export function DecisionCreationForm({
           </p>
         )}
 
-        <div className="form-actions decision-creation-actions">
-          <button className="primary-button" type="submit" disabled={isSaving}>
+        <div className="form-actions decision-creation-actions premium-form-actions">
+          <button className="primary-button" type="submit" aria-busy={isSaving} disabled={isSaving}>
             {isSaving ? 'Сохраняем…' : 'Создать решение'}
           </button>
           <button className="secondary-button" type="button" disabled={isSaving} onClick={onClose}>

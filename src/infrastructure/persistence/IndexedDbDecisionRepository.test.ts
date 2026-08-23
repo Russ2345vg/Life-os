@@ -69,6 +69,26 @@ describe('IndexedDbDecisionRepository', () => {
     database.close();
   });
 
+  it('находит связанные решения одним запросом через byProjectId', async () => {
+    const { database, repository } = createContext();
+    const projectId = EntityId.create('project-indexed');
+    const linked = Decision.createDraft({
+      id: EntityId.create('linked-decision'),
+      title: DecisionTitle.create('Связанное решение'),
+      kind: DECISION_KIND.additional,
+      projectId,
+      occurredAt: new Date('2026-08-01T08:00:00.000Z'),
+      eventId: EntityId.create('linked-decision-event'),
+    });
+    await repository.save(linked);
+    await repository.save(createDecisionDraft('unlinked-decision'));
+
+    const found = await repository.findByProjectId(projectId);
+
+    expect(found.map((decision) => decision.id.toString())).toEqual(['linked-decision']);
+    database.close();
+  });
+
   it('повторным save обновляет существующий id и соответствующий индекс даты', async () => {
     const { database, repository } = createContext();
     const decision = createPlannedDecision('decision-1', DATE);
@@ -217,6 +237,7 @@ describe('IndexedDbDecisionRepository', () => {
       sacrifices: 'Не переключаться на другие задачи',
       priority: DECISION_PRIORITY.high,
       projectReference: 'LifeOS',
+      projectId: EntityId.create('project-lifeos'),
       occurredAt: new Date('2026-08-05T08:00:00.000Z'),
       eventId: EntityId.create('decision-stage-11-1-draft-event'),
     });
@@ -240,6 +261,7 @@ describe('IndexedDbDecisionRepository', () => {
     expect(restored?.sacrifices).toBe('Не переключаться на другие задачи');
     expect(restored?.priority).toBe(DECISION_PRIORITY.high);
     expect(restored?.projectReference).toBe('LifeOS');
+    expect(restored?.projectId?.toString()).toBe('project-lifeos');
     reopenedDatabase.close();
   });
 });

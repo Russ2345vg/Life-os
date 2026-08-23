@@ -1,5 +1,6 @@
 import {
   DAY_STATUS,
+  DayDate,
   DECISION_KIND,
   DECISION_PRIORITY,
   DECISION_STATUS,
@@ -7,7 +8,6 @@ import {
   DecisionTitle,
   ExpectedResult,
   EntityId,
-  type DayDate,
   type DecisionKind,
   type DecisionPriority,
 } from '../../domain';
@@ -20,7 +20,9 @@ import type { DayRepository } from '../ports/DayRepository';
 import type { DecisionRepository } from '../ports/DecisionRepository';
 import type { IdGenerator } from '../ports/IdGenerator';
 import type { JournalUnitOfWork } from '../ports/JournalUnitOfWork';
+import type { ProjectRepository } from '../ports/ProjectRepository';
 import { createDecisionJournalEntries } from '../journal/createJournalEntries';
+import { resolveDecisionProject } from './decisionProjectSupport';
 import { domainFailure } from './decisionCommandResult';
 
 export interface CreateDecisionForDateInput {
@@ -34,6 +36,7 @@ export interface CreateDecisionForDateInput {
   readonly sacrifices?: string;
   readonly priority?: DecisionPriority;
   readonly projectReference?: string;
+  readonly projectId?: string | null;
 }
 
 export class CreateDecisionForDate {
@@ -44,6 +47,7 @@ export class CreateDecisionForDate {
   readonly #clock: Clock;
   readonly #idGenerator: IdGenerator;
   readonly #journalUnitOfWork: JournalUnitOfWork | null;
+  readonly #projectRepository: ProjectRepository | null;
 
   public constructor(
     repository: DecisionRepository,
@@ -53,6 +57,7 @@ export class CreateDecisionForDate {
     clock: Clock,
     idGenerator: IdGenerator,
     journalUnitOfWork?: JournalUnitOfWork,
+    projectRepository?: ProjectRepository,
   ) {
     this.#repository = repository;
     this.#dayRepository = dayRepository;
@@ -61,6 +66,7 @@ export class CreateDecisionForDate {
     this.#clock = clock;
     this.#idGenerator = idGenerator;
     this.#journalUnitOfWork = journalUnitOfWork ?? null;
+    this.#projectRepository = projectRepository ?? null;
   }
 
   public async execute(input: CreateDecisionForDateInput): Promise<Result<Decision, DomainError>> {
@@ -74,11 +80,27 @@ export class CreateDecisionForDate {
       );
     }
 
-    const day = await this.#dayRepository.findByDate(input.plannedDate);
-    if (day?.status === DAY_STATUS.completed) {
-      return domainFailure(
-        new DomainError('decision.completed_day_is_immutable', 'Завершённый день нельзя изменять.'),
-      );
+    let effectivePlannedDate = input.plannedDate;
+    const requestedDay = await this.#dayRepository.findByDate(input.plannedDate);
+    if (requestedDay?.status === DAY_STATUS.completed) {
+      if (!input.plannedDate.equals(currentDate)) {
+        return domainFailure(
+          new DomainError(
+            'decision.completed_day_is_immutable',
+            'Завершённый день нельзя изменять.',
+          ),
+        );
+      }
+      effectivePlannedDate = nextDay(currentDate);
+      const nextDayState = await this.#dayRepository.findByDate(effectivePlannedDate);
+      if (nextDayState?.status === DAY_STATUS.completed) {
+        return domainFailure(
+          new DomainError(
+            'decision.completed_day_is_immutable',
+            'Следующий день уже завершён и не может принять новую мысль.',
+          ),
+        );
+      }
     }
 
     let title: DecisionTitle;
@@ -88,7 +110,7 @@ export class CreateDecisionForDate {
       return domainFailure(error);
     }
 
-    const decisions = await this.#repository.findByDate(input.plannedDate);
+    const decisions = await this.#repository.findByDate(effectivePlannedDate);
     const duplicate = decisions.some(
       (decision) =>
         !decision.isArchived() &&
@@ -119,33 +141,40 @@ export class CreateDecisionForDate {
     }
 
     try {
-      const occurredAt = this.#clock.now();
-      const decisionId = this.#idGenerator.generate();
-      const draftEventId = this.#idGenerator.generate();
-      const plannedEventId = this.#idGenerator.generate();
       const expectedResult = normalizeExpectedResult(input.expectedResult);
       const reason = normalizeOptionalText(input.reason);
       const sphereId = parseOptionalEntityId(input.sphereId);
       const price = normalizeOptionalText(input.price);
       const sacrifices = normalizeOptionalText(input.sacrifices);
       const projectReference = normalizeOptionalText(input.projectReference);
+      const projectId = parseOptionalEntityId(input.projectId) ?? null;
+      const project = await resolveDecisionProject(
+        this.#projectRepository,
+        projectId,
+        sphereId ?? null,
+      );
+      const occurredAt = this.#clock.now();
+      const decisionId = this.#idGenerator.generate();
+      const draftEventId = this.#idGenerator.generate();
+      const plannedEventId = this.#idGenerator.generate();
       const decision = Decision.createDraft({
         id: decisionId,
         title,
         kind: input.kind,
         ...(reason === undefined ? {} : { reason }),
         ...(expectedResult === undefined ? {} : { expectedResult }),
-        ...(sphereId === undefined ? {} : { sphereId }),
+        sphereId: project.sphereId,
         ...(price === undefined ? {} : { price }),
         ...(sacrifices === undefined ? {} : { sacrifices }),
         priority: input.priority ?? DECISION_PRIORITY.normal,
         ...(projectReference === undefined ? {} : { projectReference }),
+        projectId: project.projectId,
         occurredAt,
         eventId: draftEventId,
       });
 
       decision.plan({
-        plannedDate: input.plannedDate,
+        plannedDate: effectivePlannedDate,
         kind: input.kind,
         ...(order === null ? {} : { order }),
         ...(expectedResult === undefined ? {} : { expectedResult }),
@@ -166,6 +195,12 @@ export class CreateDecisionForDate {
       return domainFailure(error);
     }
   }
+}
+
+function nextDay(date: DayDate): DayDate {
+  const [year, month, day] = date.toString().split('-').map(Number);
+  const value = new Date(Date.UTC(year!, month! - 1, day! + 1));
+  return DayDate.fromParts(value.getUTCFullYear(), value.getUTCMonth() + 1, value.getUTCDate());
 }
 
 function normalizeOptionalText(value: string | undefined): string | undefined {

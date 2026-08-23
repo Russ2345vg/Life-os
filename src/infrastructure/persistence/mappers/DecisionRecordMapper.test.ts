@@ -30,6 +30,7 @@ describe('DecisionRecordMapper', () => {
       sacrifices: 'Отложить второстепенное',
       priority: DECISION_PRIORITY.high,
       projectReference: 'LifeOS',
+      projectId: 'project-lifeos',
       createdAt: '2026-08-01T10:00:00.000Z',
       confirmedAt: '2026-08-02T12:00:00.000Z',
       evidenceIds: ['evidence-1'],
@@ -63,6 +64,7 @@ describe('DecisionRecordMapper', () => {
     delete (record as { sacrifices?: string | null }).sacrifices;
     delete (record as { priority?: string }).priority;
     delete (record as { projectReference?: string | null }).projectReference;
+    delete (record as { projectId?: string | null }).projectId;
 
     const restored = DecisionRecordMapper.fromRecord(record);
 
@@ -71,6 +73,7 @@ describe('DecisionRecordMapper', () => {
     expect(restored.sacrifices).toBeNull();
     expect(restored.priority).toBe(DECISION_PRIORITY.normal);
     expect(restored.projectReference).toBeNull();
+    expect(restored.projectId).toBeNull();
   });
 
   it('полным кругом сохраняет мягкое удаление и восстановление без потери прежней даты удаления', () => {
@@ -244,6 +247,7 @@ function confirmedDecision(): Decision {
     sacrifices: 'Отложить второстепенное',
     priority: DECISION_PRIORITY.high,
     projectReference: 'LifeOS',
+    projectId: EntityId.create('project-lifeos'),
     expectedResult: ExpectedResult.create('Документ опубликован'),
     occurredAt: time('2026-08-01T10:00:00.000Z'),
     eventId: id('event-draft'),

@@ -14,7 +14,7 @@ import type {
   LifeAction,
   Sphere,
 } from '../../domain';
-import { JOURNAL_ENTRY_TYPE } from '../../domain';
+import { JOURNAL_ENTRY_TYPE, type JournalEntryType } from '../../domain';
 import { DomainError } from '../../shared/errors/DomainError';
 
 export class TestDecisionRepository implements DecisionRepository {
@@ -142,6 +142,17 @@ export class TestJournalRepository implements JournalRepository {
       (entry) =>
         entry.type === JOURNAL_ENTRY_TYPE.dataCorrected &&
         entry.correction?.sourceEntryId.equals(sourceEntryId) === true,
+    );
+  }
+
+  public async findLatestBySubjectAndType(
+    subjectId: EntityId,
+    type: JournalEntryType,
+  ): Promise<JournalEntry | null> {
+    return (
+      this.sortedItems()
+        .filter((entry) => entry.type === type && entry.subjectId?.equals(subjectId) === true)
+        .sort((left, right) => right.occurredAt.getTime() - left.occurredAt.getTime())[0] ?? null
     );
   }
 

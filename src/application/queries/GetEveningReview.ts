@@ -5,6 +5,7 @@ import {
   type ActionSession,
   type Day,
   type Decision,
+  type EveningCycle,
   type LifeAction,
   type RoutineOccurrenceExecution,
 } from '../../domain';
@@ -17,6 +18,9 @@ import type { LifeActionRepository } from '../ports/LifeActionRepository';
 import type { RoutineBlockRepository } from '../ports/RoutineBlockRepository';
 import type { RoutineOccurrenceExecutionRepository } from '../ports/RoutineOccurrenceExecutionRepository';
 import type { RoutineOccurrenceOverrideRepository } from '../ports/RoutineOccurrenceOverrideRepository';
+import type { EveningCycleApplicationService } from '../evening-cycle';
+import type { EnsureCurrentDay } from '../commands/EnsureCurrentDay';
+import { GetOpenLoopsForDay, type OpenLoopsForDaySnapshot } from './GetOpenLoopsForDay';
 
 export interface EveningRoutineSummary {
   readonly plannedCount: number;
@@ -26,6 +30,7 @@ export interface EveningRoutineSummary {
 }
 
 export interface EveningReviewSnapshot {
+  readonly cycle: EveningCycle;
   readonly day: Day;
   readonly currentDate: DayDate;
   readonly tomorrowDate: DayDate;
@@ -35,11 +40,11 @@ export interface EveningReviewSnapshot {
   readonly actionSessions: readonly ActionSession[];
   readonly unfinishedSession: ActionSession | null;
   readonly tomorrowDecisions: readonly Decision[];
+  readonly openLoops?: OpenLoopsForDaySnapshot;
   readonly routineSummary?: EveningRoutineSummary;
 }
 
-export class GetEveningReview {
-  readonly #dayRepository: DayRepository;
+export class GetEveningCycleReview {
   readonly #decisionRepository: DecisionRepository;
   readonly #lifeActionRepository: LifeActionRepository;
   readonly #actionSessionRepository: ActionSessionRepository;
@@ -47,6 +52,9 @@ export class GetEveningReview {
   readonly #routineBlockRepository: RoutineBlockRepository | undefined;
   readonly #routineOverrideRepository: RoutineOccurrenceOverrideRepository | undefined;
   readonly #routineExecutionRepository: RoutineOccurrenceExecutionRepository | undefined;
+  readonly #getOpenLoops: GetOpenLoopsForDay;
+  readonly #eveningCycles: EveningCycleApplicationService;
+  readonly #ensureDay: Pick<EnsureCurrentDay, 'execute'>;
 
   public constructor(
     dayRepository: DayRepository,
@@ -57,8 +65,9 @@ export class GetEveningReview {
     routineBlockRepository?: RoutineBlockRepository,
     routineOverrideRepository?: RoutineOccurrenceOverrideRepository,
     routineExecutionRepository?: RoutineOccurrenceExecutionRepository,
+    eveningCycles?: EveningCycleApplicationService,
+    ensureDay?: Pick<EnsureCurrentDay, 'execute'>,
   ) {
-    this.#dayRepository = dayRepository;
     this.#decisionRepository = decisionRepository;
     this.#lifeActionRepository = lifeActionRepository;
     this.#actionSessionRepository = actionSessionRepository;
@@ -66,6 +75,27 @@ export class GetEveningReview {
     this.#routineBlockRepository = routineBlockRepository;
     this.#routineOverrideRepository = routineOverrideRepository;
     this.#routineExecutionRepository = routineExecutionRepository;
+    if (eveningCycles === undefined) {
+      throw new DomainError(
+        'evening_cycle.application_service_required',
+        'GetEveningReview должен использовать единое ядро EveningCycle.',
+      );
+    }
+    if (ensureDay === undefined) {
+      throw new DomainError(
+        'day.ensure_service_required',
+        'GetEveningReview должен получать Day через application-команду.',
+      );
+    }
+    this.#eveningCycles = eveningCycles;
+    this.#ensureDay = ensureDay;
+    this.#getOpenLoops = new GetOpenLoopsForDay(
+      dayRepository,
+      decisionRepository,
+      lifeActionRepository,
+      actionSessionRepository,
+      eveningCycles,
+    );
   }
 
   public async execute(reviewDate?: DayDate): Promise<EveningReviewSnapshot> {
@@ -81,31 +111,69 @@ export class GetEveningReview {
 
     const isRecoveryReview = currentDate.isBefore(actualCurrentDate);
     const tomorrowDate = isRecoveryReview ? actualCurrentDate : nextDay(currentDate);
-    const [day, decisions, lifeActions, unfinishedSession, tomorrowDecisions, routineSummary] =
-      await Promise.all([
-        this.#dayRepository.findByDate(currentDate),
-        this.#decisionRepository.findByDate(currentDate),
-        this.#lifeActionRepository.findByDate(currentDate),
-        this.#actionSessionRepository.findUnfinished(),
-        this.#decisionRepository.findByDate(tomorrowDate),
-        this.getRoutineSummary(currentDate),
-      ]);
+    const day = await this.#ensureDay.execute(currentDate);
+    const storedCycle = await this.#eveningCycles.get(currentDate);
+    const cycle = storedCycle ?? this.#eveningCycles.preview(day);
+    const openLoops =
+      storedCycle === null
+        ? await this.#getOpenLoops.preview(currentDate, cycle)
+        : await this.#getOpenLoops.execute(currentDate);
+    const [
+      decisions,
+      dayLifeActions,
+      unfinishedSession,
+      dateTomorrowDecisions,
+      routineSummary,
+      allSessions,
+    ] = await Promise.all([
+      this.#decisionRepository.findByDate(currentDate),
+      this.#lifeActionRepository.findByDate(currentDate),
+      this.#actionSessionRepository.findUnfinished(),
+      this.#decisionRepository.findByDate(tomorrowDate),
+      this.getRoutineSummary(currentDate),
+      this.#actionSessionRepository.findAll?.(),
+    ]);
 
-    if (day === null) {
-      throw new DomainError('day.not_found', 'Текущий день не найден.');
-    }
+    const activeCycle = openLoops.cycle;
 
+    const dayLifeActionIds = new Set(dayLifeActions.map((action) => action.id.toString()));
+    const referencedLifeActions = await Promise.all(
+      activeCycle.lifeActionIds
+        .filter((id) => !dayLifeActionIds.has(id.toString()))
+        .map((id) => this.#lifeActionRepository.findById(id)),
+    );
+    const lifeActions = deduplicateLifeActions([
+      ...dayLifeActions,
+      ...referencedLifeActions.flatMap((action) => (action === null ? [] : [action])),
+    ]);
+    const tomorrowDecisionIds = new Set(
+      dateTomorrowDecisions.map((decision) => decision.id.toString()),
+    );
+    const referencedDecisions = await Promise.all(
+      activeCycle.decisionIds
+        .filter((id) => !tomorrowDecisionIds.has(id.toString()))
+        .map((id) => this.#decisionRepository.findById(id)),
+    );
+    const tomorrowDecisions = deduplicateDecisions([
+      ...dateTomorrowDecisions,
+      ...referencedDecisions.flatMap((decision) => (decision === null ? [] : [decision])),
+    ]);
+
+    const actionIds = new Set(lifeActions.map((lifeAction) => lifeAction.id.toString()));
     const actionSessions = deduplicateSessions(
-      (
-        await Promise.all(
-          lifeActions.map((lifeAction) =>
-            this.#actionSessionRepository.findByLifeActionId(lifeAction.id),
-          ),
-        )
-      ).flat(),
+      allSessions === undefined
+        ? (
+            await Promise.all(
+              lifeActions.map((lifeAction) =>
+                this.#actionSessionRepository.findByLifeActionId(lifeAction.id),
+              ),
+            )
+          ).flat()
+        : allSessions.filter((session) => actionIds.has(session.lifeActionId.toString())),
     );
 
     return Object.freeze({
+      cycle: activeCycle,
       day,
       currentDate,
       tomorrowDate,
@@ -117,6 +185,7 @@ export class GetEveningReview {
       tomorrowDecisions: Object.freeze(
         tomorrowDecisions.filter((decision) => !decision.isDeleted()),
       ),
+      openLoops,
       routineSummary,
     });
   }
@@ -162,6 +231,18 @@ export class GetEveningReview {
   }
 }
 
+export class GetEveningReview {
+  readonly #core: Pick<GetEveningCycleReview, 'execute'>;
+
+  public constructor(core: Pick<GetEveningCycleReview, 'execute'>) {
+    this.#core = core;
+  }
+
+  public execute(reviewDate?: DayDate): Promise<EveningReviewSnapshot> {
+    return this.#core.execute(reviewDate);
+  }
+}
+
 function nextDay(date: DayDate): DayDate {
   const [yearText, monthText, dayText] = date.toString().split('-');
   const value = new Date(Date.UTC(Number(yearText), Number(monthText) - 1, Number(dayText) + 1));
@@ -175,5 +256,17 @@ function deduplicateSessions(sessions: readonly ActionSession[]): readonly Actio
     byId.set(session.id.toString(), session);
   }
 
+  return [...byId.values()];
+}
+
+function deduplicateLifeActions(actions: readonly LifeAction[]): readonly LifeAction[] {
+  const byId = new Map<string, LifeAction>();
+  for (const action of actions) byId.set(action.id.toString(), action);
+  return [...byId.values()];
+}
+
+function deduplicateDecisions(decisions: readonly Decision[]): readonly Decision[] {
+  const byId = new Map<string, Decision>();
+  for (const decision of decisions) byId.set(decision.id.toString(), decision);
   return [...byId.values()];
 }

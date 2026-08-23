@@ -125,13 +125,17 @@ export function getEveningReviewReadiness(
   actionForms: EveningActionForms,
   tomorrowForms: readonly TomorrowDecisionForm[],
 ): EveningReviewReadiness {
+  const openLoopError =
+    snapshot.openLoops !== undefined && snapshot.openLoops.remaining > 0
+      ? `Разберите незавершённые элементы: осталось ${snapshot.openLoops.remaining}`
+      : null;
   const sessionError = getSessionError(snapshot);
   const routineError = getRoutineError(snapshot);
   const actionError = getActionResolutionError(snapshot, actionForms);
   const summaryError = summary.trim().length === 0 ? 'Запишите итог дня' : null;
   const tomorrowError = getTomorrowDecisionError(snapshot, tomorrowForms);
   const blockingMessage =
-    sessionError ?? routineError ?? actionError ?? summaryError ?? tomorrowError;
+    openLoopError ?? sessionError ?? routineError ?? actionError ?? summaryError ?? tomorrowError;
 
   return {
     sessionsComplete: sessionError === null,

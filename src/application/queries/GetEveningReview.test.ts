@@ -1,10 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   ActionSession,
   Day,
   DayDate,
   DECISION_KIND,
   EntityId,
+  EveningCycle,
   type Decision,
   type LifeAction,
 } from '../../domain';
@@ -13,16 +14,19 @@ import type {
   DayRepository,
   DecisionRepository,
   LifeActionRepository,
+  EveningCycleRepository,
 } from '../ports';
-import { FakeCurrentDateProvider } from '../../test/helpers/Fakes';
+import { FakeClock, FakeCurrentDateProvider, FakeIdGenerator } from '../../test/helpers/Fakes';
+import { EveningCycleApplicationService } from '../evening-cycle';
+import { EnsureCurrentDay } from '../commands/EnsureCurrentDay';
 import { createPlannedDecision } from '../../test/helpers/DecisionTestFactory';
 import { createReadyLifeAction } from '../../test/helpers/LifeActionTestFactory';
-import { GetEveningReview } from './GetEveningReview';
+import { GetEveningCycleReview } from './GetEveningReview';
 
 const TODAY = DayDate.create('2026-08-05');
 const TOMORROW = DayDate.create('2026-08-06');
 
-describe('GetEveningReview', () => {
+describe('GetEveningCycleReview', () => {
   it('собирает день, решения, действия, их сессии и подготовку на завтра из единого источника', async () => {
     const dayRepository = new MemoryDayRepository();
     const decisionRepository = new MemoryDecisionRepository();
@@ -50,19 +54,25 @@ describe('GetEveningReview', () => {
       lifeActionRepository.save(action),
       sessionRepository.save(session),
     ]);
+    const findAllSessions = vi.spyOn(sessionRepository, 'findAll');
+    const findSessionsByAction = vi.spyOn(sessionRepository, 'findByLifeActionId');
 
-    const snapshot = await new GetEveningReview(
+    const query = createQuery(
       dayRepository,
       decisionRepository,
       lifeActionRepository,
       sessionRepository,
       new FakeCurrentDateProvider(TODAY),
-    ).execute();
+    );
+    const snapshot = await query.execute();
+    const repeatedSnapshot = await query.execute();
 
     expect(snapshot.day.id.equals(day.id)).toBe(true);
     expect(snapshot.currentDate.equals(TODAY)).toBe(true);
     expect(snapshot.tomorrowDate.equals(TOMORROW)).toBe(true);
     expect(snapshot.isRecoveryReview).toBe(false);
+    expect(snapshot.cycle.state).toBe('NOT_STARTED');
+    expect(repeatedSnapshot.cycle.id.equals(snapshot.cycle.id)).toBe(true);
     expect(snapshot.decisions.map(String)).toEqual([todayDecision.toString()]);
     expect(snapshot.lifeActions.map((item) => item.id.toString())).toEqual([action.id.toString()]);
     expect(snapshot.actionSessions.map((item) => item.id.toString())).toEqual([
@@ -72,6 +82,100 @@ describe('GetEveningReview', () => {
     expect(snapshot.tomorrowDecisions.map((item) => item.id.toString())).toEqual([
       tomorrowDecision.id.toString(),
     ]);
+    expect(findAllSessions).toHaveBeenCalledTimes(4);
+    expect(findSessionsByAction).not.toHaveBeenCalled();
+  });
+
+  it('возвращает NOT_STARTED без сохранения EveningCycle и повторяет это после refresh', async () => {
+    const days = new MemoryDayRepository();
+    const cycles = new MemoryEveningCycleRepository();
+    await days.save(createOpenDay(TODAY));
+    const query = createQuery(
+      days,
+      new MemoryDecisionRepository(),
+      new MemoryLifeActionRepository(),
+      new MemoryActionSessionRepository(),
+      new FakeCurrentDateProvider(TODAY),
+      cycles,
+    );
+
+    const first = await query.execute(TODAY);
+    const refreshed = await query.execute(TODAY);
+
+    expect(first.cycle.state).toBe('NOT_STARTED');
+    expect(refreshed.cycle.state).toBe('NOT_STARTED');
+    expect(refreshed.cycle.id.equals(first.cycle.id)).toBe(true);
+    expect(cycles.size).toBe(0);
+  });
+
+  it('восстанавливает уже начатый EveningCycle в его состоянии', async () => {
+    const days = new MemoryDayRepository();
+    const decisions = new MemoryDecisionRepository();
+    const cycles = new MemoryEveningCycleRepository();
+    await days.save(createOpenDay(TODAY));
+    await decisions.save(createPlannedDecision('still-open', TODAY));
+    const service = new EveningCycleApplicationService(
+      cycles,
+      days,
+      new FakeClock(new Date('2026-08-05T20:00:00.000+09:00')),
+      new FakeIdGenerator('started-cycle'),
+    );
+    const started = await service.start(TODAY);
+    await service.beginResolving(TODAY);
+
+    const snapshot = await createQuery(
+      days,
+      decisions,
+      new MemoryLifeActionRepository(),
+      new MemoryActionSessionRepository(),
+      new FakeCurrentDateProvider(TODAY),
+      cycles,
+    ).execute(TODAY);
+
+    expect(snapshot.cycle.id.equals(started.id)).toBe(true);
+    expect(snapshot.cycle.state).toBe('RESOLVING');
+  });
+
+  it('восстанавливает COMPLETED EveningCycle для Recovery Scene', async () => {
+    const days = new MemoryDayRepository();
+    const cycles = new MemoryEveningCycleRepository();
+    const day = createOpenDay(TODAY);
+    day.complete(new Date('2026-08-05T21:00:00.000+09:00'), id('completed-day'));
+    await days.save(day);
+    const service = new EveningCycleApplicationService(
+      cycles,
+      days,
+      new FakeClock(new Date('2026-08-05T21:05:00.000+09:00')),
+      new FakeIdGenerator('completed-cycle'),
+    );
+    const completed = await service.start(TODAY);
+
+    const snapshot = await createQuery(
+      days,
+      new MemoryDecisionRepository(),
+      new MemoryLifeActionRepository(),
+      new MemoryActionSessionRepository(),
+      new FakeCurrentDateProvider(TODAY),
+      cycles,
+    ).execute(TODAY);
+
+    expect(snapshot.cycle.id.equals(completed.id)).toBe(true);
+    expect(snapshot.cycle.state).toBe('COMPLETED');
+  });
+
+  it('не маскирует реальную ошибку EveningCycle repository как NOT_STARTED', async () => {
+    const days = new MemoryDayRepository();
+    await days.save(createOpenDay(TODAY));
+    const query = createQuery(
+      days,
+      new MemoryDecisionRepository(),
+      new MemoryLifeActionRepository(),
+      new MemoryActionSessionRepository(),
+      new FakeCurrentDateProvider(TODAY),
+      new FailingEveningCycleRepository(),
+    );
+
+    await expect(query.execute(TODAY)).rejects.toThrow('IndexedDB unavailable');
   });
 
   it('открывает прошлый активный день для восстановления и готовит продолжение на текущую дату', async () => {
@@ -90,7 +194,7 @@ describe('GetEveningReview', () => {
     );
     await Promise.all([dayRepository.save(staleDay), decisionRepository.save(currentDecision)]);
 
-    const snapshot = await new GetEveningReview(
+    const snapshot = await createQuery(
       dayRepository,
       decisionRepository,
       lifeActionRepository,
@@ -108,7 +212,7 @@ describe('GetEveningReview', () => {
   });
 
   it('не открывает вечерний контроль для будущей даты', async () => {
-    const query = new GetEveningReview(
+    const query = createQuery(
       new MemoryDayRepository(),
       new MemoryDecisionRepository(),
       new MemoryLifeActionRepository(),
@@ -135,7 +239,7 @@ describe('GetEveningReview', () => {
     });
     await sessionRepository.save(foreignSession);
 
-    const snapshot = await new GetEveningReview(
+    const snapshot = await createQuery(
       dayRepository,
       decisionRepository,
       lifeActionRepository,
@@ -147,9 +251,9 @@ describe('GetEveningReview', () => {
     expect(snapshot.actionSessions).toHaveLength(0);
   });
 
-  it('правильно вычисляет завтра на границе года и сообщает об отсутствующем дне', async () => {
+  it('создаёт отсутствующий Day для выбранной даты и правильно вычисляет завтра', async () => {
     const currentDate = DayDate.create('2026-12-31');
-    const query = new GetEveningReview(
+    const query = createQuery(
       new MemoryDayRepository(),
       new MemoryDecisionRepository(),
       new MemoryLifeActionRepository(),
@@ -157,11 +261,14 @@ describe('GetEveningReview', () => {
       new FakeCurrentDateProvider(currentDate),
     );
 
-    await expect(query.execute()).rejects.toMatchObject({ code: 'day.not_found' });
+    const created = await query.execute();
+    expect(created.day.date.equals(currentDate)).toBe(true);
+    expect(created.cycle.state).toBe('NOT_STARTED');
+    expect(created.tomorrowDate.toString()).toBe('2027-01-01');
 
     const dayRepository = new MemoryDayRepository();
     await dayRepository.save(createOpenDay(currentDate));
-    const snapshot = await new GetEveningReview(
+    const snapshot = await createQuery(
       dayRepository,
       new MemoryDecisionRepository(),
       new MemoryLifeActionRepository(),
@@ -171,6 +278,34 @@ describe('GetEveningReview', () => {
     expect(snapshot.tomorrowDate.toString()).toBe('2027-01-01');
   });
 });
+
+function createQuery(
+  days: DayRepository,
+  decisions: DecisionRepository,
+  lifeActions: LifeActionRepository,
+  sessions: ActionSessionRepository,
+  currentDateProvider: FakeCurrentDateProvider,
+  cycles: MemoryEveningCycleRepository = new MemoryEveningCycleRepository(),
+): GetEveningCycleReview {
+  const clock = new FakeClock(new Date('2026-08-05T20:00:00.000+09:00'));
+  return new GetEveningCycleReview(
+    days,
+    decisions,
+    lifeActions,
+    sessions,
+    currentDateProvider,
+    undefined,
+    undefined,
+    undefined,
+    new EveningCycleApplicationService(cycles, days, clock, new FakeIdGenerator('evening-review')),
+    new EnsureCurrentDay(
+      days,
+      currentDateProvider,
+      clock,
+      new FakeIdGenerator('ensure-evening-review'),
+    ),
+  );
+}
 
 function createOpenDay(date: DayDate): Day {
   return Day.openCurrent({
@@ -258,11 +393,58 @@ class MemoryActionSessionRepository implements ActionSessionRepository {
     return this.#items.filter((session) => session.lifeActionId.equals(lifeActionId));
   }
 
+  public async findAll(): Promise<readonly ActionSession[]> {
+    return [...this.#items];
+  }
+
   public async findUnfinished(): Promise<ActionSession | null> {
     return this.#items.find((session) => session.status !== 'completed') ?? null;
   }
 
   public async save(session: ActionSession): Promise<void> {
     this.#items.push(session);
+  }
+}
+
+class MemoryEveningCycleRepository implements EveningCycleRepository {
+  readonly #items = new Map<string, EveningCycle>();
+
+  public async findById(id: EntityId): Promise<EveningCycle | null> {
+    return [...this.#items.values()].find((cycle) => cycle.id.equals(id)) ?? null;
+  }
+
+  public async findByDayId(dayId: EntityId): Promise<EveningCycle | null> {
+    return [...this.#items.values()].find((cycle) => cycle.dayId.equals(dayId)) ?? null;
+  }
+
+  public async findByDateKey(dateKey: DayDate): Promise<EveningCycle | null> {
+    return this.#items.get(dateKey.toString()) ?? null;
+  }
+
+  public async createIfAbsent(cycle: EveningCycle): Promise<EveningCycle> {
+    const existing = await this.findByDateKey(cycle.dateKey);
+    if (existing !== null) return existing;
+    this.#items.set(cycle.dateKey.toString(), cycle);
+    return cycle;
+  }
+
+  public async saveIfVersionMatches(
+    cycle: EveningCycle,
+    expectedVersion: number,
+  ): Promise<boolean> {
+    const stored = await this.findByDateKey(cycle.dateKey);
+    if (stored === null || stored.version !== expectedVersion) return false;
+    this.#items.set(cycle.dateKey.toString(), cycle);
+    return true;
+  }
+
+  public get size(): number {
+    return this.#items.size;
+  }
+}
+
+class FailingEveningCycleRepository extends MemoryEveningCycleRepository {
+  public override async findByDateKey(): Promise<EveningCycle | null> {
+    throw new Error('IndexedDB unavailable');
   }
 }

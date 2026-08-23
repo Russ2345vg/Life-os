@@ -16,6 +16,7 @@ export interface DecisionRecord {
   readonly sacrifices?: string | null;
   readonly priority?: 'low' | 'normal' | 'high';
   readonly projectReference?: string | null;
+  readonly projectId?: string | null;
   readonly expectedResult: string | null;
   readonly actualResultSummary: string | null;
   readonly status: 'draft' | 'planned' | 'in_progress' | 'confirmed' | 'cancelled';

@@ -9,9 +9,15 @@ import { DayRecordMapper } from './mappers/DayRecordMapper';
 import { DecisionRecordMapper } from './mappers/DecisionRecordMapper';
 import { LifeActionRecordMapper } from './mappers/LifeActionRecordMapper';
 import { JournalEntryRecordMapper } from './mappers/JournalEntryRecordMapper';
+import { EveningCycleRecordMapper } from './mappers/EveningCycleRecordMapper';
+import { TomorrowPlanRecordMapper } from './mappers/TomorrowPlanRecordMapper';
+import { PreparationPlanRecordMapper } from './mappers/PreparationPlanRecordMapper';
 import type { DayRecord } from './records/DayRecord';
 import type { DecisionRecord } from './records/DecisionRecord';
 import type { LifeActionRecord } from './records/LifeActionRecord';
+import type { EveningCycleRecord } from './records/EveningCycleRecord';
+import type { TomorrowPlanRecord } from './records/TomorrowPlanRecord';
+import type { PreparationPlanRecord } from './records/PreparationPlanRecord';
 
 export class IndexedDbDayCompletionUnitOfWork implements DayCompletionUnitOfWork {
   readonly #indexedDb: LifeOsIndexedDb;
@@ -31,6 +37,9 @@ export class IndexedDbDayCompletionUnitOfWork implements DayCompletionUnitOfWork
           LIFE_OS_STORE.lifeActions,
           LIFE_OS_STORE.decisions,
           LIFE_OS_STORE.journal,
+          LIFE_OS_STORE.eveningCycles,
+          LIFE_OS_STORE.tomorrowPlans,
+          LIFE_OS_STORE.preparationPlans,
         ],
         'readwrite',
       );
@@ -45,6 +54,9 @@ export class IndexedDbDayCompletionUnitOfWork implements DayCompletionUnitOfWork
       const actionStore = transaction.objectStore(LIFE_OS_STORE.lifeActions);
       const decisionStore = transaction.objectStore(LIFE_OS_STORE.decisions);
       const journalStore = transaction.objectStore(LIFE_OS_STORE.journal);
+      const eveningCycleStore = transaction.objectStore(LIFE_OS_STORE.eveningCycles);
+      const tomorrowPlanStore = transaction.objectStore(LIFE_OS_STORE.tomorrowPlans);
+      const preparationPlanStore = transaction.objectStore(LIFE_OS_STORE.preparationPlans);
       const dayPromise = observeRequest<DayRecord | undefined>(
         dayStore.get(input.day.id.toString()),
       );
@@ -56,19 +68,65 @@ export class IndexedDbDayCompletionUnitOfWork implements DayCompletionUnitOfWork
       const tomorrowDecisionsPromise = observeRequest<DecisionRecord[]>(
         decisionStore.index('byPlannedDate').getAll(input.tomorrowDate.toString()),
       );
-      const [storedDay, storedActions, storedTomorrowDecisions] = await Promise.all([
+      const storedEveningCyclePromise = observeRequest<EveningCycleRecord | undefined>(
+        eveningCycleStore.get(input.eveningCycle.id.toString()),
+      );
+      const storedTomorrowPlanPromise =
+        input.tomorrowPlan === undefined
+          ? Promise.resolve(undefined)
+          : observeRequest<TomorrowPlanRecord | undefined>(
+              tomorrowPlanStore.get(input.tomorrowPlan.id.toString()),
+            );
+      const storedPreparationPlanPromise =
+        input.preparationPlan === undefined
+          ? Promise.resolve(undefined)
+          : observeRequest<PreparationPlanRecord | undefined>(
+              preparationPlanStore.get(input.preparationPlan.id.toString()),
+            );
+      const [
+        storedDay,
+        storedActions,
+        storedTomorrowDecisions,
+        storedEveningCycle,
+        storedTomorrowPlan,
+        storedPreparationPlan,
+      ] = await Promise.all([
         dayPromise,
         Promise.all(actionPromises),
         tomorrowDecisionsPromise,
+        storedEveningCyclePromise,
+        storedTomorrowPlanPromise,
+        storedPreparationPlanPromise,
       ]);
 
       validateStoredDay(storedDay, input);
       validateStoredActions(storedActions, input);
       validateTomorrowDecisionLimit(storedTomorrowDecisions, input);
+      validateStoredEveningCycle(storedEveningCycle, input);
+      validateStoredTomorrowPlan(storedTomorrowPlan, input);
+      validateStoredPreparationPlan(storedPreparationPlan, input);
 
       const writes: Promise<unknown>[] = [
         observeRequest(dayStore.put(DayRecordMapper.toRecord(input.day))),
+        observeRequest(
+          eveningCycleStore.put(EveningCycleRecordMapper.toRecord(input.eveningCycle)),
+        ),
       ];
+
+      if (input.tomorrowPlan !== undefined) {
+        writes.push(
+          observeRequest(
+            tomorrowPlanStore.put(TomorrowPlanRecordMapper.toRecord(input.tomorrowPlan)),
+          ),
+        );
+      }
+      if (input.preparationPlan !== undefined) {
+        writes.push(
+          observeRequest(
+            preparationPlanStore.put(PreparationPlanRecordMapper.toRecord(input.preparationPlan)),
+          ),
+        );
+      }
 
       for (const change of input.lifeActions) {
         writes.push(
@@ -96,6 +154,65 @@ export class IndexedDbDayCompletionUnitOfWork implements DayCompletionUnitOfWork
 
       throw persistenceOperationFailed(error);
     }
+  }
+}
+
+function validateStoredTomorrowPlan(
+  stored: TomorrowPlanRecord | undefined,
+  input: CommitDayCompletionInput,
+): void {
+  if (input.tomorrowPlan === undefined) return;
+  if (
+    input.expectedTomorrowPlanVersion === undefined ||
+    stored === undefined ||
+    stored.version !== input.expectedTomorrowPlanVersion ||
+    stored.cycleId !== input.eveningCycle.id.toString() ||
+    stored.sourceDayId !== input.day.id.toString() ||
+    stored.status !== 'COMPLETED'
+  ) {
+    throw new DomainError(
+      'tomorrow_plan.completion_conflict',
+      'План завтра изменился. Обновите завершение дня и повторите операцию.',
+    );
+  }
+}
+
+function validateStoredPreparationPlan(
+  stored: PreparationPlanRecord | undefined,
+  input: CommitDayCompletionInput,
+): void {
+  if (input.preparationPlan === undefined) return;
+  if (
+    input.expectedPreparationPlanVersion === undefined ||
+    input.tomorrowPlan === undefined ||
+    stored === undefined ||
+    stored.version !== input.expectedPreparationPlanVersion ||
+    stored.cycleId !== input.eveningCycle.id.toString() ||
+    stored.tomorrowPlanId !== input.tomorrowPlan.id.toString() ||
+    stored.status !== 'COMPLETED'
+  ) {
+    throw new DomainError(
+      'preparation.completion_conflict',
+      'План подготовки изменился. Обновите завершение дня и повторите операцию.',
+    );
+  }
+}
+
+function validateStoredEveningCycle(
+  stored: EveningCycleRecord | undefined,
+  input: CommitDayCompletionInput,
+): void {
+  if (
+    stored === undefined ||
+    stored.version !== input.expectedEveningCycleVersion ||
+    stored.dayId !== input.day.id.toString() ||
+    stored.dateKey !== input.day.date.toString() ||
+    stored.state === 'COMPLETED'
+  ) {
+    throw new DomainError(
+      'evening_cycle.completion_conflict',
+      'Состояние вечернего цикла изменилось. Обновите данные и повторите операцию.',
+    );
   }
 }
 

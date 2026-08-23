@@ -8,9 +8,17 @@ import {
   Decision,
   DecisionTitle,
   EntityId,
+  EveningCycle,
   ExpectedResult,
   LIFE_ACTION_STATUS,
   SESSION_COMPLETION_KIND,
+  REFLECTION_DAY_SIGNAL,
+  REFLECTION_QUESTION_KIND,
+  REFLECTION_QUESTION_TYPE,
+  ReflectionQuestion,
+  ReflectionResult,
+  PreparationPlan,
+  TomorrowPlan,
   type LifeAction,
 } from '../../domain';
 import {
@@ -23,6 +31,9 @@ import { IndexedDbDayCompletionUnitOfWork } from './IndexedDbDayCompletionUnitOf
 import { IndexedDbDayRepository } from './IndexedDbDayRepository';
 import { IndexedDbDecisionRepository } from './IndexedDbDecisionRepository';
 import { IndexedDbLifeActionRepository } from './IndexedDbLifeActionRepository';
+import { IndexedDbEveningCycleRepository } from './IndexedDbEveningCycleRepository';
+import { IndexedDbPreparationPlanRepository } from './IndexedDbPreparationPlanRepository';
+import { IndexedDbTomorrowPlanRepository } from './IndexedDbTomorrowPlanRepository';
 import { LifeOsIndexedDb } from './indexed-db/LifeOsIndexedDb';
 import { DayRecordMapper } from './mappers/DayRecordMapper';
 import { LifeActionRecordMapper } from './mappers/LifeActionRecordMapper';
@@ -36,6 +47,7 @@ describe('IndexedDbDayCompletionUnitOfWork', () => {
     const factory = new IDBFactory();
     const context = createContext(factory);
     const day = createOpenDay();
+    const cycle = createStartedEveningCycle(day);
     const movedSource = createReadyLifeAction('move', TODAY);
     const cancelledSource = createReadyLifeAction('cancel', TODAY);
     const completedHistory = completeLifeAction(
@@ -48,6 +60,7 @@ describe('IndexedDbDayCompletionUnitOfWork', () => {
       context.lifeActionRepository.save(cancelledSource),
       context.lifeActionRepository.save(completedHistory),
       context.sessionRepository.save(historySession),
+      context.eveningCycleRepository.createIfAbsent(cycle),
     ]);
     const historyActionBefore = LifeActionRecordMapper.toRecord(completedHistory);
     const historySessionVersion = historySession.version;
@@ -63,8 +76,11 @@ describe('IndexedDbDayCompletionUnitOfWork', () => {
     );
     completedDay.complete(NOW, id('day-completed'), 'Вечерний итог');
     const tomorrowDecision = createTomorrowDecision('tomorrow-new', 1);
+    const completedCycle = completeEveningCycle(cycle);
 
     await context.unitOfWork.commit({
+      eveningCycle: completedCycle,
+      expectedEveningCycleVersion: cycle.version,
       day: completedDay,
       expectedDayVersion: day.version,
       lifeActions: [
@@ -77,14 +93,21 @@ describe('IndexedDbDayCompletionUnitOfWork', () => {
     context.database.close();
 
     const restored = createContext(factory);
-    const [restoredDay, restoredMoved, restoredCancelled, restoredHistory, restoredTomorrow] =
-      await Promise.all([
-        restored.dayRepository.findByDate(TODAY),
-        restored.lifeActionRepository.findById(moved.id),
-        restored.lifeActionRepository.findById(cancelled.id),
-        restored.lifeActionRepository.findById(completedHistory.id),
-        restored.decisionRepository.findByDate(TOMORROW),
-      ]);
+    const [
+      restoredDay,
+      restoredMoved,
+      restoredCancelled,
+      restoredHistory,
+      restoredTomorrow,
+      restoredCycle,
+    ] = await Promise.all([
+      restored.dayRepository.findByDate(TODAY),
+      restored.lifeActionRepository.findById(moved.id),
+      restored.lifeActionRepository.findById(cancelled.id),
+      restored.lifeActionRepository.findById(completedHistory.id),
+      restored.decisionRepository.findByDate(TOMORROW),
+      restored.eveningCycleRepository.findByDateKey(TODAY),
+    ]);
     const restoredHistorySessions = await restored.sessionRepository.findByLifeActionId(
       completedHistory.id,
     );
@@ -97,6 +120,7 @@ describe('IndexedDbDayCompletionUnitOfWork', () => {
     expect(restoredTomorrow.map((decision) => decision.id.toString())).toEqual([
       tomorrowDecision.id.toString(),
     ]);
+    expect(restoredCycle?.state).toBe('COMPLETED');
     expect(LifeActionRecordMapper.toRecord(restoredHistory!)).toEqual(historyActionBefore);
     expect(restoredHistorySessions).toHaveLength(1);
     expect(restoredHistorySessions[0]?.version).toBe(historySessionVersion);
@@ -107,21 +131,26 @@ describe('IndexedDbDayCompletionUnitOfWork', () => {
     const factory = new IDBFactory();
     const context = createContext(factory);
     const day = createOpenDay();
+    const cycle = createStartedEveningCycle(day);
     const action = createReadyLifeAction('rollback', TODAY);
     const existing = createTomorrowDecision('duplicate-id', 1);
     await Promise.all([
       context.dayRepository.save(day),
       context.lifeActionRepository.save(action),
       context.decisionRepository.save(existing),
+      context.eveningCycleRepository.createIfAbsent(cycle),
     ]);
     const changedDay = DayRecordMapper.fromRecord(DayRecordMapper.toRecord(day));
     const changedAction = cloneLifeAction(action);
     changedDay.complete(NOW, id('complete-event'), 'Итог');
     changedAction.reschedule(TOMORROW, NOW, id('reschedule-event'));
     const duplicate = createTomorrowDecision('duplicate-id', 2);
+    const completedCycle = completeEveningCycle(cycle);
 
     await expect(
       context.unitOfWork.commit({
+        eveningCycle: completedCycle,
+        expectedEveningCycleVersion: cycle.version,
         day: changedDay,
         expectedDayVersion: day.version,
         lifeActions: [{ lifeAction: changedAction, expectedVersion: action.version }],
@@ -130,15 +159,17 @@ describe('IndexedDbDayCompletionUnitOfWork', () => {
       }),
     ).rejects.toMatchObject({ code: 'persistence.constraint_violation' });
 
-    const [restoredDay, restoredAction, tomorrowDecisions] = await Promise.all([
+    const [restoredDay, restoredAction, tomorrowDecisions, restoredCycle] = await Promise.all([
       context.dayRepository.findByDate(TODAY),
       context.lifeActionRepository.findById(action.id),
       context.decisionRepository.findByDate(TOMORROW),
+      context.eveningCycleRepository.findByDateKey(TODAY),
     ]);
     expect(restoredDay?.status).toBe('open');
     expect(restoredDay?.summary).toBeNull();
     expect(restoredAction?.plannedDate?.equals(TODAY)).toBe(true);
     expect(tomorrowDecisions).toHaveLength(1);
+    expect(restoredCycle?.state).toBe('WINDING_DOWN');
     context.database.close();
   });
 
@@ -146,12 +177,18 @@ describe('IndexedDbDayCompletionUnitOfWork', () => {
     const factory = new IDBFactory();
     const context = createContext(factory);
     const day = createOpenDay();
-    await context.dayRepository.save(day);
+    const cycle = createStartedEveningCycle(day);
+    await Promise.all([
+      context.dayRepository.save(day),
+      context.eveningCycleRepository.createIfAbsent(cycle),
+    ]);
     const changedDay = DayRecordMapper.fromRecord(DayRecordMapper.toRecord(day));
     changedDay.complete(NOW, id('complete-event'), 'Итог');
 
     await expect(
       context.unitOfWork.commit({
+        eveningCycle: completeEveningCycle(cycle),
+        expectedEveningCycleVersion: cycle.version,
         day: changedDay,
         expectedDayVersion: day.version + 1,
         lifeActions: [],
@@ -169,7 +206,11 @@ describe('IndexedDbDayCompletionUnitOfWork', () => {
     const factory = new IDBFactory();
     const context = createContext(factory);
     const day = createOpenDay();
-    await context.dayRepository.save(day);
+    const cycle = createStartedEveningCycle(day);
+    await Promise.all([
+      context.dayRepository.save(day),
+      context.eveningCycleRepository.createIfAbsent(cycle),
+    ]);
     await Promise.all([
       context.decisionRepository.save(createTomorrowDecision('main-1', 1)),
       context.decisionRepository.save(createTomorrowDecision('main-2', 2)),
@@ -180,6 +221,8 @@ describe('IndexedDbDayCompletionUnitOfWork', () => {
 
     await expect(
       context.unitOfWork.commit({
+        eveningCycle: completeEveningCycle(cycle),
+        expectedEveningCycleVersion: cycle.version,
         day: changedDay,
         expectedDayVersion: day.version,
         lifeActions: [],
@@ -188,6 +231,43 @@ describe('IndexedDbDayCompletionUnitOfWork', () => {
       }),
     ).rejects.toMatchObject({ code: 'decision.main_limit_reached' });
     expect((await context.dayRepository.findByDate(TODAY))?.status).toBe('open');
+    context.database.close();
+  });
+
+  it('откатывает SHUTDOWN целиком при конфликте связанного TomorrowPlan', async () => {
+    const factory = new IDBFactory();
+    const context = createContext(factory);
+    const day = createOpenDay();
+    const cycle = createStartedEveningCycle(day);
+    const tomorrowPlan = createCompletedTomorrowPlan(cycle, day);
+    const preparationPlan = createCompletedPreparationPlan(cycle, tomorrowPlan);
+    await Promise.all([
+      context.dayRepository.save(day),
+      context.eveningCycleRepository.createIfAbsent(cycle),
+      context.tomorrowPlanRepository.createIfAbsent(tomorrowPlan),
+      context.preparationPlanRepository.createIfAbsent(preparationPlan),
+    ]);
+    const changedDay = DayRecordMapper.fromRecord(DayRecordMapper.toRecord(day));
+    changedDay.complete(NOW, id('shutdown-completed'), 'Итог');
+
+    await expect(
+      context.unitOfWork.commit({
+        eveningCycle: completeEveningCycle(cycle),
+        expectedEveningCycleVersion: cycle.version,
+        day: changedDay,
+        expectedDayVersion: day.version,
+        lifeActions: [],
+        tomorrowDate: TOMORROW,
+        newTomorrowDecisions: [],
+        tomorrowPlan,
+        expectedTomorrowPlanVersion: tomorrowPlan.version - 1,
+        preparationPlan,
+        expectedPreparationPlanVersion: preparationPlan.version,
+      }),
+    ).rejects.toMatchObject({ code: 'tomorrow_plan.completion_conflict' });
+
+    expect((await context.dayRepository.findByDate(TODAY))?.status).toBe('open');
+    expect((await context.eveningCycleRepository.findByDateKey(TODAY))?.state).toBe('WINDING_DOWN');
     context.database.close();
   });
 });
@@ -200,8 +280,94 @@ function createContext(factory: IDBFactory) {
     decisionRepository: new IndexedDbDecisionRepository(database),
     lifeActionRepository: new IndexedDbLifeActionRepository(database),
     sessionRepository: new IndexedDbActionSessionRepository(database),
+    eveningCycleRepository: new IndexedDbEveningCycleRepository(database),
+    tomorrowPlanRepository: new IndexedDbTomorrowPlanRepository(database),
+    preparationPlanRepository: new IndexedDbPreparationPlanRepository(database),
     unitOfWork: new IndexedDbDayCompletionUnitOfWork(database),
   };
+}
+
+function createCompletedTomorrowPlan(cycle: EveningCycle, day: Day): TomorrowPlan {
+  const plan = TomorrowPlan.create({
+    id: id('tomorrow-plan'),
+    cycleId: cycle.id,
+    sourceDayId: day.id,
+    targetDayId: id('target-day'),
+    targetDateKey: TOMORROW,
+    createdAt: NOW,
+  });
+  plan.assignPrimaryDecision(id('tomorrow-primary'), NOW);
+  plan.setOutcomes('Минимум', null, null, NOW);
+  plan.assignFirstAction(id('tomorrow-first-action'), NOW);
+  plan.complete(NOW);
+  return plan;
+}
+
+function createCompletedPreparationPlan(
+  cycle: EveningCycle,
+  tomorrowPlan: TomorrowPlan,
+): PreparationPlan {
+  const plan = PreparationPlan.create({
+    id: id('preparation-plan'),
+    cycleId: cycle.id,
+    tomorrowPlanId: tomorrowPlan.id,
+    targetDayId: tomorrowPlan.targetDayId,
+    sourceVersion: tomorrowPlan.version,
+    generationSignature: 'ready',
+    createdAt: NOW,
+  });
+  plan.complete(NOW);
+  return plan;
+}
+
+function createStartedEveningCycle(day: Day): EveningCycle {
+  const cycle = EveningCycle.create({
+    id: id('evening-cycle'),
+    dayId: day.id,
+    dateKey: day.date,
+    occurredAt: NOW,
+  });
+  cycle.start(NOW);
+  return cycle;
+}
+
+function completeEveningCycle(source: EveningCycle): EveningCycle {
+  const cycle = EveningCycle.rehydrate({
+    id: source.id,
+    dayId: source.dayId,
+    dateKey: source.dateKey,
+    state: source.state,
+    mode: source.mode,
+    startedAt: source.startedAt,
+    updatedAt: source.updatedAt,
+    completedAt: source.completedAt,
+    decisionIds: source.decisionIds,
+    lifeActionIds: source.lifeActionIds,
+    version: source.version,
+  });
+  cycle.beginResolving(NOW);
+  cycle.completeResolving(NOW);
+  finishReflection(cycle);
+  cycle.completeReflection(NOW);
+  cycle.completeTomorrowPlanning(NOW);
+  cycle.completePreparation(NOW);
+  cycle.complete(NOW);
+  return cycle;
+}
+
+function finishReflection(cycle: EveningCycle): void {
+  const question = ReflectionQuestion.create({
+    id: 'GENERAL_LEARNING:test',
+    kind: REFLECTION_QUESTION_KIND.generalLearning,
+    signal: REFLECTION_DAY_SIGNAL.learning,
+    type: REFLECTION_QUESTION_TYPE.optionalText,
+    prompt: 'Какой вывод стоит сохранить?',
+    context: 'Тестовый день завершён.',
+    required: false,
+    sourceEntityIds: [],
+  });
+  cycle.initializeReflection([question], NOW);
+  cycle.recordReflectionResult(ReflectionResult.skip(cycle.id, question, NOW), null, NOW);
 }
 
 function createOpenDay(): Day {

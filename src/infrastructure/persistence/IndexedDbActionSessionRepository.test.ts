@@ -62,6 +62,18 @@ describe('IndexedDbActionSessionRepository', () => {
     database.close();
   });
 
+  it('пакетно читает сессии нескольких LifeAction одним запросом', async () => {
+    const { database, repository } = createContext();
+    await repository.save(createRunningSession('first', 'action-1'));
+    await repository.save(createCompletedSession('second', 'action-2'));
+    await repository.save(createRunningSession('another', 'action-3'));
+
+    const sessions = await repository.findByLifeActionIds([id('action-1'), id('action-2')]);
+
+    expect(sessions.map((session) => session.id.toString()).sort()).toEqual(['first', 'second']);
+    database.close();
+  });
+
   it('находит running-сессию через byStatus как незавершённую', async () => {
     const { database, repository } = createContext();
     const running = createRunningSession('running', 'action-1');

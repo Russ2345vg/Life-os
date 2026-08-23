@@ -14,7 +14,9 @@ import { MainDecisionLimitPolicy } from '../decision/MainDecisionLimitPolicy';
 import type { Clock } from '../ports/Clock';
 import type { DecisionRepository } from '../ports/DecisionRepository';
 import type { IdGenerator } from '../ports/IdGenerator';
+import type { ProjectRepository } from '../ports/ProjectRepository';
 import { domainFailure } from './decisionCommandResult';
+import { resolveDecisionProject } from './decisionProjectSupport';
 
 export interface UpdateDecisionDetailsInput {
   readonly decisionId: EntityId;
@@ -27,6 +29,7 @@ export interface UpdateDecisionDetailsInput {
   readonly sacrifices?: string;
   readonly priority?: DecisionPriority;
   readonly projectReference?: string;
+  readonly projectId?: EntityId | null;
   readonly kind?: DecisionKind;
 }
 
@@ -34,15 +37,18 @@ export class UpdateDecisionDetails {
   readonly #decisionRepository: DecisionRepository;
   readonly #clock: Clock;
   readonly #idGenerator: IdGenerator;
+  readonly #projectRepository: ProjectRepository | null;
 
   public constructor(
     decisionRepository: DecisionRepository,
     clock: Clock,
     idGenerator: IdGenerator,
+    projectRepository?: ProjectRepository,
   ) {
     this.#decisionRepository = decisionRepository;
     this.#clock = clock;
     this.#idGenerator = idGenerator;
+    this.#projectRepository = projectRepository ?? null;
   }
 
   public async execute(input: UpdateDecisionDetailsInput): Promise<Result<Decision, DomainError>> {
@@ -133,7 +139,8 @@ export class UpdateDecisionDetails {
       }
 
       const reason = normalizeOptionalText(input.reason, storedDecision.reason);
-      const sphereId = input.sphereId === undefined ? storedDecision.sphereId : input.sphereId;
+      const requestedSphereId =
+        input.sphereId === undefined ? storedDecision.sphereId : input.sphereId;
       const price = normalizeOptionalText(input.price, storedDecision.price);
       const sacrifices = normalizeOptionalText(input.sacrifices, storedDecision.sacrifices);
       const priority = input.priority ?? storedDecision.priority;
@@ -141,6 +148,17 @@ export class UpdateDecisionDetails {
         input.projectReference,
         storedDecision.projectReference,
       );
+      const requestedProjectId =
+        input.projectId === undefined ? storedDecision.projectId : input.projectId;
+      const changingProject = !sameOptionalEntityId(storedDecision.projectId, requestedProjectId);
+      const project = await resolveDecisionProject(
+        this.#projectRepository,
+        requestedProjectId,
+        requestedSphereId,
+        !changingProject,
+      );
+      const sphereId = project.sphereId;
+      const projectId = project.projectId;
 
       if (
         isSameDecisionDetails(storedDecision, {
@@ -152,6 +170,7 @@ export class UpdateDecisionDetails {
           sacrifices,
           priority,
           projectReference,
+          projectId,
           kind,
           order,
         })
@@ -169,6 +188,7 @@ export class UpdateDecisionDetails {
         sacrifices,
         priority,
         projectReference,
+        projectId,
         kind,
         order,
         occurredAt: this.#clock.now(),
@@ -192,6 +212,7 @@ interface ComparableDecisionDetails {
   readonly sacrifices: string | null;
   readonly priority: DecisionPriority;
   readonly projectReference: string | null;
+  readonly projectId: EntityId | null;
   readonly kind: DecisionKind;
   readonly order: number | null;
 }
@@ -211,6 +232,7 @@ function isSameDecisionDetails(decision: Decision, details: ComparableDecisionDe
     decision.sacrifices === details.sacrifices &&
     decision.priority === details.priority &&
     decision.projectReference === details.projectReference &&
+    sameOptionalEntityId(decision.projectId, details.projectId) &&
     decision.kind === details.kind &&
     decision.order === details.order
   );
@@ -266,6 +288,7 @@ function cloneDecision(decision: Decision): Decision {
     sacrifices: decision.sacrifices,
     priority: decision.priority,
     projectReference: decision.projectReference,
+    projectId: decision.projectId,
     expectedResult: decision.expectedResult,
     actualResultSummary: decision.actualResultSummary,
     status: decision.status,
@@ -284,6 +307,7 @@ function cloneDecision(decision: Decision): Decision {
     restoredFromTrashAt: decision.restoredFromTrashAt,
     evidenceIds: decision.evidenceIds,
     rescheduleCount: decision.rescheduleCount,
+    rescheduleHistory: decision.rescheduleHistory,
     version: decision.version,
   });
 }

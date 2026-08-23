@@ -28,17 +28,17 @@ interface NavigationItem {
 
 const DESKTOP_NAVIGATION: readonly NavigationItem[] = [
   { section: APP_SECTION.today, icon: 'today' },
-  { section: APP_SECTION.decisions, icon: 'decisions' },
-  { section: APP_SECTION.actions, icon: 'actions' },
+  { section: APP_SECTION.management, icon: 'management' },
   { section: APP_SECTION.routine, icon: 'routine' },
   { section: APP_SECTION.spheres, icon: 'spheres' },
   { section: APP_SECTION.history, icon: 'history' },
+  { section: APP_SECTION.eveningAnalytics, icon: 'statistics' },
   { section: APP_SECTION.more, icon: 'more' },
 ];
 
 const MOBILE_NAVIGATION: readonly NavigationItem[] = [
   { section: APP_SECTION.today, icon: 'today' },
-  { section: APP_SECTION.actions, icon: 'actions' },
+  { section: APP_SECTION.management, icon: 'management' },
   { section: APP_SECTION.history, icon: 'history' },
   { section: APP_SECTION.more, icon: 'more' },
 ];
@@ -175,7 +175,7 @@ export function ApplicationShellView({
         />
         <NavigationButton
           item={MOBILE_NAVIGATION[1]!}
-          active={activeSection === APP_SECTION.actions}
+          active={activeSection === APP_SECTION.management}
           onOpenSection={onOpenSection}
           mobile
         />
@@ -198,7 +198,9 @@ export function ApplicationShellView({
         />
         <NavigationButton
           item={MOBILE_NAVIGATION[3]!}
-          active={activeSection === APP_SECTION.more}
+          active={
+            activeSection === APP_SECTION.more || activeSection === APP_SECTION.eveningAnalytics
+          }
           onOpenSection={onOpenSection}
           mobile
         />

@@ -2,7 +2,9 @@ import type { SVGProps } from 'react';
 
 export type AppIconName =
   | 'today'
+  | 'management'
   | 'decisions'
+  | 'completed'
   | 'actions'
   | 'history'
   | 'more'
@@ -43,6 +45,13 @@ export function AppIcon({ name, ...props }: AppIconProps) {
 
 function iconPath(name: AppIconName) {
   switch (name) {
+    case 'management':
+      return (
+        <>
+          <path d="M4 20V9M10 20V4M16 20v-7M22 20H2" />
+          <path d="m3 6 6-4 6 7 6-5" />
+        </>
+      );
     case 'today':
       return (
         <>
@@ -58,6 +67,8 @@ function iconPath(name: AppIconName) {
           <path d="m3.5 5 1.4 1.4L7.5 3.8M3.5 12l1.4 1.4 2.6-2.6M3.5 19l1.4 1.4 2.6-2.6" />
         </>
       );
+    case 'completed':
+      return <path d="m7 12.5 3.2 3.2L17.5 8.5" />;
     case 'actions':
       return (
         <>
