@@ -1,0 +1,29 @@
+#:schema https://developers.openai.com/codex/config-schema.json
+
+model = "gpt-5.6-sol"
+model_reasoning_effort = "high"
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+
+[sandbox_workspace_write]
+network_access = false
+
+[agents.lifeos-architect]
+description = "Trace LifeOS architecture, ownership, and minimal safe change boundaries."
+config_file = "agents/lifeos-architect.toml"
+
+[agents.ui-auditor]
+description = "Audit LifeOS UI fidelity, responsive behavior, accessibility, and browser evidence."
+config_file = "agents/ui-auditor.toml"
+
+[agents.runtime-debugger]
+description = "Reproduce and diagnose LifeOS runtime, browser, persistence, and test-process failures."
+config_file = "agents/runtime-debugger.toml"
+
+[agents.test-reviewer]
+description = "Review regression coverage, flakiness risks, and quality-gate evidence."
+config_file = "agents/test-reviewer.toml"
+
+[agents.final-reviewer]
+description = "Independently review scope, safety, verification, and commit readiness."
+config_file = "agents/final-reviewer.toml"

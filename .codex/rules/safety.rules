@@ -1,0 +1,102 @@
+# Project-local guardrails for commands that request execution outside the sandbox.
+
+prefix_rule(
+    pattern = ["git", "reset", "--hard"],
+    decision = "forbidden",
+    justification = "Do not discard the worktree; use a targeted, user-approved recovery instead.",
+    match = ["git reset --hard", "git reset --hard HEAD~1"],
+    not_match = ["git reset --soft HEAD~1"],
+)
+
+prefix_rule(
+    pattern = ["git", "clean", ["-f", "--force", "-fd", "-df", "-fx", "-xf", "-fX", "-Xf", "-fdx", "-dfx", "-xfd", "-xdf"]],
+    decision = "forbidden",
+    justification = "Do not delete untracked files; classify them and ask the user for a recoverable action.",
+    match = ["git clean -f", "git clean -fd", "git clean --force"],
+    not_match = ["git clean -n", "git clean --dry-run"],
+)
+
+prefix_rule(
+    pattern = ["git", "clean", ["-d", "-x", "-X"], ["-f", "--force"]],
+    decision = "forbidden",
+    justification = "Do not delete untracked files; classify them and ask the user for a recoverable action.",
+    match = ["git clean -d -f", "git clean -x --force"],
+    not_match = ["git clean -d -n", "git clean -x --dry-run"],
+)
+
+prefix_rule(
+    pattern = ["git", "checkout", "--"],
+    decision = "forbidden",
+    justification = "Do not discard file changes; inspect the diff and use a targeted, user-approved alternative.",
+    match = ["git checkout -- package.json"],
+    not_match = ["git checkout feature-branch"],
+)
+
+prefix_rule(
+    pattern = ["git", ["checkout", "switch"], ["-f", "--force"]],
+    decision = "forbidden",
+    justification = "Do not force a branch transition that can discard working-tree changes.",
+    match = ["git checkout -f main", "git switch --force feature"],
+    not_match = ["git checkout feature-branch", "git switch feature-branch"],
+)
+
+prefix_rule(
+    pattern = ["git", "restore"],
+    decision = "prompt",
+    justification = "Restoring files or the index requires review of the exact targets and user approval.",
+    match = ["git restore package.json", "git restore --staged package.json"],
+    not_match = ["git status --short", "git diff --check"],
+)
+
+prefix_rule(
+    pattern = ["git", "branch", "-D"],
+    decision = "forbidden",
+    justification = "Do not force-delete a branch; preserve recovery paths and request an explicit safe plan.",
+    match = ["git branch -D feature"],
+    not_match = ["git branch --show-current", "git branch feature"],
+)
+
+prefix_rule(
+    pattern = ["git", ["commit", "push", "merge", "rebase", "cherry-pick", "revert"]],
+    decision = "prompt",
+    justification = "Repository history and remote state changes require explicit user approval.",
+    match = [
+        "git commit -m checkpoint",
+        "git push origin main",
+        "git merge feature",
+        "git rebase main",
+        "git cherry-pick abc123",
+        "git revert abc123",
+    ],
+    not_match = ["git status --short", "git diff --check"],
+)
+
+prefix_rule(
+    pattern = ["npm", ["install", "uninstall", "update"]],
+    decision = "prompt",
+    justification = "Dependency and lockfile changes require an explicit task and review.",
+    match = ["npm install package-name", "npm uninstall package-name", "npm update"],
+    not_match = ["npm run test", "npm ci"],
+)
+
+prefix_rule(
+    pattern = ["npm", "publish"],
+    decision = "forbidden",
+    justification = "Publishing is outside the local LifeOS development workflow.",
+    match = ["npm publish", "npm publish --access public"],
+)
+
+prefix_rule(
+    pattern = ["Remove-Item"],
+    decision = "prompt",
+    justification = "Filesystem deletion requires review of the exact resolved target.",
+    match = ["Remove-Item file.tmp", "Remove-Item -Recurse generated"],
+)
+
+prefix_rule(
+    pattern = ["rm", ["-rf", "-fr"]],
+    decision = "forbidden",
+    justification = "Avoid broad recursive deletion; resolve exact targets and use a recoverable operation.",
+    match = ["rm -rf generated", "rm -fr generated"],
+    not_match = ["rm generated/file.tmp"],
+)
