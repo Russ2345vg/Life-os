@@ -22,6 +22,7 @@ import {
   readNullableIsoDate,
   readNullableString,
   readNumber,
+  readOptionalNullableEntityId,
   readString,
   type UnknownRecord,
 } from './RecordMapperSupport';
@@ -31,6 +32,7 @@ export class GoalRecordMapper {
     return {
       schemaVersion: 1,
       id: goal.id.toString(),
+      directionId: goal.directionId?.toString() ?? null,
       title: goal.title,
       description: goal.description,
       whyImportant: goal.whyImportant,
@@ -64,6 +66,7 @@ export class GoalRecordMapper {
 
     return Goal.rehydrate({
       id: readEntityId(record, 'id'),
+      directionId: readOptionalNullableEntityId(record, 'directionId'),
       title: readString(record, 'title'),
       description: readNullableString(record, 'description'),
       whyImportant: readNullableString(record, 'whyImportant'),

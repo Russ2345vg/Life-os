@@ -1,7 +1,7 @@
 import { DomainError } from '../../../shared/errors/DomainError';
 
 export const LIFE_OS_DATABASE_NAME = 'lifeos';
-export const LIFE_OS_DATABASE_VERSION = 16;
+export const LIFE_OS_DATABASE_VERSION = 17;
 
 export const LIFE_OS_STORE = {
   days: 'days',
@@ -98,6 +98,7 @@ export class LifeOsIndexedDb {
           if (oldVersion < 14) createVersionFourteenSchema(request.result);
           if (oldVersion < 15) createVersionFifteenSchema(request.result);
           if (oldVersion < 16) createVersionSixteenSchema(request.result);
+          if (oldVersion < 17) createVersionSeventeenSchema(request.transaction);
         } catch (error: unknown) {
           upgradeError = error;
           request.transaction?.abort();
@@ -138,6 +139,15 @@ export class LifeOsIndexedDb {
       });
     });
   }
+}
+
+function createVersionSeventeenSchema(transaction: IDBTransaction | null): void {
+  if (transaction === null) {
+    throw new Error('Транзакция обновления IndexedDB недоступна.');
+  }
+  transaction
+    .objectStore(LIFE_OS_STORE.goals)
+    .createIndex('byDirectionId', 'directionId', { unique: false });
 }
 
 function createVersionSixteenSchema(database: IDBDatabase): void {

@@ -1,5 +1,7 @@
 import {
+  type EntityId,
   Goal,
+  GOAL_STATUS,
   type GoalCoverImage,
   type GoalCreationStatus,
   type GoalHorizon,
@@ -10,11 +12,13 @@ import {
 import { DomainError } from '../../shared/errors/DomainError';
 import { failure, success, type Result } from '../../shared/result/Result';
 import type { Clock } from '../ports/Clock';
+import type { DirectionRepository } from '../ports/DirectionRepository';
 import type { GoalRepository } from '../ports/GoalRepository';
 import type { IdGenerator } from '../ports/IdGenerator';
-import { goalFailure } from './goalCommandSupport';
+import { goalFailure, validateGoalDirection } from './goalCommandSupport';
 
 export interface CreateGoalInput {
+  readonly directionId?: EntityId | null;
   readonly title: string;
   readonly description?: string | null;
   readonly whyImportant?: string | null;
@@ -32,19 +36,29 @@ export interface CreateGoalInput {
 export class CreateGoal {
   public constructor(
     readonly repository: GoalRepository,
+    readonly directionRepository: DirectionRepository,
     readonly clock: Clock,
     readonly idGenerator: IdGenerator,
   ) {}
 
   public async execute(input: CreateGoalInput): Promise<Result<Goal, DomainError>> {
+    const directionId = input.directionId ?? null;
+    const status = input.status ?? GOAL_STATUS.future;
+    const directionFailure = await validateGoalDirection(
+      this.directionRepository,
+      directionId,
+      status,
+    );
+    if (directionFailure !== null) return directionFailure;
     try {
       const goal = Goal.create({
         id: this.idGenerator.generate(),
+        directionId,
         title: input.title,
         ...(input.description === undefined ? {} : { description: input.description }),
         ...(input.whyImportant === undefined ? {} : { whyImportant: input.whyImportant }),
         ...(input.whyNow === undefined ? {} : { whyNow: input.whyNow }),
-        ...(input.status === undefined ? {} : { status: input.status }),
+        status,
         ...(input.stage === undefined ? {} : { stage: input.stage }),
         ...(input.intentionLevel === undefined ? {} : { intentionLevel: input.intentionLevel }),
         ...(input.horizon === undefined ? {} : { horizon: input.horizon }),

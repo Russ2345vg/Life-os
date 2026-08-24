@@ -31,6 +31,17 @@ export class IndexedDbGoalRepository implements GoalRepository {
     return values.map((value) => GoalRecordMapper.fromRecord(value));
   }
 
+  public async findByDirectionId(directionId: EntityId): Promise<readonly Goal[]> {
+    const database = await this.indexedDb.open();
+    const values = await executeIndexedDbRequest<unknown[]>(
+      database,
+      LIFE_OS_STORE.goals,
+      'readonly',
+      (store) => store.index('byDirectionId').getAll(directionId.toString()),
+    );
+    return values.map((value) => GoalRecordMapper.fromRecord(value));
+  }
+
   public async create(goal: Goal): Promise<boolean> {
     const database = await this.indexedDb.open();
     try {

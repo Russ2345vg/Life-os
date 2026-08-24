@@ -9,6 +9,7 @@ import {
   DECISION_PRIORITY,
   DECISION_STATUS,
   EntityId,
+  GOAL_STATUS,
   LIFE_ACTION_STATUS,
   SESSION_COMPLETION_KIND,
 } from '../../domain';
@@ -103,6 +104,35 @@ describe('createLifeOsApplication', () => {
       application.dayRepository.findByDate(application.currentDateProvider.getCurrentDate()),
     ).resolves.not.toBeNull();
 
+    application.close();
+  });
+
+  it('exposes a persistent Goal API integrated with existing Directions', async () => {
+    const application = await createLifeOsApplication({
+      database: new LifeOsIndexedDb(new IDBFactory()),
+      clock: new FakeClock(NOW),
+      currentDateProvider: new FakeCurrentDateProvider(TODAY),
+      idGenerator: new FakeIdGenerator('goal-composition'),
+    });
+    const direction = await application.createDirection.execute({ name: 'Развитие' });
+    if (!direction.ok) throw direction.error;
+
+    const created = await application.createGoal.execute({
+      title: 'Освоить новый навык',
+      status: GOAL_STATUS.active,
+      directionId: direction.value.id,
+    });
+
+    expect(created).toMatchObject({
+      ok: true,
+      value: { directionId: direction.value.id, status: GOAL_STATUS.active },
+    });
+    await expect(
+      application.getGoals.execute({
+        directionId: direction.value.id,
+        status: GOAL_STATUS.active,
+      }),
+    ).resolves.toMatchObject([{ title: 'Освоить новый навык' }]);
     application.close();
   });
 

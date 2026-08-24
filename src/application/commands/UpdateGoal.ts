@@ -8,19 +8,23 @@ import type {
   GoalProgress,
   GoalStage,
 } from '../../domain';
+import { GOAL_STATUS } from '../../domain';
 import { DomainError } from '../../shared/errors/DomainError';
 import { failure, success, type Result } from '../../shared/result/Result';
 import type { Clock } from '../ports/Clock';
+import type { DirectionRepository } from '../ports/DirectionRepository';
 import type { GoalRepository } from '../ports/GoalRepository';
 import {
   goalFailure,
   goalVersionConflict,
+  validateGoalDirection,
   validateGoalExpectedVersion,
 } from './goalCommandSupport';
 
 export interface UpdateGoalInput {
   readonly id: EntityId;
   readonly expectedVersion: number;
+  readonly directionId?: EntityId | null;
   readonly title: string;
   readonly description?: string | null;
   readonly whyImportant?: string | null;
@@ -38,6 +42,7 @@ export interface UpdateGoalInput {
 export class UpdateGoal {
   public constructor(
     readonly repository: GoalRepository,
+    readonly directionRepository: DirectionRepository,
     readonly clock: Clock,
   ) {}
 
@@ -47,10 +52,25 @@ export class UpdateGoal {
     const stored = await this.repository.findById(input.id);
     if (stored === null) return failure(new DomainError('goal.not_found', 'Цель не найдена.'));
     if (stored.version !== input.expectedVersion) return goalVersionConflict();
+    const directionId = input.directionId === undefined ? stored.directionId : input.directionId;
+    const status = input.status ?? stored.status;
+    const directionUnchanged =
+      stored.directionId === null
+        ? directionId === null
+        : directionId !== null && stored.directionId.equals(directionId);
+    const activatesGoal = stored.status !== GOAL_STATUS.active && status === GOAL_STATUS.active;
+    const directionFailure = await validateGoalDirection(
+      this.directionRepository,
+      directionId,
+      status,
+      directionUnchanged && !activatesGoal,
+    );
+    if (directionFailure !== null) return directionFailure;
     try {
       const updated = stored.update(
         {
           title: input.title,
+          directionId,
           ...(input.description === undefined ? {} : { description: input.description }),
           ...(input.whyImportant === undefined ? {} : { whyImportant: input.whyImportant }),
           ...(input.whyNow === undefined ? {} : { whyNow: input.whyNow }),

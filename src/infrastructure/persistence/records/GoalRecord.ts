@@ -18,6 +18,7 @@ export type GoalProgressRecord =
 export interface GoalRecord {
   readonly schemaVersion: 1;
   readonly id: string;
+  readonly directionId: string | null;
   readonly title: string;
   readonly description: string | null;
   readonly whyImportant: string | null;

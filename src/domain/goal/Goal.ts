@@ -25,6 +25,7 @@ export type GoalEditableStatus = Exclude<GoalStatus, typeof GOAL_STATUS.archived
 
 export interface GoalCreationData {
   readonly id: EntityId;
+  readonly directionId?: EntityId | null;
   readonly title: string;
   readonly description?: string | null;
   readonly whyImportant?: string | null;
@@ -41,6 +42,7 @@ export interface GoalCreationData {
 }
 
 export interface GoalDetails {
+  readonly directionId?: EntityId | null;
   readonly title: string;
   readonly description?: string | null;
   readonly whyImportant?: string | null;
@@ -57,6 +59,7 @@ export interface GoalDetails {
 
 export interface GoalRehydrationData {
   readonly id: EntityId;
+  readonly directionId: EntityId | null;
   readonly title: string;
   readonly description: string | null;
   readonly whyImportant: string | null;
@@ -76,6 +79,7 @@ export interface GoalRehydrationData {
 }
 
 export class Goal extends Entity {
+  public readonly directionId: EntityId | null;
   public readonly title: string;
   public readonly description: string | null;
   public readonly whyImportant: string | null;
@@ -96,6 +100,7 @@ export class Goal extends Entity {
 
   private constructor(data: GoalRehydrationData) {
     super(data.id);
+    this.directionId = data.directionId;
     this.title = normalizeRequiredTitle(data.title);
     this.description = normalizeOptionalText(
       data.description,
@@ -145,6 +150,7 @@ export class Goal extends Entity {
     assertStage(stage);
     return new Goal({
       id: data.id,
+      directionId: data.directionId ?? null,
       title: data.title,
       description: data.description === undefined ? null : data.description,
       whyImportant: data.whyImportant === undefined ? null : data.whyImportant,
@@ -174,6 +180,7 @@ export class Goal extends Entity {
     }
     return new Goal({
       ...this.toRehydrationData(),
+      directionId: details.directionId === undefined ? this.directionId : details.directionId,
       title: details.title,
       description: details.description === undefined ? this.description : details.description,
       whyImportant: details.whyImportant === undefined ? this.whyImportant : details.whyImportant,
@@ -221,6 +228,7 @@ export class Goal extends Entity {
   private toRehydrationData(): GoalRehydrationData {
     return {
       id: this.id,
+      directionId: this.directionId,
       title: this.title,
       description: this.description,
       whyImportant: this.whyImportant,

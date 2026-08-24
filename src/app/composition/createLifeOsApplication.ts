@@ -672,8 +672,8 @@ export async function createLifeOsApplication(
     const getProjectsForSphere = new GetProjectsForSphere(projectRepository);
     const getProjectsForDirection = new GetProjectsForDirection(projectRepository);
     const getProjectById = new GetProjectById(projectRepository);
-    const createGoal = new CreateGoal(goalRepository, clock, idGenerator);
-    const updateGoal = new UpdateGoal(goalRepository, clock);
+    const createGoal = new CreateGoal(goalRepository, directionRepository, clock, idGenerator);
+    const updateGoal = new UpdateGoal(goalRepository, directionRepository, clock);
     const archiveGoal = new ArchiveGoal(goalRepository, clock);
     const getGoalById = new GetGoalById(goalRepository);
     const getGoals = new GetGoals(goalRepository);

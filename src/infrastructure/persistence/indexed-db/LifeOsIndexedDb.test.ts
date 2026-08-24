@@ -1,5 +1,7 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it } from 'vitest';
+import { EntityId, GOAL_STAGE, GOAL_STATUS } from '../../../domain';
+import { IndexedDbGoalRepository } from '../IndexedDbGoalRepository';
 import { executeIndexedDbRequest } from './IndexedDbRequest';
 import {
   LIFE_OS_DATABASE_NAME,
@@ -125,6 +127,7 @@ describe('LifeOsIndexedDb', () => {
       byDayId: true,
     });
     expect(indexesOf(transaction.objectStore(LIFE_OS_STORE.goals))).toEqual({
+      byDirectionId: false,
       byStatus: false,
     });
 
@@ -483,10 +486,79 @@ describe('LifeOsIndexedDb', () => {
     expect([...upgraded.objectStoreNames]).toContain(LIFE_OS_STORE.goals);
     expect(
       indexesOf(upgraded.transaction(LIFE_OS_STORE.goals).objectStore(LIFE_OS_STORE.goals)),
-    ).toEqual({ byStatus: false });
+    ).toEqual({ byDirectionId: false, byStatus: false });
+    indexedDb.close();
+  });
+
+  it('migrates a database version 16 without losing existing Goals and adds Direction index', async () => {
+    const factory = new IDBFactory();
+    const legacy = await openDatabaseVersion16(factory);
+    const legacyGoal = {
+      schemaVersion: 1,
+      id: 'goal-before-direction-index',
+      title: 'Существующая цель',
+      description: null,
+      whyImportant: null,
+      whyNow: null,
+      status: GOAL_STATUS.active,
+      stage: GOAL_STAGE.activeGoal,
+      intentionLevel: null,
+      horizon: null,
+      progressType: null,
+      progress: null,
+      achievementCriteria: null,
+      nextProgress: null,
+      coverImage: null,
+      createdAt: '2026-08-23T08:00:00.000Z',
+      updatedAt: '2026-08-23T08:00:00.000Z',
+      archivedAt: null,
+      version: 1,
+    };
+    const transaction = legacy.transaction(LIFE_OS_STORE.goals, 'readwrite');
+    transaction.objectStore(LIFE_OS_STORE.goals).put(legacyGoal);
+    await transactionDone(transaction);
+    legacy.close();
+
+    const indexedDb = new LifeOsIndexedDb(factory);
+    const upgraded = await indexedDb.open();
+    const restored = await executeIndexedDbRequest(
+      upgraded,
+      LIFE_OS_STORE.goals,
+      'readonly',
+      (store) => store.get('goal-before-direction-index'),
+    );
+
+    expect(upgraded.version).toBe(LIFE_OS_DATABASE_VERSION);
+    expect(restored).toEqual(legacyGoal);
+    const repository = new IndexedDbGoalRepository(indexedDb);
+    await expect(
+      repository.findById(EntityId.create('goal-before-direction-index')),
+    ).resolves.toMatchObject({
+      directionId: null,
+      status: GOAL_STATUS.active,
+    });
+    expect(
+      indexesOf(upgraded.transaction(LIFE_OS_STORE.goals).objectStore(LIFE_OS_STORE.goals)),
+    ).toEqual({ byDirectionId: false, byStatus: false });
     indexedDb.close();
   });
 });
+
+function openDatabaseVersion16(factory: IDBFactory): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = factory.open(LIFE_OS_DATABASE_NAME, 16);
+    request.addEventListener('upgradeneeded', () => {
+      for (const storeName of Object.values(LIFE_OS_STORE)) {
+        const store = request.result.createObjectStore(storeName, { keyPath: 'id' });
+        if (storeName === LIFE_OS_STORE.goals) {
+          store.createIndex('byStatus', 'status', { unique: false });
+        }
+      }
+    });
+    request.addEventListener('success', () => resolve(request.result));
+    request.addEventListener('error', () => reject(request.error));
+  });
+}
 
 function openDatabaseVersion15(factory: IDBFactory): Promise<IDBDatabase> {
   const legacyStores = [

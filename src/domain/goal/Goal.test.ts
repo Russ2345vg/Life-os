@@ -25,6 +25,7 @@ describe('Goal', () => {
       whyNow: null,
       status: GOAL_STATUS.future,
       stage: GOAL_STAGE.idea,
+      directionId: null,
       intentionLevel: null,
       horizon: null,
       progressType: null,
@@ -37,6 +38,27 @@ describe('Goal', () => {
     });
     expect(goal.createdAt).toEqual(CREATED_AT);
     expect(goal.updatedAt).toEqual(CREATED_AT);
+  });
+
+  it('keeps an optional Direction reference through updates and archiving', () => {
+    const firstDirectionId = EntityId.create('direction-first');
+    const secondDirectionId = EntityId.create('direction-second');
+    const goal = Goal.create({
+      id: EntityId.create('goal-direction'),
+      directionId: firstDirectionId,
+      title: 'Цель с направлением',
+      now: CREATED_AT,
+    });
+
+    const updated = goal.update(
+      { title: goal.title, directionId: secondDirectionId },
+      new Date('2026-08-24T08:00:00.000Z'),
+    );
+    const archived = updated.archive(new Date('2026-08-25T08:00:00.000Z'));
+
+    expect(goal.directionId).toEqual(firstDirectionId);
+    expect(updated.directionId).toEqual(secondDirectionId);
+    expect(archived.directionId).toEqual(secondDirectionId);
   });
 
   it('updates supported details and keeps progress type consistent with its payload', () => {

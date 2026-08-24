@@ -16,6 +16,10 @@ export class InMemoryGoalRepository implements GoalRepository {
     return [...this.#goals.values()];
   }
 
+  public async findByDirectionId(directionId: EntityId): Promise<readonly Goal[]> {
+    return [...this.#goals.values()].filter((goal) => goal.directionId?.equals(directionId));
+  }
+
   public async create(goal: Goal): Promise<boolean> {
     if (this.#goals.has(goal.id.toString())) return false;
     this.#goals.set(goal.id.toString(), goal);

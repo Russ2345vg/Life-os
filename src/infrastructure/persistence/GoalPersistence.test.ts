@@ -20,8 +20,10 @@ describe('Goal IndexedDB persistence', () => {
     const firstDatabase = new LifeOsIndexedDb(factory);
     const firstRepository = new IndexedDbGoalRepository(firstDatabase);
     const createdAt = new Date('2026-08-23T08:00:00.000Z');
+    const directionId = EntityId.create('direction-persisted-goal');
     const goal = Goal.create({
       id: EntityId.create('goal-persisted'),
+      directionId,
       title: 'Собственная мастерская',
       description: 'Тихое рабочее пространство',
       whyImportant: 'Делать вещи своими руками',
@@ -53,6 +55,7 @@ describe('Goal IndexedDB persistence', () => {
 
     expect(restored).toMatchObject({
       title: 'Собственная мастерская',
+      directionId,
       status: GOAL_STATUS.active,
       stage: GOAL_STAGE.activeGoal,
       intentionLevel: GOAL_INTENTION_LEVEL.commit,
@@ -63,6 +66,7 @@ describe('Goal IndexedDB persistence', () => {
       version: 1,
     });
     expect(restored?.createdAt).toEqual(createdAt);
+    expect(restored?.directionId?.toString()).toBe('direction-persisted-goal');
     if (restored === null) throw new Error('Goal was not restored');
 
     const archivedAt = new Date('2026-08-24T08:00:00.000Z');
@@ -99,6 +103,66 @@ describe('Goal IndexedDB persistence', () => {
     await expect(repository.findById(goal.id)).resolves.toMatchObject({
       title: 'Первая правка',
       version: 2,
+    });
+    database.close();
+  });
+
+  it('lists Goals for one Direction without returning other Directions', async () => {
+    const database = new LifeOsIndexedDb(new IDBFactory());
+    const repository = new IndexedDbGoalRepository(database);
+    const firstDirectionId = EntityId.create('direction-indexed-first');
+    const secondDirectionId = EntityId.create('direction-indexed-second');
+    const firstGoal = Goal.create({
+      id: EntityId.create('goal-indexed-first'),
+      directionId: firstDirectionId,
+      title: 'Цель первого направления',
+      now: new Date('2026-08-23T08:00:00.000Z'),
+    });
+    const secondGoal = Goal.create({
+      id: EntityId.create('goal-indexed-second'),
+      directionId: secondDirectionId,
+      title: 'Цель второго направления',
+      now: new Date('2026-08-23T08:00:00.000Z'),
+    });
+    await repository.create(firstGoal);
+    await repository.create(secondGoal);
+
+    await expect(repository.findByDirectionId(firstDirectionId)).resolves.toEqual([firstGoal]);
+    database.close();
+  });
+
+  it('restores a legacy future Idea without directionId as an unassigned Goal', async () => {
+    const database = new LifeOsIndexedDb(new IDBFactory());
+    const connection = await database.open();
+    await executeIndexedDbRequest(connection, LIFE_OS_STORE.goals, 'readwrite', (store) =>
+      store.add({
+        schemaVersion: 1,
+        id: 'goal-legacy-idea',
+        title: 'Старая идея',
+        description: null,
+        whyImportant: null,
+        whyNow: null,
+        status: GOAL_STATUS.future,
+        stage: GOAL_STAGE.idea,
+        intentionLevel: null,
+        horizon: null,
+        progressType: null,
+        progress: null,
+        achievementCriteria: null,
+        nextProgress: null,
+        coverImage: null,
+        createdAt: '2026-08-23T08:00:00.000Z',
+        updatedAt: '2026-08-23T08:00:00.000Z',
+        archivedAt: null,
+        version: 1,
+      }),
+    );
+    const repository = new IndexedDbGoalRepository(database);
+
+    await expect(repository.findById(EntityId.create('goal-legacy-idea'))).resolves.toMatchObject({
+      directionId: null,
+      status: GOAL_STATUS.future,
+      stage: GOAL_STAGE.idea,
     });
     database.close();
   });

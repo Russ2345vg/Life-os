@@ -18,7 +18,7 @@ export { CreateGoal, type CreateGoalInput } from './commands/CreateGoal';
 export { UpdateGoal, type UpdateGoalInput } from './commands/UpdateGoal';
 export { ArchiveGoal, type ArchiveGoalInput } from './commands/ArchiveGoal';
 export { GetGoalById } from './queries/GetGoalById';
-export { GetGoals } from './queries/GetGoals';
+export { GetGoals, type GetGoalsInput } from './queries/GetGoals';
 export type { MorningCycleRepository } from './ports/MorningCycleRepository';
 export {
   CompleteCurrentDay,
