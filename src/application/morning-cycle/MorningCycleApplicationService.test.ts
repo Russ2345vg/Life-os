@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { Day, DayDate, EntityId } from '../../domain';
-import { InMemoryMorningCycleRepository } from '../../infrastructure/persistence/InMemoryMorningCycleRepository';
+import { Day, DayDate, EntityId, type MorningCycle } from '../../domain';
 import {
   FakeClock,
   FakeCurrentDateProvider,
   FakeDayRepository,
   FakeIdGenerator,
 } from '../../test/helpers/Fakes';
+import type { MorningCycleRepository } from '../ports/MorningCycleRepository';
 import { MorningCycleApplicationService } from './MorningCycleApplicationService';
 
 const TODAY = DayDate.create('2026-08-23');
@@ -61,6 +61,46 @@ describe('MorningCycleApplicationService', () => {
   });
 });
 
+class FakeMorningCycleRepository implements MorningCycleRepository {
+  readonly #byDate = new Map<string, MorningCycle>();
+
+  public async findByDayId(dayId: EntityId): Promise<MorningCycle | null> {
+    return [...this.#byDate.values()].find((cycle) => cycle.dayId.equals(dayId)) ?? null;
+  }
+
+  public async findByDateKey(dateKey: DayDate): Promise<MorningCycle | null> {
+    return this.#byDate.get(dateKey.toString()) ?? null;
+  }
+
+  public async createIfAbsent(cycle: MorningCycle): Promise<MorningCycle> {
+    const existing = await this.findByDateKey(cycle.dateKey);
+    if (existing !== null) return existing;
+    this.#byDate.set(cycle.dateKey.toString(), cycle);
+    return cycle;
+  }
+
+  public async saveIfVersionMatches(
+    cycle: MorningCycle,
+    expectedVersion: number,
+  ): Promise<boolean> {
+    const stored = await this.findByDateKey(cycle.dateKey);
+    if (
+      stored === null ||
+      !stored.id.equals(cycle.id) ||
+      !stored.dayId.equals(cycle.dayId) ||
+      stored.version !== expectedVersion
+    ) {
+      return false;
+    }
+    this.#byDate.set(cycle.dateKey.toString(), cycle);
+    return true;
+  }
+
+  public all(): readonly MorningCycle[] {
+    return [...this.#byDate.values()];
+  }
+}
+
 async function createContext(seedDay = true) {
   const dayRepository = new FakeDayRepository();
   if (seedDay) {
@@ -73,7 +113,7 @@ async function createContext(seedDay = true) {
       }),
     );
   }
-  const repository = new InMemoryMorningCycleRepository();
+  const repository = new FakeMorningCycleRepository();
   const clock = new FakeClock(NOW);
   return {
     repository,

@@ -23,6 +23,7 @@
 ### Task 1: MorningCycle domain
 
 **Files:**
+
 - Create: `src/domain/morning-cycle/MorningPhysicalStatus.ts`
 - Create: `src/domain/morning-cycle/MorningCycle.ts`
 - Create: `src/domain/morning-cycle/MorningCycle.test.ts`
@@ -30,6 +31,7 @@
 - Modify: `src/domain/index.ts`
 
 **Interfaces:**
+
 - Produces: `MORNING_PHYSICAL_STATUS`, `MorningPhysicalStatus`, `MorningCycle`, `MorningCycleRehydrationData`.
 - `MorningCycle.start(at)`, `completeWater(at, amountMl)`, `skipPhysical(at)`, `preparePhysical(at)`, `startPhysical(at)`, and `completePhysical(at)` return `boolean` for idempotent mutations.
 
@@ -101,6 +103,7 @@ Expected: PASS.
 ### Task 2: Repository contract and mutation service
 
 **Files:**
+
 - Create: `src/application/ports/MorningCycleRepository.ts`
 - Create: `src/application/morning-cycle/MorningCycleApplicationService.ts`
 - Create: `src/application/morning-cycle/MorningCycleApplicationService.test.ts`
@@ -160,6 +163,7 @@ Expected: PASS.
 ### Task 3: Morning overview read model
 
 **Files:**
+
 - Create: `src/application/queries/GetMorningOverview.ts`
 - Create: `src/application/queries/GetMorningOverview.test.ts`
 - Modify: `src/application/index.ts`
@@ -225,6 +229,7 @@ Expected: PASS.
 ### Task 4: IndexedDB persistence
 
 **Files:**
+
 - Create: `src/infrastructure/persistence/records/MorningCycleRecord.ts`
 - Create: `src/infrastructure/persistence/mappers/MorningCycleRecordMapper.ts`
 - Create: `src/infrastructure/persistence/IndexedDbMorningCycleRepository.ts`
@@ -235,6 +240,7 @@ Expected: PASS.
 - Modify: `src/infrastructure/index.ts`
 
 **Interfaces:**
+
 - Produces schema-version-1 records with ISO timestamps and the repository contract from Task 2.
 - Raises `LIFE_OS_DATABASE_VERSION` from 14 to 15 and creates `morningCycles`, `byDayId`, and `byDateKey`.
 
@@ -269,11 +275,13 @@ Expected: PASS.
 ### Task 5: Composition root
 
 **Files:**
+
 - Modify: `src/app/composition/LifeOsApplication.ts`
 - Modify: `src/app/composition/createLifeOsApplication.ts`
 - Modify: `src/app/composition/createLifeOsApplication.test.ts`
 
 **Interfaces:**
+
 - Adds `morningCycleRepository`, `morningCycle`, and `getMorningOverview` to `LifeOsApplication`.
 
 - [ ] **Step 1: Extend composition tests first**
@@ -301,6 +309,7 @@ Expected: PASS.
 ### Task 6: Morning page and routine integration
 
 **Files:**
+
 - Create: `src/presentation/pages/MorningBlockPage.tsx`
 - Create: `src/presentation/pages/MorningBlockPage.test.ts`
 - Modify: `src/presentation/pages/RoutinePage.tsx`
@@ -314,7 +323,10 @@ export interface MorningBlockPageProps {
   readonly currentDate: DayDate;
   readonly selectedDate: DayDate;
   readonly getMorningOverview: Pick<GetMorningOverview, 'execute'>;
-  readonly morningCycle: Pick<MorningCycleApplicationService, 'start' | 'completeWater' | 'skipPhysical'>;
+  readonly morningCycle: Pick<
+    MorningCycleApplicationService,
+    'start' | 'completeWater' | 'skipPhysical'
+  >;
   readonly onPlanMainAction: (actionId: EntityId) => void;
   readonly onDefineMainAction: () => void;
   readonly onOpenDay: () => void;
@@ -350,10 +362,12 @@ Expected: PASS.
 ### Task 7: Visual system, regression, and manual QA
 
 **Files:**
+
 - Modify: `src/presentation/styles/global.css`
 - Modify: `src/presentation/pages/MorningBlockPage.test.ts`
 
 **Interfaces:**
+
 - Produces `.morning-block-*` styles scoped under `.morning-block-page` using existing tokens.
 
 - [ ] **Step 1: Add failing CSS contract assertions**

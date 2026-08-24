@@ -439,9 +439,7 @@ describe('TodayPage view and workflow', () => {
       createCompletedCurrentDay(),
     );
 
-    expect(markup).toContain(
-      '<dt>Решения</dt><dd>0 из 1</dd><small>выполнено</small>',
-    );
+    expect(markup).toContain('<dt>Решения</dt><dd>0 из 1</dd><small>выполнено</small>');
     expect(markup).not.toContain('<dt>Решения</dt><dd>0</dd><small>Не было</small>');
   });
 

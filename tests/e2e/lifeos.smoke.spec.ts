@@ -33,8 +33,8 @@ test('loads LifeOS and navigates between primary sections without runtime errors
   const mobile = testInfo.project.name === 'mobile-chrome';
   const navigationName = mobile ? 'Мобильная навигация' : 'Основные разделы';
   const sectionLabels = mobile
-    ? ['День', 'Действия', 'История', 'Ещё']
-    : ['День', 'Решения', 'Действия', 'Распорядок', 'Сферы', 'История', 'Ещё'];
+    ? ['День', 'Управление', 'История', 'Ещё']
+    : ['День', 'Управление', 'Распорядок', 'Сферы', 'История', 'Вечерняя аналитика', 'Ещё'];
 
   await page.goto('/');
 

@@ -1,1 +1,4 @@
-export { MorningCycleApplicationService, cloneMorningCycle } from './MorningCycleApplicationService';
+export {
+  MorningCycleApplicationService,
+  cloneMorningCycle,
+} from './MorningCycleApplicationService';
