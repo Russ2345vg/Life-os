@@ -253,5 +253,8 @@ function deleteDatabase(): Promise<void> {
     const request = indexedDB.deleteDatabase(LIFE_OS_DATABASE_NAME);
     request.addEventListener('success', () => resolve());
     request.addEventListener('error', () => reject(request.error));
+    request.addEventListener('blocked', () =>
+      reject(new Error(`Deleting ${LIFE_OS_DATABASE_NAME} was blocked by an open connection.`)),
+    );
   });
 }

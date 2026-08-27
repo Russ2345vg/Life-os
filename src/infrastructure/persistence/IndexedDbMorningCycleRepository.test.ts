@@ -1,7 +1,14 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it } from 'vitest';
 import { cloneMorningCycle } from '../../application';
-import { DayDate, EntityId, MorningCycle } from '../../domain';
+import {
+  DayDate,
+  EntityId,
+  MORNING_CYCLE_STATE,
+  MORNING_PHYSICAL_STATUS,
+  MORNING_STAGE_STATUS,
+  MorningCycle,
+} from '../../domain';
 import { IndexedDbMorningCycleRepository } from './IndexedDbMorningCycleRepository';
 import { LIFE_OS_STORE, LifeOsIndexedDb } from './indexed-db/LifeOsIndexedDb';
 
@@ -26,6 +33,71 @@ describe('IndexedDbMorningCycleRepository', () => {
     expect(restored?.waterCompletedAt).toEqual(WATER);
     expect(restored?.waterAmountMl).toBe(250);
     expect(restored?.physicalStatus).toBe('SKIPPED');
+    database.close();
+  });
+
+  it('восстанавливает новый lifecycle и snapshots этапов после повторного открытия', async () => {
+    const database = new LifeOsIndexedDb(new IDBFactory());
+    const repository = new IndexedDbMorningCycleRepository(database);
+    const cycle = MorningCycle.rehydrate({
+      id: EntityId.create('cycle-with-foundation'),
+      dayId: EntityId.create('day-with-foundation'),
+      dateKey: DATE,
+      state: MORNING_CYCLE_STATE.readyToWork,
+      startedAt: START,
+      finishedAt: null,
+      shortenedMode: true,
+      stageStates: [
+        {
+          stageId: 'water',
+          status: MORNING_STAGE_STATUS.completed,
+          updatedAt: WATER,
+        },
+      ],
+      waterCompletedAt: WATER,
+      waterAmountMl: 250,
+      physicalStatus: MORNING_PHYSICAL_STATUS.notConfigured,
+      physicalUpdatedAt: null,
+      updatedAt: WATER,
+      version: 4,
+    });
+    await repository.createIfAbsent(cycle);
+    database.close();
+
+    const restored = await new IndexedDbMorningCycleRepository(database).findByDateKey(DATE);
+
+    expect(restored?.state).toBe(MORNING_CYCLE_STATE.readyToWork);
+    expect(restored?.shortenedMode).toBe(true);
+    expect(restored?.stageStates).toEqual([
+      {
+        stageId: 'water',
+        status: MORNING_STAGE_STATUS.completed,
+        updatedAt: WATER,
+      },
+    ]);
+    database.close();
+  });
+
+  it('находит последний активный запуск строго до даты и пропускает terminal-записи', async () => {
+    const database = new LifeOsIndexedDb(new IDBFactory());
+    const repository = new IndexedDbMorningCycleRepository(database);
+    const older = morningCycleFor('older', 'older-day', '2026-08-20');
+    older.start(new Date('2026-08-19T22:00:00.000Z'));
+    const previous = morningCycleFor('previous', 'previous-day', '2026-08-21');
+    previous.start(new Date('2026-08-20T22:00:00.000Z'));
+    const terminal = morningCycleFor('terminal', 'terminal-day', '2026-08-22');
+    terminal.start(new Date('2026-08-21T22:00:00.000Z'));
+    terminal.abandon(new Date('2026-08-21T23:00:00.000Z'));
+    const boundary = morningCycleFor('boundary', 'boundary-day', '2026-08-23');
+    boundary.start(START);
+    await repository.createIfAbsent(older);
+    await repository.createIfAbsent(terminal);
+    await repository.createIfAbsent(previous);
+    await repository.createIfAbsent(boundary);
+
+    const found = await repository.findLatestUnfinishedBefore(DATE);
+
+    expect(found?.id.equals(previous.id)).toBe(true);
     database.close();
   });
 
@@ -78,10 +150,14 @@ describe('IndexedDbMorningCycleRepository', () => {
 });
 
 function morningCycle(id: string): MorningCycle {
+  return morningCycleFor(id, 'day', DATE.toString());
+}
+
+function morningCycleFor(id: string, dayId: string, date: string): MorningCycle {
   return MorningCycle.create({
     id: EntityId.create(id),
-    dayId: EntityId.create('day'),
-    dateKey: DATE,
+    dayId: EntityId.create(dayId),
+    dateKey: DayDate.create(date),
     occurredAt: new Date('2026-08-23T06:50:00.000+09:00'),
   });
 }

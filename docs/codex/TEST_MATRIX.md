@@ -6,85 +6,108 @@
 npm ci
 ```
 
-Используется npm с `package-lock.json` lockfile v3. Не заменяй менеджер пакетов без отдельного
-решения.
+Используется npm с `package-lock.json` lockfile v3. Не заменяй менеджер пакетов и не добавляй
+зависимости без отдельного решения.
 
-## Команды
+## Канонические команды
 
-| Задача                     | Команда                                 | Режим                |
-| -------------------------- | --------------------------------------- | -------------------- |
-| Development server         | `npm run dev`                           | Долгоживущий процесс |
-| Один unit/integration файл | `npm run test -- src/path/File.test.ts` | Однократный          |
-| Alpha gate                 | `npm run test:alpha`                    | Однократный          |
-| Все Vitest-тесты           | `npm run test`                          | Однократный          |
-| Список E2E без запуска     | `npm run test:e2e:list`                 | Однократный          |
-| Browser smoke              | `npm run test:e2e`                      | Однократный          |
-| TypeScript                 | `npm run typecheck`                     | Однократный          |
-| ESLint                     | `npm run lint`                          | Однократный          |
-| Production build           | `npm run build`                         | Однократный          |
-| Prettier check             | `npm run format:check`                  | Однократный          |
-| Проверка whitespace Git    | `git diff --check`                      | Однократный          |
+| Задача                            | Команда                                        | Режим                         | Process deadline |
+| --------------------------------- | ---------------------------------------------- | ----------------------------- | ---------------: |
+| Targeted unit/integration         | `npm run test:target -- src/path/File.test.ts` | one-shot, selector обязателен |            120 с |
+| Быстрые domain/application/shared | `npm run test:fast`                            | one-shot                      |            180 с |
+| Полные unit/integration           | `npm run test`                                 | one-shot                      |            300 с |
+| Self-tests инфраструктуры         | `npm run test:infra`                           | one-shot                      |            120 с |
+| Alpha gate                        | `npm run test:alpha`                           | one-shot                      |             60 с |
+| Список E2E                        | `npm run test:e2e:list`                        | managed one-shot              |            120 с |
+| Browser E2E                       | `npm run test:e2e`                             | managed one-shot              |           1200 с |
+| TypeScript                        | `npm run typecheck`                            | bounded one-shot              |            180 с |
+| ESLint                            | `npm run lint`                                 | bounded one-shot              |            180 с |
+| Production build                  | `npm run build`                                | bounded sequential one-shot   |    240 с + 120 с |
+| Prettier check                    | `npm run format:check`                         | bounded one-shot              |            180 с |
+| Полный quality gate               | `npm run verify`                               | sequential one-shot           |     1800 с общий |
 
-Test runner — Vitest 4.1.10. `package.json` запускает `vitest run`, поэтому `npm run test` не
-является watch-командой.
+`test:target`, `test:fast`, `test`, `test:infra` и `test:alpha` всегда вызывают локальный Vitest с
+подкомандой `run`. Пустой targeted selector завершается как invalid config, поэтому случайный
+полный прогон вместо одного файла невозможен.
 
-Prettier использует `endOfLine: auto`, потому что Windows Git настроен с `core.autocrlf=true`.
-Проверка сохраняет EOL checkout и продолжает проверять остальные правила форматирования; массовая
-перезапись product source ради LF не требуется.
+Не используй для проверки голые `vitest`, `npx vitest`, `npm run dev` или Playwright с `--ui`,
+`--debug`, `--headed`, `--config`, `--reporter`: это watch, интерактивные или обходящие managed
+lifecycle/heartbeat режимы.
+Канонические wrappers также отклоняют `--retry`/`--retries` и config override: агент не может
+скрыть failure повторными прогонами или подменить проверенную конфигурацию.
 
-Контрольный запуск 2026-08-24 завершился штатно: 147 файлов, 1166 тестов, 62.99 секунды. При
-неинтерактивном выводе Vitest показал только `RUN`, а итоговую сводку напечатал после завершения,
-поэтому около минуты процесс выглядел зависшим. Это не open handle: процесс вышел с кодом `0` сразу
-после сводки. Для диагностики прогресса используй однократную команду
-`npm run test -- --reporter=verbose` с внешним ограничением времени; timeout тестов не увеличивай.
+## Порядок работы
 
-Не используй для quality gate `vitest` или `npx vitest` без подкоманды `run`: в интерактивной
-среде такой запуск может перейти в watch-режим и не завершиться сам.
+1. После изменения запусти ближайший тест:
+   `npm run test:target -- src/path/ChangedContract.test.ts`.
+2. Если затронут общий domain/application/shared контракт, добавь `npm run test:fast`.
+3. После стабилизации выполни `npm run typecheck` и `npm run lint`.
+4. Не запускай тяжёлый gate после каждого edit. Перед handoff один раз выполни `npm run verify`.
 
-## Быстрая проверка
+`verify` последовательно запускает typecheck → lint → full unit/integration → test-infrastructure
+→ alpha → E2E → build → format check → `git diff --check`. Первый failure сохраняет исходный exit
+code и останавливает цепочку. Retry отсутствуют.
 
-Выбирай минимальный набор по изменённому слою:
+## E2E, Vite и порт 4173
+
+`test:e2e:list` и `test:e2e` используют один managed lifecycle:
+
+- до запуска проверяют `127.0.0.1:4173`;
+- при занятом порту немедленно завершаются с понятной ошибкой;
+- не определяют и не завершают владельца чужого порта;
+- запускают Vite напрямую с `--strictPort` и закрытым stdin;
+- запускают Playwright только после HTTP readiness;
+- на success, failure, timeout, SIGINT или SIGTERM завершают только дерево созданного процесса;
+- подтверждают освобождение порта ограниченным teardown.
+
+Playwright выполняется с `retries: 0`, per-test timeout 30 секунд, action timeout 10 секунд,
+navigation timeout 15 секунд, expect timeout 5 секунд и global timeout 1200 секунд. Trace
+сохраняется при failure. На Windows owned tree завершается по PID созданного child через
+`taskkill /T`; PID из port lookup никогда не используется.
+
+Если Windows `taskkill /T` сам недоступен или завершается с ошибкой, runner делает ограниченную
+fallback-попытку закрыть точный корневой child, но не маскирует её как подтверждённый tree cleanup:
+результат содержит `CLEANUP ERROR`. Для managed Vite teardown дополнительно проверяется фактическое
+освобождение owned-порта; восстановление после такой ошибки явно печатается как `RECOVERED`, а не
+происходит молча.
+
+Managed reporter печатает `START N/total [project] test name`, результат каждого теста и heartbeat
+каждые 10 секунд, пока тест выполняется. Текущее состояние сохраняется в служебный progress-файл;
+если process-level deadline сработает раньше Playwright, timeout-диагностика всё равно содержит
+точные `N/total`, project, имя зависшего теста, этап `playwright` и elapsed. Progress-файл удаляется
+в bounded teardown.
+
+## Диагностика зависания
+
+Не жди молча дольше встроенного deadline. Runner печатает начало этапа, фактическую команду,
+допустимое время, elapsed и exit code. Timeout возвращает `124` и является failed/unresolved check.
+
+При timeout:
+
+1. сохрани stage, command, deadline, elapsed и последний output;
+2. проверь, что owned E2E-порт освобождён;
+3. локализуй последний `PASS/SKIP` и первый незавершённый `START` по E2E progress/heartbeat;
+   для Vitest используй `test:target` или один диагностический прогон с `--reporter=verbose`;
+4. исследуй timers/listeners/IndexedDB/worker/process handles;
+5. не запускай бесконечные retry и не увеличивай timeout без измеренной причины.
+
+Если порт занят, сообщи адрес и попроси владельца остановить процесс или выбрать другое время.
+Никогда не убивай процесс только потому, что он занимает требуемый порт.
+
+## Ручная browser QA
+
+Для отдельной ручной QA можно явно запустить `npm run dev` в контролируемом терминале. Это
+долгоживущий процесс, а не тест: агент обязан сам остановить созданный dev server после проверки.
+Проверь desktop, затронутый mobile viewport, keyboard/focus и browser console.
+
+## Git hygiene после gate
 
 ```bash
-npm run test -- src/path/ChangedContract.test.ts
-npm run typecheck
-git diff --check
-```
-
-Для Markdown/config-only изменений сначала валидируй формат и структуру изменённых файлов, затем
-запускай проверки, которые реально затрагивает конфигурация.
-
-## UI-проверка
-
-Автоматический smoke самостоятельно запускает и останавливает Vite на порту 4173:
-
-```bash
-npm run test:e2e
-```
-
-Для отдельной ручной browser QA запусти `npm run dev` в одном терминале, затем открой показанный
-адрес браузерным инструментом в другой сессии. Пройди изменённый сценарий, проверь desktop,
-затронутый mobile viewport и browser console.
-
-Playwright smoke использует установленный системный Google Chrome, проверяет desktop 1440×900 и
-mobile 390×844, основную навигацию, console/page errors и сохранение desktop sidebar preference
-после refresh.
-
-## Полный quality gate
-
-```bash
-npm run typecheck
-npm run lint
-npm run test
-npm run test:alpha
-npm run test:e2e
-npm run build
-npm run format:check
 git diff --check
 git diff --stat
+git diff --name-status
 git status --short
 ```
 
-Полный `npm run test` запускай как one-shot процесс. Если он не завершается, не подменяй диагноз
-увеличением timeout: установи последний завершённый файл, проверь активные handles и повтори
-подозрительный файл отдельно.
+Prettier использует `endOfLine: auto`, потому что Windows Git настроен с `core.autocrlf=true`.
+Массовая перезапись product source ради LF не требуется.

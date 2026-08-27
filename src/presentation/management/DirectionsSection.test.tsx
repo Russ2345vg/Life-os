@@ -15,7 +15,7 @@ import {
 const NOW = new Date('2026-08-10T08:00:00.000Z');
 
 describe('Directions presentation', () => {
-  it('renders a compact main card with real project counts and a mobile-accessible menu', () => {
+  it('renders a compact main card with the total project count and a mobile-accessible menu', () => {
     const sphere = Sphere.create({
       id: EntityId.create('sphere-product'),
       name: 'Продукт',
@@ -44,7 +44,8 @@ describe('Directions presentation', () => {
 
     expect(markup).toContain('Развитие LifeOS');
     expect(markup).toContain('3 проекта');
-    expect(markup).toContain('2 активных');
+    expect(markup).toContain('Состояние уточняется');
+    expect(markup).toContain('Данные загружаются');
     expect(markup).toContain('aria-label="Главное направление"');
     expect(markup).toContain('<details');
     expect(markup).toContain('Редактировать');
@@ -199,12 +200,12 @@ describe('Directions presentation', () => {
     );
 
     expect(markup).toContain('Движение');
-    expect(markup).toContain('Движется');
     expect(markup).toContain('4</dd>');
     expect(markup).toContain('5 незавершённых');
     expect(markup).toContain('6 выполнено');
     expect(markup).toContain('8 ч 30 мин');
-    expect(markup).toContain('7 завершённых сессий');
+    expect(markup).toContain('<dd>7</dd>');
+    expect(markup).toContain('<small>завершено</small>');
     expect(markup).toContain('2 выполненных действий');
     expect(markup).toContain('3 сессий');
     expect(markup).toContain('aria-pressed="true"');

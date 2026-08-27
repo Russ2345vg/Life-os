@@ -8,14 +8,20 @@ export default defineConfig({
   forbidOnly: true,
   retries: 0,
   workers: 1,
+  globalTimeout: 1_200_000,
   timeout: 30_000,
   expect: {
     timeout: 5_000,
   },
-  reporter: [['list'], ['html', { open: 'never', outputFolder: 'playwright-report' }]],
+  reporter: [
+    ['./scripts/test-infrastructure/progress-reporter.mjs', { heartbeatMs: 10_000 }],
+    ['html', { open: 'never', outputFolder: 'playwright-report' }],
+  ],
   use: {
     baseURL,
-    trace: 'on-first-retry',
+    actionTimeout: 10_000,
+    navigationTimeout: 15_000,
+    trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'off',
   },

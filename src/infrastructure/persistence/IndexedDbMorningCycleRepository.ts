@@ -16,6 +16,37 @@ export class IndexedDbMorningCycleRepository implements MorningCycleRepository {
     return this.findByIndex('byDateKey', dateKey.toString());
   }
 
+  public async findLatestUnfinishedBefore(dateKey: DayDate): Promise<MorningCycle | null> {
+    const database = await this.indexedDb.open();
+    const transaction = database.transaction(LIFE_OS_STORE.morningCycles, 'readonly');
+    const request = transaction
+      .objectStore(LIFE_OS_STORE.morningCycles)
+      .index('byDateKey')
+      .openCursor(IDBKeyRange.upperBound(dateKey.toString(), true), 'prev');
+
+    return new Promise((resolve, reject) => {
+      request.addEventListener('success', () => {
+        const cursor = request.result;
+        if (cursor === null) {
+          resolve(null);
+          return;
+        }
+        try {
+          const cycle = MorningCycleRecordMapper.fromRecord(cursor.value);
+          if (cycle.isActive()) {
+            resolve(cycle);
+            return;
+          }
+          cursor.continue();
+        } catch (error: unknown) {
+          reject(error);
+        }
+      });
+      request.addEventListener('error', () => reject(request.error));
+      transaction.addEventListener('abort', () => reject(transaction.error));
+    });
+  }
+
   public async createIfAbsent(cycle: MorningCycle): Promise<MorningCycle> {
     const database = await this.indexedDb.open();
     const transaction = database.transaction(LIFE_OS_STORE.morningCycles, 'readwrite');

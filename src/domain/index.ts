@@ -107,11 +107,18 @@ export {
 } from './life-action';
 export {
   MORNING_PHYSICAL_STATUS,
+  MORNING_CYCLE_STATE,
+  MORNING_STAGE_STATUS,
   MorningCycle,
+  isMorningCycleState,
   isMorningPhysicalStatus,
+  isMorningStageStatus,
   type MorningCycleCreationData,
   type MorningCycleRehydrationData,
+  type MorningCycleState,
   type MorningPhysicalStatus,
+  type MorningStageState,
+  type MorningStageStatus,
 } from './morning-cycle';
 export type { DomainEvent } from './shared/DomainEvent';
 export { Entity } from './shared/Entity';

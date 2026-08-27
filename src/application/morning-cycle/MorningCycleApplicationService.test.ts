@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Day, DayDate, EntityId, type MorningCycle } from '../../domain';
+import { Day, DayDate, EntityId, MORNING_CYCLE_STATE, MorningCycle } from '../../domain';
 import {
   FakeClock,
   FakeCurrentDateProvider,
@@ -10,6 +10,7 @@ import type { MorningCycleRepository } from '../ports/MorningCycleRepository';
 import { MorningCycleApplicationService } from './MorningCycleApplicationService';
 
 const TODAY = DayDate.create('2026-08-23');
+const YESTERDAY = DayDate.create('2026-08-22');
 const TOMORROW = DayDate.create('2026-08-24');
 const NOW = new Date('2026-08-23T07:12:00.000+09:00');
 
@@ -59,6 +60,65 @@ describe('MorningCycleApplicationService', () => {
       code: 'morning_cycle.not_found',
     });
   });
+
+  it('отделяет сегодняшний активный запуск от незавершённого вчерашнего', async () => {
+    const context = await createContext();
+    const yesterday = morningCycle('yesterday-cycle', 'yesterday-day', YESTERDAY);
+    yesterday.start(new Date('2026-08-22T07:00:00.000+09:00'));
+    await context.repository.createIfAbsent(yesterday);
+    const today = await context.service.start(TODAY);
+
+    const current = await context.service.getCurrentContext();
+
+    expect(current.current?.id.equals(today.id)).toBe(true);
+    expect(current.previousUnfinished?.id.equals(yesterday.id)).toBe(true);
+    expect(current.current?.dateKey.equals(TODAY)).toBe(true);
+    expect(current.previousUnfinished?.dateKey.equals(YESTERDAY)).toBe(true);
+  });
+
+  it('идемпотентно закрывает вчерашний запуск, не создавая новый', async () => {
+    const context = await createContext();
+    const yesterday = morningCycle('yesterday-cycle', 'yesterday-day', YESTERDAY);
+    yesterday.start(new Date('2026-08-22T07:00:00.000+09:00'));
+    await context.repository.createIfAbsent(yesterday);
+
+    const first = await context.service.abandonUnfinished(YESTERDAY);
+    context.clock.setTime(new Date('2026-08-23T08:00:00.000+09:00'));
+    const second = await context.service.abandonUnfinished(YESTERDAY);
+
+    expect(second.id.equals(first.id)).toBe(true);
+    expect(second.state).toBe(MORNING_CYCLE_STATE.abandoned);
+    expect(second.finishedAt).toEqual(first.finishedAt);
+    expect(second.isActive()).toBe(false);
+    expect(context.repository.all()).toHaveLength(1);
+    expect((await context.service.getCurrentContext()).previousUnfinished).toBeNull();
+  });
+
+  it('идемпотентно завершает сегодняшний запуск и исключает его из active context', async () => {
+    const context = await createContext();
+    await context.service.start(TODAY);
+    await context.service.markReadyToWork(TODAY);
+
+    const first = await context.service.finish(TODAY);
+    context.clock.setTime(new Date('2026-08-23T08:00:00.000+09:00'));
+    const second = await context.service.finish(TODAY);
+
+    expect(second.state).toBe(MORNING_CYCLE_STATE.finished);
+    expect(second.finishedAt).toEqual(first.finishedAt);
+    expect(second.isActive()).toBe(false);
+    expect((await context.service.getCurrentContext()).current).toBeNull();
+  });
+
+  it('не позволяет специальной команде закрывать сегодняшний или будущий запуск', async () => {
+    const context = await createContext();
+
+    await expect(context.service.abandonUnfinished(TODAY)).rejects.toMatchObject({
+      code: 'morning_cycle.previous_date_required',
+    });
+    await expect(context.service.abandonUnfinished(TOMORROW)).rejects.toMatchObject({
+      code: 'morning_cycle.previous_date_required',
+    });
+  });
 });
 
 class FakeMorningCycleRepository implements MorningCycleRepository {
@@ -70,6 +130,16 @@ class FakeMorningCycleRepository implements MorningCycleRepository {
 
   public async findByDateKey(dateKey: DayDate): Promise<MorningCycle | null> {
     return this.#byDate.get(dateKey.toString()) ?? null;
+  }
+
+  public async findLatestUnfinishedBefore(dateKey: DayDate): Promise<MorningCycle | null> {
+    return (
+      [...this.#byDate.values()]
+        .filter((cycle) => cycle.dateKey.isBefore(dateKey) && cycle.isActive())
+        .sort((left, right) =>
+          right.dateKey.toString().localeCompare(left.dateKey.toString()),
+        )[0] ?? null
+    );
   }
 
   public async createIfAbsent(cycle: MorningCycle): Promise<MorningCycle> {
@@ -99,6 +169,15 @@ class FakeMorningCycleRepository implements MorningCycleRepository {
   public all(): readonly MorningCycle[] {
     return [...this.#byDate.values()];
   }
+}
+
+function morningCycle(id: string, dayId: string, date: DayDate): MorningCycle {
+  return MorningCycle.create({
+    id: EntityId.create(id),
+    dayId: EntityId.create(dayId),
+    dateKey: date,
+    occurredAt: new Date(`${date.toString()}T06:50:00.000+09:00`),
+  });
 }
 
 async function createContext(seedDay = true) {

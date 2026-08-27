@@ -79,25 +79,34 @@ read-only вопрос; их выводы сводит главный агент
 
 ## Финальная проверка
 
-Используй `lifeos-quality-gate`. Сначала запусти целевой тест и `npm run typecheck`, затем полный
-набор из `docs/codex/TEST_MATRIX.md`:
+Используй `lifeos-quality-gate`. Рабочий порядок проверок:
 
 ```bash
+npm run test:target -- src/path/ChangedContract.test.ts
+npm run test:fast              # если изменение затрагивает общий слой
 npm run typecheck
 npm run lint
-npm run test
-npm run test:alpha
-npm run test:e2e
-npm run build
-npm run format:check
-git diff --check
-git diff --stat
-git status --short
+npm run verify                 # один полный gate после стабилизации патча
 ```
 
-`npm run test` уже является one-shot командой `vitest run`. При подозрении на зависание используй
-`npm run test -- --reporter=verbose` с внешним наблюдением; не запускай голый `vitest` и не меняй
-timeout без диагноза. Успех подтверждается свежим exit code и сводкой текущего дерева.
+`npm run verify` последовательно выполняет typecheck, lint, полный Vitest, self-tests тестовой
+инфраструктуры, alpha, E2E, build, format и `git diff --check`. У каждого этапа есть отдельный
+deadline, у всей команды — общий; цепочка останавливается на первом ненулевом exit code без retry.
+Прямые `npm run typecheck`, `npm run lint`, `npm run build` и `npm run format:check` используют тот
+же bounded process runner и также не могут ждать бесконечно вне `verify`.
+
+Managed E2E runner сообщает `N/total`, project и имя текущего теста при старте, печатает heartbeat
+каждые 10 секунд и ограничивает test/action/navigation ожидания. При process timeout он читает
+последнее progress-состояние, называет зависший тест и этап, после чего завершает только созданное
+дерево Playwright/Vite/Node и проверяет освобождение своего порта.
+
+`npm run test` — bounded one-shot команда. Для прогресса допустим
+`npm run test -- --reporter=verbose`. Не запускай `vitest`/`npx vitest` без `run`, интерактивный
+Playwright или `npm run dev` как gate. Если команда выглядит зависшей, не жди молча часами:
+запиши stage, command, elapsed и последний output. Timeout с кодом `124` — failed/unresolved check;
+локализуй причину через `test:target`, не увеличивай лимит без измерения. Занятый E2E-порт должен
+быстро завершить проверку; освободи его владельца вручную, но никогда не убивай процесс по порту.
+Успех подтверждается свежим exit code и сводкой текущего дерева.
 
 ## Роли, модели и права
 

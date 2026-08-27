@@ -120,10 +120,17 @@ npm ci
 npm run dev
 npm run typecheck
 npm run lint
+npm run test:target -- src/path/ChangedContract.test.ts
+npm run test:fast
 npm run test
+npm run test:infra
 npm run test:alpha
+npm run test:e2e:list
+npm run test:e2e
 npm run build
 npm run format:check
+npm run verify
 ```
 
-Подробный выбор проверок описан в `docs/codex/TEST_MATRIX.md`.
+`npm run verify` — единый полный bounded gate. Подробный выбор targeted/fast/full проверок и
+правила диагностики timeout описаны в `docs/codex/TEST_MATRIX.md`.

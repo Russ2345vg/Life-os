@@ -12,6 +12,16 @@ export class InMemoryMorningCycleRepository implements MorningCycleRepository {
     return this.#byDate.get(dateKey.toString()) ?? null;
   }
 
+  public async findLatestUnfinishedBefore(dateKey: DayDate): Promise<MorningCycle | null> {
+    return (
+      [...this.#byDate.values()]
+        .filter((cycle) => cycle.dateKey.isBefore(dateKey) && cycle.isActive())
+        .sort((left, right) =>
+          right.dateKey.toString().localeCompare(left.dateKey.toString()),
+        )[0] ?? null
+    );
+  }
+
   public async createIfAbsent(cycle: MorningCycle): Promise<MorningCycle> {
     const existing = await this.findByDateKey(cycle.dateKey);
     if (existing !== null) return existing;

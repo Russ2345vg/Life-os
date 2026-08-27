@@ -23,6 +23,16 @@ describe('Alpha 0.1 — выпускной барьер полного цикл�
   it('проводит 20 последовательных дней через IndexedDB без ручного исправления данных', async () => {
     const indexedDbFactory = new IDBFactory();
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Сеть недоступна'));
+    const openApplications = new Set<Awaited<ReturnType<typeof createApplication>>>();
+    const openApplication = async (...args: Parameters<typeof createApplication>) => {
+      const application = await createApplication(...args);
+      openApplications.add(application);
+      return application;
+    };
+    const closeApplication = (application: Awaited<ReturnType<typeof createApplication>>) => {
+      application.close();
+      openApplications.delete(application);
+    };
     let carriedActionId: EntityId | null = null;
 
     try {
@@ -30,7 +40,7 @@ describe('Alpha 0.1 — выпускной барьер полного цикл�
         const currentDate = dayAt(cycleIndex);
         const tomorrowDate = dayAt(cycleIndex + 1);
         const clock = new FakeClock(atLocalTime(currentDate, 8, 0));
-        const application = await createApplication(
+        const application = await openApplication(
           indexedDbFactory,
           currentDate,
           clock,
@@ -107,10 +117,10 @@ describe('Alpha 0.1 — выпускной барьер полного цикл�
           tomorrowDecisions: [],
         });
         expect(errorCode(blockedCompletion)).toBe('day.unfinished_session');
-        application.close();
+        closeApplication(application);
 
         const restoredClock = new FakeClock(atLocalTime(currentDate, 9, 40));
-        const restoredApplication = await createApplication(
+        const restoredApplication = await openApplication(
           indexedDbFactory,
           currentDate,
           restoredClock,
@@ -252,9 +262,9 @@ describe('Alpha 0.1 — выпускной барьер полного цикл�
           tomorrowDecisions: [],
         });
         expect(repeatedCompletion.ok).toBe(true);
-        restoredApplication.close();
+        closeApplication(restoredApplication);
 
-        const verificationApplication = await createApplication(
+        const verificationApplication = await openApplication(
           indexedDbFactory,
           currentDate,
           new FakeClock(atLocalTime(currentDate, 21, 0)),
@@ -284,13 +294,13 @@ describe('Alpha 0.1 — выпускной барьер полного цикл�
           verifiedTomorrowDecisions.some((decision) => decision.kind === DECISION_KIND.main),
         ).toBe(true);
         expect(await verificationApplication.getUnfinishedActionSession.execute()).toBeNull();
-        verificationApplication.close();
+        closeApplication(verificationApplication);
 
         carriedActionId = cycleIndex === CYCLE_COUNT - 1 ? null : movingAction.id;
       }
 
       const finalDate = dayAt(CYCLE_COUNT - 1);
-      const finalApplication = await createApplication(
+      const finalApplication = await openApplication(
         indexedDbFactory,
         finalDate,
         new FakeClock(atLocalTime(finalDate, 22, 0)),
@@ -307,11 +317,13 @@ describe('Alpha 0.1 — выпускной барьер полного цикл�
       expect(new Set(completedDays.map((day) => day?.id.toString())).size).toBe(CYCLE_COUNT);
       expect(carriedActionId).toBeNull();
       expect(fetchSpy).not.toHaveBeenCalled();
-      finalApplication.close();
+      closeApplication(finalApplication);
     } finally {
+      for (const application of openApplications) application.close();
+      openApplications.clear();
       fetchSpy.mockRestore();
     }
-  });
+  }, 30_000);
 });
 
 async function createApplication(

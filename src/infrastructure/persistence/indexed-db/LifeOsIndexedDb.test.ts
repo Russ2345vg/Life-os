@@ -835,6 +835,7 @@ function transactionDone(transaction: IDBTransaction): Promise<void> {
   return new Promise((resolve, reject) => {
     transaction.addEventListener('complete', () => resolve());
     transaction.addEventListener('error', () => reject(transaction.error));
+    transaction.addEventListener('abort', () => reject(transaction.error));
   });
 }
 

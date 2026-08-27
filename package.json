@@ -5,16 +5,19 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
-    "typecheck": "tsc -b --pretty false",
-    "lint": "eslint .",
-    "test": "vitest run",
-    "test:e2e": "playwright test",
-    "test:e2e:list": "playwright test --list",
+    "build": "node scripts/run-check.mjs build",
+    "typecheck": "node scripts/run-check.mjs typecheck",
+    "lint": "node scripts/run-check.mjs lint",
+    "test:target": "node scripts/run-vitest.mjs target",
+    "test:fast": "node scripts/run-vitest.mjs fast",
+    "test": "node scripts/run-vitest.mjs full",
+    "test:infra": "node scripts/run-vitest.mjs infra",
+    "test:e2e": "node scripts/run-playwright-e2e.mjs",
+    "test:e2e:list": "node scripts/run-playwright-e2e.mjs --list",
     "format": "prettier --write .",
-    "format:check": "prettier --check .",
-    "verify": "npm run typecheck && npm run lint && npm run test && npm run build && npm run format:check && git diff --check",
-    "test:alpha": "vitest run src/test/alpha/AlphaCycleGate.test.ts"
+    "format:check": "node scripts/run-check.mjs format-check",
+    "verify": "node scripts/verify.mjs",
+    "test:alpha": "node scripts/run-vitest.mjs alpha"
   },
   "dependencies": {
     "react": "19.2.8",

@@ -8,6 +8,11 @@ import type { MorningCycleRepository } from '../ports/MorningCycleRepository';
 
 type MorningMutation = (cycle: MorningCycle, occurredAt: Date) => void;
 
+export interface MorningCycleContext {
+  readonly current: MorningCycle | null;
+  readonly previousUnfinished: MorningCycle | null;
+}
+
 export class MorningCycleApplicationService {
   public constructor(
     private readonly cycles: MorningCycleRepository,
@@ -19,6 +24,18 @@ export class MorningCycleApplicationService {
 
   public get(date: DayDate): Promise<MorningCycle | null> {
     return this.cycles.findByDateKey(date);
+  }
+
+  public async getCurrentContext(): Promise<MorningCycleContext> {
+    const today = this.currentDate.getCurrentDate();
+    const [candidate, previousUnfinished] = await Promise.all([
+      this.cycles.findByDateKey(today),
+      this.cycles.findLatestUnfinishedBefore(today),
+    ]);
+    return Object.freeze({
+      current: candidate?.isActive() === true ? candidate : null,
+      previousUnfinished,
+    });
   }
 
   public async start(date: DayDate): Promise<MorningCycle> {
@@ -58,6 +75,26 @@ export class MorningCycleApplicationService {
     return this.mutate(date, (cycle, occurredAt) => cycle.skipPhysical(occurredAt));
   }
 
+  public markReadyToWork(date: DayDate): Promise<MorningCycle> {
+    this.assertCurrentDate(date);
+    return this.mutate(date, (cycle, occurredAt) => cycle.markReadyToWork(occurredAt));
+  }
+
+  public finish(date: DayDate): Promise<MorningCycle> {
+    this.assertCurrentDate(date);
+    return this.mutate(date, (cycle, occurredAt) => cycle.finish(occurredAt));
+  }
+
+  public async abandonUnfinished(date: DayDate): Promise<MorningCycle> {
+    if (!date.isBefore(this.currentDate.getCurrentDate())) {
+      throw new DomainError(
+        'morning_cycle.previous_date_required',
+        'Как незавершённый можно закрыть только утренний блок прошлого дня.',
+      );
+    }
+    return this.mutate(date, (cycle, occurredAt) => cycle.abandon(occurredAt));
+  }
+
   private assertCurrentDate(date: DayDate): void {
     if (!date.equals(this.currentDate.getCurrentDate())) {
       throw new DomainError(
@@ -91,7 +128,11 @@ export function cloneMorningCycle(cycle: MorningCycle): MorningCycle {
     id: cycle.id,
     dayId: cycle.dayId,
     dateKey: cycle.dateKey,
+    state: cycle.state,
     startedAt: cycle.startedAt,
+    finishedAt: cycle.finishedAt,
+    shortenedMode: cycle.shortenedMode,
+    stageStates: cycle.stageStates,
     waterCompletedAt: cycle.waterCompletedAt,
     waterAmountMl: cycle.waterAmountMl,
     physicalStatus: cycle.physicalStatus,

@@ -4,8 +4,7 @@ export default defineConfig({
   test: {
     environment: 'node',
     globals: true,
-    include: ['src/**/*.test.{ts,tsx}'],
-    exclude: ['src/test/alpha/**/*.test.ts'],
+    include: ['src/test/alpha/AlphaCycleGate.test.ts'],
     setupFiles: ['./src/test/setup.ts'],
   },
 });
