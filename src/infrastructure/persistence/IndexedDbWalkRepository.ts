@@ -55,6 +55,22 @@ export class IndexedDbWalkRepository implements WalkRepository {
     return value === undefined ? null : WalkRecordMapper.fromRecord(value);
   }
 
+  public async findActive(): Promise<Walk | null> {
+    const database = await this.indexedDb.open();
+    const transaction = database.transaction(LIFE_OS_STORE.walks, 'readonly');
+    const completion = observeTransaction(transaction);
+    const statusIndex = transaction.objectStore(LIFE_OS_STORE.walks).index('byStatus');
+    const [running, paused] = await Promise.all([
+      observeRequest<unknown[]>(statusIndex.getAll(WALK_STATUS.running)),
+      observeRequest<unknown[]>(statusIndex.getAll(WALK_STATUS.paused)),
+    ]);
+    await completion;
+    const active = [...running, ...paused];
+    if (active.length > 1) throw multipleActiveWalks();
+    const value = active[0];
+    return value === undefined ? null : WalkRecordMapper.fromRecord(value);
+  }
+
   public async save(walk: Walk): Promise<void> {
     const database = await this.indexedDb.open();
     await executeIndexedDbRequest(database, LIFE_OS_STORE.walks, 'readwrite', (store) =>
@@ -80,7 +96,13 @@ export class IndexedDbWalkRepository implements WalkRepository {
       const running = await observeRequest<WalkRecord | undefined>(
         store.index('byStatus').get(WALK_STATUS.running),
       );
-      if (running !== undefined && running.id !== walk.id.toString()) {
+      const paused = await observeRequest<WalkRecord | undefined>(
+        store.index('byStatus').get(WALK_STATUS.paused),
+      );
+      if (
+        (running !== undefined && running.id !== walk.id.toString()) ||
+        (paused !== undefined && paused.id !== walk.id.toString())
+      ) {
         transaction.abort();
         await settleTransaction(completion);
         return 'runningExists';
@@ -144,6 +166,13 @@ function multipleRunningWalks(): DomainError {
   return new DomainError(
     'walk.multiple_running',
     'Обнаружено несколько идущих прогулок. Данные не изменены.',
+  );
+}
+
+function multipleActiveWalks(): DomainError {
+  return new DomainError(
+    'walk.multiple_active',
+    'Обнаружено несколько активных прогулок. Данные не изменены.',
   );
 }
 

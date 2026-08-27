@@ -36,6 +36,19 @@ export const WALK_TYPE_PRESENTATION: Readonly<Record<WalkType, WalkTypePresentat
 
 export const WALK_TYPE_OPTIONS: readonly WalkType[] = Object.values(WALK_TYPE);
 
+export function formatActualDuration(milliseconds: number | null): string {
+  if (milliseconds === null) return '—';
+  const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return [
+    ...(hours > 0 ? [`${hours} ч`] : []),
+    ...(minutes > 0 ? [`${minutes} мин`] : []),
+    ...(hours === 0 && minutes === 0 ? [`${seconds} сек`] : []),
+  ].join(' ');
+}
+
 export function formatStatisticsDuration(milliseconds: number): string {
   const totalMinutes = Math.max(0, Math.round(milliseconds / 60_000));
   const hours = Math.floor(totalMinutes / 60);

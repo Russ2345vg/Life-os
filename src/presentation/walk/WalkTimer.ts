@@ -7,7 +7,10 @@ export interface WalkTimeSnapshot {
 
 export function getWalkTimeSnapshot(walk: Walk, now: Date): WalkTimeSnapshot {
   if (walk.startedAt === null || walk.mode === null) return { seconds: 0, expired: false };
-  const elapsedSeconds = Math.max(0, Math.floor((now.getTime() - walk.startedAt.getTime()) / 1000));
+  const elapsedSeconds = Math.max(
+    0,
+    Math.floor((walk.elapsedDurationMilliseconds(now) ?? 0) / 1000),
+  );
   if (walk.mode === WALK_MODE.stopwatch) return { seconds: elapsedSeconds, expired: false };
   const targetSeconds = (walk.timerTargetMinutes ?? 0) * 60;
   return {

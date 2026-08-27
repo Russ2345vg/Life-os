@@ -36,6 +36,7 @@ import {
   type Decision,
 } from '../../domain';
 import { DecisionDetailsController } from '../components/DecisionDetailsController';
+import type { DecisionWalkIntegration } from '../decision/DecisionWalkNavigation';
 import { SphereBadge } from '../components/SphereReference';
 import {
   SPHERE_FILTER_ALL,
@@ -65,6 +66,7 @@ import {
 } from './DecisionCreationFormState';
 
 interface DecisionsPageProps {
+  readonly decisionWalk?: DecisionWalkIntegration | undefined;
   readonly currentDate: DayDate;
   readonly selectedDate: DayDate;
   readonly getDecisionsForDate: Pick<GetDecisionsForDate, 'execute'>;
@@ -108,6 +110,7 @@ interface DateScopedFormState {
 }
 
 export function DecisionsPage({
+  decisionWalk,
   currentDate,
   selectedDate,
   getDecisionsForDate,
@@ -186,21 +189,44 @@ export function DecisionsPage({
   const [deleting, setDeleting] = useState(false);
   const [restoringDecisionId, setRestoringDecisionId] = useState<string | null>(null);
   const operationRef = useRef(false);
+  const handledInitialDecisionId = useRef<string | null>(null);
 
   useEffect(() => {
-    if (initialDecisionId === null) return;
+    if (initialDecisionId === null) {
+      handledInitialDecisionId.current = null;
+      return;
+    }
+    if (handledInitialDecisionId.current === initialDecisionId) return;
     let active = true;
-    void getDecisionById.execute(EntityId.create(initialDecisionId)).then((result) => {
-      if (!active || !result.ok || result.value.isDeleted()) return;
-      const decisionDate = result.value.plannedDate;
-      if (decisionDate === null) return;
-      const dateKey = decisionDate.toString();
-      setSelection({ dateKey, decision: result.value });
-      if (!decisionDate.equals(selectedDate)) {
-        selectedDateKeyRef.current = dateKey;
-        onDateChange(decisionDate);
-      }
-    });
+    void getDecisionById
+      .execute(EntityId.create(initialDecisionId))
+      .then((result) => {
+        if (!active) return;
+        handledInitialDecisionId.current = initialDecisionId;
+        if (!result.ok || result.value.isDeleted()) {
+          setNoticeState({
+            dateKey: selectedDate.toString(),
+            message: 'Связанное решение больше недоступно',
+          });
+          return;
+        }
+        const decisionDate = result.value.plannedDate ?? selectedDate;
+        const dateKey = decisionDate.toString();
+        setSelection({ dateKey, decision: result.value });
+        if (!decisionDate.equals(selectedDate)) {
+          selectedDateKeyRef.current = dateKey;
+          onDateChange(decisionDate);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          handledInitialDecisionId.current = initialDecisionId;
+          setNoticeState({
+            dateKey: selectedDate.toString(),
+            message: 'Связанное решение больше недоступно',
+          });
+        }
+      });
     return () => {
       active = false;
     };
@@ -512,6 +538,7 @@ export function DecisionsPage({
       )}
 
       <DecisionDetailsController
+        decisionWalk={decisionWalk}
         decision={selectedDecision}
         currentDate={currentDate}
         selectedDate={selectedDate}

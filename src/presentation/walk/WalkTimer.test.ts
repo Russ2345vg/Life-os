@@ -31,6 +31,35 @@ describe('walk timer presentation', () => {
     });
     expect(walk.status).toBe(WALK_STATUS.running);
   });
+
+  it('freezes stopwatch elapsed time at the pause timestamp', () => {
+    const walk = runningWalk(WALK_MODE.stopwatch).pause(new Date('2026-08-08T08:10:00.000Z'));
+
+    expect(getWalkTimeSnapshot(walk, new Date('2026-08-08T08:40:00.000Z'))).toEqual({
+      seconds: 600,
+      expired: false,
+    });
+  });
+
+  it('does not consume timer time while the walk is paused', () => {
+    const walk = runningWalk(WALK_MODE.timer, 20).pause(new Date('2026-08-08T08:05:00.000Z'));
+
+    expect(getWalkTimeSnapshot(walk, new Date('2026-08-08T08:40:00.000Z'))).toEqual({
+      seconds: 900,
+      expired: false,
+    });
+  });
+
+  it('continues a timer from active time after resume without consuming the pause', () => {
+    const walk = runningWalk(WALK_MODE.timer, 20)
+      .pause(new Date('2026-08-08T08:05:00.000Z'))
+      .resume(new Date('2026-08-08T08:08:00.000Z'));
+
+    expect(getWalkTimeSnapshot(walk, new Date('2026-08-08T08:10:00.000Z'))).toEqual({
+      seconds: 13 * 60,
+      expired: false,
+    });
+  });
 });
 
 function runningWalk(mode: typeof WALK_MODE.stopwatch): Walk;

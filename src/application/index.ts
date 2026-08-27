@@ -229,6 +229,12 @@ export type { RoutineBlockRepository } from './ports/RoutineBlockRepository';
 export type { RoutineOccurrenceOverrideRepository } from './ports/RoutineOccurrenceOverrideRepository';
 export type { StartWalkPersistenceResult, WalkRepository } from './ports/WalkRepository';
 export type {
+  FinishRoutineWalkCommitInput,
+  RoutineWalkPlanExpectation,
+  RoutineWalkUnitOfWork,
+  StartRoutineWalkCommitInput,
+} from './ports/RoutineWalkUnitOfWork';
+export type {
   CreateSpherePersistenceResult,
   SphereRepository,
   UpdateSpherePersistenceResult,
@@ -354,9 +360,31 @@ export {
   type ClearRoutineOccurrenceOverrideInput,
 } from './commands/ClearRoutineOccurrenceOverride';
 export { CreateWalk, type CreateWalkInput } from './commands/CreateWalk';
+export {
+  StartRoutineWalk,
+  type StartRoutineWalkDependencies,
+  type StartRoutineWalkInput,
+} from './commands/StartRoutineWalk';
+export {
+  finishRoutineWalk,
+  type RoutineWalkFinishDependencies,
+} from './commands/routineWalkFinishSupport';
+export {
+  AdvanceWalkReflectionStage,
+  type AdvanceWalkReflectionStageInput,
+} from './commands/AdvanceWalkReflectionStage';
+export {
+  DisableWalkReflectionGuidance,
+  type DisableWalkReflectionGuidanceInput,
+} from './commands/DisableWalkReflectionGuidance';
 export { CompleteWalk, type CompleteWalkInput } from './commands/CompleteWalk';
+export { CompleteWalkReentry, type WalkReentryCommandInput } from './commands/CompleteWalkReentry';
+export { CloseWalkReentry } from './commands/CloseWalkReentry';
+export { RecordWalkOutcome, type RecordWalkOutcomeInput } from './commands/RecordWalkOutcome';
 export { AbandonWalk, type AbandonWalkInput } from './commands/AbandonWalk';
 export { DeleteWalk, type DeleteWalkInput } from './commands/DeleteWalk';
+export { PauseWalk, type PauseWalkInput } from './commands/PauseWalk';
+export { ResumeWalk, type ResumeWalkInput } from './commands/ResumeWalk';
 export { StartWalk, type StartWalkInput } from './commands/StartWalk';
 export { UpdateWalkPhoto, type UpdateWalkPhotoInput } from './commands/UpdateWalkPhoto';
 export { UpdateWalkSphere, type UpdateWalkSphereInput } from './commands/UpdateWalkSphere';
@@ -365,6 +393,29 @@ export {
   type UpdateDayResultSphereInput,
 } from './commands/UpdateDayResultSphere';
 export { GetWalksForDate } from './queries/GetWalksForDate';
+export { GetWalkHistory } from './queries/GetWalkHistory';
+export { GetWalkAnalytics } from './queries/GetWalkAnalytics';
+export { GetWalkRecommendation } from './queries/GetWalkRecommendation';
+export { walkConfidenceLevel } from './walk/WalkInsights';
+export type {
+  WalkInsight,
+  WalkInsightEvidence,
+  WalkConfidenceLevel,
+  WalkInsightSegment,
+} from './walk/WalkInsights';
+export type { WalkRecommendation } from './walk/WalkRecommendationPolicy';
+export type {
+  WalkAnalytics,
+  WalkAnalyticsPeriod,
+  WalkAnalyticsMetric,
+  WalkAnalyticsMetricKey,
+  WalkAnalyticsMode,
+  WalkAnalyticsState,
+} from './walk/WalkAnalytics';
+export { GetWalkHistoryDetail, type WalkHistoryDetail } from './queries/GetWalkHistoryDetail';
+export { WalkSourceContextReader, type WalkSourceContext } from './walk/WalkSourceContextReader';
+export { GetActiveWalk } from './queries/GetActiveWalk';
+export { GetPendingWalkReentry } from './queries/GetPendingWalkReentry';
 export { GetRunningWalk } from './queries/GetRunningWalk';
 export {
   GetWalkStatistics,
@@ -377,6 +428,7 @@ export {
   pickWalkReflectionQuestion,
   type WalkReflectionQuestionPicker,
 } from './walk/WalkReflectionQuestions';
+export { resolveWalkReentryAction, type WalkReentryOutcomeInput } from './walk/WalkReentryPolicy';
 export type {
   RoutineOccurrenceCommandDependencies,
   RoutineOccurrenceCommandInput,
@@ -515,3 +567,20 @@ export {
   type RecommendationPreviewKind,
 } from './recommendations';
 export type { CommitPreparationInput, PreparationUnitOfWork } from './ports/PreparationUnitOfWork';
+export {
+  StartDecisionWalk,
+  DECISION_WALK_DEFAULT_QUESTION,
+  type StartDecisionWalkInput,
+} from './commands/StartDecisionWalk';
+export { GetLatestWalkOutcomeForDecision } from './queries/GetLatestWalkOutcomeForDecision';
+export type { WalkCaptureRepository } from './ports/WalkCaptureRepository';
+export { CreateWalkCapture, type CreateWalkCaptureInput } from './commands/CreateWalkCapture';
+export { UpdateWalkCapture, type UpdateWalkCaptureInput } from './commands/UpdateWalkCapture';
+export { ProcessWalkCapture, type ProcessWalkCaptureInput } from './commands/ProcessWalkCapture';
+export { GetPendingWalkCaptures } from './queries/GetPendingWalkCaptures';
+export { GetWalkCaptures } from './queries/GetWalkCaptures';
+export { GetWalkCaptureById } from './queries/GetWalkCaptureById';
+export {
+  WalkCaptureContextReader,
+  type WalkCaptureReadModel,
+} from './walk-capture/WalkCaptureReadModel';

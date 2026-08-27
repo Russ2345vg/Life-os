@@ -118,4 +118,3 @@ RED → GREEN покрывает:
 Browser QA проходит полный сценарий с ожиданием не менее 10 секунд и сохраняет screenshots active, quick completion и reentry для desktop и mobile.
 
 Финальный gate: целевые Walk tests, persistence/composition tests, `npm run test:alpha`, `npm run verify`, Playwright desktop/mobile и `git diff --check`.
-

@@ -19,6 +19,7 @@ import type {
   GetRoutineActionDetails,
   GetRoutineActionOptions,
   GetRoutineBlocksForDate,
+  GetActiveWalk,
   GetUnfinishedActionSession,
   PauseActionSession,
   RescheduleDecisionSafely,
@@ -69,6 +70,8 @@ import {
   type EffectiveRoutineOccurrence,
   type EveningCycleState,
   type RoutineOccurrenceOverrideType,
+  type Walk,
+  sameWalkRoutineOccurrenceReference,
 } from '../../domain';
 import { DecisionDetailsController } from '../components/DecisionDetailsController';
 import { LifeActionDetailsController } from '../components/LifeActionDetailsController';
@@ -95,6 +98,13 @@ import {
 } from '../routine/RoutineBlockFormState';
 import { RoutineSubmissionGuard } from '../routine/RoutineSubmissionGuard';
 import { openRoutineAssignmentSection } from '../routine/RoutineAssignmentNavigation';
+import {
+  createRoutineWalkLaunchRequest,
+  routineWalkReferenceOf,
+  type RoutineWalkLaunchRequest,
+  type RoutineWalkDestinationRequest,
+} from '../routine/RoutineWalkNavigation';
+import { RoutineWalkActions } from '../routine/RoutineWalkActions';
 import { findRoutineBlockOverlaps } from '../routine/RoutineBlockOverlaps';
 import {
   eveningBlockStatus,
@@ -133,6 +143,10 @@ interface RoutinePageProps {
   readonly completeRoutineOccurrence?: CompleteRoutineOccurrence;
   readonly abandonRoutineOccurrence?: AbandonRoutineOccurrence;
   readonly onOpenWalks?: () => void;
+  readonly getActiveWalk?: Pick<GetActiveWalk, 'execute'>;
+  readonly onStartWalk?: (request: RoutineWalkLaunchRequest) => void;
+  readonly routineReturnTarget?: RoutineWalkDestinationRequest | null;
+  readonly onRoutineReturnHandled?: () => void;
   readonly workflow?: RoutinePageWorkflowServices;
 }
 
@@ -205,12 +219,18 @@ type RunningRoutineState =
   | { readonly status: 'error'; readonly message: string };
 
 export function RoutinePage(props: RoutinePageProps) {
+  const { selectedDate, routineReturnTarget, onRoutineReturnHandled } = props;
   const spheres = useSpheres(props.workflow?.getSpheres ?? EMPTY_GET_SPHERES);
   const projects = useProjects(props.workflow?.getProjects);
   const workflow = props.workflow;
   const [localSection, setLocalSection] = useState<RoutineSection>(ROUTINE_SECTION.day);
   const activeSection = props.activeSection ?? localSection;
   const [blocks, setBlocks] = useState<readonly EffectiveRoutineOccurrence[]>([]);
+  const [loadedDate, setLoadedDate] = useState<DayDate | null>(null);
+  const [activeWalk, setActiveWalk] = useState<Walk | null>(null);
+  const listHeadingRef = useRef<HTMLHeadingElement>(null);
+  const cardRefs = useRef(new Map<string, HTMLElement>());
+  const [returnHighlight, setReturnHighlight] = useState<string | null>(null);
   const [planFacts, setPlanFacts] = useState<ReadonlyMap<string, RoutinePlanFactPresentation>>(
     new Map(),
   );
@@ -249,6 +269,9 @@ export function RoutinePage(props: RoutinePageProps) {
   const [deviationError, setDeviationError] = useState<string | null>(null);
   const savingGuard = useRef(new RoutineSubmissionGuard());
   const activationGuard = useRef(new RoutineSubmissionGuard());
+  const activeWalkReady =
+    props.getActiveWalk === undefined ||
+    (loadedDate?.equals(props.selectedDate) === true && loadError === null);
 
   useEffect(() => {
     let active = true;
@@ -256,14 +279,17 @@ export function RoutinePage(props: RoutinePageProps) {
       props.getRoutineBlocksForDate.execute(props.selectedDate),
       workflow?.getRoutineActionOptions.execute() ?? Promise.resolve([]),
       props.getRoutinePlanFactForDate?.execute(props.selectedDate) ?? Promise.resolve([]),
+      props.getActiveWalk?.execute() ?? Promise.resolve(null),
     ]).then(
-      async ([nextBlocks, nextOptions, nextPlanFacts]) => {
+      async ([nextBlocks, nextOptions, nextPlanFacts, nextActiveWalk]) => {
         const nextDetails =
           workflow === undefined
             ? new Map<string, RoutineActionDetails | null>()
             : await resolveActionDetails(nextBlocks, workflow.getRoutineActionDetails);
         if (!active) return;
         setBlocks(nextBlocks);
+        setActiveWalk(nextActiveWalk);
+        setLoadedDate(props.selectedDate);
         setPlanFacts(new Map(nextPlanFacts.map((item) => [planFactKey(item.occurrence), item])));
         setActionOptions(nextOptions);
         setActionDetails(nextDetails);
@@ -280,8 +306,37 @@ export function RoutinePage(props: RoutinePageProps) {
     workflow,
     props.getRoutineBlocksForDate,
     props.getRoutinePlanFactForDate,
+    props.getActiveWalk,
     props.selectedDate,
   ]);
+
+  useEffect(() => {
+    const target = routineReturnTarget;
+    if (
+      target == null ||
+      loadedDate === null ||
+      !loadedDate.equals(target.date) ||
+      !selectedDate.equals(target.date) ||
+      loadError !== null
+    )
+      return;
+    const occurrence =
+      target.focus === null
+        ? undefined
+        : blocks.find(
+            (block) =>
+              !block.isSkipped &&
+              !block.isRescheduledSource &&
+              sameWalkRoutineOccurrenceReference(routineWalkReferenceOf(block), target.focus!),
+          );
+    const key = occurrence === undefined ? null : planFactKey(occurrence);
+    const element = (key === null ? null : cardRefs.current.get(key)) ?? listHeadingRef.current;
+    if (element == null) return;
+    element.focus({ preventScroll: true });
+    element.scrollIntoView({ block: 'center' });
+    setReturnHighlight(key);
+    onRoutineReturnHandled?.();
+  }, [routineReturnTarget, selectedDate, onRoutineReturnHandled, loadedDate, blocks, loadError]);
 
   useEffect(() => {
     let active = true;
@@ -357,6 +412,8 @@ export function RoutinePage(props: RoutinePageProps) {
     const nextPlanFacts =
       (await props.getRoutinePlanFactForDate?.execute(props.selectedDate)) ?? [];
     setBlocks(nextBlocks);
+    setActiveWalk((await props.getActiveWalk?.execute()) ?? null);
+    setLoadedDate(props.selectedDate);
     setPlanFacts(new Map(nextPlanFacts.map((item) => [planFactKey(item.occurrence), item])));
     setActionOptions(nextOptions);
     setActionDetails(
@@ -701,6 +758,14 @@ export function RoutinePage(props: RoutinePageProps) {
       ? runningRoutine.item
       : null;
   const startBlocked = runningRoutine.status !== 'ready' || runningRoutine.item !== null;
+  const linkedSource = activeWalk?.returnContext?.routineContext?.source;
+  const recoveredWalkLinked =
+    recoveredRunning !== null &&
+    linkedSource != null &&
+    sameWalkRoutineOccurrenceReference(
+      routineWalkReferenceOf(recoveredRunning.occurrence),
+      linkedSource,
+    );
   const activeEveningReviewDate =
     eveningReviewDate ?? (activeSection === ROUTINE_SECTION.evening ? props.selectedDate : null);
 
@@ -770,7 +835,18 @@ export function RoutinePage(props: RoutinePageProps) {
           <p>Запуск новых блоков заблокирован; данные не изменены.</p>
         </section>
       ) : null}
-      {recoveredRunning === null ? null : (
+      {recoveredWalkLinked ? (
+        <section className="routine-recovery">
+          <RoutineWalkActions
+            linked
+            notStarted={false}
+            canStart={false}
+            disabled={false}
+            onStart={() => undefined}
+            onReturn={() => props.onOpenWalks?.()}
+          />
+        </section>
+      ) : recoveredRunning === null || !activeWalkReady ? null : (
         <RoutineRecoveryPanel
           item={recoveredRunning}
           isResolving={isFinishingExecution}
@@ -789,6 +865,9 @@ export function RoutinePage(props: RoutinePageProps) {
           <p>Сохранение разрешено: скорректируйте интервалы вручную, если это необходимо.</p>
         </aside>
       )}
+      <h2 className="routine-list-heading" ref={listHeadingRef} tabIndex={-1}>
+        Блоки распорядка
+      </h2>
       {activeSection === ROUTINE_SECTION.evening ? null : visibleBlocks.length === 0 &&
         loadError === null ? (
         <section className="routine-empty">
@@ -813,9 +892,21 @@ export function RoutinePage(props: RoutinePageProps) {
                 ? (planFact?.execution ?? null)
                 : null;
             const canChangeFact = props.selectedDate.equals(props.currentDate);
+            const isWalkAssignment =
+              block.effectiveAssignment.kind === ROUTINE_BLOCK_ASSIGNMENT.walk;
+            const linkedWalk =
+              linkedSource != null &&
+              sameWalkRoutineOccurrenceReference(routineWalkReferenceOf(block), linkedSource);
+            const walkStart =
+              isWalkAssignment && executionStatus === ROUTINE_EXECUTION_STATUS.notStarted;
             return (
               <article
-                className={`routine-card routine-category-${block.category}${block.isSkipped ? ' routine-card-skipped' : ''}${planFact === undefined ? '' : ` routine-temporal-${planFact.temporalState}`}`}
+                className={`routine-card routine-category-${block.category}${block.isSkipped ? ' routine-card-skipped' : ''}${planFact === undefined ? '' : ` routine-temporal-${planFact.temporalState}`}${returnHighlight === planFactKey(block) ? ' routine-return-target' : ''}`}
+                ref={(element) => {
+                  if (element === null) cardRefs.current.delete(planFactKey(block));
+                  else cardRefs.current.set(planFactKey(block), element);
+                }}
+                tabIndex={-1}
                 key={`${block.id.toString()}-${block.occurrenceDate.toString()}-${block.effectiveDate.toString()}`}
               >
                 <div className="routine-card-time">
@@ -849,7 +940,24 @@ export function RoutinePage(props: RoutinePageProps) {
                   </div>
                 </div>
                 <div className="routine-card-actions">
-                  {executionStatus === ROUTINE_EXECUTION_STATUS.notStarted &&
+                  <RoutineWalkActions
+                    linked={linkedWalk}
+                    notStarted={walkStart}
+                    canStart={
+                      canChangeFact &&
+                      !block.isSkipped &&
+                      !block.isRescheduledSource &&
+                      props.onStartWalk !== undefined
+                    }
+                    disabled={startBlocked || !activeWalkReady}
+                    onStart={() =>
+                      props.onStartWalk?.(createRoutineWalkLaunchRequest(block, visibleBlocks))
+                    }
+                    onReturn={() => props.onOpenWalks?.()}
+                  />
+                  {!walkStart &&
+                  !linkedWalk &&
+                  executionStatus === ROUTINE_EXECUTION_STATUS.notStarted &&
                   !block.isSkipped &&
                   canChangeFact &&
                   props.startRoutineOccurrence !== undefined ? (
@@ -865,7 +973,11 @@ export function RoutinePage(props: RoutinePageProps) {
                       Начать блок
                     </button>
                   ) : null}
-                  {runningExecution !== null && planFact !== undefined && canChangeFact ? (
+                  {!linkedWalk &&
+                  (!isWalkAssignment || activeWalkReady) &&
+                  runningExecution !== null &&
+                  planFact !== undefined &&
+                  canChangeFact ? (
                     <>
                       <button
                         className="primary-button routine-primary-command"
@@ -895,18 +1007,20 @@ export function RoutinePage(props: RoutinePageProps) {
                       </button>
                     </>
                   ) : null}
-                  <button
-                    className="secondary-button"
-                    type="button"
-                    onClick={() =>
-                      details === null &&
-                      block.assignment.kind === ROUTINE_BLOCK_ASSIGNMENT.existingAction
-                        ? openEdit(block.sourceBlock)
-                        : void activate(block)
-                    }
-                  >
-                    {primaryCommandLabel(block, details)}
-                  </button>
+                  {linkedWalk || walkStart ? null : (
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={() =>
+                        details === null &&
+                        block.assignment.kind === ROUTINE_BLOCK_ASSIGNMENT.existingAction
+                          ? openEdit(block.sourceBlock)
+                          : void activate(block)
+                      }
+                    >
+                      {primaryCommandLabel(block, details)}
+                    </button>
+                  )}
                   <button
                     className="secondary-button"
                     type="button"

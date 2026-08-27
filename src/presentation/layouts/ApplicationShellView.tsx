@@ -30,6 +30,7 @@ const DESKTOP_NAVIGATION: readonly NavigationItem[] = [
   { section: APP_SECTION.today, icon: 'today' },
   { section: APP_SECTION.management, icon: 'management' },
   { section: APP_SECTION.routine, icon: 'routine' },
+  { section: APP_SECTION.walks, icon: 'walks' },
   { section: APP_SECTION.spheres, icon: 'spheres' },
   { section: APP_SECTION.history, icon: 'history' },
   { section: APP_SECTION.eveningAnalytics, icon: 'statistics' },

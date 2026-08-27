@@ -72,6 +72,7 @@ import {
   type SessionCompletionKind,
 } from '../../domain';
 import { DecisionDetailsPanel } from '../components/DecisionDetailsPanel';
+import type { DecisionWalkIntegration } from '../decision/DecisionWalkNavigation';
 import { LifeActionDetailsPanel } from '../components/LifeActionDetailsPanel';
 import { EveningReviewPanel } from './EveningReviewPanel';
 import { SphereBadge, SphereSelect } from '../components/SphereReference';
@@ -185,6 +186,7 @@ function useTodayDesktopLayout(): boolean {
 }
 
 interface TodayPageProps {
+  readonly decisionWalk?: DecisionWalkIntegration | undefined;
   readonly currentDate: DayDate;
   readonly currentDay: Day;
   readonly onCurrentDayChange: (day: Day) => void;
@@ -259,6 +261,7 @@ interface TodayPageProps {
 }
 
 export function TodayPage({
+  decisionWalk,
   currentDate,
   currentDay,
   onCurrentDayChange,
@@ -1534,6 +1537,7 @@ export function TodayPage({
         onOpenRoutine={onOpenRoutine}
         onOpenActions={onOpenActions}
         onOpenProject={onOpenProject}
+        decisionWalk={decisionWalk}
         onOpenForm={() => dispatch({ type: 'open_form' })}
         onCloseForm={() => dispatch({ type: 'close_form' })}
         onKindChange={(kind) => dispatch({ type: 'kind_changed', kind })}
@@ -1717,6 +1721,7 @@ interface TodayPageViewProps {
   readonly onDateChange: (date: DayDate) => void;
   readonly onPlanTomorrow: () => void;
   readonly onAddTomorrowAction?: () => void;
+  readonly decisionWalk?: DecisionWalkIntegration | undefined;
   readonly onOpenRoutine?: () => void;
   readonly onOpenActions?: () => void;
   readonly onOpenProject?: (projectId: string) => void;
@@ -1831,6 +1836,7 @@ export function TodayPageView({
   onDateChange,
   onPlanTomorrow,
   onAddTomorrowAction = onPlanTomorrow,
+  decisionWalk,
   onOpenRoutine = () => undefined,
   onOpenActions = () => undefined,
   onOpenProject = () => undefined,
@@ -2371,6 +2377,7 @@ export function TodayPageView({
 
       {state.actionDetails.status === 'closed' ? (
         <DecisionDetailsPanel
+          decisionWalk={decisionWalk}
           spheres={spheres}
           projects={projects}
           onOpenProject={onOpenProject}

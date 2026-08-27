@@ -40,6 +40,14 @@ class TestWalkRepository implements WalkRepository {
     return [...this.#walks.values()].find((walk) => walk.status === WALK_STATUS.running) ?? null;
   }
 
+  public async findActive(): Promise<Walk | null> {
+    return (
+      [...this.#walks.values()].find(
+        (walk) => walk.status === WALK_STATUS.running || walk.status === WALK_STATUS.paused,
+      ) ?? null
+    );
+  }
+
   public async save(walk: Walk): Promise<void> {
     this.#walks.set(walk.id.toString(), walk);
   }
@@ -114,6 +122,43 @@ describe('StartWalk', () => {
     });
   });
 
+  it('uses a non-empty user reflection question instead of the local picker', async () => {
+    const walk = plannedWalk('custom-question');
+    const repository = new TestWalkRepository([walk]);
+    const picker = vi.fn(() => 'Вопрос из локального набора');
+
+    const result = await commandFor(repository, picker).execute({
+      walkId: walk.id,
+      mode: WALK_MODE.timer,
+      timerTargetMinutes: 30,
+      reflectionQuestion: '  Что мне важно спокойно обдумать?  ',
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: { reflectionQuestion: 'Что мне важно спокойно обдумать?' },
+    });
+    expect(picker).not.toHaveBeenCalled();
+  });
+
+  it('uses the local picker when the optional user question is blank', async () => {
+    const walk = plannedWalk('blank-question');
+    const repository = new TestWalkRepository([walk]);
+    const picker = vi.fn(() => 'Вопрос из локального набора');
+
+    const result = await commandFor(repository, picker).execute({
+      walkId: walk.id,
+      mode: WALK_MODE.stopwatch,
+      reflectionQuestion: '   ',
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: { reflectionQuestion: 'Вопрос из локального набора' },
+    });
+    expect(picker).toHaveBeenCalledTimes(1);
+  });
+
   it.each([0, 1.5, 1441])(
     'rejects invalid timer duration %s without changing the walk',
     async (duration) => {
@@ -180,6 +225,29 @@ describe('StartWalk', () => {
     expect(result).toMatchObject({
       ok: false,
       error: { code: 'walk.another_running', message: 'Сначала завершите текущую прогулку.' },
+    });
+    expect((await repository.findById(second.id))?.status).toBe(WALK_STATUS.planned);
+  });
+
+  it('does not start a second walk while another one is paused', async () => {
+    const paused = plannedWalk('paused-active')
+      .start({
+        mode: WALK_MODE.stopwatch,
+        startedAt: STARTED_AT,
+        reflectionQuestion: 'Что сейчас важно?',
+      })
+      .pause(new Date('2026-08-08T08:20:00.000Z'));
+    const second = plannedWalk('second-after-paused');
+    const repository = new TestWalkRepository([paused, second]);
+
+    const result = await commandFor(repository).execute({
+      walkId: second.id,
+      mode: WALK_MODE.stopwatch,
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: 'walk.another_running' },
     });
     expect((await repository.findById(second.id))?.status).toBe(WALK_STATUS.planned);
   });

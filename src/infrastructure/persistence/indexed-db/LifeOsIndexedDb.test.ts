@@ -2,6 +2,9 @@ import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it } from 'vitest';
 import { EntityId, GOAL_STAGE, GOAL_STATUS } from '../../../domain';
 import { IndexedDbGoalRepository } from '../IndexedDbGoalRepository';
+import { IndexedDbWalkRepository } from '../IndexedDbWalkRepository';
+import { WalkRecordMapper } from '../mappers/WalkRecordMapper';
+import { historyWalk } from '../../../test/helpers/WalkHistoryFixtures';
 import { executeIndexedDbRequest } from './IndexedDbRequest';
 import {
   LIFE_OS_DATABASE_NAME,
@@ -11,6 +14,67 @@ import {
 } from './LifeOsIndexedDb';
 
 describe('LifeOsIndexedDb', () => {
+  it('WALK-14 opens v17 Walk outcome and return context unchanged while adding empty Capture storage', async () => {
+    const factory = new IDBFactory();
+    const legacy = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = factory.open(LIFE_OS_DATABASE_NAME, 17);
+      request.onupgradeneeded = () => {
+        for (const name of Object.values(LIFE_OS_STORE)) {
+          if (name === LIFE_OS_STORE.walkCaptures) continue;
+          const store = request.result.createObjectStore(name, { keyPath: 'id' });
+          if (name === LIFE_OS_STORE.walks) {
+            store.createIndex('byDate', 'date');
+            store.createIndex('byStatus', 'status');
+          }
+        }
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const entity = { type: 'decision', id: EntityId.create('v17-decision') } as const;
+    const walk = historyWalk('v17-walk', {
+      beforeState: { energy: 3, tension: 8, clarity: 4 },
+      afterState: { energy: 5, tension: 5, clarity: 6 },
+      impact: 'better',
+      result: 'Сохранённый вывод v17',
+      linkedEntity: entity,
+      returnContext: { origin: 'decision', entity, nextStep: null },
+      reentry: {
+        status: 'pending',
+        preparedAt: new Date('2026-08-26T08:30:00Z'),
+        resolvedAt: null,
+        action: { kind: 'reviewResult', destination: 'decision', entity, nextStep: null },
+      },
+    });
+    const record = WalkRecordMapper.toRecord(walk);
+    const tx = legacy.transaction(['walks', 'decisions', 'routineBlocks', 'goals'], 'readwrite');
+    tx.objectStore('walks').put(record);
+    for (const name of ['decisions', 'routineBlocks', 'goals'])
+      tx.objectStore(name).put({ id: `v17-${name}`, title: `Existing ${name}` });
+    await transactionDone(tx);
+    legacy.close();
+    const adapter = new LifeOsIndexedDb(factory);
+    const upgraded = await adapter.open();
+    expect(
+      await executeIndexedDbRequest(upgraded, 'walks', 'readonly', (store) => store.getAll()),
+    ).toEqual([record]);
+    expect(
+      await executeIndexedDbRequest(upgraded, 'walkCaptures', 'readonly', (store) =>
+        store.getAll(),
+      ),
+    ).toEqual([]);
+    for (const name of ['decisions', 'routineBlocks', 'goals']) {
+      expect(
+        await executeIndexedDbRequest(upgraded, name, 'readonly', (store) => store.getAll()),
+      ).toEqual([{ id: `v17-${name}`, title: `Existing ${name}` }]);
+    }
+    adapter.close();
+    const restored = await new IndexedDbWalkRepository(adapter).findById(walk.id);
+    expect(restored).not.toBeNull();
+    expect(WalkRecordMapper.toRecord(restored!)).toEqual(record);
+    adapter.close();
+  });
+
   it('создаёт текущую схему и все object store с ключом id', async () => {
     const indexedDb = new LifeOsIndexedDb(new IDBFactory());
 
@@ -37,6 +101,7 @@ describe('LifeOsIndexedDb', () => {
       LIFE_OS_STORE.routineOccurrenceOverrides,
       LIFE_OS_STORE.spheres,
       LIFE_OS_STORE.tomorrowPlans,
+      LIFE_OS_STORE.walkCaptures,
       LIFE_OS_STORE.walks,
     ]);
 
@@ -82,6 +147,10 @@ describe('LifeOsIndexedDb', () => {
     expect(indexesOf(transaction.objectStore(LIFE_OS_STORE.walks))).toEqual({
       byDate: false,
       byStatus: false,
+    });
+    expect(indexesOf(transaction.objectStore(LIFE_OS_STORE.walkCaptures))).toEqual({
+      byStatus: false,
+      byWalkId: false,
     });
     expect(indexesOf(transaction.objectStore(LIFE_OS_STORE.spheres))).toEqual({
       byNormalizedName: true,
@@ -167,7 +236,7 @@ describe('LifeOsIndexedDb', () => {
     const secondConnection = await indexedDb.open();
 
     expect(secondConnection).not.toBe(firstConnection);
-    expect([...secondConnection.objectStoreNames]).toHaveLength(19);
+    expect([...secondConnection.objectStoreNames]).toHaveLength(20);
     indexedDb.close();
   });
 
@@ -549,6 +618,7 @@ function openDatabaseVersion16(factory: IDBFactory): Promise<IDBDatabase> {
     const request = factory.open(LIFE_OS_DATABASE_NAME, 16);
     request.addEventListener('upgradeneeded', () => {
       for (const storeName of Object.values(LIFE_OS_STORE)) {
+        if (storeName === LIFE_OS_STORE.walkCaptures) continue;
         const store = request.result.createObjectStore(storeName, { keyPath: 'id' });
         if (storeName === LIFE_OS_STORE.goals) {
           store.createIndex('byStatus', 'status', { unique: false });
@@ -615,7 +685,8 @@ function openVersion13Database(factory: IDBFactory): Promise<IDBDatabase> {
         if (
           storeName !== LIFE_OS_STORE.recommendationApplications &&
           storeName !== LIFE_OS_STORE.morningCycles &&
-          storeName !== LIFE_OS_STORE.goals
+          storeName !== LIFE_OS_STORE.goals &&
+          storeName !== LIFE_OS_STORE.walkCaptures
         ) {
           request.result.createObjectStore(storeName, { keyPath: 'id' });
         }

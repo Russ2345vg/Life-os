@@ -328,6 +328,14 @@ class TestWalkRepository implements WalkRepository {
     return [...this.#items.values()].find((walk) => walk.status === WALK_STATUS.running) ?? null;
   }
 
+  public async findActive(): Promise<Walk | null> {
+    return (
+      [...this.#items.values()].find(
+        (walk) => walk.status === WALK_STATUS.running || walk.status === WALK_STATUS.paused,
+      ) ?? null
+    );
+  }
+
   public async save(walk: Walk): Promise<void> {
     this.#items.set(walk.id.toString(), walk);
   }

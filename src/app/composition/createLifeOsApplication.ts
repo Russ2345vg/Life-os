@@ -68,13 +68,37 @@ import {
   StartRoutineOccurrence,
   CompleteRoutineOccurrence,
   AbandonRoutineOccurrence,
+  AdvanceWalkReflectionStage,
   AbandonWalk,
   CompleteWalk,
+  CompleteWalkReentry,
+  CloseWalkReentry,
   CreateWalk,
   DeleteWalk,
+  DisableWalkReflectionGuidance,
+  GetActiveWalk,
+  GetPendingWalkReentry,
   GetWalkStatistics,
+  GetWalkAnalytics,
+  GetWalkRecommendation,
   GetWalksForDate,
+  GetWalkHistory,
+  GetWalkHistoryDetail,
+  WalkSourceContextReader,
   GetRunningWalk,
+  PauseWalk,
+  RecordWalkOutcome,
+  ResumeWalk,
+  StartRoutineWalk,
+  StartDecisionWalk,
+  GetLatestWalkOutcomeForDecision,
+  CreateWalkCapture,
+  UpdateWalkCapture,
+  ProcessWalkCapture,
+  GetPendingWalkCaptures,
+  GetWalkCaptures,
+  GetWalkCaptureById,
+  WalkCaptureContextReader,
   StartWalk,
   UpdateWalkPhoto,
   UpdateWalkSphere,
@@ -138,7 +162,9 @@ import { IndexedDbJournalUnitOfWork } from '../../infrastructure/persistence/Ind
 import { IndexedDbRoutineBlockRepository } from '../../infrastructure/persistence/IndexedDbRoutineBlockRepository';
 import { IndexedDbRoutineOccurrenceOverrideRepository } from '../../infrastructure/persistence/IndexedDbRoutineOccurrenceOverrideRepository';
 import { IndexedDbRoutineOccurrenceExecutionRepository } from '../../infrastructure/persistence/IndexedDbRoutineOccurrenceExecutionRepository';
+import { IndexedDbRoutineWalkUnitOfWork } from '../../infrastructure/persistence/IndexedDbRoutineWalkUnitOfWork';
 import { IndexedDbWalkRepository } from '../../infrastructure/persistence/IndexedDbWalkRepository';
+import { IndexedDbWalkCaptureRepository } from '../../infrastructure/persistence/IndexedDbWalkCaptureRepository';
 import { IndexedDbSphereRepository } from '../../infrastructure/persistence/IndexedDbSphereRepository';
 import { IndexedDbDirectionRepository } from '../../infrastructure/persistence/IndexedDbDirectionRepository';
 import { IndexedDbProjectRepository } from '../../infrastructure/persistence/IndexedDbProjectRepository';
@@ -195,7 +221,9 @@ export async function createLifeOsApplication(
     const routineOccurrenceExecutionRepository = new IndexedDbRoutineOccurrenceExecutionRepository(
       database,
     );
+    const routineWalkUnitOfWork = new IndexedDbRoutineWalkUnitOfWork(database);
     const walkRepository = new IndexedDbWalkRepository(database);
+    const walkCaptureRepository = new IndexedDbWalkCaptureRepository(database);
     const sphereRepository = new IndexedDbSphereRepository(database);
     const directionRepository = new IndexedDbDirectionRepository(database);
     const projectRepository = new IndexedDbProjectRepository(database);
@@ -604,13 +632,76 @@ export async function createLifeOsApplication(
     const completeRoutineOccurrence = new CompleteRoutineOccurrence(routineExecutionDependencies);
     const abandonRoutineOccurrence = new AbandonRoutineOccurrence(routineExecutionDependencies);
     const createWalk = new CreateWalk(walkRepository, clock, idGenerator);
-    const completeWalk = new CompleteWalk(walkRepository, clock);
-    const abandonWalk = new AbandonWalk(walkRepository, clock);
+    const createWalkCapture = new CreateWalkCapture(
+      walkCaptureRepository,
+      walkRepository,
+      clock,
+      idGenerator,
+    );
+    const updateWalkCapture = new UpdateWalkCapture(walkCaptureRepository, clock);
+    const processWalkCapture = new ProcessWalkCapture(walkCaptureRepository, clock);
+    const captureContext = new WalkCaptureContextReader(
+      walkRepository,
+      decisionRepository,
+      routineBlockRepository,
+    );
+    const getPendingWalkCaptures = new GetPendingWalkCaptures(
+      walkCaptureRepository,
+      captureContext,
+    );
+    const getWalkCaptures = new GetWalkCaptures(walkCaptureRepository, captureContext);
+    const getWalkCaptureById = new GetWalkCaptureById(walkCaptureRepository, captureContext);
+    const startRoutineWalk = new StartRoutineWalk({
+      routineBlockRepository,
+      overrideRepository: routineOccurrenceOverrideRepository,
+      executionRepository: routineOccurrenceExecutionRepository,
+      walkRepository,
+      dayRepository,
+      currentDateProvider,
+      clock,
+      idGenerator,
+      unitOfWork: routineWalkUnitOfWork,
+    });
+    const routineWalkFinish = {
+      executionRepository: routineOccurrenceExecutionRepository,
+      unitOfWork: routineWalkUnitOfWork,
+    };
+    const advanceWalkReflectionStage = new AdvanceWalkReflectionStage(walkRepository, clock);
+    const disableWalkReflectionGuidance = new DisableWalkReflectionGuidance(walkRepository, clock);
+    const completeWalk = new CompleteWalk(walkRepository, clock, routineWalkFinish);
+    const completeWalkReentry = new CompleteWalkReentry(walkRepository, clock);
+    const closeWalkReentry = new CloseWalkReentry(walkRepository, clock);
+    const recordWalkOutcome = new RecordWalkOutcome(walkRepository, clock);
+    const abandonWalk = new AbandonWalk(walkRepository, clock, routineWalkFinish);
     const deleteWalk = new DeleteWalk(walkRepository);
+    const getActiveWalk = new GetActiveWalk(walkRepository);
+    const getPendingWalkReentry = new GetPendingWalkReentry(walkRepository);
     const getWalkStatistics = new GetWalkStatistics(walkRepository, currentDateProvider);
+    const getWalkAnalytics = new GetWalkAnalytics(
+      walkRepository,
+      currentDateProvider,
+      walkCaptureRepository,
+    );
     const getWalksForDate = new GetWalksForDate(walkRepository);
+    const getWalkRecommendation = new GetWalkRecommendation(getWalkAnalytics);
+    const getWalkHistory = new GetWalkHistory(walkRepository);
+    const getWalkHistoryDetail = new GetWalkHistoryDetail(
+      walkRepository,
+      getWalkCaptures,
+      new WalkSourceContextReader(decisionRepository, routineBlockRepository),
+    );
     const getRunningWalk = new GetRunningWalk(walkRepository);
+    const pauseWalk = new PauseWalk(walkRepository, clock);
+    const resumeWalk = new ResumeWalk(walkRepository, clock);
     const startWalk = new StartWalk(walkRepository, currentDateProvider, clock);
+    const startDecisionWalk = new StartDecisionWalk({
+      getDecisionById,
+      getActiveWalk,
+      createWalk,
+      startWalk,
+      currentDateProvider,
+    });
+    const getLatestWalkOutcomeForDecision = new GetLatestWalkOutcomeForDecision(walkRepository);
     const updateWalkPhoto = new UpdateWalkPhoto(walkRepository, clock);
     const updateWalkSphere = new UpdateWalkSphere(walkRepository, clock);
     const createSphere = new CreateSphere(sphereRepository, clock, idGenerator);
@@ -692,6 +783,13 @@ export async function createLifeOsApplication(
       routineOccurrenceExecutionRepository,
       walkRepository,
       sphereRepository,
+      walkCaptureRepository,
+      createWalkCapture,
+      updateWalkCapture,
+      processWalkCapture,
+      getPendingWalkCaptures,
+      getWalkCaptures,
+      getWalkCaptureById,
       directionRepository,
       projectRepository,
       goalRepository,
@@ -778,12 +876,28 @@ export async function createLifeOsApplication(
       completeRoutineOccurrence,
       abandonRoutineOccurrence,
       createWalk,
+      startRoutineWalk,
+      startDecisionWalk,
+      getLatestWalkOutcomeForDecision,
+      advanceWalkReflectionStage,
+      disableWalkReflectionGuidance,
       completeWalk,
+      completeWalkReentry,
+      closeWalkReentry,
+      recordWalkOutcome,
       abandonWalk,
       deleteWalk,
+      getActiveWalk,
+      getPendingWalkReentry,
       getWalkStatistics,
+      getWalkAnalytics,
+      getWalkRecommendation,
       getWalksForDate,
+      getWalkHistory,
+      getWalkHistoryDetail,
       getRunningWalk,
+      pauseWalk,
+      resumeWalk,
       startWalk,
       updateWalkPhoto,
       updateWalkSphere,

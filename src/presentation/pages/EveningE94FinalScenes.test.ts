@@ -281,7 +281,7 @@ describe('E9.4 controller and responsive contract', () => {
 
   it('на старте приложения открывает сохранённые SHUTDOWN и COMPLETED по дате цикла', () => {
     expect(applicationShellSource).toContain('application.getApplicationMode');
-    expect(applicationShellSource).toContain('setStartupEveningDate(cycleDate)');
+    expect(applicationShellSource).toContain('setStartupEveningDate(result.date)');
     expect(todayPageSource).toContain('setEveningReviewDate(startupEveningDate)');
     expect(todayPageSource).toContain('reviewDate={eveningReviewDate}');
   });

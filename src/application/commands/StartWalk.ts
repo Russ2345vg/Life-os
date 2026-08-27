@@ -13,6 +13,7 @@ export interface StartWalkInput {
   readonly walkId: EntityId;
   readonly mode: WalkMode;
   readonly timerTargetMinutes?: number;
+  readonly reflectionQuestion?: string;
 }
 
 export class StartWalk {
@@ -76,16 +77,17 @@ export class StartWalk {
         );
       }
 
-      const running = await this.repository.findRunning();
-      if (running !== null) return anotherWalkRunning();
+      const active = await this.repository.findActive();
+      if (active !== null) return anotherWalkRunning();
 
+      const userQuestion = input.reflectionQuestion?.trim() ?? '';
       const started = stored.start({
         mode: input.mode,
         startedAt: this.clock.now(),
         ...(input.mode === WALK_MODE.timer
           ? { timerTargetMinutes: input.timerTargetMinutes ?? Number.NaN }
           : {}),
-        reflectionQuestion: this.questionPicker(),
+        reflectionQuestion: userQuestion.length > 0 ? userQuestion : this.questionPicker(),
       });
       const saved = await this.repository.startIfVersionMatches(started, stored.version);
       if (saved === 'saved') return success(started);

@@ -1,7 +1,7 @@
 import { DomainError } from '../../../shared/errors/DomainError';
 
 export const LIFE_OS_DATABASE_NAME = 'lifeos';
-export const LIFE_OS_DATABASE_VERSION = 17;
+export const LIFE_OS_DATABASE_VERSION = 18;
 
 export const LIFE_OS_STORE = {
   days: 'days',
@@ -12,6 +12,7 @@ export const LIFE_OS_STORE = {
   routineOccurrenceOverrides: 'routineOccurrenceOverrides',
   routineOccurrenceExecutions: 'routineOccurrenceExecutions',
   walks: 'walks',
+  walkCaptures: 'walkCaptures',
   spheres: 'spheres',
   journal: 'journal',
   directions: 'directions',
@@ -99,6 +100,7 @@ export class LifeOsIndexedDb {
           if (oldVersion < 15) createVersionFifteenSchema(request.result);
           if (oldVersion < 16) createVersionSixteenSchema(request.result);
           if (oldVersion < 17) createVersionSeventeenSchema(request.transaction);
+          if (oldVersion < 18) createVersionEighteenSchema(request.result);
         } catch (error: unknown) {
           upgradeError = error;
           request.transaction?.abort();
@@ -139,6 +141,12 @@ export class LifeOsIndexedDb {
       });
     });
   }
+}
+
+function createVersionEighteenSchema(database: IDBDatabase): void {
+  const captures = database.createObjectStore(LIFE_OS_STORE.walkCaptures, { keyPath: 'id' });
+  captures.createIndex('byWalkId', 'walkId', { unique: false });
+  captures.createIndex('byStatus', 'status', { unique: false });
 }
 
 function createVersionSeventeenSchema(transaction: IDBTransaction | null): void {

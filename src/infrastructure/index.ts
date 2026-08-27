@@ -15,6 +15,7 @@ export { IndexedDbRoutineBlockRepository } from './persistence/IndexedDbRoutineB
 export { IndexedDbRoutineOccurrenceOverrideRepository } from './persistence/IndexedDbRoutineOccurrenceOverrideRepository';
 export { IndexedDbRoutineOccurrenceExecutionRepository } from './persistence/IndexedDbRoutineOccurrenceExecutionRepository';
 export { IndexedDbWalkRepository } from './persistence/IndexedDbWalkRepository';
+export { IndexedDbRoutineWalkUnitOfWork } from './persistence/IndexedDbRoutineWalkUnitOfWork';
 export { IndexedDbSphereRepository } from './persistence/IndexedDbSphereRepository';
 export { IndexedDbTomorrowPlanRepository } from './persistence/IndexedDbTomorrowPlanRepository';
 export { IndexedDbTomorrowPlanUnitOfWork } from './persistence/IndexedDbTomorrowPlanUnitOfWork';
@@ -85,3 +86,6 @@ export type {
   PreparationRuleRecord,
   PauseIntervalRecord,
 } from './persistence/records';
+export { InMemoryWalkCaptureRepository } from './persistence/InMemoryWalkCaptureRepository';
+export { IndexedDbWalkCaptureRepository } from './persistence/IndexedDbWalkCaptureRepository';
+export { WalkCaptureRecordMapper } from './persistence/mappers/WalkCaptureRecordMapper';

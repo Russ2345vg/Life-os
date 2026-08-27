@@ -23,6 +23,7 @@ import type {
 } from '../../application';
 import type { DayDate, Decision, EntityId, LifeAction, Project } from '../../domain';
 import { DecisionDetailsPanel } from './DecisionDetailsPanel';
+import type { DecisionWalkIntegration } from '../decision/DecisionWalkNavigation';
 import { LifeActionDetailsController } from './LifeActionDetailsController';
 import {
   cancelDecisionResult,
@@ -39,6 +40,7 @@ import {
 } from '../pages/TodayPageState';
 
 interface DecisionDetailsControllerProps {
+  readonly decisionWalk?: DecisionWalkIntegration | undefined;
   readonly decision: Decision | null;
   readonly currentDate: DayDate;
   readonly selectedDate: DayDate;
@@ -72,6 +74,7 @@ interface DecisionDetailsControllerProps {
 }
 
 export function DecisionDetailsController({
+  decisionWalk,
   decision,
   currentDate,
   selectedDate,
@@ -422,6 +425,7 @@ export function DecisionDetailsController({
 
   return (
     <DecisionDetailsPanel
+      decisionWalk={decisionWalk}
       details={state.details}
       currentDate={currentDate}
       readOnly={readOnly}

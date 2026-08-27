@@ -20,6 +20,21 @@ describe('RoutineBlock walk navigation', () => {
     expect(openWalks).toHaveBeenCalledOnce();
   });
 
+  it('does not open a walk assignment when navigation is unavailable', () => {
+    expect(openRoutineAssignmentSection({ kind: ROUTINE_BLOCK_ASSIGNMENT.walk }, undefined)).toBe(
+      false,
+    );
+  });
+
+  it('does not navigate a reminder assignment to walks', () => {
+    const openWalks = vi.fn();
+
+    expect(
+      openRoutineAssignmentSection({ kind: ROUTINE_BLOCK_ASSIGNMENT.reminder }, openWalks),
+    ).toBe(false);
+    expect(openWalks).not.toHaveBeenCalled();
+  });
+
   it('keeps a rehydrated legacy walk assignment connected to the walks section', () => {
     const legacyBlock = RoutineBlock.rehydrate({
       id: EntityId.create('legacy-walk-block'),

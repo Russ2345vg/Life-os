@@ -30,8 +30,11 @@ import {
 import { decisionPriorityLabel } from '../entityPresentation';
 import { formatHistoryDuration } from '../historyPresentation';
 import { SphereBadge, SphereSelect } from './SphereReference';
+import { DecisionWalkSection } from '../decision/DecisionWalkSection';
+import type { DecisionWalkIntegration } from '../decision/DecisionWalkNavigation';
 
 interface DecisionDetailsPanelProps {
+  readonly decisionWalk?: DecisionWalkIntegration | undefined;
   readonly details: DecisionDetailsState;
   readonly currentDate: DayDate;
   readonly readOnly: boolean;
@@ -88,6 +91,7 @@ interface DecisionDetailsPanelProps {
 }
 
 export function DecisionDetailsPanel({
+  decisionWalk,
   details,
   currentDate,
   readOnly,
@@ -233,6 +237,14 @@ export function DecisionDetailsPanel({
               <h2 id="decision-details-title">{details.decision.title.toString()}</h2>
             </header>
 
+            {decisionWalk === undefined ? null : (
+              <DecisionWalkSection
+                key={details.decision.id.toString()}
+                decision={details.decision}
+                readOnly={readOnly}
+                integration={decisionWalk}
+              />
+            )}
             {details.decision.isDeleted() ? (
               <section className="decision-deleted-banner" role="status">
                 <strong>Решение находится в корзине</strong>

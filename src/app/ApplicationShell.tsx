@@ -1,6 +1,11 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import type { Day, DayDate } from '../domain';
 import { ApplicationShellView } from '../presentation/layouts/ApplicationShellView';
+import { WalkReentryReminder } from '../presentation/walk/WalkReentryReminder';
+import type {
+  DecisionWalkLaunchRequest,
+  DecisionWalkIntegration,
+} from '../presentation/decision/DecisionWalkNavigation';
 import {
   APP_SECTION,
   resolveMenuEntrySection,
@@ -17,13 +22,22 @@ import {
   type LocalSettings,
 } from '../presentation/settings/localSettings';
 import { startBrowserCurrentDateRefresh } from './lifecycle/BrowserCurrentDateRefresh';
-import { loadEveningStartup } from '../presentation/pages/EveningStartupPresentation';
 import {
   buildRoutineRoute,
   parseRoutineRoute,
   ROUTINE_SECTION,
   type RoutineSection,
 } from '../presentation/routine/RoutineNavigation';
+import { loadApplicationStartup } from './ApplicationStartup';
+import type {
+  RoutineWalkLaunchRequest,
+  RoutineWalkDestinationRequest,
+} from '../presentation/routine/RoutineWalkNavigation';
+import {
+  loadPendingWalkReentry,
+  shouldShowWalkReentryReminder,
+  type PendingWalkReentryState,
+} from './WalkReentryStartup';
 
 const ActionsPage = lazy(() =>
   import('../presentation/pages/ActionsPage').then((module) => ({ default: module.ActionsPage })),
@@ -92,9 +106,24 @@ export function ApplicationShell() {
     initialRoutineRoute?.section ?? ROUTINE_SECTION.day,
   );
   const [openCreateRequested, setOpenCreateRequested] = useState(false);
+  const [decisionLaunchRequest, setDecisionLaunchRequest] =
+    useState<DecisionWalkLaunchRequest | null>(null);
+  const [decisionReturnId, setDecisionReturnId] = useState<string | null>(null);
+  const consumeDecisionLaunch = useCallback(() => setDecisionLaunchRequest(null), []);
+  const [routineLaunchRequest, setRoutineLaunchRequest] = useState<RoutineWalkLaunchRequest | null>(
+    null,
+  );
+  const [routineReturnTarget, setRoutineReturnTarget] =
+    useState<RoutineWalkDestinationRequest | null>(null);
+  const consumeRoutineLaunch = useCallback(() => setRoutineLaunchRequest(null), []);
+  const consumeRoutineReturn = useCallback(() => setRoutineReturnTarget(null), []);
   const [startupEveningDate, setStartupEveningDate] = useState<DayDate | null>(null);
   const [startupStorageError, setStartupStorageError] = useState(false);
   const [startupRetryToken, setStartupRetryToken] = useState(0);
+  const [activeWalkRestored, setActiveWalkRestored] = useState(true);
+  const [pendingWalkReentryState, setPendingWalkReentryState] = useState<PendingWalkReentryState>({
+    status: 'loading',
+  });
   const [managementProjectRequest, setManagementProjectRequest] = useState<{
     readonly projectId: string | null;
     readonly sequence: number;
@@ -151,27 +180,61 @@ export function ApplicationShell() {
   }, []);
 
   useEffect(() => {
-    if (initialRoutineRoute !== null) return;
     let active = true;
 
-    void loadEveningStartup(application.getApplicationMode).then((result) => {
+    const loadStartup = async (): Promise<void> => {
+      const result = await loadApplicationStartup({
+        getActiveWalk: application.getActiveWalk,
+        getApplicationMode: application.getApplicationMode,
+        hasInitialRoutineRoute: initialRoutineRoute !== null,
+      });
       if (!active) return;
-      if (result.status === 'error') {
+      setActiveWalkRestored(result.status === 'active-walk');
+      if (result.status === 'storage-error') {
         setStartupStorageError(true);
         return;
       }
       setStartupStorageError(false);
-      const cycleDate = result.cycleDate;
-      if (cycleDate === null) return;
+      if (result.status === 'active-walk') {
+        setActiveSection(APP_SECTION.walks);
+        setSelectedDate(result.date);
+        return;
+      }
+      if (result.status !== 'evening') return;
       setActiveSection(APP_SECTION.today);
-      setSelectedDate(cycleDate);
-      setStartupEveningDate(cycleDate);
+      setSelectedDate(result.date);
+      setStartupEveningDate(result.date);
+    };
+
+    void loadStartup().catch(() => {
+      if (active) setStartupStorageError(true);
     });
 
     return () => {
       active = false;
     };
   }, [application, initialRoutineRoute, startupRetryToken]);
+
+  const refreshPendingWalkReentry = useCallback(async (): Promise<void> => {
+    setPendingWalkReentryState(await loadPendingWalkReentry(application.getPendingWalkReentry));
+    try {
+      const activeWalk = await application.getActiveWalk.execute();
+      setActiveWalkRestored(activeWalk !== null);
+    } catch {
+      setActiveWalkRestored(true);
+      setStartupStorageError(true);
+    }
+  }, [application]);
+
+  useEffect(() => {
+    let active = true;
+    void loadPendingWalkReentry(application.getPendingWalkReentry).then((state) => {
+      if (active) setPendingWalkReentryState(state);
+    });
+    return () => {
+      active = false;
+    };
+  }, [application]);
   const routineWorkflow = useMemo(
     () => ({
       getRoutineActionOptions: application.getRoutineActionOptions,
@@ -211,6 +274,7 @@ export function ApplicationShell() {
   );
 
   function openSection(section: AppSection): void {
+    setDecisionReturnId(null);
     if (section === APP_SECTION.management) {
       setManagementProjectRequest((current) => ({
         projectId: null,
@@ -290,8 +354,18 @@ export function ApplicationShell() {
     setOpenCreateRequested(true);
   }
 
+  const decisionWalkIntegration: DecisionWalkIntegration = {
+    getLatestOutcome: application.getLatestWalkOutcomeForDecision,
+    onStart: (decision) => {
+      setRoutineLaunchRequest(null);
+      setDecisionLaunchRequest({ decisionId: decision.id, title: decision.title.toString() });
+      openSection(APP_SECTION.walks);
+    },
+  };
+
   const renderDecisionsPage = (initialDecisionId: string | null) => (
     <DecisionsPage
+      decisionWalk={decisionWalkIntegration}
       currentDate={currentDate}
       selectedDate={selectedDate}
       getDecisionsForDate={application.getDecisionsForDate}
@@ -327,7 +401,7 @@ export function ApplicationShell() {
     />
   );
 
-  const decisionsPage = renderDecisionsPage(null);
+  const decisionsPage = renderDecisionsPage(decisionReturnId);
 
   const actionsPage = (
     <ActionsPage
@@ -357,6 +431,7 @@ export function ApplicationShell() {
 
   const todayPage = (
     <TodayPage
+      decisionWalk={decisionWalkIntegration}
       currentDate={currentDate}
       currentDay={currentDay}
       onCurrentDayChange={setCurrentDay}
@@ -408,6 +483,16 @@ export function ApplicationShell() {
     />
   );
 
+  const showPendingWalkReentry = shouldShowWalkReentryReminder({
+    pendingState: pendingWalkReentryState,
+    activeSection,
+    activeWalkRestored,
+  });
+  const showPendingWalkReentryError =
+    pendingWalkReentryState.status === 'error' &&
+    activeSection !== APP_SECTION.walks &&
+    !activeWalkRestored;
+
   return (
     <ApplicationShellView
       activeSection={activeSection}
@@ -422,10 +507,28 @@ export function ApplicationShell() {
       sidebarCollapsed={sidebarCollapsed}
       onToggleSidebar={toggleSidebar}
     >
+      {showPendingWalkReentry || showPendingWalkReentryError ? (
+        <WalkReentryReminder
+          error={
+            showPendingWalkReentryError ? 'Не удалось проверить сохранённое возвращение.' : null
+          }
+          onContinue={() => openSection(APP_SECTION.walks)}
+          onRetry={() => {
+            setPendingWalkReentryState({ status: 'loading' });
+            void refreshPendingWalkReentry();
+          }}
+        />
+      ) : null}
       {startupStorageError ? (
         <aside className="local-data-warning" role="status">
           <span>Не удалось загрузить часть локальных данных.</span>
-          <button type="button" onClick={() => setStartupRetryToken((value) => value + 1)}>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveWalkRestored(true);
+              setStartupRetryToken((value) => value + 1);
+            }}
+          >
             Повторить
           </button>
         </aside>
@@ -500,27 +603,85 @@ export function ApplicationShell() {
             startRoutineOccurrence={application.startRoutineOccurrence}
             completeRoutineOccurrence={application.completeRoutineOccurrence}
             abandonRoutineOccurrence={application.abandonRoutineOccurrence}
-            onOpenWalks={() => setActiveSection(APP_SECTION.walks)}
+            getActiveWalk={application.getActiveWalk}
+            onOpenWalks={() => openSection(APP_SECTION.walks)}
+            onStartWalk={(request) => {
+              setDecisionLaunchRequest(null);
+              setRoutineLaunchRequest(request);
+              openSection(APP_SECTION.walks);
+            }}
+            routineReturnTarget={routineReturnTarget}
+            onRoutineReturnHandled={consumeRoutineReturn}
             workflow={routineWorkflow}
           />
         ) : null}
 
         {activeSection === APP_SECTION.walks ? (
           <WalksPage
+            getWalkHistory={application.getWalkHistory}
+            getWalkAnalytics={application.getWalkAnalytics}
+            getWalkRecommendation={application.getWalkRecommendation}
+            getWalkHistoryDetail={application.getWalkHistoryDetail}
+            onOpenHistoryDecision={(decisionId) => {
+              openSection(APP_SECTION.decisions);
+              setDecisionReturnId(decisionId);
+            }}
+            onOpenHistoryRoutine={(request) => {
+              setSelectedDate(request.date);
+              setRoutineSection(ROUTINE_SECTION.day);
+              setRoutineReturnTarget(request);
+              writeRoutineRoute(ROUTINE_SECTION.day, request.date);
+              setActiveSection(APP_SECTION.routine);
+            }}
+            createWalkCapture={application.createWalkCapture}
+            updateWalkCapture={application.updateWalkCapture}
+            processWalkCapture={application.processWalkCapture}
+            getPendingWalkCaptures={application.getPendingWalkCaptures}
+            getWalkCaptures={application.getWalkCaptures}
+            getWalkCaptureById={application.getWalkCaptureById}
+            startDecisionWalk={application.startDecisionWalk}
+            getDecisionById={application.getDecisionById}
+            decisionLaunchRequest={decisionLaunchRequest}
+            onDecisionLaunchConsumed={consumeDecisionLaunch}
+            onReturnToDecision={(decisionId) => {
+              setDecisionLaunchRequest(null);
+              openSection(APP_SECTION.decisions);
+              setDecisionReturnId(decisionId);
+            }}
+            startRoutineWalk={application.startRoutineWalk}
+            abandonWalk={application.abandonWalk}
+            routineLaunchRequest={routineLaunchRequest}
+            onRoutineLaunchConsumed={consumeRoutineLaunch}
+            onReturnToRoutine={(request) => {
+              setSelectedDate(request.date);
+              setRoutineSection(ROUTINE_SECTION.day);
+              setRoutineReturnTarget(request);
+              writeRoutineRoute(ROUTINE_SECTION.day, request.date);
+              setActiveSection(APP_SECTION.routine);
+            }}
             currentDate={currentDate}
             selectedDate={selectedDate}
             onDateChange={setSelectedDate}
             createWalk={application.createWalk}
+            advanceWalkReflectionStage={application.advanceWalkReflectionStage}
+            disableWalkReflectionGuidance={application.disableWalkReflectionGuidance}
             completeWalk={application.completeWalk}
-            abandonWalk={application.abandonWalk}
+            completeWalkReentry={application.completeWalkReentry}
+            closeWalkReentry={application.closeWalkReentry}
             deleteWalk={application.deleteWalk}
             getWalkStatistics={application.getWalkStatistics}
             getWalksForDate={application.getWalksForDate}
-            getRunningWalk={application.getRunningWalk}
+            getActiveWalk={application.getActiveWalk}
+            getPendingWalkReentry={application.getPendingWalkReentry}
+            pauseWalk={application.pauseWalk}
+            recordWalkOutcome={application.recordWalkOutcome}
+            resumeWalk={application.resumeWalk}
             startWalk={application.startWalk}
             updateWalkPhoto={application.updateWalkPhoto}
             updateWalkSphere={application.updateWalkSphere}
             getSpheres={application.getSpheres}
+            onReentryChanged={refreshPendingWalkReentry}
+            onOpenSection={openSection}
           />
         ) : null}
 

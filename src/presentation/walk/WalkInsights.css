@@ -1,0 +1,146 @@
+.walk-recommendation {
+  min-width: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--color-accent-gold);
+  border-radius: var(--radius-medium);
+  background: var(--color-surface);
+}
+
+.walk-recommendation h2 {
+  margin: var(--space-2) 0;
+  font-size: clamp(1.05rem, 2vw, 1.35rem);
+  line-height: 1.35;
+}
+
+.walk-recommendation p,
+.walk-recommendation-neutral p,
+.walk-current-state p,
+.walk-insights p {
+  margin: 0 0 var(--space-3);
+  line-height: 1.5;
+}
+
+.walk-recommendation-eyebrow,
+.walk-insight-confidence {
+  color: var(--color-accent-gold);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.walk-recommendation-duration,
+.walk-recommendation-reason,
+.walk-recommendation-evidence,
+.walk-current-state {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+.walk-recommendation .walk-session-primary-action {
+  min-height: 44px;
+  margin-top: var(--space-1);
+}
+
+.walk-recommendation-neutral .walk-session-primary-action,
+.walk-recommendation-status .walk-session-primary-action {
+  margin-top: var(--space-3);
+}
+
+.walk-recommendation-secondary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  gap: 0 var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.walk-recommendation-secondary details {
+  flex: 1 1 15rem;
+  min-width: 0;
+}
+
+.walk-recommendation summary,
+.walk-current-state summary,
+.walk-recommendation-ordinary {
+  min-height: 44px;
+  padding: var(--space-3) 0;
+  cursor: pointer;
+  color: var(--color-text);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.walk-recommendation-ordinary {
+  border: 0;
+  background: transparent;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.walk-recommendation summary:focus-visible,
+.walk-current-state summary:focus-visible,
+.walk-recommendation-ordinary:focus-visible {
+  outline: 2px solid var(--color-accent-gold);
+  outline-offset: 3px;
+  border-radius: var(--radius-small);
+}
+
+.walk-recommendation-evidence {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+  overflow-wrap: anywhere;
+}
+
+.walk-recommendation-evidence h3 {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text);
+  font-size: 0.875rem;
+}
+
+.walk-current-state {
+  margin-top: var(--space-2);
+}
+
+.walk-current-state .walk-before-state-fields {
+  grid-template-columns: 1fr;
+}
+
+.walk-insights-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  margin-block: var(--space-4);
+}
+
+.walk-insights-grid article {
+  min-width: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-small);
+}
+
+.walk-insights-grid h3 {
+  margin: 0 0 var(--space-3);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+@media (max-width: 48rem) {
+  .walk-insights-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 30rem) {
+  .walk-recommendation {
+    padding: var(--space-3);
+  }
+
+  .walk-recommendation-secondary {
+    display: block;
+  }
+
+  .walk-recommendation .walk-session-primary-action {
+    width: 100%;
+  }
+}

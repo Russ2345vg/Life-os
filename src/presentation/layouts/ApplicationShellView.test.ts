@@ -153,6 +153,28 @@ describe('ApplicationShellView', () => {
     );
   });
 
+  it('показывает Прогулки в desktop sidebar и mobile menu, но не в фиксированной нижней панели', () => {
+    const markup = renderShell(APP_SECTION.walks);
+    const bottomNavigation = markup.slice(markup.indexOf('Мобильная навигация'));
+    const mobileMenu = renderToStaticMarkup(
+      createElement(ApplicationMobileMenu, {
+        activeSection: APP_SECTION.walks,
+        currentDayStatus: DAY_STATUS.open,
+        onOpenSection: vi.fn(),
+        onClose: vi.fn(),
+      }),
+    );
+
+    expect(markup).toMatch(
+      /aria-current="page"[^>]*>[\s\S]*?<span class="application-navigation-label">Прогулки<\/span>/,
+    );
+    expect(bottomNavigation).not.toContain(
+      '<span class="application-navigation-label">Прогулки</span>',
+    );
+    expect(mobileMenu).toContain('<span class="application-navigation-label">Прогулки</span>');
+    expect(mobileMenu).toContain('aria-current="page"');
+  });
+
   it('готовит мобильное меню поверх страницы с управлением закрытием', () => {
     const markup = renderToStaticMarkup(
       createElement(ApplicationMobileMenu, {

@@ -31,6 +31,19 @@ export class InMemoryWalkRepository implements WalkRepository {
     return running[0] ?? null;
   }
 
+  public async findActive(): Promise<Walk | null> {
+    const active = [...this.#walks.values()].filter(
+      (walk) => walk.status === WALK_STATUS.running || walk.status === WALK_STATUS.paused,
+    );
+    if (active.length > 1) {
+      throw new DomainError(
+        'walk.multiple_active',
+        'Обнаружено несколько активных прогулок. Данные не изменены.',
+      );
+    }
+    return active[0] ?? null;
+  }
+
   public async save(walk: Walk): Promise<void> {
     const key = walk.id.toString();
     this.#walks.set(key, walk);
@@ -45,7 +58,9 @@ export class InMemoryWalkRepository implements WalkRepository {
     if (this.#versions.get(key) !== expectedVersion) return 'versionConflict';
     if (
       [...this.#walks.values()].some(
-        (stored) => stored.status === WALK_STATUS.running && !stored.id.equals(walk.id),
+        (stored) =>
+          (stored.status === WALK_STATUS.running || stored.status === WALK_STATUS.paused) &&
+          !stored.id.equals(walk.id),
       )
     ) {
       return 'runningExists';

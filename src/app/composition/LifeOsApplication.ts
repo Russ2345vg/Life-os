@@ -78,13 +78,36 @@ import type {
   CompleteRoutineOccurrence,
   AbandonRoutineOccurrence,
   WalkRepository,
+  WalkCaptureRepository,
+  CreateWalkCapture,
+  UpdateWalkCapture,
+  ProcessWalkCapture,
+  GetPendingWalkCaptures,
+  GetWalkCaptures,
+  GetWalkCaptureById,
+  AdvanceWalkReflectionStage,
   AbandonWalk,
   CompleteWalk,
+  CompleteWalkReentry,
+  CloseWalkReentry,
   CreateWalk,
   DeleteWalk,
+  DisableWalkReflectionGuidance,
+  GetActiveWalk,
+  GetPendingWalkReentry,
   GetWalkStatistics,
+  GetWalkAnalytics,
+  GetWalkRecommendation,
   GetWalksForDate,
+  GetWalkHistory,
+  GetWalkHistoryDetail,
   GetRunningWalk,
+  PauseWalk,
+  RecordWalkOutcome,
+  ResumeWalk,
+  StartRoutineWalk,
+  StartDecisionWalk,
+  GetLatestWalkOutcomeForDecision,
   StartWalk,
   UpdateWalkPhoto,
   UpdateWalkSphere,
@@ -156,6 +179,13 @@ interface LifeOsApplicationServices {
   readonly routineOccurrenceOverrideRepository: RoutineOccurrenceOverrideRepository;
   readonly routineOccurrenceExecutionRepository: RoutineOccurrenceExecutionRepository;
   readonly walkRepository: WalkRepository;
+  readonly walkCaptureRepository: WalkCaptureRepository;
+  readonly createWalkCapture: CreateWalkCapture;
+  readonly updateWalkCapture: UpdateWalkCapture;
+  readonly processWalkCapture: ProcessWalkCapture;
+  readonly getPendingWalkCaptures: GetPendingWalkCaptures;
+  readonly getWalkCaptures: GetWalkCaptures;
+  readonly getWalkCaptureById: GetWalkCaptureById;
   readonly sphereRepository: SphereRepository;
   readonly directionRepository: DirectionRepository;
   readonly projectRepository: ProjectRepository;
@@ -243,12 +273,28 @@ interface LifeOsApplicationServices {
   readonly completeRoutineOccurrence: CompleteRoutineOccurrence;
   readonly abandonRoutineOccurrence: AbandonRoutineOccurrence;
   readonly createWalk: CreateWalk;
+  readonly startRoutineWalk: StartRoutineWalk;
+  readonly startDecisionWalk: StartDecisionWalk;
+  readonly getLatestWalkOutcomeForDecision: GetLatestWalkOutcomeForDecision;
+  readonly advanceWalkReflectionStage: AdvanceWalkReflectionStage;
+  readonly disableWalkReflectionGuidance: DisableWalkReflectionGuidance;
   readonly completeWalk: CompleteWalk;
+  readonly completeWalkReentry: CompleteWalkReentry;
+  readonly closeWalkReentry: CloseWalkReentry;
+  readonly recordWalkOutcome: RecordWalkOutcome;
   readonly abandonWalk: AbandonWalk;
   readonly deleteWalk: DeleteWalk;
+  readonly getActiveWalk: GetActiveWalk;
+  readonly getPendingWalkReentry: GetPendingWalkReentry;
   readonly getWalkStatistics: GetWalkStatistics;
+  readonly getWalkAnalytics: GetWalkAnalytics;
+  readonly getWalkRecommendation: GetWalkRecommendation;
   readonly getWalksForDate: GetWalksForDate;
+  readonly getWalkHistory: GetWalkHistory;
+  readonly getWalkHistoryDetail: GetWalkHistoryDetail;
   readonly getRunningWalk: GetRunningWalk;
+  readonly pauseWalk: PauseWalk;
+  readonly resumeWalk: ResumeWalk;
   readonly startWalk: StartWalk;
   readonly updateWalkPhoto: UpdateWalkPhoto;
   readonly updateWalkSphere: UpdateWalkSphere;
@@ -302,6 +348,13 @@ export class LifeOsApplication {
   public readonly routineOccurrenceOverrideRepository: RoutineOccurrenceOverrideRepository;
   public readonly routineOccurrenceExecutionRepository: RoutineOccurrenceExecutionRepository;
   public readonly walkRepository: WalkRepository;
+  public readonly walkCaptureRepository: WalkCaptureRepository;
+  public readonly createWalkCapture: CreateWalkCapture;
+  public readonly updateWalkCapture: UpdateWalkCapture;
+  public readonly processWalkCapture: ProcessWalkCapture;
+  public readonly getPendingWalkCaptures: GetPendingWalkCaptures;
+  public readonly getWalkCaptures: GetWalkCaptures;
+  public readonly getWalkCaptureById: GetWalkCaptureById;
   public readonly sphereRepository: SphereRepository;
   public readonly directionRepository: DirectionRepository;
   public readonly projectRepository: ProjectRepository;
@@ -389,12 +442,28 @@ export class LifeOsApplication {
   public readonly completeRoutineOccurrence: CompleteRoutineOccurrence;
   public readonly abandonRoutineOccurrence: AbandonRoutineOccurrence;
   public readonly createWalk: CreateWalk;
+  public readonly startRoutineWalk: StartRoutineWalk;
+  public readonly startDecisionWalk: StartDecisionWalk;
+  public readonly getLatestWalkOutcomeForDecision: GetLatestWalkOutcomeForDecision;
+  public readonly advanceWalkReflectionStage: AdvanceWalkReflectionStage;
+  public readonly disableWalkReflectionGuidance: DisableWalkReflectionGuidance;
   public readonly completeWalk: CompleteWalk;
+  public readonly completeWalkReentry: CompleteWalkReentry;
+  public readonly closeWalkReentry: CloseWalkReentry;
+  public readonly recordWalkOutcome: RecordWalkOutcome;
   public readonly abandonWalk: AbandonWalk;
   public readonly deleteWalk: DeleteWalk;
+  public readonly getActiveWalk: GetActiveWalk;
+  public readonly getPendingWalkReentry: GetPendingWalkReentry;
   public readonly getWalkStatistics: GetWalkStatistics;
+  public readonly getWalkAnalytics: GetWalkAnalytics;
+  public readonly getWalkRecommendation: GetWalkRecommendation;
   public readonly getWalksForDate: GetWalksForDate;
+  public readonly getWalkHistory: GetWalkHistory;
+  public readonly getWalkHistoryDetail: GetWalkHistoryDetail;
   public readonly getRunningWalk: GetRunningWalk;
+  public readonly pauseWalk: PauseWalk;
+  public readonly resumeWalk: ResumeWalk;
   public readonly startWalk: StartWalk;
   public readonly updateWalkPhoto: UpdateWalkPhoto;
   public readonly updateWalkSphere: UpdateWalkSphere;
@@ -448,6 +517,13 @@ export class LifeOsApplication {
     this.routineOccurrenceOverrideRepository = services.routineOccurrenceOverrideRepository;
     this.routineOccurrenceExecutionRepository = services.routineOccurrenceExecutionRepository;
     this.walkRepository = services.walkRepository;
+    this.walkCaptureRepository = services.walkCaptureRepository;
+    this.createWalkCapture = services.createWalkCapture;
+    this.updateWalkCapture = services.updateWalkCapture;
+    this.processWalkCapture = services.processWalkCapture;
+    this.getPendingWalkCaptures = services.getPendingWalkCaptures;
+    this.getWalkCaptures = services.getWalkCaptures;
+    this.getWalkCaptureById = services.getWalkCaptureById;
     this.sphereRepository = services.sphereRepository;
     this.directionRepository = services.directionRepository;
     this.projectRepository = services.projectRepository;
@@ -535,12 +611,28 @@ export class LifeOsApplication {
     this.completeRoutineOccurrence = services.completeRoutineOccurrence;
     this.abandonRoutineOccurrence = services.abandonRoutineOccurrence;
     this.createWalk = services.createWalk;
+    this.startRoutineWalk = services.startRoutineWalk;
+    this.startDecisionWalk = services.startDecisionWalk;
+    this.getLatestWalkOutcomeForDecision = services.getLatestWalkOutcomeForDecision;
+    this.advanceWalkReflectionStage = services.advanceWalkReflectionStage;
+    this.disableWalkReflectionGuidance = services.disableWalkReflectionGuidance;
     this.completeWalk = services.completeWalk;
+    this.completeWalkReentry = services.completeWalkReentry;
+    this.closeWalkReentry = services.closeWalkReentry;
+    this.recordWalkOutcome = services.recordWalkOutcome;
     this.abandonWalk = services.abandonWalk;
     this.deleteWalk = services.deleteWalk;
+    this.getActiveWalk = services.getActiveWalk;
+    this.getPendingWalkReentry = services.getPendingWalkReentry;
     this.getWalkStatistics = services.getWalkStatistics;
+    this.getWalkAnalytics = services.getWalkAnalytics;
+    this.getWalkRecommendation = services.getWalkRecommendation;
     this.getWalksForDate = services.getWalksForDate;
+    this.getWalkHistory = services.getWalkHistory;
+    this.getWalkHistoryDetail = services.getWalkHistoryDetail;
     this.getRunningWalk = services.getRunningWalk;
+    this.pauseWalk = services.pauseWalk;
+    this.resumeWalk = services.resumeWalk;
     this.startWalk = services.startWalk;
     this.updateWalkPhoto = services.updateWalkPhoto;
     this.updateWalkSphere = services.updateWalkSphere;

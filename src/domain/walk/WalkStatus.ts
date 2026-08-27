@@ -1,6 +1,7 @@
 export const WALK_STATUS = {
   planned: 'planned',
   running: 'running',
+  paused: 'paused',
   completed: 'completed',
   abandoned: 'abandoned',
 } as const;
