@@ -1,9 +1,15 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 // @ts-expect-error — тест выполняется в Node, а production tsconfig не включает Node types.
 import { readFileSync } from 'node:fs';
-import type { EveningReviewSnapshot, OpenLoopItem, PreparationSnapshot, ReflectionSession } from '../../application';
+import type {
+  CommitPreparationInput,
+  EveningReviewSnapshot,
+  OpenLoopItem,
+  PreparationSnapshot,
+  ReflectionSession,
+} from '../../application';
 import {
   Day,
   DayDate,
@@ -27,10 +33,19 @@ import {
   PREPARATION_SOURCE_TYPE,
   PreparationItem,
   PreparationPlan,
+  TomorrowPlan,
 } from '../../domain';
 import { PREPARATION_AREA, type PreparationArea } from '../../domain/preparation';
 import { createPlannedDecision } from '../../test/helpers/DecisionTestFactory';
+import { FakeClock, FakeIdGenerator } from '../../test/helpers/Fakes';
 import { createReadyLifeAction } from '../../test/helpers/LifeActionTestFactory';
+import { TestDecisionRepository, TestLifeActionRepository } from '../../test/helpers/TestRepositories';
+import { InMemoryEveningCycleRepository } from '../../infrastructure/persistence/InMemoryEveningCycleRepository';
+import { InMemoryPreparationPlanRepository } from '../../infrastructure/persistence/InMemoryPreparationPlanRepository';
+import { InMemoryPreparationRuleRepository } from '../../infrastructure/persistence/InMemoryPreparationRuleRepository';
+import { InMemoryProjectRepository } from '../../infrastructure/persistence/InMemoryProjectRepository';
+import { InMemoryTomorrowPlanRepository } from '../../infrastructure/persistence/InMemoryTomorrowPlanRepository';
+import { PreparationService } from '../../application/preparation/PreparationService';
 import {
   EveningReflectionHistoryScene,
   EveningTodayHistoryScene,
@@ -69,13 +84,17 @@ describe('completed evening history scenes', () => {
     const versionBefore = plan.version;
 
     const markup = renderPreparationHistory(plan);
+    const sleepArea = preparationAreaMarkup(markup, 'sleep_environment', 'tomorrow_start');
+    const tomorrowArea = preparationAreaMarkup(markup, 'tomorrow_start');
 
     expect(markup).toContain('Среда для сна');
     expect(markup).toContain('Среда для завтра');
-    expect(markup).toContain('Проветрить комнату');
-    expect(markup).toContain('Положить одежду на завтра');
-    expect(markup).toContain('Выполнено');
-    expect(markup).toContain('Было осознанно пропущено');
+    expect(sleepArea).toContain('Проветрить комнату');
+    expect(sleepArea).toContain('Выполнено');
+    expect(sleepArea).not.toContain('Положить одежду на завтра');
+    expect(tomorrowArea).toContain('Положить одежду на завтра');
+    expect(tomorrowArea).toContain('Было осознанно пропущено');
+    expect(tomorrowArea).not.toContain('Проветрить комнату');
     expect(markup).toContain('>Изменить подготовку</button>');
     expect(markup).not.toContain('>Выполнено</button>');
     expect(markup).not.toContain('>Пропустить сегодня</button>');
@@ -86,6 +105,67 @@ describe('completed evening history scenes', () => {
       'COMPLETED',
       'COMPLETED',
     ]);
+  });
+
+  it('открывает сохранённый completed history без генерации, записи или application mutation', async () => {
+    const cycles = new InMemoryEveningCycleRepository();
+    const tomorrowPlans = new InMemoryTomorrowPlanRepository();
+    const preparationPlans = new InMemoryPreparationPlanRepository();
+    const rules = new InMemoryPreparationRuleRepository();
+    const ids = new FakeIdGenerator('completed-history-read');
+    const cycle = completedCycle();
+    const tomorrowPlan = TomorrowPlan.create({
+      id: EntityId.create('completed-history-tomorrow-plan'),
+      cycleId: cycle.id,
+      sourceDayId: cycle.dayId,
+      targetDayId: EntityId.create('completed-history-target-day'),
+      targetDateKey: TOMORROW,
+      createdAt: NOW,
+    });
+    const storedPlan = PreparationPlan.rehydrate({
+      id: EntityId.create('completed-history-preparation-plan'),
+      cycleId: cycle.id,
+      tomorrowPlanId: tomorrowPlan.id,
+      targetDayId: tomorrowPlan.targetDayId,
+      items: [],
+      requiredCoreKeys: null,
+      sourceVersion: 1,
+      generationSignature: 'saved-history',
+      status: PREPARATION_PLAN_STATUS.completed,
+      createdAt: NOW,
+      updatedAt: NOW,
+      completedAt: NOW,
+      version: 7,
+    });
+    const commit = vi.fn(async (_input: CommitPreparationInput): Promise<void> => undefined);
+    const service = new PreparationService(
+      cycles,
+      tomorrowPlans,
+      preparationPlans,
+      rules,
+      new TestDecisionRepository(),
+      new TestLifeActionRepository(),
+      new InMemoryProjectRepository(),
+      new FakeClock(NOW),
+      ids,
+      { commit },
+    );
+    await cycles.createIfAbsent(cycle);
+    await tomorrowPlans.createIfAbsent(tomorrowPlan);
+    await preparationPlans.createIfAbsent(storedPlan);
+    const create = vi.spyOn(preparationPlans, 'createIfAbsent');
+    const save = vi.spyOn(preparationPlans, 'saveIfVersionMatches');
+    const readRules = vi.spyOn(rules, 'findActive');
+
+    const history = await service.getOrGenerate(DATE);
+
+    expect(history.plan).toBe(storedPlan);
+    expect(history.plan.version).toBe(7);
+    expect(ids.generatedCount).toBe(0);
+    expect(readRules).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
+    expect(commit).not.toHaveBeenCalled();
   });
 
   it('открывает legacy историю только с сохранённой средой завтра без фабрикации сна', () => {
@@ -428,6 +508,18 @@ function renderPreparationHistory(plan: PreparationPlan): string {
       onReviewEditingChange: () => undefined,
     }),
   );
+}
+
+function preparationAreaMarkup(
+  markup: string,
+  area: 'sleep_environment' | 'tomorrow_start',
+  nextArea?: 'tomorrow_start',
+): string {
+  const start = markup.indexOf(`data-area="${area}"`);
+  const end = nextArea === undefined ? markup.length : markup.indexOf(`data-area="${nextArea}"`, start);
+  expect(start).toBeGreaterThanOrEqual(0);
+  expect(end).toBeGreaterThan(start);
+  return markup.slice(start, end);
 }
 
 function completedPreparationPlan(items: readonly PreparationItem[]): PreparationPlan {
