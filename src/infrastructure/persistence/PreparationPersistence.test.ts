@@ -58,6 +58,12 @@ describe('Preparation persistence', () => {
     plan.configureRequiredCore(['sleep-lights', 'tomorrow-clothes', 'tomorrow-water'], NOW);
     plan.completeItem(completed!.id, NOW);
     plan.skipItem(skipped!.id, NOW, 'Сегодня сознательно сокращаю подготовку');
+    const expectedCompleted = plan.items.find(
+      (item) => item.status === PREPARATION_ITEM_STATUS.completed,
+    );
+    const expectedSkipped = plan.items.find(
+      (item) => item.status === PREPARATION_ITEM_STATUS.skipped,
+    );
     await repository.createIfAbsent(plan);
 
     database.close();
@@ -73,6 +79,12 @@ describe('Preparation persistence', () => {
     expect(
       restored?.items.find((item) => item.status === PREPARATION_ITEM_STATUS.skipped)?.skipReason,
     ).toBe('Сегодня сознательно сокращаю подготовку');
+    expect(
+      restored?.items.find((item) => item.status === PREPARATION_ITEM_STATUS.completed)?.completedAt,
+    ).toEqual(expectedCompleted?.completedAt);
+    expect(
+      restored?.items.find((item) => item.status === PREPARATION_ITEM_STATUS.skipped)?.skippedAt,
+    ).toEqual(expectedSkipped?.skippedAt);
     database.close();
   });
 
@@ -146,6 +158,12 @@ describe('Preparation persistence', () => {
     const changedCycle = cloneEveningCycle(storedCycle);
     changedPlan.complete(NOW);
     changedCycle.completePreparation(NOW);
+    const expectedCompleted = changedPlan.items.find(
+      (item) => item.status === PREPARATION_ITEM_STATUS.completed,
+    );
+    const expectedSkipped = changedPlan.items.find(
+      (item) => item.skipReason === 'Сегодня сознательно сокращаю подготовку',
+    );
     await new IndexedDbPreparationUnitOfWork(database).commit({
       plan: changedPlan,
       expectedPlanVersion: storedPlan.version,
@@ -173,6 +191,14 @@ describe('Preparation persistence', () => {
       PREPARATION_ITEM_STATUS.pending,
     ]);
     expect(restoredPlan?.items[1]?.skipReason).toBe('Сегодня сознательно сокращаю подготовку');
+    expect(
+      restoredPlan?.items.find((item) => item.status === PREPARATION_ITEM_STATUS.completed)
+        ?.completedAt,
+    ).toEqual(expectedCompleted?.completedAt);
+    expect(
+      restoredPlan?.items.find((item) => item.skipReason === 'Сегодня сознательно сокращаю подготовку')
+        ?.skippedAt,
+    ).toEqual(expectedSkipped?.skippedAt);
     expect(restored?.state).toBe(EVENING_CYCLE_STATE.shutdown);
     expect(restored?.completedAt).toBeNull();
     expect((await database.open()).version).toBe(LIFE_OS_DATABASE_VERSION);
