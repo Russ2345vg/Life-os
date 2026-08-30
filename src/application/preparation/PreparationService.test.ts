@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type {
   CommitPreparationInput,
   EveningCycleRepository,
@@ -30,6 +30,7 @@ import {
   TOMORROW_PLAN_STATUS,
   TomorrowPlan,
 } from '../../domain';
+import { PREPARATION_AREA } from '../../domain/preparation';
 import { FakeClock, FakeIdGenerator } from '../../test/helpers/Fakes';
 import {
   TestDecisionRepository,
@@ -67,7 +68,37 @@ describe('PreparationService', () => {
         PREPARATION_CATEGORY.cognitive,
       ]),
     );
-    expect(first.plan.activeItems.length).toBeLessThanOrEqual(5);
+    expect(first.plan.activeItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ area: PREPARATION_AREA.sleepEnvironment }),
+        expect.objectContaining({ area: PREPARATION_AREA.tomorrowStart }),
+      ]),
+    );
+    expect(first.recommendedCoreKeys).toHaveLength(4);
+  });
+
+  it('requires explicit core confirmation and restores its persisted selection', async () => {
+    const context = await createContext();
+    const generated = await context.service.getOrGenerate(CYCLE_DATE);
+
+    expect(generated.plan.coreConfigured).toBe(false);
+    await expect(context.service.continueToShutdown(CYCLE_DATE)).rejects.toMatchObject({
+      code: 'preparation.required_core_not_configured',
+    });
+
+    const configured = await context.service.configureRequiredCore(
+      CYCLE_DATE,
+      generated.recommendedCoreKeys,
+    );
+
+    expect(configured.plan.requiredCoreKeys).toEqual(generated.recommendedCoreKeys);
+    expect(
+      configured.plan.activeItems.filter((item) => item.required).map((item) => item.key),
+    ).toEqual(generated.recommendedCoreKeys);
+
+    const refreshed = await context.secondService.getOrGenerate(CYCLE_DATE);
+    expect(refreshed.plan.requiredCoreKeys).toEqual(generated.recommendedCoreKeys);
+    expect(refreshed.recommendedCoreKeys).toEqual(generated.recommendedCoreKeys);
   });
 
   it('восстанавливает выполненные и пропущенные пункты после пересоздания сервиса', async () => {
@@ -86,10 +117,10 @@ describe('PreparationService', () => {
   it('пересчитывает изменённый TomorrowPlan, не дублирует и сохраняет выполненную историю', async () => {
     const context = await createContext();
     const generated = await context.service.getOrGenerate(CYCLE_DATE);
-    const physical = generated.plan.activeItems.find(
-      (item) => item.category === PREPARATION_CATEGORY.physical,
+    const workspace = generated.plan.activeItems.find((item) =>
+      item.key.startsWith('FIRST_ACTION:action:DEVELOPMENT_WORKSPACE'),
     )!;
-    await context.service.completeItem(CYCLE_DATE, physical.id);
+    await context.service.completeItem(CYCLE_DATE, workspace.id);
 
     const meeting = createAction('meeting-action', 'Встреча в офисе', context.decision.id);
     await context.actions.save(meeting);
@@ -100,9 +131,9 @@ describe('PreparationService', () => {
     expect(await context.tomorrowPlans.saveIfVersionMatches(changed, expectedVersion)).toBe(true);
 
     const recalculated = await context.service.getOrGenerate(CYCLE_DATE);
-    const historicalPhysical = recalculated.plan.items.find((item) => item.id.equals(physical.id));
+    const historicalWorkspace = recalculated.plan.items.find((item) => item.id.equals(workspace.id));
 
-    expect(historicalPhysical).toMatchObject({
+    expect(historicalWorkspace).toMatchObject({
       active: false,
       status: PREPARATION_ITEM_STATUS.completed,
     });
@@ -119,9 +150,16 @@ describe('PreparationService', () => {
     expect(generated.plan.targetDayId.equals(id('target-day'))).toBe(true);
 
     await expect(context.service.continueToShutdown(CYCLE_DATE)).rejects.toMatchObject({
+      code: 'preparation.required_core_not_configured',
+    });
+    const configured = await context.service.configureRequiredCore(
+      CYCLE_DATE,
+      generated.recommendedCoreKeys,
+    );
+    await expect(context.service.continueToShutdown(CYCLE_DATE)).rejects.toMatchObject({
       code: 'preparation.required_items_pending',
     });
-    for (const item of generated.plan.activeItems.filter((candidate) => candidate.required)) {
+    for (const item of configured.plan.activeItems.filter((candidate) => candidate.required)) {
       await context.service.skipItem(CYCLE_DATE, item.id, 'Осознанно');
     }
     const completed = await context.service.continueToShutdown(CYCLE_DATE);
@@ -151,7 +189,11 @@ describe('PreparationService', () => {
 
     const restored = await context.service.completeItem(CYCLE_DATE, first.id);
     expect(restored.plan.activeItems[0]!.status).toBe(PREPARATION_ITEM_STATUS.completed);
-    for (const item of restored.plan.activeItems.filter(
+    const configured = await context.service.configureRequiredCore(
+      CYCLE_DATE,
+      restored.recommendedCoreKeys,
+    );
+    for (const item of configured.plan.activeItems.filter(
       (candidate) => candidate.required && candidate.status === PREPARATION_ITEM_STATUS.pending,
     )) {
       await context.service.completeItem(CYCLE_DATE, item.id);
@@ -165,6 +207,42 @@ describe('PreparationService', () => {
     expect((await context.cycles.findByDateKey(CYCLE_DATE))?.state).toBe(
       EVENING_CYCLE_STATE.completed,
     );
+  });
+
+  it('returns completed history unchanged when rules and TomorrowPlan later change', async () => {
+    const context = await createContext(NOW, EVENING_CYCLE_STATE.completed);
+    const generated = await context.service.getOrGenerate(CYCLE_DATE);
+    const configured = await context.service.configureRequiredCore(
+      CYCLE_DATE,
+      generated.recommendedCoreKeys,
+    );
+    for (const item of configured.plan.activeItems.filter((candidate) => candidate.required)) {
+      await context.service.skipItem(CYCLE_DATE, item.id, 'История сохранена');
+    }
+    const completed = await context.service.continueToShutdown(CYCLE_DATE);
+
+    await context.service.createRule({
+      condition: PREPARATION_RULE_CONDITION.firstActionContains,
+      conditionValue: 'изучить',
+      category: PREPARATION_CATEGORY.cognitive,
+      title: 'Новое правило',
+      required: false,
+    });
+    const tomorrow = (await context.tomorrowPlans.findByCycleId(context.cycle.id))!;
+    const changedTomorrow = cloneTomorrow(tomorrow);
+    const replacement = createAction('replacement', 'Встреча в офисе', context.decision.id);
+    await context.actions.save(replacement);
+    changedTomorrow.assignFirstAction(replacement.id, NOW);
+    expect(await context.tomorrowPlans.saveIfVersionMatches(changedTomorrow, tomorrow.version)).toBe(
+      true,
+    );
+    const save = vi.spyOn(context.preparationPlans, 'saveIfVersionMatches');
+
+    const recovered = await context.secondService.getOrGenerate(CYCLE_DATE);
+
+    expect(recovered.plan.version).toBe(completed.plan.version);
+    expect(recovered.plan.items).toEqual(completed.plan.items);
+    expect(save).not.toHaveBeenCalled();
   });
 });
 
@@ -209,6 +287,7 @@ async function createContext(
   return {
     cycles,
     tomorrowPlans,
+    preparationPlans,
     actions,
     cycle,
     decision,

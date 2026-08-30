@@ -16,6 +16,7 @@ import {
   type Project,
   type TomorrowPlan,
 } from '../../domain';
+import { PREPARATION_AREA } from '../../domain/preparation';
 import { DomainError } from '../../shared/errors/DomainError';
 import { cloneEveningCycle } from '../evening-cycle';
 import type { Clock } from '../ports/Clock';
@@ -28,9 +29,14 @@ import type { PreparationRuleRepository } from '../ports/PreparationRuleReposito
 import type { PreparationUnitOfWork } from '../ports/PreparationUnitOfWork';
 import type { ProjectRepository } from '../ports/ProjectRepository';
 import type { TomorrowPlanRepository } from '../ports/TomorrowPlanRepository';
+import {
+  environmentPreparationRequirements,
+  recommendedEnvironmentCoreKeys,
+} from './EnvironmentPreparationCatalog';
 
 export interface PreparationSnapshot {
   readonly plan: PreparationPlan;
+  readonly recommendedCoreKeys: readonly string[];
   readonly firstAction: LifeAction | null;
   readonly primaryDecision: Decision | null;
   readonly project: Project | null;
@@ -68,7 +74,13 @@ export class PreparationService {
   ) {}
 
   public async getOrGenerate(cycleDate: DayDate): Promise<PreparationSnapshot> {
-    const context = await this.generationContext(cycleDate);
+    const cycle = await this.requirePreparingCycle(cycleDate);
+    const storedPlan = await this.preparationPlans.findByCycleId(cycle.id);
+    if (cycle.state === EVENING_CYCLE_STATE.completed && storedPlan !== null) {
+      return snapshot(storedPlan, await this.historyContextForCycle(cycle));
+    }
+
+    const context = await this.contextForCycle(cycle);
     const signature = generationSignature(context);
     const requirements = generateRequirements(context);
 
@@ -125,6 +137,13 @@ export class PreparationService {
     reason?: string | null,
   ): Promise<PreparationSnapshot> {
     return this.mutate(cycleDate, (plan, now) => plan.skipItem(itemId, now, reason));
+  }
+
+  public async configureRequiredCore(
+    cycleDate: DayDate,
+    itemKeys: readonly string[],
+  ): Promise<PreparationSnapshot> {
+    return this.mutate(cycleDate, (plan, now) => plan.configureRequiredCore(itemKeys, now));
   }
 
   public async createRule(input: CreatePreparationRuleInput): Promise<PreparationRule> {
@@ -229,6 +248,23 @@ export class PreparationService {
     return { plan, cycle, firstAction, primaryDecision, project, rules };
   }
 
+  private async historyContextForCycle(cycle: EveningCycle): Promise<GenerationContext> {
+    const plan = await this.tomorrowPlans.findByCycleId(cycle.id);
+    if (plan === null) {
+      throw new DomainError('preparation.tomorrow_plan_not_found', 'План завтра не найден.');
+    }
+    const firstAction =
+      plan.firstActionId === null ? null : await this.lifeActions.findById(plan.firstActionId);
+    return {
+      plan,
+      cycle,
+      firstAction,
+      primaryDecision: null,
+      project: null,
+      rules: [],
+    };
+  }
+
   private async requirePreparingCycle(cycleDate: DayDate): Promise<EveningCycle> {
     const cycle = await this.cycles.findByDateKey(cycleDate);
     if (cycle === null)
@@ -253,6 +289,7 @@ export function clonePreparationPlan(plan: PreparationPlan): PreparationPlan {
     tomorrowPlanId: plan.tomorrowPlanId,
     targetDayId: plan.targetDayId,
     items: plan.items,
+    requiredCoreKeys: plan.requiredCoreKeys,
     sourceVersion: plan.sourceVersion,
     generationSignature: plan.generationSignature,
     status: plan.status,
@@ -266,6 +303,10 @@ export function clonePreparationPlan(plan: PreparationPlan): PreparationPlan {
 function snapshot(plan: PreparationPlan, context: GenerationContext): PreparationSnapshot {
   return Object.freeze({
     plan,
+    recommendedCoreKeys:
+      plan.requiredCoreKeys === null
+        ? recommendedEnvironmentCoreKeys(plan.activeItems)
+        : plan.requiredCoreKeys,
     firstAction: context.firstAction,
     primaryDecision: context.primaryDecision,
     project: context.project,
@@ -281,11 +322,13 @@ function generationSignature(context: GenerationContext): string {
     .map((item) => item.id.toString())
     .sort()
     .join(',');
-  return `tomorrow:${context.plan.version}|rules:${ruleSignature}|corrections:${corrections}`;
+  return `environment:r4|tomorrow:${context.plan.version}|rules:${ruleSignature}|corrections:${corrections}`;
 }
 
 function generateRequirements(context: GenerationContext): readonly PreparationRequirement[] {
-  const requirements: PreparationRequirement[] = [];
+  const requirements: PreparationRequirement[] = [
+    ...environmentPreparationRequirements(context.firstAction),
+  ];
   const actionText = normalizeMatchText(context.firstAction?.title.toString() ?? '');
   const decisionText = normalizeMatchText(context.primaryDecision?.title.toString() ?? '');
   const projectText = normalizeMatchText(context.project?.title ?? '');
@@ -294,6 +337,7 @@ function generateRequirements(context: GenerationContext): readonly PreparationR
   for (const rule of context.rules.filter((candidate) => matchesRule(candidate, context))) {
     requirements.push({
       key: `RULE:${rule.id.toString()}`,
+      area: PREPARATION_AREA.tomorrowStart,
       category: rule.category,
       title: rule.title,
       sourceType: PREPARATION_SOURCE_TYPE.rule,
@@ -305,6 +349,7 @@ function generateRequirements(context: GenerationContext): readonly PreparationR
   if (context.project !== null) {
     requirements.push({
       key: `PROJECT:${context.project.id.toString()}:OPEN`,
+      area: PREPARATION_AREA.tomorrowStart,
       category: PREPARATION_CATEGORY.digital,
       title: `Открыть проект «${context.project.title}»`,
       sourceType: PREPARATION_SOURCE_TYPE.project,
@@ -363,6 +408,7 @@ function generateRequirements(context: GenerationContext): readonly PreparationR
   for (const correction of context.cycle.reflectionCorrections.filter(isPreparationCorrection)) {
     requirements.push({
       key: `REFLECTION:${correction.id.toString()}`,
+      area: PREPARATION_AREA.tomorrowStart,
       category: categoryForText(correction.action),
       title: correction.action,
       sourceType: PREPARATION_SOURCE_TYPE.reflection,
@@ -371,7 +417,13 @@ function generateRequirements(context: GenerationContext): readonly PreparationR
     });
   }
 
-  return requirements.sort((left, right) => Number(right.required) - Number(left.required));
+  const deduplicated = new Map<string, PreparationRequirement>();
+  for (const requirement of requirements) {
+    if (!deduplicated.has(requirement.key)) deduplicated.set(requirement.key, requirement);
+  }
+  return [...deduplicated.values()].sort(
+    (left, right) => Number(right.required) - Number(left.required),
+  );
 }
 
 function requirementForAction(
@@ -383,6 +435,7 @@ function requirementForAction(
 ): PreparationRequirement {
   return {
     key: `FIRST_ACTION:${action?.id.toString() ?? 'MISSING'}:${suffix}`,
+    area: PREPARATION_AREA.tomorrowStart,
     category,
     title,
     sourceType: PREPARATION_SOURCE_TYPE.firstAction,
