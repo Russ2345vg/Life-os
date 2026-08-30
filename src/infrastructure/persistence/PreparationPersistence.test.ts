@@ -13,10 +13,15 @@ import {
   PREPARATION_SOURCE_TYPE,
   PreparationPlan,
 } from '../../domain';
+import { PREPARATION_AREA } from '../../domain/preparation';
 import { IndexedDbEveningCycleRepository } from './IndexedDbEveningCycleRepository';
 import { IndexedDbPreparationPlanRepository } from './IndexedDbPreparationPlanRepository';
 import { IndexedDbPreparationUnitOfWork } from './IndexedDbPreparationUnitOfWork';
-import { LifeOsIndexedDb } from './indexed-db/LifeOsIndexedDb';
+import {
+  LIFE_OS_DATABASE_VERSION,
+  LIFE_OS_STORE,
+  LifeOsIndexedDb,
+} from './indexed-db/LifeOsIndexedDb';
 
 const NOW = new Date('2026-08-14T14:00:00.000Z');
 const DATE = DayDate.create('2026-08-14');
@@ -45,11 +50,60 @@ describe('Preparation persistence', () => {
     database.close();
   });
 
+  it('сохраняет области среды, обязательное ядро и результаты пунктов при перезагрузке', async () => {
+    const database = new LifeOsIndexedDb(new IDBFactory());
+    const repository = new IndexedDbPreparationPlanRepository(database);
+    const plan = createEnvironmentPlan();
+    const [completed, skipped] = plan.items;
+    plan.configureRequiredCore(['sleep-lights', 'tomorrow-clothes', 'tomorrow-water'], NOW);
+    plan.completeItem(completed!.id, NOW);
+    plan.skipItem(skipped!.id, NOW, 'Сегодня сознательно сокращаю подготовку');
+    await repository.createIfAbsent(plan);
+
+    database.close();
+    const restored = await new IndexedDbPreparationPlanRepository(database).findByCycleId(
+      id('environment-cycle'),
+    );
+
+    expect(restored?.requiredCoreKeys).toEqual(plan.requiredCoreKeys);
+    expect(restored?.items.map((item) => item.area)).toEqual(plan.items.map((item) => item.area));
+    expect(restored?.items.map((item) => item.status)).toEqual(
+      plan.items.map((item) => item.status),
+    );
+    expect(
+      restored?.items.find((item) => item.status === PREPARATION_ITEM_STATUS.skipped)?.skipReason,
+    ).toBe('Сегодня сознательно сокращаю подготовку');
+    database.close();
+  });
+
+  it('читает legacy-запись без области и обязательного ядра без изменения required', async () => {
+    const database = new LifeOsIndexedDb(new IDBFactory());
+    const opened = await database.open();
+    const transaction = opened.transaction(LIFE_OS_STORE.preparationPlans, 'readwrite');
+    await observeRequest(
+      transaction.objectStore(LIFE_OS_STORE.preparationPlans).add(legacyPreparationRecord()),
+    );
+    await observeTransaction(transaction);
+
+    const restored = await new IndexedDbPreparationPlanRepository(database).findByCycleId(
+      id('legacy-preparation-cycle'),
+    );
+
+    expect(restored?.requiredCoreKeys).toBeNull();
+    expect(restored?.items.map((item) => item.required)).toEqual([true, false]);
+    expect(restored?.items.map((item) => item.area)).toEqual([
+      PREPARATION_AREA.tomorrowStart,
+      PREPARATION_AREA.tomorrowStart,
+    ]);
+    database.close();
+  });
+
   it('откатывает весь UoW при конфликте версии EveningCycle', async () => {
     const database = new LifeOsIndexedDb(new IDBFactory());
     const plans = new IndexedDbPreparationPlanRepository(database);
     const cycles = new IndexedDbEveningCycleRepository(database);
-    const storedPlan = createPlan();
+    const storedPlan = createEnvironmentPlan('cycle');
+    storedPlan.configureRequiredCore(['sleep-lights', 'tomorrow-clothes', 'tomorrow-water'], NOW);
     for (const item of storedPlan.activeItems.filter((candidate) => candidate.required)) {
       storedPlan.skipItem(item.id, NOW, 'Осознанно');
     }
@@ -79,10 +133,12 @@ describe('Preparation persistence', () => {
     const database = new LifeOsIndexedDb(new IDBFactory());
     const plans = new IndexedDbPreparationPlanRepository(database);
     const cycles = new IndexedDbEveningCycleRepository(database);
-    const storedPlan = createPlan();
-    for (const item of storedPlan.activeItems.filter((candidate) => candidate.required)) {
-      storedPlan.skipItem(item.id, NOW, 'Осознанно');
-    }
+    const storedPlan = createEnvironmentPlan('cycle');
+    storedPlan.configureRequiredCore(['sleep-lights', 'tomorrow-clothes', 'tomorrow-water'], NOW);
+    const [completed, skipped, thirdCore] = storedPlan.items;
+    storedPlan.completeItem(completed!.id, NOW);
+    storedPlan.skipItem(skipped!.id, NOW, 'Сегодня сознательно сокращаю подготовку');
+    storedPlan.skipItem(thirdCore!.id, NOW, 'Осознанно');
     const storedCycle = preparingCycle();
     await plans.createIfAbsent(storedPlan);
     await cycles.createIfAbsent(storedCycle);
@@ -98,9 +154,28 @@ describe('Preparation persistence', () => {
     });
 
     database.close();
+    const restoredPlan = await new IndexedDbPreparationPlanRepository(database).findByCycleId(
+      id('cycle'),
+    );
     const restored = await new IndexedDbEveningCycleRepository(database).findByDateKey(DATE);
+
+    expect(restoredPlan?.requiredCoreKeys).toEqual(['sleep-lights', 'tomorrow-clothes', 'tomorrow-water']);
+    expect(restoredPlan?.items.map((item) => item.area)).toEqual([
+      PREPARATION_AREA.sleepEnvironment,
+      PREPARATION_AREA.tomorrowStart,
+      PREPARATION_AREA.tomorrowStart,
+      PREPARATION_AREA.sleepEnvironment,
+    ]);
+    expect(restoredPlan?.items.map((item) => item.status)).toEqual([
+      PREPARATION_ITEM_STATUS.completed,
+      PREPARATION_ITEM_STATUS.skipped,
+      PREPARATION_ITEM_STATUS.skipped,
+      PREPARATION_ITEM_STATUS.pending,
+    ]);
+    expect(restoredPlan?.items[1]?.skipReason).toBe('Сегодня сознательно сокращаю подготовку');
     expect(restored?.state).toBe(EVENING_CYCLE_STATE.shutdown);
     expect(restored?.completedAt).toBeNull();
+    expect((await database.open()).version).toBe(LIFE_OS_DATABASE_VERSION);
     database.close();
   });
 });
@@ -120,6 +195,7 @@ function createPlan(): PreparationPlan {
     [
       {
         key: 'digital',
+        area: PREPARATION_AREA.tomorrowStart,
         category: PREPARATION_CATEGORY.digital,
         title: 'Открыть проект',
         sourceType: PREPARATION_SOURCE_TYPE.project,
@@ -128,6 +204,7 @@ function createPlan(): PreparationPlan {
       },
       {
         key: 'physical',
+        area: PREPARATION_AREA.tomorrowStart,
         category: PREPARATION_CATEGORY.physical,
         title: 'Подготовить рабочее место',
         sourceType: PREPARATION_SOURCE_TYPE.firstAction,
@@ -141,6 +218,113 @@ function createPlan(): PreparationPlan {
     () => id(`item-${(next += 1)}`),
   );
   return plan;
+}
+
+function createEnvironmentPlan(cycleId = 'environment-cycle'): PreparationPlan {
+  const plan = PreparationPlan.create({
+    id: id('environment-preparation'),
+    cycleId: id(cycleId),
+    tomorrowPlanId: id('environment-tomorrow'),
+    targetDayId: id('environment-target-day'),
+    sourceVersion: 5,
+    generationSignature: 'UNINITIALIZED',
+    createdAt: NOW,
+  });
+  let next = 0;
+  plan.synchronize(
+    [
+      {
+        key: 'sleep-lights',
+        area: PREPARATION_AREA.sleepEnvironment,
+        category: PREPARATION_CATEGORY.physical,
+        title: 'Приглушить освещение',
+        sourceType: PREPARATION_SOURCE_TYPE.rule,
+        sourceId: id('sleep-lights-rule'),
+        required: false,
+      },
+      {
+        key: 'tomorrow-clothes',
+        area: PREPARATION_AREA.tomorrowStart,
+        category: PREPARATION_CATEGORY.physical,
+        title: 'Подготовить одежду',
+        sourceType: PREPARATION_SOURCE_TYPE.rule,
+        sourceId: id('tomorrow-clothes-rule'),
+        required: false,
+      },
+      {
+        key: 'tomorrow-water',
+        area: PREPARATION_AREA.tomorrowStart,
+        category: PREPARATION_CATEGORY.physical,
+        title: 'Подготовить воду',
+        sourceType: PREPARATION_SOURCE_TYPE.rule,
+        sourceId: id('tomorrow-water-rule'),
+        required: false,
+      },
+      {
+        key: 'sleep-noise',
+        area: PREPARATION_AREA.sleepEnvironment,
+        category: PREPARATION_CATEGORY.cognitive,
+        title: 'Уменьшить шум',
+        sourceType: PREPARATION_SOURCE_TYPE.rule,
+        sourceId: id('sleep-noise-rule'),
+        required: false,
+      },
+    ],
+    5,
+    'environment:5',
+    NOW,
+    () => id(`environment-item-${(next += 1)}`),
+  );
+  return plan;
+}
+
+function legacyPreparationRecord(): Record<string, unknown> {
+  return {
+    schemaVersion: 1,
+    id: 'legacy-preparation',
+    cycleId: 'legacy-preparation-cycle',
+    tomorrowPlanId: 'legacy-preparation-tomorrow',
+    targetDayId: 'legacy-preparation-target-day',
+    items: [
+      {
+        id: 'legacy-preparation-item-1',
+        planId: 'legacy-preparation',
+        key: 'legacy-required',
+        category: PREPARATION_CATEGORY.digital,
+        title: 'Открыть проект',
+        sourceType: PREPARATION_SOURCE_TYPE.project,
+        sourceId: 'legacy-project',
+        required: true,
+        status: PREPARATION_ITEM_STATUS.pending,
+        active: true,
+        completedAt: null,
+        skippedAt: null,
+        skipReason: null,
+      },
+      {
+        id: 'legacy-preparation-item-2',
+        planId: 'legacy-preparation',
+        key: 'legacy-optional',
+        category: PREPARATION_CATEGORY.physical,
+        title: 'Подготовить рабочее место',
+        sourceType: PREPARATION_SOURCE_TYPE.firstAction,
+        sourceId: 'legacy-action',
+        required: false,
+        status: PREPARATION_ITEM_STATUS.pending,
+        active: true,
+        completedAt: null,
+        skippedAt: null,
+        skipReason: null,
+      },
+    ],
+    sourceVersion: 5,
+    generationSignature: 'legacy:5',
+    status: PREPARATION_PLAN_STATUS.inProgress,
+    createdAt: NOW.toISOString(),
+    updatedAt: NOW.toISOString(),
+    completedAt: null,
+    version: 1,
+  };
 }
 
 function preparingCycle(): EveningCycle {
@@ -159,4 +343,19 @@ function preparingCycle(): EveningCycle {
 
 function id(value: string): EntityId {
   return EntityId.create(value);
+}
+
+function observeRequest<T>(request: IDBRequest<T>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    request.addEventListener('success', () => resolve(request.result));
+    request.addEventListener('error', () => reject(request.error));
+  });
+}
+
+function observeTransaction(transaction: IDBTransaction): Promise<void> {
+  return new Promise((resolve, reject) => {
+    transaction.addEventListener('complete', () => resolve());
+    transaction.addEventListener('error', () => reject(transaction.error));
+    transaction.addEventListener('abort', () => reject(transaction.error));
+  });
 }

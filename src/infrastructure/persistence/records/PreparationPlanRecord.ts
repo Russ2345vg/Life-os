@@ -2,6 +2,7 @@ export interface PreparationItemRecord {
   readonly id: string;
   readonly planId: string;
   readonly key: string;
+  readonly area?: string;
   readonly category: string;
   readonly title: string;
   readonly sourceType: string;
@@ -21,6 +22,7 @@ export interface PreparationPlanRecord {
   readonly tomorrowPlanId: string;
   readonly targetDayId: string;
   readonly items: readonly PreparationItemRecord[];
+  readonly requiredCoreKeys?: readonly string[] | null;
   readonly sourceVersion: number;
   readonly generationSignature: string;
   readonly status: string;
