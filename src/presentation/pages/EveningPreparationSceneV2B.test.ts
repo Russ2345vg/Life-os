@@ -185,6 +185,12 @@ describe('R4 Environment PreparationScene', () => {
     expect(environmentCss).toMatch(
       /@media \(max-width: 640px\)[\s\S]*?\.preparation-core-edit[\s\S]*?min-height:\s*44px/,
     );
+    expect(environmentCss).toMatch(
+      /\.preparation-core-error \.text-button\s*{[\s\S]*?min-height:\s*2\.75rem/,
+    );
+    expect(environmentCss).toMatch(
+      /@media \(max-width: 640px\)[\s\S]*?\.preparation-core-error \.text-button[\s\S]*?width:\s*100%[\s\S]*?min-height:\s*44px/,
+    );
     expect(environmentCss).not.toContain('--control-lg');
     expect(environmentCss).not.toContain('--control-md');
     expect(environmentCss).toContain(':focus-visible');
