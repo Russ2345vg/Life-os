@@ -213,10 +213,16 @@ export class PreparationPlan extends Entity {
   private constructor(data: PreparationPlanRehydrationData) {
     super(data.id);
     assertPlanData(data);
+    const requiredCoreKeys = normalizeRequiredCoreKeys(data.requiredCoreKeys, data.items);
+    const selectedCore = new Set(requiredCoreKeys ?? []);
     this.cycleId = data.cycleId;
     this.tomorrowPlanId = data.tomorrowPlanId;
     this.targetDayId = data.targetDayId;
-    this.#items = Object.freeze([...data.items]);
+    this.#items = Object.freeze(
+      requiredCoreKeys === null
+        ? [...data.items]
+        : data.items.map((item) => item.withRequired(selectedCore.has(item.key))),
+    );
     this.#sourceVersion = data.sourceVersion;
     this.#generationSignature = normalizeKey(data.generationSignature);
     this.#status = data.status;
@@ -224,10 +230,7 @@ export class PreparationPlan extends Entity {
     this.#updatedAt = copyDate(data.updatedAt);
     this.#completedAt = copyOptionalDate(data.completedAt);
     this.#version = data.version;
-    this.#requiredCoreKeys =
-      data.requiredCoreKeys === undefined || data.requiredCoreKeys === null
-        ? null
-        : Object.freeze([...data.requiredCoreKeys]);
+    this.#requiredCoreKeys = requiredCoreKeys;
   }
 
   public static create(data: PreparationPlanCreationData): PreparationPlan {
@@ -338,28 +341,7 @@ export class PreparationPlan extends Entity {
 
   public configureRequiredCore(itemKeys: readonly string[], occurredAt: Date): boolean {
     assertDate(occurredAt, 'preparation.invalid_update_time');
-    if (itemKeys.length < 3 || itemKeys.length > 6) {
-      throw new DomainError(
-        'preparation.invalid_required_core_size',
-        'Выберите от трёх до шести обязательных пунктов.',
-      );
-    }
-    if (new Set(itemKeys).size !== itemKeys.length) {
-      throw new DomainError(
-        'preparation.duplicate_required_core_item',
-        'Обязательные пункты не должны повторяться.',
-      );
-    }
-    const activeByKey = new Map(this.activeItems.map((item) => [item.key, item]));
-    if (itemKeys.some((key) => !activeByKey.has(key))) {
-      throw new DomainError(
-        'preparation.required_core_item_not_found',
-        'Обязательный пункт не входит в активную подготовку.',
-      );
-    }
-    const normalized = this.activeItems
-      .filter((item) => itemKeys.includes(item.key))
-      .map((item) => item.key);
+    const normalized = normalizeRequiredCoreKeys(itemKeys, this.#items)!;
     const unchanged =
       this.#requiredCoreKeys !== null &&
       normalized.length === this.#requiredCoreKeys.length &&
@@ -549,6 +531,38 @@ function assertPlanData(data: PreparationPlanRehydrationData): void {
   if (data.status === PREPARATION_PLAN_STATUS.inProgress && data.completedAt !== null) {
     throw new DomainError('preparation.invalid_completed_state', 'Незавершённый план не завершён.');
   }
+}
+
+function normalizeRequiredCoreKeys(
+  requiredCoreKeys: readonly string[] | null | undefined,
+  items: readonly PreparationItem[],
+): readonly string[] | null {
+  if (requiredCoreKeys === undefined || requiredCoreKeys === null) return null;
+  if (requiredCoreKeys.length < 3 || requiredCoreKeys.length > 6) {
+    throw new DomainError(
+      'preparation.invalid_required_core_size',
+      'Выберите от трёх до шести обязательных пунктов.',
+    );
+  }
+  if (new Set(requiredCoreKeys).size !== requiredCoreKeys.length) {
+    throw new DomainError(
+      'preparation.duplicate_required_core_item',
+      'Обязательные пункты не должны повторяться.',
+    );
+  }
+  const selected = new Set(requiredCoreKeys);
+  const activeByKey = new Map(
+    items.filter((item) => item.active).map((item) => [item.key, item]),
+  );
+  if (requiredCoreKeys.some((key) => !activeByKey.has(key))) {
+    throw new DomainError(
+      'preparation.required_core_item_not_found',
+      'Обязательный пункт не входит в активную подготовку.',
+    );
+  }
+  return Object.freeze(
+    items.filter((item) => item.active && selected.has(item.key)).map((item) => item.key),
+  );
 }
 
 function assertItemData(data: PreparationItemData): void {

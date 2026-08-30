@@ -103,6 +103,62 @@ describe('PreparationPlan', () => {
     );
   });
 
+  it('отклоняет восстановленное обязательное ядро меньше трёх пунктов', () => {
+    const source = synchronizedPlan(3);
+
+    expect(() =>
+      rehydratePlan(source, source.items, source.activeItems.slice(0, 2).map((item) => item.key)),
+    ).toThrow(
+      expect.objectContaining({ code: 'preparation.invalid_required_core_size' }),
+    );
+  });
+
+  it('отклоняет восстановленное обязательное ядро с повторяющимися пунктами', () => {
+    const source = synchronizedPlan(3);
+    const [first, second] = source.activeItems;
+
+    expect(() =>
+      rehydratePlan(source, source.items, [first!.key, first!.key, second!.key]),
+    ).toThrow(
+      expect.objectContaining({ code: 'preparation.duplicate_required_core_item' }),
+    );
+  });
+
+  it('отклоняет восстановленное обязательное ядро с неактивным пунктом', () => {
+    const source = synchronizedPlan(4);
+    const keys = source.activeItems.map((item) => item.key);
+    const items = source.items.map((item, index) => (index === 3 ? item.deactivate() : item));
+
+    expect(() => rehydratePlan(source, items, [keys[0]!, keys[1]!, keys[3]!])).toThrow(
+      expect.objectContaining({ code: 'preparation.required_core_item_not_found' }),
+    );
+  });
+
+  it('normalizes required flags of a valid restored core before completion', () => {
+    const source = synchronizedPlan(3);
+    const restored = rehydratePlan(
+      source,
+      source.items.map((item) => item.withRequired(false)),
+      source.activeItems.map((item) => item.key),
+    );
+
+    expect(restored.activeItems.every((item) => item.required)).toBe(true);
+    expect(() => restored.complete(NOW)).toThrow(
+      expect.objectContaining({ code: 'preparation.required_items_pending' }),
+    );
+  });
+
+  it('keeps a completed legacy plan with a null restored core idempotent', () => {
+    const source = synchronizedPlan(3);
+    source.configureRequiredCore(source.activeItems.map((item) => item.key), NOW);
+    for (const item of source.activeItems) source.skipItem(item.id, NOW);
+    source.complete(NOW);
+    const legacy = rehydratePlan(source, source.items, null);
+
+    expect(legacy.coreConfigured).toBe(false);
+    expect(legacy.complete(LATER)).toBe(false);
+  });
+
   it('отклоняет неактивный пункт при настройке ядра', () => {
     const plan = createPlan();
     const allRequirements = environmentRequirements(7);
@@ -250,6 +306,40 @@ function environmentRequirements(count: number): readonly PreparationRequirement
     sourceId: null,
     required: false,
   }));
+}
+
+function synchronizedPlan(count: number): PreparationPlan {
+  const plan = createPlan();
+  plan.synchronize(
+    environmentRequirements(count),
+    1,
+    `source:rehydrate:${count}`,
+    NOW,
+    sequence(),
+  );
+  return plan;
+}
+
+function rehydratePlan(
+  source: PreparationPlan,
+  items: readonly PreparationItem[],
+  requiredCoreKeys: readonly string[] | null,
+): PreparationPlan {
+  return PreparationPlan.rehydrate({
+    id: source.id,
+    cycleId: source.cycleId,
+    tomorrowPlanId: source.tomorrowPlanId,
+    targetDayId: source.targetDayId,
+    sourceVersion: source.sourceVersion,
+    generationSignature: source.generationSignature,
+    createdAt: source.createdAt,
+    items,
+    requiredCoreKeys,
+    status: source.status,
+    updatedAt: source.updatedAt,
+    completedAt: source.completedAt,
+    version: source.version,
+  });
 }
 
 function sequence(): () => EntityId {
