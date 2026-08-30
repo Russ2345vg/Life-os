@@ -10,6 +10,12 @@ export const PREPARATION_CATEGORY = {
 } as const;
 export type PreparationCategory = (typeof PREPARATION_CATEGORY)[keyof typeof PREPARATION_CATEGORY];
 
+export const PREPARATION_AREA = {
+  sleepEnvironment: 'SLEEP_ENVIRONMENT',
+  tomorrowStart: 'TOMORROW_START',
+} as const;
+export type PreparationArea = (typeof PREPARATION_AREA)[keyof typeof PREPARATION_AREA];
+
 export const PREPARATION_ITEM_STATUS = {
   pending: 'PENDING',
   completed: 'COMPLETED',
@@ -36,6 +42,7 @@ export type PreparationSourceType =
 
 export interface PreparationRequirement {
   readonly key: string;
+  readonly area: PreparationArea;
   readonly category: PreparationCategory;
   readonly title: string;
   readonly sourceType: PreparationSourceType;
@@ -57,6 +64,7 @@ export class PreparationItem {
   public readonly id: EntityId;
   public readonly planId: EntityId;
   public readonly key: string;
+  public readonly area: PreparationArea;
   public readonly category: PreparationCategory;
   public readonly title: string;
   public readonly sourceType: PreparationSourceType;
@@ -73,6 +81,7 @@ export class PreparationItem {
     this.id = data.id;
     this.planId = data.planId;
     this.key = normalizeKey(data.key);
+    this.area = data.area;
     this.category = data.category;
     this.title = normalizeTitle(data.title);
     this.sourceType = data.sourceType;
@@ -140,11 +149,16 @@ export class PreparationItem {
     return this.active ? this.copy({ active: false }) : this;
   }
 
+  public withRequired(required: boolean): PreparationItem {
+    return this.required === required ? this : this.copy({ required });
+  }
+
   public toData(): PreparationItemData {
     return {
       id: this.id,
       planId: this.planId,
       key: this.key,
+      area: this.area,
       category: this.category,
       title: this.title,
       sourceType: this.sourceType,
@@ -175,6 +189,7 @@ export interface PreparationPlanCreationData {
 
 export interface PreparationPlanRehydrationData extends PreparationPlanCreationData {
   readonly items: readonly PreparationItem[];
+  readonly requiredCoreKeys?: readonly string[] | null;
   readonly status: PreparationPlanStatus;
   readonly updatedAt: Date;
   readonly completedAt: Date | null;
@@ -193,6 +208,7 @@ export class PreparationPlan extends Entity {
   #updatedAt: Date;
   #completedAt: Date | null;
   #version: number;
+  #requiredCoreKeys: readonly string[] | null;
 
   private constructor(data: PreparationPlanRehydrationData) {
     super(data.id);
@@ -208,12 +224,17 @@ export class PreparationPlan extends Entity {
     this.#updatedAt = copyDate(data.updatedAt);
     this.#completedAt = copyOptionalDate(data.completedAt);
     this.#version = data.version;
+    this.#requiredCoreKeys =
+      data.requiredCoreKeys === undefined || data.requiredCoreKeys === null
+        ? null
+        : Object.freeze([...data.requiredCoreKeys]);
   }
 
   public static create(data: PreparationPlanCreationData): PreparationPlan {
     return new PreparationPlan({
       ...data,
       items: [],
+      requiredCoreKeys: null,
       status: PREPARATION_PLAN_STATUS.inProgress,
       updatedAt: data.createdAt,
       completedAt: null,
@@ -249,6 +270,12 @@ export class PreparationPlan extends Entity {
   public get version(): number {
     return this.#version;
   }
+  public get requiredCoreKeys(): readonly string[] | null {
+    return this.#requiredCoreKeys === null ? null : [...this.#requiredCoreKeys];
+  }
+  public get coreConfigured(): boolean {
+    return this.#requiredCoreKeys !== null;
+  }
 
   public get progress(): Readonly<{ total: number; processed: number; requiredPending: number }> {
     const active = this.activeItems;
@@ -270,20 +297,29 @@ export class PreparationPlan extends Entity {
   ): boolean {
     if (this.#generationSignature === generationSignature) return false;
     assertDate(occurredAt, 'preparation.invalid_update_time');
-    const unique = uniqueRequirements(requirements).slice(0, 5);
+    const unique = uniqueRequirements(requirements);
     const existingByKey = new Map(this.#items.map((item) => [item.key, item]));
     const activeKeys = new Set(unique.map((requirement) => requirement.key));
-    const synchronized = unique.map((requirement) => {
+    const generated = unique.map((requirement) => {
       const existing = existingByKey.get(requirement.key);
       return (
         existing?.reactivate(requirement) ??
         PreparationItem.create({ ...requirement, id: createId(), planId: this.id })
       );
     });
+    const selectedCore = new Set(this.#requiredCoreKeys ?? []);
+    const selectedExisting = this.#items.filter(
+      (item) => selectedCore.has(item.key) && !activeKeys.has(item.key),
+    );
     const historical = this.#items
-      .filter((item) => !activeKeys.has(item.key))
+      .filter((item) => !activeKeys.has(item.key) && !selectedCore.has(item.key))
       .map((item) => item.deactivate());
-    this.#items = Object.freeze([...synchronized, ...historical]);
+    const merged = [...generated, ...selectedExisting, ...historical];
+    this.#items = Object.freeze(
+      this.#requiredCoreKeys === null
+        ? merged
+        : merged.map((item) => item.withRequired(selectedCore.has(item.key))),
+    );
     this.#sourceVersion = sourceVersion;
     this.#generationSignature = normalizeKey(generationSignature);
     this.#status = PREPARATION_PLAN_STATUS.inProgress;
@@ -300,8 +336,54 @@ export class PreparationPlan extends Entity {
     return this.replaceItem(itemId, (item) => item.skip(occurredAt, reason), occurredAt);
   }
 
+  public configureRequiredCore(itemKeys: readonly string[], occurredAt: Date): boolean {
+    assertDate(occurredAt, 'preparation.invalid_update_time');
+    if (itemKeys.length < 3 || itemKeys.length > 6) {
+      throw new DomainError(
+        'preparation.invalid_required_core_size',
+        'Выберите от трёх до шести обязательных пунктов.',
+      );
+    }
+    if (new Set(itemKeys).size !== itemKeys.length) {
+      throw new DomainError(
+        'preparation.duplicate_required_core_item',
+        'Обязательные пункты не должны повторяться.',
+      );
+    }
+    const activeByKey = new Map(this.activeItems.map((item) => [item.key, item]));
+    if (itemKeys.some((key) => !activeByKey.has(key))) {
+      throw new DomainError(
+        'preparation.required_core_item_not_found',
+        'Обязательный пункт не входит в активную подготовку.',
+      );
+    }
+    const normalized = this.activeItems
+      .filter((item) => itemKeys.includes(item.key))
+      .map((item) => item.key);
+    const unchanged =
+      this.#requiredCoreKeys !== null &&
+      normalized.length === this.#requiredCoreKeys.length &&
+      normalized.every((key, index) => key === this.#requiredCoreKeys?.[index]);
+    if (unchanged) return false;
+    const selected = new Set(normalized);
+    this.#items = Object.freeze(
+      this.#items.map((item) => (item.active ? item.withRequired(selected.has(item.key)) : item)),
+    );
+    this.#requiredCoreKeys = Object.freeze(normalized);
+    this.#status = PREPARATION_PLAN_STATUS.inProgress;
+    this.#completedAt = null;
+    this.touch(occurredAt);
+    return true;
+  }
+
   public complete(occurredAt: Date): boolean {
     if (this.#status === PREPARATION_PLAN_STATUS.completed) return false;
+    if (this.#requiredCoreKeys === null) {
+      throw new DomainError(
+        'preparation.required_core_not_configured',
+        'Сначала настройте обязательное ядро подготовки.',
+      );
+    }
     if (this.progress.requiredPending > 0) {
       throw new DomainError(
         'preparation.required_items_pending',
@@ -416,6 +498,9 @@ export class PreparationRule extends Entity {
 export function isPreparationCategory(value: string): value is PreparationCategory {
   return (Object.values(PREPARATION_CATEGORY) as readonly string[]).includes(value);
 }
+export function isPreparationArea(value: string): value is PreparationArea {
+  return (Object.values(PREPARATION_AREA) as readonly string[]).includes(value);
+}
 export function isPreparationItemStatus(value: string): value is PreparationItemStatus {
   return (Object.values(PREPARATION_ITEM_STATUS) as readonly string[]).includes(value);
 }
@@ -467,6 +552,9 @@ function assertPlanData(data: PreparationPlanRehydrationData): void {
 }
 
 function assertItemData(data: PreparationItemData): void {
+  if (!isPreparationArea(data.area)) {
+    throw new DomainError('preparation.invalid_area', 'Неизвестная область подготовки.');
+  }
   if (!isPreparationCategory(data.category)) {
     throw new DomainError('preparation.invalid_category', 'Неизвестная категория подготовки.');
   }
