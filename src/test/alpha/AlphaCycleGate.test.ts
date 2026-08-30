@@ -239,7 +239,11 @@ describe('Alpha 0.1 — выпускной барьер полного цикл�
         }
         await restoredApplication.tomorrowPlan.complete(currentDate, true);
         const preparation = await restoredApplication.preparation.getOrGenerate(currentDate);
-        for (const item of preparation.plan.activeItems.filter((candidate) => candidate.required)) {
+        const configuredPreparation = await restoredApplication.preparation.configureRequiredCore(
+          currentDate,
+          preparation.recommendedCoreKeys,
+        );
+        for (const item of configuredPreparation.plan.activeItems.filter((candidate) => candidate.required)) {
           await restoredApplication.preparation.skipItem(
             currentDate,
             item.id,
