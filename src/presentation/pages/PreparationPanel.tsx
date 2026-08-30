@@ -74,13 +74,12 @@ export function PreparationPanel({
   const [isConfiguringCore, setIsConfiguringCore] = useState(false);
   const [isSavingCore, setIsSavingCore] = useState(false);
   const [coreError, setCoreError] = useState<string | null>(null);
-  const [focusChecklist, setFocusChecklist] = useState(false);
-  const coreErrorRef = useRef<HTMLElement | null>(null);
+  const coreErrorRef = useRef<HTMLDivElement | null>(null);
   const checklistHeadingRef = useRef<HTMLHeadingElement | null>(null);
 
-  useEffect(() => {
-    if (loadState.status !== 'ready') return;
-    const nextDraft = coreSelectionDraft(loadState.snapshot);
+  function acceptSnapshot(snapshot: PreparationSnapshot): void {
+    setLoadState({ status: 'ready', snapshot });
+    const nextDraft = coreSelectionDraft(snapshot);
     setCoreDraft((current) =>
       current !== null &&
       current.planId === nextDraft.planId &&
@@ -88,24 +87,18 @@ export function PreparationPanel({
         ? current
         : nextDraft,
     );
-  }, [loadState]);
+  }
 
   useEffect(() => {
     if (coreError !== null) coreErrorRef.current?.focus();
   }, [coreError]);
 
   useEffect(() => {
-    if (!focusChecklist) return;
-    checklistHeadingRef.current?.focus();
-    setFocusChecklist(false);
-  }, [focusChecklist]);
-
-  useEffect(() => {
     let cancelled = false;
     void service
       .getOrGenerate(cycleDate)
       .then((snapshot) => {
-        if (!cancelled) setLoadState({ status: 'ready', snapshot });
+        if (!cancelled) acceptSnapshot(snapshot);
       })
       .catch(() => {
         if (!cancelled) {
@@ -123,7 +116,7 @@ export function PreparationPanel({
       const snapshot = skip
         ? await service.skipItem(cycleDate, item.id)
         : await service.completeItem(cycleDate, item.id);
-      setLoadState({ status: 'ready', snapshot });
+      acceptSnapshot(snapshot);
     } catch {
       setLoadState({ status: 'error', message: 'Не удалось сохранить пункт подготовки.' });
     } finally {
@@ -137,9 +130,9 @@ export function PreparationPanel({
     setCoreError(null);
     try {
       const snapshot = await service.configureRequiredCore(cycleDate, coreDraft.selectedKeys);
-      setLoadState({ status: 'ready', snapshot });
+      acceptSnapshot(snapshot);
       setIsConfiguringCore(false);
-      setFocusChecklist(true);
+      requestAnimationFrame(() => checklistHeadingRef.current?.focus());
     } catch {
       setCoreError('Не удалось сохранить обязательное ядро. Повторить');
     } finally {
@@ -151,7 +144,7 @@ export function PreparationPanel({
     setIsContinuing(true);
     try {
       const snapshot = await service.continueToShutdown(cycleDate);
-      setLoadState({ status: 'ready', snapshot });
+      acceptSnapshot(snapshot);
       if (completedReview) {
         setCompletedReviewEditing(false);
       }
@@ -247,8 +240,8 @@ export function PreparationSceneView({
   readonly isConfiguringCore?: boolean;
   readonly isSavingCore?: boolean;
   readonly coreError?: string | null;
-  readonly coreErrorRef?: RefObject<HTMLElement | null>;
-  readonly checklistHeadingRef?: RefObject<HTMLHeadingElement | null>;
+  readonly coreErrorRef?: RefObject<HTMLDivElement | null> | undefined;
+  readonly checklistHeadingRef?: RefObject<HTMLHeadingElement | null> | undefined;
   readonly onCoreDraftChange?: (draft: PreparationCoreSelectionDraft) => void;
   readonly onConfigureCore?: () => Promise<void>;
   readonly onConfigureCoreChange?: (configuring: boolean) => void;
@@ -541,9 +534,9 @@ function PreparationCoreConfiguration({
   readonly draft: PreparationCoreSelectionDraft;
   readonly isSaving: boolean;
   readonly error: string | null;
-  readonly errorRef?: RefObject<HTMLElement | null>;
-  readonly onDraftChange?: (draft: PreparationCoreSelectionDraft) => void;
-  readonly onConfirm?: () => Promise<void>;
+  readonly errorRef?: RefObject<HTMLDivElement | null> | undefined;
+  readonly onDraftChange?: ((draft: PreparationCoreSelectionDraft) => void) | undefined;
+  readonly onConfirm?: (() => Promise<void>) | undefined;
 }) {
   const selected = new Set(draft.selectedKeys);
   return (
@@ -633,7 +626,7 @@ export function PreparationSection({
   readonly reviewEditing: boolean;
   readonly completedReview: boolean;
   readonly onProcess: (item: PreparationItem, skip: boolean) => Promise<void>;
-  readonly headingRef?: RefObject<HTMLHeadingElement | null>;
+  readonly headingRef?: RefObject<HTMLHeadingElement | null> | undefined;
 }) {
   const areaKey = area.toLowerCase();
   return (

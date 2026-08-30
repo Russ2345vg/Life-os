@@ -4,11 +4,15 @@ import { describe, expect, it, vi } from 'vitest';
 // @ts-expect-error — тест выполняется в Node, а production tsconfig не включает Node types.
 import { readFileSync } from 'node:fs';
 import type {
-  CommitPreparationInput,
+  EveningCycleRepository,
   EveningReviewSnapshot,
   OpenLoopItem,
+  PreparationPlanRepository,
+  PreparationRuleRepository,
   PreparationSnapshot,
+  ProjectRepository,
   ReflectionSession,
+  TomorrowPlanRepository,
 } from '../../application';
 import {
   Day,
@@ -40,11 +44,6 @@ import { createPlannedDecision } from '../../test/helpers/DecisionTestFactory';
 import { FakeClock, FakeIdGenerator } from '../../test/helpers/Fakes';
 import { createReadyLifeAction } from '../../test/helpers/LifeActionTestFactory';
 import { TestDecisionRepository, TestLifeActionRepository } from '../../test/helpers/TestRepositories';
-import { InMemoryEveningCycleRepository } from '../../infrastructure/persistence/InMemoryEveningCycleRepository';
-import { InMemoryPreparationPlanRepository } from '../../infrastructure/persistence/InMemoryPreparationPlanRepository';
-import { InMemoryPreparationRuleRepository } from '../../infrastructure/persistence/InMemoryPreparationRuleRepository';
-import { InMemoryProjectRepository } from '../../infrastructure/persistence/InMemoryProjectRepository';
-import { InMemoryTomorrowPlanRepository } from '../../infrastructure/persistence/InMemoryTomorrowPlanRepository';
 import { PreparationService } from '../../application/preparation/PreparationService';
 import {
   EveningReflectionHistoryScene,
@@ -108,10 +107,68 @@ describe('completed evening history scenes', () => {
   });
 
   it('открывает сохранённый completed history без генерации, записи или application mutation', async () => {
-    const cycles = new InMemoryEveningCycleRepository();
-    const tomorrowPlans = new InMemoryTomorrowPlanRepository();
-    const preparationPlans = new InMemoryPreparationPlanRepository();
-    const rules = new InMemoryPreparationRuleRepository();
+    let storedCycle: EveningCycle | null = null;
+    let storedTomorrowPlan: TomorrowPlan | null = null;
+    let storedPreparationPlan: PreparationPlan | null = null;
+    const cycles: EveningCycleRepository = {
+      findById: async (id) => (storedCycle?.id.equals(id) ? storedCycle : null),
+      findByDayId: async (dayId) => (storedCycle?.dayId.equals(dayId) ? storedCycle : null),
+      findByDateKey: async (date) => (storedCycle?.dateKey.equals(date) ? storedCycle : null),
+      createIfAbsent: async (cycle) => {
+        if (storedCycle === null) storedCycle = cycle;
+        return storedCycle;
+      },
+      saveIfVersionMatches: async (cycle) => {
+        storedCycle = cycle;
+        return true;
+      },
+    };
+    const tomorrowPlans: TomorrowPlanRepository = {
+      findById: async (id) => (storedTomorrowPlan?.id.equals(id) ? storedTomorrowPlan : null),
+      findByCycleId: async (cycleId) =>
+        storedTomorrowPlan?.cycleId.equals(cycleId) ? storedTomorrowPlan : null,
+      findByTargetDate: async (date) =>
+        storedTomorrowPlan?.targetDateKey.equals(date) ? storedTomorrowPlan : null,
+      createIfAbsent: async (plan) => {
+        if (storedTomorrowPlan === null) storedTomorrowPlan = plan;
+        return storedTomorrowPlan;
+      },
+      saveIfVersionMatches: async (plan) => {
+        storedTomorrowPlan = plan;
+        return true;
+      },
+    };
+    const preparationPlans: PreparationPlanRepository = {
+      findById: async (id) => (storedPreparationPlan?.id.equals(id) ? storedPreparationPlan : null),
+      findByCycleId: async (cycleId) =>
+        storedPreparationPlan?.cycleId.equals(cycleId) ? storedPreparationPlan : null,
+      findByTomorrowPlanId: async (tomorrowPlanId) =>
+        storedPreparationPlan?.tomorrowPlanId.equals(tomorrowPlanId) ? storedPreparationPlan : null,
+      findByTargetDayId: async (targetDayId) =>
+        storedPreparationPlan?.targetDayId.equals(targetDayId) ? storedPreparationPlan : null,
+      createIfAbsent: async (plan) => {
+        if (storedPreparationPlan === null) storedPreparationPlan = plan;
+        return storedPreparationPlan;
+      },
+      saveIfVersionMatches: async (plan) => {
+        storedPreparationPlan = plan;
+        return true;
+      },
+    };
+    const rules: PreparationRuleRepository = {
+      findActive: async () => [],
+      save: async () => undefined,
+    };
+    const projects: ProjectRepository = {
+      findById: async () => null,
+      findAll: async () => [],
+      findBySphereId: async () => [],
+      findByDirectionId: async () => [],
+      create: async () => true,
+      createAndReplaceMain: async () => true,
+      updateIfVersionMatches: async () => true,
+      replaceMain: async () => true,
+    };
     const ids = new FakeIdGenerator('completed-history-read');
     const cycle = completedCycle();
     const tomorrowPlan = TomorrowPlan.create({
@@ -137,7 +194,7 @@ describe('completed evening history scenes', () => {
       completedAt: NOW,
       version: 7,
     });
-    const commit = vi.fn(async (_input: CommitPreparationInput): Promise<void> => undefined);
+    const commit = vi.fn(async (): Promise<void> => undefined);
     const service = new PreparationService(
       cycles,
       tomorrowPlans,
@@ -145,7 +202,7 @@ describe('completed evening history scenes', () => {
       rules,
       new TestDecisionRepository(),
       new TestLifeActionRepository(),
-      new InMemoryProjectRepository(),
+      projects,
       new FakeClock(NOW),
       ids,
       { commit },

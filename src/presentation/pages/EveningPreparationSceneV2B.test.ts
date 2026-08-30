@@ -163,7 +163,7 @@ describe('R4 Environment PreparationScene', () => {
   it('сохраняет late-flow isolation и применимые V2B responsive contracts', () => {
     expect(reviewSource).toContain('EmergencyPreparationSkipPanel');
     expect(reviewSource).toContain('eveningCycle.skipPreparation');
-    expect(reviewSource).toContain('Позднее завершение · Подготовка');
+    expect(reviewSource).toContain('Позднее завершение · Среда');
     expect(v2bCss).toContain('min-width: 0;');
     expect(v2bCss).toContain('overflow-wrap: anywhere;');
     expect(v2bCss).not.toMatch(/overflow-x:\s*(?:auto|scroll)/);

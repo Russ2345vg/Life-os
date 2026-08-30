@@ -226,7 +226,7 @@ interface TodayPageProps {
   >;
   readonly preparation?: Pick<
     PreparationService,
-    'getOrGenerate' | 'completeItem' | 'skipItem' | 'continueToShutdown'
+    'getOrGenerate' | 'configureRequiredCore' | 'completeItem' | 'skipItem' | 'continueToShutdown'
   >;
   readonly updateDayResultSphere: Pick<UpdateDayResultSphere, 'execute'>;
   readonly getDecisionsForDate: Pick<GetDecisionsForDate, 'execute'>;

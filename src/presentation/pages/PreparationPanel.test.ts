@@ -32,7 +32,6 @@ const globalCss = readFileSync(new URL('../styles/global.css', import.meta.url),
 const v2bCss = globalCss.slice(
   globalCss.lastIndexOf('/* E11.3G-B: PreparationScene visual fidelity V2B */'),
 );
-const preparationSource = readFileSync(new URL('./PreparationPanel.tsx', import.meta.url), 'utf8');
 const presentationSource = readFileSync(
   new URL('./PreparationPanelPresentation.ts', import.meta.url),
   'utf8',

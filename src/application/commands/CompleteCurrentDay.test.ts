@@ -18,6 +18,7 @@ import {
   OPEN_LOOP_ENTITY_TYPE,
   OPEN_LOOP_REQUIREMENT,
   OpenLoopReference,
+  PREPARATION_PLAN_STATUS,
   PreparationPlan,
   REFLECTION_DAY_SIGNAL,
   REFLECTION_QUESTION_KIND,
@@ -343,17 +344,21 @@ function completedPreparationPlan(
   cycle: EveningCycle,
   tomorrowPlan: TomorrowPlan,
 ): PreparationPlan {
-  const plan = PreparationPlan.create({
+  return PreparationPlan.rehydrate({
     id: id(`preparation-${cycle.id.toString()}`),
     cycleId: cycle.id,
     tomorrowPlanId: tomorrowPlan.id,
     targetDayId: tomorrowPlan.targetDayId,
+    items: [],
+    requiredCoreKeys: null,
     sourceVersion: tomorrowPlan.version,
     generationSignature: 'ready',
+    status: PREPARATION_PLAN_STATUS.completed,
     createdAt: STARTED_AT,
+    updatedAt: STARTED_AT,
+    completedAt: STARTED_AT,
+    version: 1,
   });
-  plan.complete(STARTED_AT);
-  return plan;
 }
 
 function tomorrowRepository(plan: TomorrowPlan | null): TomorrowPlanRepository {

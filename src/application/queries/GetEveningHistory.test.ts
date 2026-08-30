@@ -32,6 +32,7 @@ import {
   type EveningCycleMode,
   type EveningCycleState,
 } from '../../domain';
+import { PREPARATION_AREA } from '../../domain/preparation';
 import type { EveningHistoryReader, EveningHistorySourceData } from '../ports/EveningHistoryReader';
 import { EVENING_HISTORY_RANGE_KIND, GetEveningHistory } from './GetEveningHistory';
 import { GetEveningHistorySummary } from './GetEveningHistorySummary';
@@ -399,6 +400,7 @@ function preparationPlanFor(cycle: EveningCycle): PreparationPlan {
     id: EntityId.create('preparation-completed'),
     planId: id,
     key: 'first-action:ready',
+    area: PREPARATION_AREA.sleepEnvironment,
     category: PREPARATION_CATEGORY.physical,
     title: 'Подготовить рабочее место',
     sourceType: PREPARATION_SOURCE_TYPE.firstAction,
@@ -414,6 +416,7 @@ function preparationPlanFor(cycle: EveningCycle): PreparationPlan {
     id: EntityId.create('preparation-skipped'),
     planId: id,
     key: 'reflection:note',
+    area: PREPARATION_AREA.tomorrowStart,
     category: PREPARATION_CATEGORY.cognitive,
     title: 'Записать уточнение',
     sourceType: PREPARATION_SOURCE_TYPE.reflection,
