@@ -193,6 +193,7 @@
 
   .evening-command-center-page .preparation-item-actions {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .evening-command-center-page .preparation-core-error {

@@ -186,6 +186,9 @@ describe('R4 Environment PreparationScene', () => {
       /@media \(max-width: 640px\)[\s\S]*?\.preparation-core-edit[\s\S]*?min-height:\s*44px/,
     );
     expect(environmentCss).toMatch(
+      /@media \(max-width: 640px\)[\s\S]*?\.preparation-item-actions\s*{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/,
+    );
+    expect(environmentCss).toMatch(
       /\.preparation-core-error \.text-button\s*{[\s\S]*?min-height:\s*2\.75rem/,
     );
     expect(environmentCss).toMatch(
