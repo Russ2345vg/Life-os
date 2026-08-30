@@ -3,14 +3,14 @@
 ## Status
 
 - Design: `APPROVED IN CHAT`
-- Written specification: `PENDING USER REVIEW`
+- Written specification: `APPROVED`
 - Implementation: `NOT STARTED`
 - Visual review: `NOT STARTED`
 - Lock: `UNLOCKED`
 
 The architecture, readiness gate, persistent default-practice behavior, screen-free durations, and
-UI contract were accepted by the user on 2026-08-30. This document must be reviewed by the user
-before implementation planning begins.
+UI contract were accepted by the user on 2026-08-30. The written specification was reviewed and
+approved by the user on 2026-08-30.
 
 ## Scope classification
 
@@ -630,7 +630,7 @@ reason under `AGENTS.md`; R5 must not silently expand into R9, R10, R12, or R6.
 - [x] Readiness gate approved.
 - [x] Embedded EveningCycle architecture approved.
 - [x] UI, mode, mobile, and testing contract approved.
-- [ ] Written specification reviewed and approved by the user.
+- [x] Written specification reviewed and approved by the user.
 - [ ] Implementation plan written and reviewed.
 - [ ] Failing tests added before production implementation.
 - [ ] R5 implemented without starting R6.
