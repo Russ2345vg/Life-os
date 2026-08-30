@@ -263,7 +263,7 @@ export function PreparationSceneView({
   const coreConfigured = snapshot.plan.requiredCoreKeys !== null;
   const isEmergency = mode === EVENING_CYCLE_MODE.emergency;
   const showCoreConfiguration =
-    !completedReview && !isEmergency && (!coreConfigured || configuringCore);
+    !completedReview && (!coreConfigured || (!isEmergency && configuringCore));
   const { processed, requiredPending, fullyReady, progressValue, summary, action } =
     buildPreparationPanelPresentation(
       items,
@@ -673,7 +673,7 @@ export function PreparationSection({
                 </span>
                 <span>
                   <strong>{item.title}</strong>
-                  <small>{preparationItemStatus(item, completedReview)}</small>
+                  {pending ? <small>{preparationItemStatus(item, completedReview)}</small> : null}
                   {item.required ? <em>Обязательное ядро</em> : null}
                 </span>
               </div>

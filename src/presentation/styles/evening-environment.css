@@ -47,7 +47,7 @@
   align-items: center;
   gap: var(--space-3);
   width: 100%;
-  min-height: var(--control-lg);
+  min-height: 2.75rem;
   padding: var(--space-3);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-small);
@@ -82,7 +82,7 @@
 
 .evening-command-center-page .preparation-core-confirm {
   justify-self: start;
-  min-height: var(--control-lg);
+  min-height: 2.75rem;
 }
 
 .evening-command-center-page .preparation-environment-area {
@@ -98,7 +98,7 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-3);
-  min-height: var(--control-lg);
+  min-height: 2.75rem;
 }
 
 .evening-command-center-page .preparation-item-copy {
@@ -132,7 +132,7 @@
 .evening-command-center-page .preparation-item-actions button,
 .evening-command-center-page .preparation-item-outcome,
 .evening-command-center-page .preparation-core-edit {
-  min-height: var(--control-md);
+  min-height: 2.75rem;
 }
 
 .evening-command-center-page .preparation-environment-area li.is-completed {
@@ -180,6 +180,7 @@
   }
 
   .evening-command-center-page .preparation-core-confirm,
+  .evening-command-center-page .preparation-core-edit,
   .evening-command-center-page .preparation-item-actions,
   .evening-command-center-page .preparation-item-actions button {
     width: 100%;
@@ -191,7 +192,8 @@
 
   .evening-command-center-page .preparation-item-actions button,
   .evening-command-center-page .preparation-core-option,
-  .evening-command-center-page .preparation-core-confirm {
+  .evening-command-center-page .preparation-core-confirm,
+  .evening-command-center-page .preparation-core-edit {
     min-height: 44px;
   }
 

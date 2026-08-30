@@ -133,6 +133,32 @@ describe('PreparationPanel completed history', () => {
     expect(seven).toMatch(/<button[^>]*disabled=""[^>]*>Подтвердить ядро<\/button>/);
   });
 
+  it('показывает первичную настройку ядра в emergency до первого подтверждения', () => {
+    const items = [
+      preparationItem('sleep-one', false, PREPARATION_CATEGORY.physical, PREPARATION_AREA.sleepEnvironment),
+      preparationItem('sleep-two', false, PREPARATION_CATEGORY.physical, PREPARATION_AREA.sleepEnvironment),
+      preparationItem('tomorrow-one', false, PREPARATION_CATEGORY.digital, PREPARATION_AREA.tomorrowStart),
+      preparationItem('tomorrow-two', false, PREPARATION_CATEGORY.digital, PREPARATION_AREA.tomorrowStart),
+    ];
+    const markup = renderToStaticMarkup(
+      PreparationSceneView({
+        snapshot: preparationSnapshotForCore(items),
+        mode: EVENING_CYCLE_MODE.emergency,
+        completedReview: false,
+        completedReviewEditing: false,
+        busyItemId: null,
+        isContinuing: false,
+        onProcess: async () => undefined,
+        onContinue: async () => undefined,
+        onReviewEditingChange: vi.fn(),
+      }),
+    );
+
+    expect(markup).toContain('Настройте обязательное ядро');
+    expect(markup).toContain('Подтвердить ядро');
+    expect(markup).not.toContain('Настроить ядро</button>');
+  });
+
   it('показывает итоговый заголовок и компактное пустое состояние без CTA', () => {
     const markup = renderToStaticMarkup(
       PreparationEmptyState({
