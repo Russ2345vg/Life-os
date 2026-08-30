@@ -1,15 +1,15 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import type { PreparationService, PreparationSnapshot } from '../../application';
 import {
   EVENING_CYCLE_MODE,
-  PREPARATION_CATEGORY,
   PREPARATION_ITEM_STATUS,
   type DayDate,
   type EveningCycleMode,
-  type PreparationCategory,
   type PreparationItem,
 } from '../../domain';
+import { PREPARATION_AREA, type PreparationArea } from '../../domain/preparation';
 import { EveningVisualIcon, type EveningVisualIconName } from '../components/EveningVisualIcon';
+import '../styles/evening-environment.css';
 import { visiblePreparationItemsForMode } from './EveningModePresentation';
 import {
   buildPreparationPanelPresentation,
@@ -21,7 +21,7 @@ interface PreparationPanelProps {
   readonly cycleDate: DayDate;
   readonly service: Pick<
     PreparationService,
-    'getOrGenerate' | 'completeItem' | 'skipItem' | 'continueToShutdown'
+    'getOrGenerate' | 'configureRequiredCore' | 'completeItem' | 'skipItem' | 'continueToShutdown'
   >;
   readonly onContinued: () => void;
   readonly onClose: () => void;
@@ -35,23 +35,26 @@ type LoadState =
   | Readonly<{ status: 'error'; message: string }>
   | Readonly<{ status: 'ready'; snapshot: PreparationSnapshot }>;
 
-const CATEGORY_LABELS: Readonly<Record<PreparationCategory, string>> = {
-  [PREPARATION_CATEGORY.physical]: 'Физически',
-  [PREPARATION_CATEGORY.digital]: 'Цифровая среда',
-  [PREPARATION_CATEGORY.cognitive]: 'Дополнительно',
-};
-
-const CATEGORY_ORDER: readonly PreparationCategory[] = Object.freeze([
-  PREPARATION_CATEGORY.digital,
-  PREPARATION_CATEGORY.physical,
-  PREPARATION_CATEGORY.cognitive,
+const AREA_ORDER: readonly PreparationArea[] = Object.freeze([
+  PREPARATION_AREA.sleepEnvironment,
+  PREPARATION_AREA.tomorrowStart,
 ]);
 
-const CATEGORY_ICONS: Readonly<Record<PreparationCategory, EveningVisualIconName>> = {
-  [PREPARATION_CATEGORY.physical]: 'chair',
-  [PREPARATION_CATEGORY.digital]: 'laptop',
-  [PREPARATION_CATEGORY.cognitive]: 'spark',
+const AREA_LABELS: Readonly<Record<PreparationArea, string>> = {
+  [PREPARATION_AREA.sleepEnvironment]: 'Среда для сна',
+  [PREPARATION_AREA.tomorrowStart]: 'Среда для завтра',
 };
+
+const AREA_ICONS: Readonly<Record<PreparationArea, EveningVisualIconName>> = {
+  [PREPARATION_AREA.sleepEnvironment]: 'chair',
+  [PREPARATION_AREA.tomorrowStart]: 'sun',
+};
+
+interface PreparationCoreSelectionDraft {
+  readonly planId: string;
+  readonly savedCoreSignature: string;
+  readonly selectedKeys: readonly string[];
+}
 
 export function PreparationPanel({
   cycleDate,
@@ -67,6 +70,35 @@ export function PreparationPanel({
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
   const [isContinuing, setIsContinuing] = useState(false);
   const [completedReviewEditing, setCompletedReviewEditing] = useState(false);
+  const [coreDraft, setCoreDraft] = useState<PreparationCoreSelectionDraft | null>(null);
+  const [isConfiguringCore, setIsConfiguringCore] = useState(false);
+  const [isSavingCore, setIsSavingCore] = useState(false);
+  const [coreError, setCoreError] = useState<string | null>(null);
+  const [focusChecklist, setFocusChecklist] = useState(false);
+  const coreErrorRef = useRef<HTMLElement | null>(null);
+  const checklistHeadingRef = useRef<HTMLHeadingElement | null>(null);
+
+  useEffect(() => {
+    if (loadState.status !== 'ready') return;
+    const nextDraft = coreSelectionDraft(loadState.snapshot);
+    setCoreDraft((current) =>
+      current !== null &&
+      current.planId === nextDraft.planId &&
+      current.savedCoreSignature === nextDraft.savedCoreSignature
+        ? current
+        : nextDraft,
+    );
+  }, [loadState]);
+
+  useEffect(() => {
+    if (coreError !== null) coreErrorRef.current?.focus();
+  }, [coreError]);
+
+  useEffect(() => {
+    if (!focusChecklist) return;
+    checklistHeadingRef.current?.focus();
+    setFocusChecklist(false);
+  }, [focusChecklist]);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,6 +128,22 @@ export function PreparationPanel({
       setLoadState({ status: 'error', message: 'Не удалось сохранить пункт подготовки.' });
     } finally {
       setBusyItemId(null);
+    }
+  }
+
+  async function configureRequiredCore(): Promise<void> {
+    if (coreDraft === null || !isValidCoreSelection(coreDraft.selectedKeys)) return;
+    setIsSavingCore(true);
+    setCoreError(null);
+    try {
+      const snapshot = await service.configureRequiredCore(cycleDate, coreDraft.selectedKeys);
+      setLoadState({ status: 'ready', snapshot });
+      setIsConfiguringCore(false);
+      setFocusChecklist(true);
+    } catch {
+      setCoreError('Не удалось сохранить обязательное ядро. Повторить');
+    } finally {
+      setIsSavingCore(false);
     }
   }
 
@@ -149,6 +197,18 @@ export function PreparationPanel({
         completedReviewEditing={completedReviewEditing}
         busyItemId={busyItemId}
         isContinuing={isContinuing}
+        coreDraft={coreDraft ?? coreSelectionDraft(loadState.snapshot)}
+        isConfiguringCore={isConfiguringCore}
+        isSavingCore={isSavingCore}
+        coreError={coreError}
+        coreErrorRef={coreErrorRef}
+        checklistHeadingRef={checklistHeadingRef}
+        onCoreDraftChange={setCoreDraft}
+        onConfigureCore={configureRequiredCore}
+        onConfigureCoreChange={(configuring) => {
+          setCoreError(null);
+          setIsConfiguringCore(configuring);
+        }}
         onProcess={processItem}
         onContinue={continueToShutdown}
         onReviewEditingChange={setCompletedReviewEditing}
@@ -164,6 +224,15 @@ export function PreparationSceneView({
   completedReviewEditing,
   busyItemId,
   isContinuing,
+  coreDraft,
+  isConfiguringCore,
+  isSavingCore,
+  coreError,
+  coreErrorRef,
+  checklistHeadingRef,
+  onCoreDraftChange,
+  onConfigureCore,
+  onConfigureCoreChange,
   onProcess,
   onContinue,
   onReviewEditingChange,
@@ -174,24 +243,41 @@ export function PreparationSceneView({
   readonly completedReviewEditing: boolean;
   readonly busyItemId: string | null;
   readonly isContinuing: boolean;
+  readonly coreDraft?: PreparationCoreSelectionDraft;
+  readonly isConfiguringCore?: boolean;
+  readonly isSavingCore?: boolean;
+  readonly coreError?: string | null;
+  readonly coreErrorRef?: RefObject<HTMLElement | null>;
+  readonly checklistHeadingRef?: RefObject<HTMLHeadingElement | null>;
+  readonly onCoreDraftChange?: (draft: PreparationCoreSelectionDraft) => void;
+  readonly onConfigureCore?: () => Promise<void>;
+  readonly onConfigureCoreChange?: (configuring: boolean) => void;
   readonly onProcess: (item: PreparationItem, skip: boolean) => Promise<void>;
   readonly onContinue: () => Promise<void>;
   readonly onReviewEditingChange: (editing: boolean) => void;
 }) {
   const items = visiblePreparationItemsForMode(snapshot.plan.activeItems, mode);
+  const resolvedCoreDraft = coreDraft ?? coreSelectionDraft(snapshot);
+  const configuringCore = isConfiguringCore ?? false;
+  const savingCore = isSavingCore ?? false;
+  const coreConfigured = snapshot.plan.requiredCoreKeys !== null;
+  const isEmergency = mode === EVENING_CYCLE_MODE.emergency;
+  const showCoreConfiguration =
+    !completedReview && !isEmergency && (!coreConfigured || configuringCore);
   const { processed, requiredPending, fullyReady, progressValue, summary, action } =
     buildPreparationPanelPresentation(
       items,
       snapshot.firstAction !== null,
       completedReview,
       completedReviewEditing,
+      coreConfigured,
     );
   const editable = !completedReview || completedReviewEditing;
   const heading = preparationHeading(completedReview);
   const historyEmpty = completedReview && items.length === 0;
-  const categories = CATEGORY_ORDER.flatMap((category) => {
-    const categoryItems = items.filter((item) => item.category === category);
-    return categoryItems.length === 0 ? [] : [{ category, items: categoryItems }];
+  const areas = AREA_ORDER.flatMap((area) => {
+    const areaItems = items.filter((item) => item.area === area);
+    return areaItems.length === 0 ? [] : [{ area, items: areaItems }];
   });
 
   return (
@@ -256,32 +342,43 @@ export function PreparationSceneView({
 
         {historyEmpty ? null : <PreparationSummaryStrip items={summary} />}
 
-        {items.length === 0 ? (
+        {showCoreConfiguration ? (
+          <PreparationCoreConfiguration
+            items={snapshot.plan.activeItems}
+            draft={resolvedCoreDraft}
+            isSaving={savingCore}
+            error={coreError ?? null}
+            errorRef={coreErrorRef}
+            onDraftChange={onCoreDraftChange}
+            onConfirm={onConfigureCore}
+          />
+        ) : items.length === 0 ? (
           <PreparationEmptyState
             firstActionDefined={snapshot.firstAction !== null}
             completedReview={completedReview}
           />
         ) : (
           <div
-            className={`preparation-sections preparation-sections-${categories.length}`}
-            aria-label="Категории подготовки"
+            className={`preparation-sections preparation-environment-areas preparation-sections-${areas.length}`}
+            aria-label="Области подготовки среды"
           >
-            {categories.map(({ category, items: categoryItems }) => (
+            {areas.map(({ area, items: areaItems }) => (
               <PreparationSection
-                category={category}
-                items={categoryItems}
+                area={area}
+                items={areaItems}
                 busyItemId={busyItemId}
                 editable={editable}
                 reviewEditing={completedReviewEditing}
                 completedReview={completedReview}
                 onProcess={onProcess}
-                key={category}
+                headingRef={area === PREPARATION_AREA.sleepEnvironment ? checklistHeadingRef : undefined}
+                key={area}
               />
             ))}
           </div>
         )}
 
-        {historyEmpty ? null : (
+        {showCoreConfiguration || historyEmpty ? null : (
           <footer className="preparation-readiness">
             <div className="preparation-status-copy">
               <strong>
@@ -317,11 +414,28 @@ export function PreparationSceneView({
                 />
               ))}
             </div>
+            {!completedReview && !isEmergency ? (
+              <button
+                className="secondary-button preparation-core-edit"
+                type="button"
+                disabled={savingCore || busyItemId !== null || isContinuing}
+                onClick={() => onConfigureCoreChange?.(true)}
+              >
+                Настроить ядро
+              </button>
+            ) : null}
             {action === null ? null : (
               <button
                 className={`${action.tone}-button preparation-scene-action`}
                 type="button"
-                disabled={action.intent === 'continue' && (isContinuing || requiredPending > 0)}
+                disabled={
+                  action.intent === 'continue' &&
+                  (isContinuing ||
+                    savingCore ||
+                    busyItemId !== null ||
+                    !coreConfigured ||
+                    requiredPending > 0)
+                }
                 onClick={() => {
                   if (action.intent === 'continue') void onContinue();
                   else onReviewEditingChange(action.intent === 'beginEdit');
@@ -369,7 +483,20 @@ function PreparationSummaryStrip({ items }: { readonly items: readonly Preparati
 function summaryIcon(id: PreparationSummaryItem['id']): EveningVisualIconName {
   if (id === 'prepared') return 'list';
   if (id === 'first-start') return 'sun';
-  return CATEGORY_ICONS[id];
+  return AREA_ICONS[id];
+}
+
+function coreSelectionDraft(snapshot: PreparationSnapshot): PreparationCoreSelectionDraft {
+  const selectedKeys = snapshot.plan.requiredCoreKeys ?? snapshot.recommendedCoreKeys;
+  return {
+    planId: snapshot.plan.id.toString(),
+    savedCoreSignature: [...selectedKeys].sort().join('|'),
+    selectedKeys: [...selectedKeys],
+  };
+}
+
+function isValidCoreSelection(keys: readonly string[]): boolean {
+  return keys.length >= 3 && keys.length <= 6;
 }
 
 export function PreparationSceneState({
@@ -401,35 +528,127 @@ export function PreparationSceneState({
   );
 }
 
+function PreparationCoreConfiguration({
+  items,
+  draft,
+  isSaving,
+  error,
+  errorRef,
+  onDraftChange,
+  onConfirm,
+}: {
+  readonly items: readonly PreparationItem[];
+  readonly draft: PreparationCoreSelectionDraft;
+  readonly isSaving: boolean;
+  readonly error: string | null;
+  readonly errorRef?: RefObject<HTMLElement | null>;
+  readonly onDraftChange?: (draft: PreparationCoreSelectionDraft) => void;
+  readonly onConfirm?: () => Promise<void>;
+}) {
+  const selected = new Set(draft.selectedKeys);
+  return (
+    <section className="preparation-core-configuration" aria-labelledby="preparation-core-title">
+      <header>
+        <p className="section-kicker gold">Обязательное ядро</p>
+        <h4 id="preparation-core-title">Настройте обязательное ядро</h4>
+        <p id="preparation-core-count">Выбрано {selected.size} из 3–6</p>
+      </header>
+      <div className="preparation-core-areas" aria-describedby="preparation-core-count">
+        {AREA_ORDER.map((area) => {
+          const areaItems = items.filter((item) => item.area === area);
+          if (areaItems.length === 0) return null;
+          return (
+            <section className="preparation-core-area" aria-labelledby={`core-area-${area}`} key={area}>
+              <h5 id={`core-area-${area}`}>{AREA_LABELS[area]}</h5>
+              <ul>
+                {areaItems.map((item) => {
+                  const selectedItem = selected.has(item.key);
+                  return (
+                    <li key={item.id.toString()}>
+                      <button
+                        className="preparation-core-option"
+                        type="button"
+                        aria-pressed={selectedItem}
+                        disabled={isSaving}
+                        onClick={() => {
+                          if (onDraftChange === undefined) return;
+                          const nextKeys = selectedItem
+                            ? draft.selectedKeys.filter((key) => key !== item.key)
+                            : [...draft.selectedKeys, item.key];
+                          onDraftChange({ ...draft, selectedKeys: nextKeys });
+                        }}
+                      >
+                        <span className="preparation-core-selected-indicator" aria-hidden="true">
+                          {selectedItem ? '✓' : '○'}
+                        </span>
+                        <span>{item.title}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          );
+        })}
+      </div>
+      {error === null ? null : (
+        <div className="preparation-core-error" role="alert" tabIndex={-1} ref={errorRef}>
+          <span>{error.replace(' Повторить', '')}</span>
+          <button
+            className="text-button"
+            type="button"
+            disabled={isSaving}
+            onClick={() => void onConfirm?.()}
+          >
+            Повторить
+          </button>
+        </div>
+      )}
+      <button
+        className="primary-button preparation-core-confirm"
+        type="button"
+        disabled={isSaving || !isValidCoreSelection(draft.selectedKeys)}
+        onClick={() => void onConfirm?.()}
+      >
+        {isSaving ? 'Сохраняем…' : 'Подтвердить ядро'}
+      </button>
+    </section>
+  );
+}
+
 export function PreparationSection({
-  category,
+  area,
   items,
   busyItemId,
   editable,
   reviewEditing,
   completedReview,
   onProcess,
+  headingRef,
 }: {
-  readonly category: PreparationCategory;
+  readonly area: PreparationArea;
   readonly items: readonly PreparationItem[];
   readonly busyItemId: string | null;
   readonly editable: boolean;
   readonly reviewEditing: boolean;
   readonly completedReview: boolean;
   readonly onProcess: (item: PreparationItem, skip: boolean) => Promise<void>;
+  readonly headingRef?: RefObject<HTMLHeadingElement | null>;
 }) {
-  const categoryKey = category.toLowerCase();
+  const areaKey = area.toLowerCase();
   return (
     <section
-      className="preparation-category"
-      data-category={categoryKey}
-      aria-labelledby={`preparation-${categoryKey}`}
+      className="preparation-category preparation-environment-area"
+      data-area={areaKey}
+      aria-labelledby={`preparation-${areaKey}`}
     >
       <header className="preparation-category-heading">
         <span aria-hidden="true">
-          <EveningVisualIcon name={CATEGORY_ICONS[category]} size={22} />
+          <EveningVisualIcon name={AREA_ICONS[area]} size={22} />
         </span>
-        <h4 id={`preparation-${categoryKey}`}>{CATEGORY_LABELS[category]}</h4>
+        <h4 id={`preparation-${areaKey}`} ref={headingRef} tabIndex={-1}>
+          {AREA_LABELS[area]}
+        </h4>
         <small>
           {items.filter((item) => item.status !== PREPARATION_ITEM_STATUS.pending).length} из{' '}
           {items.length}
@@ -444,17 +663,7 @@ export function PreparationSection({
               data-required={item.required ? 'true' : 'false'}
               key={item.id.toString()}
             >
-              <button
-                className="preparation-item-button"
-                type="button"
-                disabled={
-                  !editable ||
-                  busyItemId !== null ||
-                  (!pending &&
-                    (!reviewEditing || item.status === PREPARATION_ITEM_STATUS.completed))
-                }
-                onClick={() => void onProcess(item, false)}
-              >
+              <div className="preparation-item-copy">
                 <span className="preparation-check" aria-hidden="true">
                   {item.status === PREPARATION_ITEM_STATUS.completed ? (
                     <EveningVisualIcon name="check" size={17} />
@@ -465,37 +674,31 @@ export function PreparationSection({
                 <span>
                   <strong>{item.title}</strong>
                   <small>{preparationItemStatus(item, completedReview)}</small>
+                  {item.required ? <em>Обязательное ядро</em> : null}
                 </span>
-              </button>
-              {editable && (pending || reviewEditing) ? (
-                item.required ? (
-                  <details className="preparation-item-menu">
-                    <summary aria-label={`Другие действия: ${item.title}`}>•••</summary>
-                    <button
-                      type="button"
-                      disabled={
-                        busyItemId !== null || item.status === PREPARATION_ITEM_STATUS.skipped
-                      }
-                      onClick={() => void onProcess(item, true)}
-                    >
-                      {item.status === PREPARATION_ITEM_STATUS.skipped
-                        ? 'Уже пропущено'
-                        : 'Пропустить'}
-                    </button>
-                  </details>
-                ) : (
+              </div>
+              {editable && pending ? (
+                <div className="preparation-item-actions">
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    disabled={busyItemId !== null}
+                    onClick={() => void onProcess(item, false)}
+                  >
+                    Выполнено
+                  </button>
                   <button
                     className="text-button preparation-skip"
                     type="button"
-                    disabled={
-                      busyItemId !== null || item.status === PREPARATION_ITEM_STATUS.skipped
-                    }
+                    disabled={busyItemId !== null}
                     onClick={() => void onProcess(item, true)}
                   >
-                    {item.status === PREPARATION_ITEM_STATUS.skipped ? 'Пропущено' : 'Пропустить'}
+                    Пропустить сегодня
                   </button>
-                )
-              ) : null}
+                </div>
+              ) : reviewEditing && pending ? null : (
+                <span className="preparation-item-outcome">{preparationItemStatus(item, completedReview)}</span>
+              )}
             </li>
           );
         })}

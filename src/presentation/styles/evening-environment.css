@@ -1,0 +1,207 @@
+.evening-command-center-page .preparation-core-configuration,
+.evening-command-center-page .preparation-environment-area {
+  min-width: 0;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-medium);
+  background: var(--surface-1);
+}
+
+.evening-command-center-page .preparation-core-configuration {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-6);
+}
+
+.evening-command-center-page .preparation-core-configuration h4,
+.evening-command-center-page .preparation-core-configuration h5 {
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.evening-command-center-page .preparation-core-configuration p {
+  margin: var(--space-1) 0 0;
+  color: var(--text-secondary);
+}
+
+.evening-command-center-page .preparation-core-areas,
+.evening-command-center-page .preparation-environment-areas {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.evening-command-center-page .preparation-core-area {
+  min-width: 0;
+}
+
+.evening-command-center-page .preparation-core-area ul {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.evening-command-center-page .preparation-core-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: var(--control-lg);
+  padding: var(--space-3);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-small);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  text-align: left;
+  overflow-wrap: anywhere;
+  transition: border-color var(--motion-fast) var(--ease-standard),
+    background var(--motion-fast) var(--ease-standard);
+}
+
+.evening-command-center-page .preparation-core-option[aria-pressed='true'] {
+  border-color: var(--gold-main);
+  background: color-mix(in srgb, var(--gold-main) 12%, var(--surface-2));
+}
+
+.evening-command-center-page .preparation-core-selected-indicator {
+  flex: 0 0 auto;
+  font-weight: 700;
+}
+
+.evening-command-center-page .preparation-core-option[aria-pressed='true'] .preparation-core-selected-indicator {
+  color: var(--gold-soft);
+}
+
+.evening-command-center-page .preparation-core-error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--danger);
+}
+
+.evening-command-center-page .preparation-core-confirm {
+  justify-self: start;
+  min-height: var(--control-lg);
+}
+
+.evening-command-center-page .preparation-environment-area {
+  padding: var(--space-4);
+}
+
+.evening-command-center-page .preparation-environment-area .preparation-list {
+  margin: var(--space-3) 0 0;
+}
+
+.evening-command-center-page .preparation-environment-area .preparation-list > li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--control-lg);
+}
+
+.evening-command-center-page .preparation-item-copy {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.evening-command-center-page .preparation-item-copy strong,
+.evening-command-center-page .preparation-item-copy small,
+.evening-command-center-page .preparation-item-copy em {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.evening-command-center-page .preparation-item-copy em {
+  margin-top: var(--space-1);
+  color: var(--gold-soft);
+  font-size: 0.75rem;
+  font-style: normal;
+}
+
+.evening-command-center-page .preparation-item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.evening-command-center-page .preparation-item-actions button,
+.evening-command-center-page .preparation-item-outcome,
+.evening-command-center-page .preparation-core-edit {
+  min-height: var(--control-md);
+}
+
+.evening-command-center-page .preparation-environment-area li.is-completed {
+  background: color-mix(in srgb, var(--success) 10%, transparent);
+}
+
+.evening-command-center-page .preparation-environment-area li.is-completed .preparation-item-outcome,
+.evening-command-center-page .preparation-environment-area li.is-completed .preparation-check {
+  color: var(--success);
+}
+
+.evening-command-center-page .preparation-environment-area li.is-skipped .preparation-item-outcome,
+.evening-command-center-page .preparation-environment-area li.is-skipped .preparation-check {
+  color: var(--text-muted);
+}
+
+.evening-command-center-page .preparation-core-option:focus-visible,
+.evening-command-center-page .preparation-core-confirm:focus-visible,
+.evening-command-center-page .preparation-core-edit:focus-visible,
+.evening-command-center-page .preparation-item-actions button:focus-visible,
+.evening-command-center-page .preparation-core-error .text-button:focus-visible {
+  outline: 2px solid var(--gold-soft);
+  outline-offset: 2px;
+}
+
+.evening-command-center-page .preparation-core-option:disabled,
+.evening-command-center-page .preparation-core-confirm:disabled,
+.evening-command-center-page .preparation-core-edit:disabled,
+.evening-command-center-page .preparation-item-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+@media (max-width: 900px) {
+  .evening-command-center-page .preparation-core-areas,
+  .evening-command-center-page .preparation-environment-areas {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .evening-command-center-page .preparation-core-configuration,
+  .evening-command-center-page .preparation-environment-area {
+    padding: var(--space-4);
+  }
+
+  .evening-command-center-page .preparation-core-confirm,
+  .evening-command-center-page .preparation-item-actions,
+  .evening-command-center-page .preparation-item-actions button {
+    width: 100%;
+  }
+
+  .evening-command-center-page .preparation-item-actions {
+    display: grid;
+  }
+
+  .evening-command-center-page .preparation-item-actions button,
+  .evening-command-center-page .preparation-core-option,
+  .evening-command-center-page .preparation-core-confirm {
+    min-height: 44px;
+  }
+
+  .evening-command-center-page .preparation-environment-area .preparation-list > li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .evening-command-center-page .preparation-core-option {
+    transition: none;
+  }
+}
