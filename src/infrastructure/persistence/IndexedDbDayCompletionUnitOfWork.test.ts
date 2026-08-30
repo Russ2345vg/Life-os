@@ -17,6 +17,7 @@ import {
   REFLECTION_QUESTION_TYPE,
   ReflectionQuestion,
   ReflectionResult,
+  PREPARATION_PLAN_STATUS,
   PreparationPlan,
   TomorrowPlan,
   type LifeAction,
@@ -307,17 +308,21 @@ function createCompletedPreparationPlan(
   cycle: EveningCycle,
   tomorrowPlan: TomorrowPlan,
 ): PreparationPlan {
-  const plan = PreparationPlan.create({
+  return PreparationPlan.rehydrate({
     id: id('preparation-plan'),
     cycleId: cycle.id,
     tomorrowPlanId: tomorrowPlan.id,
     targetDayId: tomorrowPlan.targetDayId,
+    items: [],
+    requiredCoreKeys: null,
     sourceVersion: tomorrowPlan.version,
     generationSignature: 'ready',
+    status: PREPARATION_PLAN_STATUS.completed,
     createdAt: NOW,
+    updatedAt: NOW,
+    completedAt: NOW,
+    version: 1,
   });
-  plan.complete(NOW);
-  return plan;
 }
 
 function createStartedEveningCycle(day: Day): EveningCycle {

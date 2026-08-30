@@ -16,9 +16,7 @@ import { EveningCommandCenter } from './EveningCommandCenter';
 import { buildEveningKpis } from './EveningCommandCenterPresentation';
 
 const globalCss = readFileSync(new URL('../styles/global.css', import.meta.url), 'utf8');
-const v2bCss = globalCss.slice(
-  globalCss.lastIndexOf('/* E11.3G-B: PreparationScene visual fidelity V2B */'),
-);
+const environmentCss = readFileSync(new URL('../styles/evening-environment.css', import.meta.url), 'utf8');
 const preparationSource = readFileSync(new URL('./PreparationPanel.tsx', import.meta.url), 'utf8');
 const resolvingSource = readFileSync(
   new URL('./EveningResolvingScene.tsx', import.meta.url),
@@ -41,7 +39,7 @@ describe('E9.5 unified evening visual system', () => {
       'Незавершённое',
       'Осмысление',
       'Завтра',
-      'Подготовка',
+      'Среда',
       'Режим',
     ]);
     expect(kpis[0]).toMatchObject({ value: 'Нет', tone: 'ready' });
@@ -123,7 +121,7 @@ describe('E9.5 unified evening visual system', () => {
     expect(preparationSource).not.toContain('<progress');
     expect(reviewSource).not.toContain('аварийному завершению');
     expect(reviewSource).toContain('Позднее завершение · Завтра');
-    expect(reviewSource).toContain('Позднее завершение · Подготовка');
+    expect(reviewSource).toContain('Позднее завершение · Среда');
   });
 
   it('синхронизирует шесть утверждённых состояний без изменения команд E1–E8', () => {
@@ -134,7 +132,10 @@ describe('E9.5 unified evening visual system', () => {
     expect(reflectionSource).not.toContain('Signal');
     expect(tomorrowSource).toContain('Вывод на завтра');
     expect(tomorrowSource).toContain('Подготовить завтра →');
-    expect(preparationSource).toContain("[PREPARATION_CATEGORY.cognitive]: 'Дополнительно'");
+    expect(preparationSource).toContain('PREPARATION_AREA.sleepEnvironment,');
+    expect(preparationSource).toContain('PREPARATION_AREA.tomorrowStart,');
+    expect(preparationSource).toContain("[PREPARATION_AREA.sleepEnvironment]: 'Среда для сна'");
+    expect(preparationSource).toContain("[PREPARATION_AREA.tomorrowStart]: 'Среда для завтра'");
     expect(preparationSource).toContain('aria-label="Общий прогресс подготовки"');
     expect(shutdownSource).toContain('Завершить день');
     expect(shutdownSource).toContain('className="evening-recovery-close"');
@@ -147,8 +148,8 @@ describe('E9.5 unified evening visual system', () => {
     expect(globalCss).toMatch(
       /\.evening-reflection-workspace\s*{[\s\S]*?grid-template-columns:\s*minmax\(0, 1\.45fr\) minmax\(17rem, 0\.75fr\)/,
     );
-    expect(v2bCss).toMatch(
-      /\.preparation-sections-3\s*{[\s\S]*?grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/,
+    expect(environmentCss).toMatch(
+      /\.evening-command-center-page \.preparation-environment-areas\s*{[\s\S]*?grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/,
     );
   });
 });

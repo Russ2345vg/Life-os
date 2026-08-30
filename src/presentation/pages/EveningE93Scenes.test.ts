@@ -50,11 +50,13 @@ describe('E9.3 tomorrow scene contract', () => {
 });
 
 describe('E9.3 preparation scene contract', () => {
-  it('начинается с первого старта и скрывает пустые категории', () => {
+  it('начинается с первого старта и скрывает пустые области среды', () => {
     expect(preparationSource.indexOf('Первый старт завтра')).toBeLessThan(
       preparationSource.indexOf('preparation-sections'),
     );
-    expect(preparationSource).toContain('categoryItems.length === 0 ? []');
+    expect(preparationSource).toContain('areaItems.length === 0 ? []');
+    expect(preparationSource).toContain("[PREPARATION_AREA.sleepEnvironment]: 'Среда для сна'");
+    expect(preparationSource).toContain("[PREPARATION_AREA.tomorrowStart]: 'Среда для завтра'");
     expect(preparationSource).toContain('Нужно для первого старта');
     expect(preparationSource).toContain('Можно подготовить дополнительно');
     expect(preparationSource).not.toContain("'REQUIRED'");

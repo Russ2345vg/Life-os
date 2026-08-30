@@ -197,7 +197,11 @@ describe('Stage 16.1 journal integration', () => {
     });
     await application.tomorrowPlan.complete(TODAY);
     const preparation = await application.preparation.getOrGenerate(TODAY);
-    for (const item of preparation.plan.activeItems.filter((candidate) => candidate.required)) {
+    const configuredPreparation = await application.preparation.configureRequiredCore(
+      TODAY,
+      preparation.recommendedCoreKeys,
+    );
+    for (const item of configuredPreparation.plan.activeItems.filter((candidate) => candidate.required)) {
       await application.preparation.skipItem(TODAY, item.id, 'Тестовый осознанный пропуск');
     }
     await application.preparation.continueToShutdown(TODAY);
