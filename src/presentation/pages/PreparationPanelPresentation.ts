@@ -1,9 +1,8 @@
 import {
-  PREPARATION_CATEGORY,
   PREPARATION_ITEM_STATUS,
-  type PreparationCategory,
   type PreparationItem,
 } from '../../domain';
+import { PREPARATION_AREA, type PreparationArea } from '../../domain/preparation';
 
 export type PreparationPanelAction = Readonly<{
   intent: 'continue' | 'beginEdit' | 'finishEdit';
@@ -14,7 +13,7 @@ export type PreparationPanelAction = Readonly<{
 export type PreparationSummaryTone = 'ready' | 'neutral';
 
 export interface PreparationSummaryItem {
-  readonly id: 'prepared' | PreparationCategory | 'first-start';
+  readonly id: 'prepared' | PreparationArea | 'first-start';
   readonly label: string;
   readonly value: string;
   readonly tone: PreparationSummaryTone;
@@ -47,12 +46,13 @@ export function buildPreparationPanelPresentation(
   firstActionDefined: boolean,
   completedReview: boolean,
   completedReviewEditing: boolean,
+  coreConfigured = false,
 ): PreparationPanelPresentation {
   const processed = items.filter((item) => item.status !== PREPARATION_ITEM_STATUS.pending).length;
   const requiredPending = items.filter(
     (item) => item.required && item.status === PREPARATION_ITEM_STATUS.pending,
   ).length;
-  const fullyReady = processed === items.length;
+  const fullyReady = coreConfigured && requiredPending === 0;
   const action: PreparationPanelAction | null = !completedReview
     ? { intent: 'continue', tone: 'primary', label: 'Перейти к завершению →' }
     : items.length === 0
@@ -86,10 +86,9 @@ export function buildPreparationSummary(
       : 'Определён'
     : 'Не определён';
 
-  const categories = [
-    categorySummary(items, PREPARATION_CATEGORY.digital, 'Цифровая среда'),
-    categorySummary(items, PREPARATION_CATEGORY.physical, 'Физически'),
-    categorySummary(items, PREPARATION_CATEGORY.cognitive, 'Дополнительно'),
+  const areas = [
+    areaSummary(items, PREPARATION_AREA.sleepEnvironment, 'Среда сна'),
+    areaSummary(items, PREPARATION_AREA.tomorrowStart, 'Среда завтра'),
   ].flatMap((item) => (item === null ? [] : [item]));
 
   return Object.freeze([
@@ -99,7 +98,7 @@ export function buildPreparationSummary(
       value: `${processed} из ${items.length}`,
       tone: processed === items.length ? 'ready' : 'neutral',
     },
-    ...categories,
+    ...areas,
     {
       id: 'first-start',
       label: 'Первый старт',
@@ -109,20 +108,20 @@ export function buildPreparationSummary(
   ]);
 }
 
-function categorySummary(
+function areaSummary(
   items: readonly PreparationItem[],
-  category: PreparationCategory,
+  area: PreparationArea,
   label: string,
 ): PreparationSummaryItem | null {
-  const categoryItems = items.filter((item) => item.category === category);
-  if (categoryItems.length === 0) return null;
-  const processed = categoryItems.filter(
+  const areaItems = items.filter((item) => item.area === area);
+  if (areaItems.length === 0) return null;
+  const processed = areaItems.filter(
     (item) => item.status !== PREPARATION_ITEM_STATUS.pending,
   ).length;
   return {
-    id: category,
+    id: area,
     label,
-    value: `${processed} из ${categoryItems.length}`,
-    tone: processed === categoryItems.length ? 'ready' : 'neutral',
+    value: `${processed} из ${areaItems.length}`,
+    tone: processed === areaItems.length ? 'ready' : 'neutral',
   };
 }

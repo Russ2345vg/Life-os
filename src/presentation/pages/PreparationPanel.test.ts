@@ -9,6 +9,7 @@ import {
   PreparationItem,
   type PreparationCategory,
 } from '../../domain';
+import { PREPARATION_AREA, type PreparationArea } from '../../domain/preparation';
 import { PreparationEmptyState, PreparationSection } from './PreparationPanel';
 import {
   buildPreparationPanelPresentation,
@@ -68,7 +69,7 @@ describe('PreparationPanel completed history', () => {
     const first = preparationItem('first', true, PREPARATION_CATEGORY.digital);
     const second = preparationItem('second', false, PREPARATION_CATEGORY.physical);
 
-    const empty = buildPreparationPanelPresentation([], true, true, false);
+    const empty = buildPreparationPanelPresentation([], true, true, false, true);
     expect(empty).toMatchObject({
       processed: 0,
       requiredPending: 0,
@@ -77,7 +78,7 @@ describe('PreparationPanel completed history', () => {
       action: null,
     });
     expect(empty.summary.map((item) => item.id)).toEqual(['prepared', 'first-start']);
-    const pending = buildPreparationPanelPresentation([first, second], true, true, false);
+    const pending = buildPreparationPanelPresentation([first, second], true, true, false, true);
     expect(pending).toMatchObject({
       processed: 0,
       requiredPending: 1,
@@ -87,16 +88,15 @@ describe('PreparationPanel completed history', () => {
     });
     expect(pending.summary.map((item) => item.id)).toEqual([
       'prepared',
-      PREPARATION_CATEGORY.digital,
-      PREPARATION_CATEGORY.physical,
+      PREPARATION_AREA.tomorrowStart,
       'first-start',
     ]);
     expect(
-      buildPreparationPanelPresentation([first.complete(NOW), second], true, true, false),
+      buildPreparationPanelPresentation([first.complete(NOW), second], true, true, false, true),
     ).toMatchObject({
       processed: 1,
       requiredPending: 0,
-      fullyReady: false,
+      fullyReady: true,
       progressValue: 50,
       action: { intent: 'beginEdit', tone: 'secondary', label: 'Изменить подготовку' },
     });
@@ -106,6 +106,7 @@ describe('PreparationPanel completed history', () => {
         true,
         true,
         false,
+        true,
       ),
     ).toMatchObject({
       processed: 2,
@@ -119,17 +120,121 @@ describe('PreparationPanel completed history', () => {
   it('оставляет history-редактирование вторичным и не показывает кнопку сохранения', () => {
     const item = preparationItem('editable', true, PREPARATION_CATEGORY.digital).complete(NOW);
 
-    expect(buildPreparationPanelPresentation([item], true, true, false).action).toEqual({
+    expect(buildPreparationPanelPresentation([item], true, true, false, true).action).toEqual({
       intent: 'beginEdit',
       tone: 'secondary',
       label: 'Изменить подготовку',
     });
-    expect(buildPreparationPanelPresentation([item], true, true, true).action).toEqual({
+    expect(buildPreparationPanelPresentation([item], true, true, true, true).action).toEqual({
       intent: 'finishEdit',
       tone: 'secondary',
       label: 'Завершить редактирование',
     });
     expect(presentationSource).not.toContain('Сохранить подготовку');
+  });
+
+  it('блокирует readiness пустого и частичного плана до явного подтверждения ядра', () => {
+    const required = preparationItem(
+      'required',
+      true,
+      PREPARATION_CATEGORY.physical,
+      PREPARATION_AREA.sleepEnvironment,
+    );
+
+    expect(buildPreparationPanelPresentation([], true, false, false, false)).toMatchObject({
+      processed: 0,
+      requiredPending: 0,
+      fullyReady: false,
+      progressValue: 100,
+    });
+    expect(
+      buildPreparationPanelPresentation([required], true, false, false, true),
+    ).toMatchObject({
+      processed: 0,
+      requiredPending: 1,
+      fullyReady: false,
+      progressValue: 0,
+    });
+  });
+
+  it('считает обработанный required и pending optional готовыми к продолжению', () => {
+    const required = preparationItem(
+      'required',
+      true,
+      PREPARATION_CATEGORY.physical,
+      PREPARATION_AREA.sleepEnvironment,
+    ).skip(NOW, 'Сегодня не требуется');
+    const optional = preparationItem(
+      'optional',
+      false,
+      PREPARATION_CATEGORY.digital,
+      PREPARATION_AREA.tomorrowStart,
+    );
+
+    expect(
+      buildPreparationPanelPresentation([required, optional], true, false, false, true),
+    ).toMatchObject({
+      processed: 1,
+      requiredPending: 0,
+      fullyReady: true,
+      progressValue: 50,
+    });
+  });
+
+  it('считает полностью обработанный план готовым', () => {
+    const first = preparationItem(
+      'first',
+      true,
+      PREPARATION_CATEGORY.physical,
+      PREPARATION_AREA.sleepEnvironment,
+    ).complete(NOW);
+    const second = preparationItem(
+      'second',
+      false,
+      PREPARATION_CATEGORY.digital,
+      PREPARATION_AREA.tomorrowStart,
+    ).skip(NOW);
+
+    expect(
+      buildPreparationPanelPresentation([first, second], true, false, false, true),
+    ).toMatchObject({
+      processed: 2,
+      requiredPending: 0,
+      fullyReady: true,
+      progressValue: 100,
+    });
+  });
+
+  it('сохраняет legacy сводку только для сохранённой среды завтра', () => {
+    const legacy = preparationItem(
+      'legacy',
+      true,
+      PREPARATION_CATEGORY.digital,
+      PREPARATION_AREA.tomorrowStart,
+    );
+
+    expect(
+      buildPreparationPanelPresentation([legacy], false, true, false, true).summary,
+    ).toEqual([
+      {
+        id: 'prepared',
+        label: 'Было подготовлено',
+        value: '0 из 1',
+        tone: 'neutral',
+      },
+      {
+        id: PREPARATION_AREA.tomorrowStart,
+        label: 'Среда завтра',
+        value: '0 из 1',
+        tone: 'neutral',
+      },
+      {
+        id: 'first-start',
+        label: 'Первый старт',
+        value: 'Не определён',
+        tone: 'neutral',
+      },
+    ]);
   });
 
   it('делает пункты read-only до явного входа в редактирование', () => {
@@ -175,23 +280,10 @@ describe('PreparationPanel completed history', () => {
     expect(activeCompletedMarkup).not.toContain('preparation-item-menu');
   });
 
-  it('сохраняет компактную сводку, первый старт и адаптивные сетки сцены', () => {
+  it('строит area-primary сводку с точными русскими labels', () => {
     expect(presentationSource).toContain("'Было подготовлено' : 'Подготовлено'");
-    expect(presentationSource).toContain("'Цифровая среда'");
-    expect(presentationSource).toContain("'Физически'");
-    expect(presentationSource).toContain("'Дополнительно'");
-    expect(preparationSource).toContain('Первый старт завтра');
-    expect(preparationSource).toContain('PreparationSummaryStrip');
-    expect(preparationSource).not.toContain('className="preparation-metrics"');
-    expect(v2bCss).toMatch(
-      /\.preparation-summary-strip\s*{[^}]*grid-template-columns:\s*minmax\(10\.5rem, 0\.65fr\) minmax\(0, 1\.35fr\)/,
-    );
-    expect(v2bCss).toMatch(
-      /\.evening-command-center-page \.preparation-sections-3\s*{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/,
-    );
-    expect(v2bCss).toMatch(
-      /@media \(max-width: 48rem\)[\s\S]*?\.evening-command-center-page \.preparation-sections,[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\)/,
-    );
+    expect(presentationSource).toContain("'Среда сна'");
+    expect(presentationSource).toContain("'Среда завтра'");
   });
 });
 
@@ -199,11 +291,13 @@ function preparationItem(
   key: string,
   required: boolean,
   category: PreparationCategory,
+  area: PreparationArea = PREPARATION_AREA.tomorrowStart,
 ): PreparationItem {
   return PreparationItem.create({
     id: EntityId.create(`item-${key}`),
     planId: EntityId.create('preparation-plan'),
     key,
+    area,
     category,
     title: `Подготовить ${key}`,
     sourceType: PREPARATION_SOURCE_TYPE.rule,
