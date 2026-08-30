@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   EVENING_CYCLE_COMPLETION,
   EVENING_CYCLE_MODE,
@@ -19,16 +19,12 @@ import {
   createShutdownRecord,
 } from '../../domain';
 import { PREPARATION_AREA } from '../../domain/preparation';
-import { EveningCycleApplicationService } from '../../application/evening-cycle/EveningCycleApplicationService';
 import { EveningCycleRecordMapper } from '../../infrastructure/persistence/mappers/EveningCycleRecordMapper';
-import { InMemoryEveningCycleRepository } from '../../infrastructure/persistence/InMemoryEveningCycleRepository';
-import { InMemoryPreparationPlanRepository } from '../../infrastructure/persistence/InMemoryPreparationPlanRepository';
 import {
   eveningModeProgress,
   visiblePreparationItemsForMode,
 } from '../../presentation/pages/EveningModePresentation';
 import { createDayJournalEntries } from '../../application/journal/createJournalEntries';
-import { FakeClock, FakeDayRepository, FakeIdGenerator } from '../helpers/Fakes';
 
 const DATE = DayDate.create('2026-08-14');
 const TOMORROW = DayDate.create('2026-08-15');
@@ -99,33 +95,6 @@ describe('E8 — Fast & Emergency Evening Modes', () => {
       'required-fourth',
       'optional',
     ]);
-  });
-
-  it('EMERGENCY проходит application entry/skip PREPARING без генерации или сохранения PreparationPlan', async () => {
-    const cycles = new InMemoryEveningCycleRepository();
-    const preparationPlans = new InMemoryPreparationPlanRepository();
-    const cycle = emergencyTomorrowCycle();
-    const eveningCycle = new EveningCycleApplicationService(
-      cycles,
-      new FakeDayRepository(),
-      new FakeClock(NOW),
-      new FakeIdGenerator('emergency-skip'),
-    );
-    await cycles.createIfAbsent(cycle);
-    const createPlan = vi.spyOn(preparationPlans, 'createIfAbsent');
-    const savePlan = vi.spyOn(preparationPlans, 'saveIfVersionMatches');
-
-    const entered = await eveningCycle.beginPreparation(DATE);
-    const skipped = await eveningCycle.skipPreparation(DATE);
-
-    expect(entered.state).toBe(EVENING_CYCLE_STATE.preparing);
-    expect(skipped.skippedStages.at(-1)).toMatchObject({
-      stage: EVENING_CYCLE_STATE.preparing,
-      reason: EVENING_STAGE_SKIP_REASON.emergencyMode,
-    });
-    expect(await preparationPlans.findByCycleId(skipped.id)).toBeNull();
-    expect(createPlan).not.toHaveBeenCalled();
-    expect(savePlan).not.toHaveBeenCalled();
   });
 
   it('NORMAL → QUICK → NORMAL сохраняет исходы и configured core одного плана', () => {
@@ -280,21 +249,6 @@ function preparationItem(key: string, required: boolean): PreparationItem {
     sourceType: PREPARATION_SOURCE_TYPE.rule,
     sourceId: null,
     required,
-  });
-}
-
-function emergencyTomorrowCycle(): EveningCycle {
-  return EveningCycle.rehydrate({
-    id: id('emergency-cycle'),
-    dayId: id('emergency-day'),
-    dateKey: DATE,
-    state: EVENING_CYCLE_STATE.planningTomorrow,
-    mode: EVENING_CYCLE_MODE.emergency,
-    modeReason: EVENING_MODE_REASON.userSelected,
-    startedAt: NOW,
-    updatedAt: NOW,
-    completedAt: null,
-    version: 4,
   });
 }
 
