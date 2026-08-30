@@ -6,8 +6,10 @@ import {
   EVENING_MODE_REASON,
   EVENING_STAGE_SKIP_REASON,
   PREPARATION_CATEGORY,
+  PREPARATION_PLAN_STATUS,
   PREPARATION_SOURCE_TYPE,
   PreparationItem,
+  PreparationPlan,
   TOMORROW_PLANNING_QUALITY,
   TomorrowPlan,
   DayDate,
@@ -16,6 +18,7 @@ import {
   Day,
   createShutdownRecord,
 } from '../../domain';
+import { PREPARATION_AREA } from '../../domain/preparation';
 import { EveningCycleRecordMapper } from '../../infrastructure/persistence/mappers/EveningCycleRecordMapper';
 import {
   eveningModeProgress,
@@ -77,18 +80,60 @@ describe('E8 — Fast & Emergency Evening Modes', () => {
     );
   });
 
-  it('QUICK показывает только REQUIRED preparation', () => {
-    const required = preparationItem('required', true);
-    const optional = preparationItem('optional', false);
+  it('QUICK фильтрует тот же сохранённый core, а NORMAL показывает required и optional', () => {
+    const plan = configuredPreparationPlan();
 
     expect(
-      visiblePreparationItemsForMode([required, optional], EVENING_CYCLE_MODE.quick).map(
-        (item) => item.key,
-      ),
-    ).toEqual(['required']);
+      visiblePreparationItemsForMode(plan.activeItems, EVENING_CYCLE_MODE.quick).map((item) => item.key),
+    ).toEqual(['required-completed', 'required-skipped', 'required-pending', 'required-fourth']);
     expect(
-      visiblePreparationItemsForMode([required, optional], EVENING_CYCLE_MODE.normal),
-    ).toHaveLength(2);
+      visiblePreparationItemsForMode(plan.activeItems, EVENING_CYCLE_MODE.normal).map((item) => item.key),
+    ).toEqual([
+      'required-completed',
+      'required-skipped',
+      'required-pending',
+      'required-fourth',
+      'optional',
+    ]);
+  });
+
+  it('EMERGENCY сохраняет существующую причину пропуска PREPARING без отдельного Environment plan', () => {
+    const cycle = createCycle();
+    cycle.start(NOW);
+    cycle.switchMode(EVENING_CYCLE_MODE.emergency, EVENING_MODE_REASON.userSelected, NOW);
+    cycle.beginResolving(NOW);
+    cycle.completeResolving(NOW);
+    cycle.skipReflection(NOW);
+    cycle.completeTomorrowPlanning(NOW);
+
+    expect(cycle.state).toBe(EVENING_CYCLE_STATE.preparing);
+    expect(
+      cycle.skippedStages.filter((stage) => stage.stage === EVENING_CYCLE_STATE.preparing),
+    ).toEqual([]);
+
+    cycle.skipPreparation(NOW);
+
+    expect(cycle.skippedStages.at(-1)).toMatchObject({
+      stage: EVENING_CYCLE_STATE.preparing,
+      reason: EVENING_STAGE_SKIP_REASON.emergencyMode,
+    });
+  });
+
+  it('NORMAL → QUICK → NORMAL сохраняет исходы и configured core одного плана', () => {
+    const cycle = createCycle();
+    const plan = configuredPreparationPlan();
+    const coreBefore = plan.requiredCoreKeys;
+    const outcomesBefore = plan.items.map((item) => ({ key: item.key, status: item.status }));
+
+    cycle.start(NOW);
+    cycle.beginResolving(NOW);
+    cycle.switchMode(EVENING_CYCLE_MODE.quick, EVENING_MODE_REASON.userSelected, NOW);
+    cycle.switchMode(EVENING_CYCLE_MODE.normal, EVENING_MODE_REASON.userSelected, LATER);
+
+    expect(cycle.mode).toBe(EVENING_CYCLE_MODE.normal);
+    expect(plan.requiredCoreKeys).toEqual(coreBefore);
+    expect(plan.items.map((item) => ({ key: item.key, status: item.status }))).toEqual(outcomesBefore);
+    expect(visiblePreparationItemsForMode(plan.activeItems, cycle.mode)).toHaveLength(5);
   });
 
   it('EMERGENCY завершает TomorrowPlan с явным MINIMAL и не придумывает данные', () => {
@@ -220,11 +265,37 @@ function preparationItem(key: string, required: boolean): PreparationItem {
     id: id(`item-${key}`),
     planId: id('preparation-plan'),
     key,
+    area: PREPARATION_AREA.tomorrowStart,
     category: PREPARATION_CATEGORY.physical,
     title: key,
     sourceType: PREPARATION_SOURCE_TYPE.rule,
     sourceId: null,
     required,
+  });
+}
+
+function configuredPreparationPlan(): PreparationPlan {
+  const items = [
+    preparationItem('required-completed', false).complete(NOW),
+    preparationItem('required-skipped', false).skip(NOW, 'Не требуется сегодня'),
+    preparationItem('required-pending', false),
+    preparationItem('required-fourth', false),
+    preparationItem('optional', false),
+  ];
+  return PreparationPlan.rehydrate({
+    id: id('preparation-plan'),
+    cycleId: id('cycle'),
+    tomorrowPlanId: id('tomorrow-plan'),
+    targetDayId: id('tomorrow-day'),
+    items,
+    requiredCoreKeys: items.slice(0, 4).map((item) => item.key),
+    sourceVersion: 4,
+    generationSignature: 'modes',
+    status: PREPARATION_PLAN_STATUS.inProgress,
+    createdAt: NOW,
+    updatedAt: NOW,
+    completedAt: null,
+    version: 3,
   });
 }
 

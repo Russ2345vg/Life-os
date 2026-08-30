@@ -243,6 +243,6 @@ const EMPTY_KPIS: readonly EveningKpiItem[] = Object.freeze([
   { label: 'Незавершённое', value: '—', meta: 'Данные уточняются', icon: 'list', tone: 'neutral' },
   { label: 'Осмысление', value: '—', meta: 'Ожидает этапа', icon: 'reflection', tone: 'neutral' },
   { label: 'Завтра', value: '—', meta: 'Ожидает этапа', icon: 'calendar', tone: 'neutral' },
-  { label: 'Подготовка', value: '—', meta: 'Ожидает этапа', icon: 'preparation', tone: 'neutral' },
+  { label: 'Среда', value: '—', meta: 'Ожидает этапа', icon: 'preparation', tone: 'neutral' },
   { label: 'Режим', value: '—', meta: 'Режим не выбран', icon: 'moon', tone: 'neutral' },
 ]);

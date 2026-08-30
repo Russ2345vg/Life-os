@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — тест выполняется в Node, а production tsconfig не включает Node types.
 import { readFileSync } from 'node:fs';
-import type { EveningReviewSnapshot, OpenLoopItem, ReflectionSession } from '../../application';
+import type { EveningReviewSnapshot, OpenLoopItem, PreparationSnapshot, ReflectionSession } from '../../application';
 import {
   Day,
   DayDate,
@@ -22,7 +22,13 @@ import {
   ReflectionCorrection,
   ReflectionQuestion,
   ReflectionResult,
+  PREPARATION_CATEGORY,
+  PREPARATION_PLAN_STATUS,
+  PREPARATION_SOURCE_TYPE,
+  PreparationItem,
+  PreparationPlan,
 } from '../../domain';
+import { PREPARATION_AREA, type PreparationArea } from '../../domain/preparation';
 import { createPlannedDecision } from '../../test/helpers/DecisionTestFactory';
 import { createReadyLifeAction } from '../../test/helpers/LifeActionTestFactory';
 import {
@@ -34,6 +40,7 @@ import {
   openLoopResolutionHistoryLabel,
 } from './EveningCompletedHistoryPresentation';
 import { EveningResolvingScene } from './EveningResolvingScene';
+import { PreparationSceneView } from './PreparationPanel';
 
 const DATE = DayDate.create('2026-08-21');
 const TOMORROW = DayDate.create('2026-08-22');
@@ -42,6 +49,83 @@ const globalCss = readFileSync(new URL('../styles/global.css', import.meta.url),
 const e113cCss = globalCss.slice(globalCss.lastIndexOf('/* E11.3C:'));
 
 describe('completed evening history scenes', () => {
+  it('показывает сохранённые области среды и исходы нового плана без изменения истории', () => {
+    const sleepItem = preparationItem(
+      'sleep-completed',
+      'Проветрить комнату',
+      PREPARATION_AREA.sleepEnvironment,
+    ).complete(NOW);
+    const tomorrowItem = preparationItem(
+      'tomorrow-skipped',
+      'Положить одежду на завтра',
+      PREPARATION_AREA.tomorrowStart,
+    ).skip(NOW, 'Уже подготовлено');
+    const plan = completedPreparationPlan([
+      sleepItem,
+      tomorrowItem,
+      preparationItem('sleep-required', 'Убрать экран', PREPARATION_AREA.sleepEnvironment).complete(NOW),
+      preparationItem('tomorrow-required', 'Поставить воду', PREPARATION_AREA.tomorrowStart).complete(NOW),
+    ]);
+    const versionBefore = plan.version;
+
+    const markup = renderPreparationHistory(plan);
+
+    expect(markup).toContain('Среда для сна');
+    expect(markup).toContain('Среда для завтра');
+    expect(markup).toContain('Проветрить комнату');
+    expect(markup).toContain('Положить одежду на завтра');
+    expect(markup).toContain('Выполнено');
+    expect(markup).toContain('Было осознанно пропущено');
+    expect(markup).toContain('>Изменить подготовку</button>');
+    expect(markup).not.toContain('>Выполнено</button>');
+    expect(markup).not.toContain('>Пропустить сегодня</button>');
+    expect(plan.version).toBe(versionBefore);
+    expect(plan.items.map((item) => item.status)).toEqual([
+      sleepItem.status,
+      tomorrowItem.status,
+      'COMPLETED',
+      'COMPLETED',
+    ]);
+  });
+
+  it('открывает legacy историю только с сохранённой средой завтра без фабрикации сна', () => {
+    const legacyItem = preparationItem(
+      'legacy-tomorrow',
+      'Поставить будильник',
+      PREPARATION_AREA.tomorrowStart,
+      'legacy-history-plan',
+    ).complete(NOW);
+    const plan = PreparationPlan.rehydrate({
+      id: EntityId.create('legacy-history-plan'),
+      cycleId: EntityId.create('legacy-history-cycle'),
+      tomorrowPlanId: EntityId.create('legacy-history-tomorrow-plan'),
+      targetDayId: EntityId.create('legacy-history-target-day'),
+      items: [legacyItem],
+      requiredCoreKeys: null,
+      sourceVersion: 1,
+      generationSignature: 'legacy-history',
+      status: PREPARATION_PLAN_STATUS.completed,
+      createdAt: NOW,
+      updatedAt: NOW,
+      completedAt: NOW,
+      version: 9,
+    });
+    const versionBefore = plan.version;
+    const statusesBefore = plan.items.map((item) => item.status);
+
+    const markup = renderPreparationHistory(plan);
+
+    expect(markup).toContain('Среда для завтра');
+    expect(markup).toContain('Поставить будильник');
+    expect(markup).not.toContain('Среда для сна');
+    expect(markup).not.toContain('data-area="sleep_environment"');
+    expect(markup).toContain('>Изменить подготовку</button>');
+    expect(markup).not.toContain('>Выполнено</button>');
+    expect(markup).not.toContain('>Пропустить сегодня</button>');
+    expect(plan.version).toBe(versionBefore);
+    expect(plan.items.map((item) => item.status)).toEqual(statusesBefore);
+  });
+
   it('показывает сохранённый исход Today без команд изменения истории', () => {
     const cycle = completedCycle();
     const snapshot = completedSnapshot(cycle);
@@ -322,6 +406,66 @@ describe('completed evening history scenes', () => {
     );
   });
 });
+
+function renderPreparationHistory(plan: PreparationPlan): string {
+  const snapshot: PreparationSnapshot = {
+    plan,
+    recommendedCoreKeys: [],
+    firstAction: null,
+    primaryDecision: null,
+    project: null,
+  };
+  return renderToStaticMarkup(
+    createElement(PreparationSceneView, {
+      snapshot,
+      mode: EVENING_CYCLE_MODE.normal,
+      completedReview: true,
+      completedReviewEditing: false,
+      busyItemId: null,
+      isContinuing: false,
+      onProcess: async () => undefined,
+      onContinue: async () => undefined,
+      onReviewEditingChange: () => undefined,
+    }),
+  );
+}
+
+function completedPreparationPlan(items: readonly PreparationItem[]): PreparationPlan {
+  return PreparationPlan.rehydrate({
+    id: EntityId.create('environment-history-plan'),
+    cycleId: EntityId.create('environment-history-cycle'),
+    tomorrowPlanId: EntityId.create('environment-history-tomorrow-plan'),
+    targetDayId: EntityId.create('environment-history-target-day'),
+    items,
+    requiredCoreKeys: items.slice(0, 4).map((item) => item.key),
+    sourceVersion: 4,
+    generationSignature: 'environment-history',
+    status: PREPARATION_PLAN_STATUS.completed,
+    createdAt: NOW,
+    updatedAt: NOW,
+    completedAt: NOW,
+    version: 5,
+  });
+}
+
+function preparationItem(
+  key: string,
+  title: string,
+  area: PreparationArea,
+  planId = 'environment-history-plan',
+): PreparationItem {
+  return PreparationItem.create({
+    id: EntityId.create(`history-${key}`),
+    planId: EntityId.create(planId),
+    key,
+    area,
+    category: PREPARATION_CATEGORY.physical,
+    title,
+    sourceType: PREPARATION_SOURCE_TYPE.rule,
+    sourceId: null,
+    required: false,
+  });
+}
 
 function completedCycle(question?: ReflectionQuestion): EveningCycle {
   const cycleId = EntityId.create('completed-history-cycle');

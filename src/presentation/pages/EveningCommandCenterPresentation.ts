@@ -13,7 +13,7 @@ export const EVENING_JOURNEY = [
   { id: 'today', label: 'Сегодня', title: 'Закрываем сегодняшний день' },
   { id: 'reflection', label: 'Осмысление', title: 'Осмысление дня' },
   { id: 'tomorrow', label: 'Завтра', title: 'ЗАВТРА' },
-  { id: 'preparation', label: 'Подготовка', title: 'ПОДГОТОВИТЬ ЗАВТРА' },
+  { id: 'preparation', label: 'Среда', title: 'СРЕДА' },
   { id: 'shutdown', label: 'Завершение', title: 'Завершение дня' },
 ] as const;
 
@@ -72,7 +72,7 @@ export function isEveningViewAvailable(
 export function eveningReturnToCurrentLabel(view: SelectedEveningView): string {
   if (view === 'reflection') return 'Вернуться к осмыслению';
   if (view === 'tomorrow') return 'Вернуться к планированию завтра';
-  if (view === 'preparation') return 'Вернуться к подготовке';
+  if (view === 'preparation') return 'Вернуться к среде';
   if (view === 'shutdown') return 'Вернуться к завершению';
   if (view === 'recovery') return 'Вернуться к восстановлению';
   return 'Вернуться к разбору дня';
@@ -153,7 +153,7 @@ export function buildEveningKpis(
       tone: journeyTone(cycle.state, 'tomorrow'),
     }),
     Object.freeze({
-      label: 'Подготовка',
+      label: 'Среда',
       value: journeyStageValue(cycle.state, 'preparation'),
       meta: stageMeta(preparationTone),
       icon: 'preparation',

@@ -2,6 +2,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  Day,
   EveningCycle,
   EVENING_CYCLE_MODE,
   EVENING_CYCLE_STATE,
@@ -12,6 +13,7 @@ import {
 import { EveningCommandCenter } from './EveningCommandCenter';
 import {
   EVENING_JOURNEY,
+  buildEveningKpis,
   defaultEveningView,
   eveningJourneyIdForState,
   eveningReturnToCurrentLabel,
@@ -71,13 +73,48 @@ describe('EveningCommandCenter', () => {
       'Сегодня',
       'Осмысление',
       'Завтра',
-      'Подготовка',
+      'Среда',
       'Завершение',
     ]);
     expect(markup.match(/data-journey-stage=/g)).toHaveLength(5);
     expect(markup).not.toContain('RESOLVING');
     expect(markup).not.toContain('PREPARING');
     expect(markup).not.toContain('Экстренный');
+  });
+
+  it('называет KPI подготовки средой, не меняя preparation view ID', () => {
+    const occurredAt = new Date('2026-08-14T20:00:00.000+09:00');
+    const cycle = EveningCycle.create({
+      id: EntityId.create('environment-kpi-cycle'),
+      dayId: EntityId.create('environment-kpi-day'),
+      dateKey: DayDate.create('2026-08-14'),
+      occurredAt,
+    });
+
+    const kpis = buildEveningKpis(
+      {
+        cycle,
+        day: Day.openCurrent({
+          id: EntityId.create('environment-kpi-day'),
+          currentDate: DayDate.create('2026-08-14'),
+          occurredAt,
+          createdEventId: EntityId.create('environment-kpi-day-created'),
+          openedEventId: EntityId.create('environment-kpi-day-opened'),
+        }),
+        currentDate: DayDate.create('2026-08-14'),
+        tomorrowDate: DayDate.create('2026-08-15'),
+        isRecoveryReview: false,
+        decisions: [],
+        lifeActions: [],
+        actionSessions: [],
+        unfinishedSession: null,
+        tomorrowDecisions: [],
+      },
+      null,
+    );
+
+    expect(kpis.find((item) => item.icon === 'preparation')?.label).toBe('Среда');
+    expect(eveningJourneyIdForState(EVENING_CYCLE_STATE.preparing)).toBe('preparation');
   });
 
   it('оставляет текущий шаг доступным, а четыре будущих шага locked', () => {
@@ -216,7 +253,7 @@ describe('EveningCommandCenter', () => {
   it('даёт отдельные подписи возврата для фактических этапов', () => {
     expect(eveningReturnToCurrentLabel('reflection')).toBe('Вернуться к осмыслению');
     expect(eveningReturnToCurrentLabel('tomorrow')).toBe('Вернуться к планированию завтра');
-    expect(eveningReturnToCurrentLabel('preparation')).toBe('Вернуться к подготовке');
+    expect(eveningReturnToCurrentLabel('preparation')).toBe('Вернуться к среде');
     expect(eveningReturnToCurrentLabel('shutdown')).toBe('Вернуться к завершению');
     expect(eveningReturnToCurrentLabel('recovery')).toBe('Вернуться к восстановлению');
   });
