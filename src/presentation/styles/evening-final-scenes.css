@@ -8,7 +8,7 @@
   .evening-command-center[data-domain-journey='recovery']
   .evening-command-center-journey
   ol {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
 }
 
 .evening-command-center-page .evening-final-scene {

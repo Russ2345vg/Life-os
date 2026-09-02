@@ -6,6 +6,7 @@ import { DayDate } from '../day/DayDate';
 import {
   EVENING_CYCLE_COMPLETION,
   EVENING_CYCLE_MODE,
+  EVENING_MODE_REASON,
   EVENING_STAGE_SKIP_REASON,
   type EveningCycleCompletion,
   type EveningCycleMode,
@@ -13,6 +14,18 @@ import {
   type EveningStageSkipReason,
 } from './EveningCycleMode';
 import { EVENING_CYCLE_STATE, type EveningCycleState } from './EveningCycleState';
+import {
+  RelaxationSnapshot,
+  type RelaxationPractice,
+  type ScreenFreeDurationMinutes,
+} from './RelaxationSnapshot';
+import {
+  SleepCheckSnapshot,
+  type CorrectiveActionKind,
+  type SleepCheckAnswerValue,
+  type SleepCheckQuestionId,
+  type SubjectiveRating,
+} from './SleepCheckSnapshot';
 import {
   OPEN_LOOP_REQUIREMENT,
   OpenLoopReference,
@@ -52,6 +65,7 @@ export interface EveningCycleRehydrationData {
   readonly mode: EveningCycleMode;
   readonly modeReason?: EveningModeReason | null;
   readonly completion?: EveningCycleCompletion;
+  readonly skipReason?: string | null;
   readonly skippedStages?: readonly EveningStageSkip[];
   readonly startedAt: Date | null;
   readonly updatedAt: Date;
@@ -64,6 +78,8 @@ export interface EveningCycleRehydrationData {
   readonly reflectionResults?: readonly ReflectionResult[];
   readonly reflectionSignals?: readonly ReflectionSignal[];
   readonly reflectionCorrections?: readonly ReflectionCorrection[];
+  readonly relaxation?: RelaxationSnapshot | null;
+  readonly sleepCheck?: SleepCheckSnapshot | null;
   readonly version: number;
 }
 
@@ -74,6 +90,7 @@ export class EveningCycle extends Entity {
   #mode: EveningCycleMode;
   #modeReason: EveningModeReason | null;
   #completion: EveningCycleCompletion;
+  #skipReason: string | null;
   #skippedStages: readonly EveningStageSkip[];
   #startedAt: Date | null;
   #updatedAt: Date;
@@ -86,6 +103,8 @@ export class EveningCycle extends Entity {
   #reflectionResults: readonly ReflectionResult[];
   #reflectionSignals: readonly ReflectionSignal[];
   #reflectionCorrections: readonly ReflectionCorrection[];
+  #relaxation: RelaxationSnapshot | null;
+  #sleepCheck: SleepCheckSnapshot | null;
   #version: number;
 
   private constructor(data: EveningCycleRehydrationData) {
@@ -96,6 +115,7 @@ export class EveningCycle extends Entity {
     this.#mode = data.mode;
     this.#modeReason = data.modeReason ?? null;
     this.#completion = data.completion ?? EVENING_CYCLE_COMPLETION.completed;
+    this.#skipReason = data.skipReason ?? null;
     this.#skippedStages = Object.freeze((data.skippedStages ?? []).map(copySkippedStage));
     this.#startedAt = copyOptionalDate(data.startedAt);
     this.#updatedAt = copyDate(data.updatedAt);
@@ -108,6 +128,8 @@ export class EveningCycle extends Entity {
     this.#reflectionResults = Object.freeze([...(data.reflectionResults ?? [])]);
     this.#reflectionSignals = Object.freeze([...(data.reflectionSignals ?? [])]);
     this.#reflectionCorrections = Object.freeze([...(data.reflectionCorrections ?? [])]);
+    this.#relaxation = copyRelaxation(data.relaxation ?? null);
+    this.#sleepCheck = copySleepCheck(data.sleepCheck ?? null);
     this.#version = data.version;
   }
 
@@ -120,6 +142,7 @@ export class EveningCycle extends Entity {
       mode: data.mode ?? EVENING_CYCLE_MODE.normal,
       modeReason: data.modeReason ?? null,
       completion: EVENING_CYCLE_COMPLETION.completed,
+      skipReason: null,
       skippedStages: [],
       startedAt: null,
       updatedAt: data.occurredAt,
@@ -132,6 +155,8 @@ export class EveningCycle extends Entity {
       reflectionResults: [],
       reflectionSignals: [],
       reflectionCorrections: [],
+      relaxation: null,
+      sleepCheck: null,
       version: 1,
     });
   }
@@ -163,6 +188,10 @@ export class EveningCycle extends Entity {
 
   public get completion(): EveningCycleCompletion {
     return this.#completion;
+  }
+
+  public get skipReason(): string | null {
+    return this.#skipReason;
   }
 
   public get skippedStages(): readonly EveningStageSkip[] {
@@ -211,6 +240,14 @@ export class EveningCycle extends Entity {
 
   public get reflectionCorrections(): readonly ReflectionCorrection[] {
     return [...this.#reflectionCorrections];
+  }
+
+  public get relaxation(): RelaxationSnapshot | null {
+    return copyRelaxation(this.#relaxation);
+  }
+
+  public get sleepCheck(): SleepCheckSnapshot | null {
+    return copySleepCheck(this.#sleepCheck);
   }
 
   public get reflectionProgress(): Readonly<{
@@ -291,6 +328,41 @@ export class EveningCycle extends Entity {
     if (this.#state !== EVENING_CYCLE_STATE.notStarted) return;
     this.#startedAt = copyDate(occurredAt);
     this.transition(EVENING_CYCLE_STATE.notStarted, EVENING_CYCLE_STATE.windingDown, occurredAt);
+  }
+
+  public startShort(occurredAt: Date): void {
+    if (
+      this.#state === EVENING_CYCLE_STATE.preparing &&
+      this.#mode === EVENING_CYCLE_MODE.quick &&
+      this.#modeReason === EVENING_MODE_REASON.lateNight
+    ) {
+      return;
+    }
+    if (this.#state !== EVENING_CYCLE_STATE.notStarted) {
+      throw invalidTransition(this.#state, EVENING_CYCLE_STATE.preparing);
+    }
+    assertDate(occurredAt, 'Время запуска короткого вечернего цикла');
+    this.#mode = EVENING_CYCLE_MODE.quick;
+    this.#modeReason = EVENING_MODE_REASON.lateNight;
+    this.#startedAt = copyDate(occurredAt);
+    this.recordSkippedStage(
+      EVENING_CYCLE_STATE.resolving,
+      EVENING_STAGE_SKIP_REASON.quickMode,
+      occurredAt,
+    );
+    this.recordSkippedStage(
+      EVENING_CYCLE_STATE.reflecting,
+      EVENING_STAGE_SKIP_REASON.quickMode,
+      occurredAt,
+    );
+    this.recordSkippedStage(
+      EVENING_CYCLE_STATE.planningTomorrow,
+      EVENING_STAGE_SKIP_REASON.quickMode,
+      occurredAt,
+    );
+    this.#state = EVENING_CYCLE_STATE.preparing;
+    this.#updatedAt = copyDate(occurredAt);
+    this.#version += 1;
   }
 
   public beginResolving(occurredAt: Date): void {
@@ -457,6 +529,51 @@ export class EveningCycle extends Entity {
     return true;
   }
 
+  public insertReflectionFollowUp(
+    parentQuestionId: string,
+    question: ReflectionQuestion,
+    occurredAt: Date,
+  ): boolean {
+    if (this.#state !== EVENING_CYCLE_STATE.reflecting) {
+      throw invalidTransition(this.#state, EVENING_CYCLE_STATE.reflecting);
+    }
+    assertDate(occurredAt, 'Время добавления уточняющего вопроса');
+    const parentIndex = this.#reflectionQuestions.findIndex(
+      (candidate) => candidate.id === parentQuestionId,
+    );
+    if (parentIndex < 0) {
+      throw new DomainError('reflection.question_not_found', 'Родительский вопрос не найден.');
+    }
+    if (!this.#reflectionResults.some((result) => result.questionId === parentQuestionId)) {
+      throw new DomainError(
+        'reflection.follow_up_parent_unanswered',
+        'Уточняющий вопрос требует сохранённого ответа.',
+      );
+    }
+    const existing = this.#reflectionQuestions.find((candidate) => candidate.id === question.id);
+    if (existing !== undefined) {
+      if (sameQuestion(existing, question)) return false;
+      throw new DomainError(
+        'reflection.duplicate_question',
+        'Идентификатор вопроса уже используется.',
+      );
+    }
+    if (this.#reflectionQuestions.length >= 5) {
+      throw new DomainError(
+        'reflection.question_limit_exceeded',
+        'Осмысление не может содержать больше пяти вопросов.',
+      );
+    }
+    this.#reflectionQuestions = Object.freeze([
+      ...this.#reflectionQuestions.slice(0, parentIndex + 1),
+      question,
+      ...this.#reflectionQuestions.slice(parentIndex + 1),
+    ]);
+    this.#updatedAt = copyDate(occurredAt);
+    this.#version += 1;
+    return true;
+  }
+
   public addReflectionCorrection(correction: ReflectionCorrection, occurredAt: Date): boolean {
     assertDate(occurredAt, 'Время создания корректировки');
     if (!correction.cycleId.equals(this.id)) {
@@ -550,7 +667,7 @@ export class EveningCycle extends Entity {
   }
 
   public completePreparation(occurredAt: Date): void {
-    this.transition(EVENING_CYCLE_STATE.preparing, EVENING_CYCLE_STATE.shutdown, occurredAt);
+    this.transition(EVENING_CYCLE_STATE.preparing, EVENING_CYCLE_STATE.relaxing, occurredAt);
   }
 
   public skipPreparation(occurredAt: Date): void {
@@ -561,7 +678,7 @@ export class EveningCycle extends Entity {
       );
     }
     if (this.#state !== EVENING_CYCLE_STATE.preparing) {
-      throw invalidTransition(this.#state, EVENING_CYCLE_STATE.shutdown);
+      throw invalidTransition(this.#state, EVENING_CYCLE_STATE.relaxing);
     }
     this.recordSkippedStage(
       EVENING_CYCLE_STATE.preparing,
@@ -570,11 +687,231 @@ export class EveningCycle extends Entity {
         : EVENING_STAGE_SKIP_REASON.emergencyMode,
       occurredAt,
     );
-    this.transition(EVENING_CYCLE_STATE.preparing, EVENING_CYCLE_STATE.shutdown, occurredAt);
+    this.transition(EVENING_CYCLE_STATE.preparing, EVENING_CYCLE_STATE.relaxing, occurredAt);
   }
 
   public beginShutdown(occurredAt: Date): void {
-    this.completePreparation(occurredAt);
+    this.completeRelaxation(occurredAt);
+  }
+
+  public initializeRelaxation(
+    defaultPractice: RelaxationPractice,
+    practiceDurationMinutes: number,
+    screenFreeDurationMinutes: ScreenFreeDurationMinutes,
+    occurredAt: Date,
+  ): boolean {
+    if (this.#state !== EVENING_CYCLE_STATE.relaxing) {
+      throw invalidTransition(this.#state, EVENING_CYCLE_STATE.relaxing);
+    }
+    if (this.#relaxation !== null) return false;
+    this.#relaxation = RelaxationSnapshot.start({
+      defaultPractice,
+      practiceDurationMinutes,
+      screenFreeDurationMinutes,
+      occurredAt,
+    });
+    this.#updatedAt = copyDate(occurredAt);
+    this.#version += 1;
+    return true;
+  }
+
+  public chooseRelaxationPractice(
+    practice: RelaxationPractice,
+    persistAsDefault: boolean,
+    occurredAt: Date,
+  ): boolean {
+    return this.mutateRelaxation(
+      (relaxation) => relaxation.choosePractice(practice, persistAsDefault, occurredAt),
+      occurredAt,
+    );
+  }
+
+  public setRelaxationPracticeDuration(minutes: number, occurredAt: Date): boolean {
+    return this.mutateRelaxation(
+      (relaxation) =>
+        this.#mode === EVENING_CYCLE_MODE.quick
+          ? relaxation.setShortPracticeDuration(minutes, occurredAt)
+          : relaxation.setPracticeDuration(minutes, occurredAt),
+      occurredAt,
+    );
+  }
+
+  public completeRelaxationDrink(occurredAt: Date): boolean {
+    return this.mutateRelaxation((relaxation) => relaxation.completeDrink(occurredAt), occurredAt);
+  }
+
+  public completeRelaxationHygiene(occurredAt: Date): boolean {
+    return this.mutateRelaxation(
+      (relaxation) => relaxation.completeHygiene(occurredAt),
+      occurredAt,
+    );
+  }
+
+  public startRelaxationPracticeTimer(occurredAt: Date): boolean {
+    return this.mutateRelaxation(
+      (relaxation) => relaxation.startPracticeTimer(occurredAt),
+      occurredAt,
+    );
+  }
+
+  public completeRelaxationPractice(occurredAt: Date): boolean {
+    return this.mutateRelaxation(
+      (relaxation) => relaxation.completePractice(occurredAt),
+      occurredAt,
+    );
+  }
+
+  public startRelaxationScreenFree(occurredAt: Date): boolean {
+    return this.mutateRelaxation(
+      (relaxation) => relaxation.startScreenFree(occurredAt),
+      occurredAt,
+    );
+  }
+
+  public shortenRelaxationScreenFree(occurredAt: Date): boolean {
+    return this.mutateRelaxation(
+      (relaxation) => relaxation.shortenScreenFree(occurredAt),
+      occurredAt,
+    );
+  }
+
+  public skipRelaxationScreenFree(occurredAt: Date): boolean {
+    return this.mutateRelaxation((relaxation) => relaxation.skipScreenFree(occurredAt), occurredAt);
+  }
+
+  public setBeforeRelaxationRatings(
+    calm: SubjectiveRating,
+    sleepReadiness: SubjectiveRating,
+    occurredAt: Date,
+  ): boolean {
+    if (this.#state !== EVENING_CYCLE_STATE.relaxing) {
+      throw invalidTransition(this.#state, EVENING_CYCLE_STATE.relaxing);
+    }
+    if (this.#sleepCheck !== null) {
+      if (
+        this.#sleepCheck.calmBefore === calm &&
+        this.#sleepCheck.sleepReadinessBefore === sleepReadiness
+      ) {
+        return false;
+      }
+      throw new DomainError(
+        'sleep_check.before_ratings_already_recorded',
+        'Оценки до расслабления уже сохранены.',
+      );
+    }
+    this.#sleepCheck = SleepCheckSnapshot.start({
+      calmBefore: calm,
+      sleepReadinessBefore: sleepReadiness,
+      occurredAt,
+    });
+    this.#updatedAt = copyDate(occurredAt);
+    this.#version += 1;
+    return true;
+  }
+
+  public completeRelaxation(occurredAt: Date): void {
+    if (this.#state !== EVENING_CYCLE_STATE.relaxing) {
+      throw invalidTransition(this.#state, EVENING_CYCLE_STATE.shutdown);
+    }
+    const relaxation = this.requireRelaxation();
+    const shortMode = this.#mode === EVENING_CYCLE_MODE.quick;
+    if (!(shortMode ? relaxation.readyForShortAt(occurredAt) : relaxation.readyAt(occurredAt))) {
+      throw new DomainError(
+        'relaxation.not_ready',
+        shortMode
+          ? 'Завершите гигиену и короткую практику.'
+          : 'Завершите напиток, гигиену, практику и период без экранов.',
+      );
+    }
+    if (this.#sleepCheck === null) {
+      throw new DomainError(
+        'sleep_check.before_ratings_required',
+        'Сохраните оценки до расслабления перед продолжением.',
+      );
+    }
+    if (!shortMode) relaxation.completeElapsedScreenFree(occurredAt);
+    this.#sleepCheck.startCheck(occurredAt);
+    this.transition(EVENING_CYCLE_STATE.relaxing, EVENING_CYCLE_STATE.sleepCheck, occurredAt);
+  }
+
+  public setAfterRelaxationRatings(
+    calm: SubjectiveRating,
+    sleepReadiness: SubjectiveRating,
+    occurredAt: Date,
+  ): boolean {
+    return this.mutateSleepCheck(
+      (sleepCheck) => sleepCheck.setAfterRatings(calm, sleepReadiness, occurredAt),
+      occurredAt,
+    );
+  }
+
+  public answerSleepCheckQuestion(
+    questionId: SleepCheckQuestionId,
+    answer: SleepCheckAnswerValue,
+    occurredAt: Date,
+  ): boolean {
+    return this.mutateSleepCheck(
+      (sleepCheck) => sleepCheck.answerQuestion(questionId, answer, occurredAt),
+      occurredAt,
+    );
+  }
+
+  public chooseSleepCheckCorrectiveAction(
+    questionId: SleepCheckQuestionId,
+    action: CorrectiveActionKind,
+    occurredAt: Date,
+  ): boolean {
+    return this.mutateSleepCheck(
+      (sleepCheck) => sleepCheck.chooseCorrectiveAction(questionId, action, occurredAt),
+      occurredAt,
+    );
+  }
+
+  public completeSleepCheckCorrectiveAction(
+    questionId: SleepCheckQuestionId,
+    capturedThought: string | null,
+    occurredAt: Date,
+  ): boolean {
+    return this.mutateSleepCheck(
+      (sleepCheck) => sleepCheck.completeCorrectiveAction(questionId, capturedThought, occurredAt),
+      occurredAt,
+    );
+  }
+
+  public retrySleepCheckQuestion(
+    questionId: SleepCheckQuestionId,
+    answer: SleepCheckAnswerValue,
+    occurredAt: Date,
+  ): boolean {
+    return this.mutateSleepCheck(
+      (sleepCheck) => sleepCheck.retryQuestion(questionId, answer, occurredAt),
+      occurredAt,
+    );
+  }
+
+  public completeSleepCheck(occurredAt: Date): boolean {
+    if (this.#state === EVENING_CYCLE_STATE.shutdown && this.#sleepCheck?.completedAt !== null) {
+      return false;
+    }
+    if (this.#state !== EVENING_CYCLE_STATE.sleepCheck) {
+      throw invalidTransition(this.#state, EVENING_CYCLE_STATE.shutdown);
+    }
+    if (!this.requireSleepCheck().complete(occurredAt)) return false;
+    this.#state = EVENING_CYCLE_STATE.shutdown;
+    this.#updatedAt = copyDate(occurredAt);
+    this.#version += 1;
+    return true;
+  }
+
+  public recoverLegacyRelaxation(occurredAt: Date): void {
+    if (
+      this.#state !== EVENING_CYCLE_STATE.relaxing ||
+      this.#relaxation !== null ||
+      this.#sleepCheck !== null
+    ) {
+      throw invalidTransition(this.#state, EVENING_CYCLE_STATE.shutdown);
+    }
+    this.transition(EVENING_CYCLE_STATE.relaxing, EVENING_CYCLE_STATE.shutdown, occurredAt);
   }
 
   public complete(
@@ -590,7 +927,7 @@ export class EveningCycle extends Entity {
     this.#lifeActionIds = uniqueIds(lifeActionIds);
   }
 
-  public skip(occurredAt: Date): void {
+  public skip(occurredAt: Date, reason: string | null = null): void {
     if (this.#state === EVENING_CYCLE_STATE.completed) {
       if (this.#completion === EVENING_CYCLE_COMPLETION.skipped) return;
       throw new DomainError(
@@ -599,6 +936,7 @@ export class EveningCycle extends Entity {
       );
     }
     assertDate(occurredAt, 'Время завершения вечернего цикла');
+    const normalizedReason = normalizeSkipReason(reason);
     if (this.#openLoopResolutions.length > 0 || this.#reflectionResults.length > 0) {
       throw new DomainError(
         'evening_cycle.started_cycle_cannot_be_skipped',
@@ -607,6 +945,7 @@ export class EveningCycle extends Entity {
     }
     this.#state = EVENING_CYCLE_STATE.completed;
     this.#completion = EVENING_CYCLE_COMPLETION.skipped;
+    this.#skipReason = normalizedReason;
     this.#startedAt = null;
     this.#completedAt = copyDate(occurredAt);
     this.#updatedAt = copyDate(occurredAt);
@@ -628,6 +967,49 @@ export class EveningCycle extends Entity {
     ]);
     this.#updatedAt = copyDate(occurredAt);
     this.#version += 1;
+  }
+
+  private mutateRelaxation(
+    mutation: (relaxation: RelaxationSnapshot) => boolean,
+    occurredAt: Date,
+  ): boolean {
+    if (this.#state !== EVENING_CYCLE_STATE.relaxing) {
+      throw invalidTransition(this.#state, EVENING_CYCLE_STATE.relaxing);
+    }
+    if (!mutation(this.requireRelaxation())) return false;
+    this.#updatedAt = copyDate(occurredAt);
+    this.#version += 1;
+    return true;
+  }
+
+  private mutateSleepCheck(
+    mutation: (sleepCheck: SleepCheckSnapshot) => boolean,
+    occurredAt: Date,
+  ): boolean {
+    if (this.#state !== EVENING_CYCLE_STATE.sleepCheck) {
+      throw invalidTransition(this.#state, EVENING_CYCLE_STATE.sleepCheck);
+    }
+    if (!mutation(this.requireSleepCheck())) return false;
+    this.#updatedAt = copyDate(occurredAt);
+    this.#version += 1;
+    return true;
+  }
+
+  private requireRelaxation(): RelaxationSnapshot {
+    if (this.#relaxation === null) {
+      throw new DomainError(
+        'relaxation.not_initialized',
+        'Этап расслабления ещё не инициализирован.',
+      );
+    }
+    return this.#relaxation;
+  }
+
+  private requireSleepCheck(): SleepCheckSnapshot {
+    if (this.#sleepCheck === null) {
+      throw new DomainError('sleep_check.not_initialized', 'Проверка сна ещё не инициализирована.');
+    }
+    return this.#sleepCheck;
   }
 
   private transition(
@@ -689,9 +1071,21 @@ function assertRehydrationInvariants(data: EveningCycleRehydrationData): void {
   ) {
     throw invariantViolation('Полностью пропущенный вечер должен быть завершён без startedAt.');
   }
+  if (
+    (data.completion ?? EVENING_CYCLE_COMPLETION.completed) !== EVENING_CYCLE_COMPLETION.skipped &&
+    data.skipReason !== null &&
+    data.skipReason !== undefined
+  ) {
+    throw invariantViolation('Причина полного пропуска допустима только для SKIPPED.');
+  }
+  if (data.skipReason !== null && data.skipReason !== undefined) {
+    normalizeSkipReason(data.skipReason);
+  }
   for (const skipped of data.skippedStages ?? []) {
     if (
+      skipped.stage !== EVENING_CYCLE_STATE.resolving &&
       skipped.stage !== EVENING_CYCLE_STATE.reflecting &&
+      skipped.stage !== EVENING_CYCLE_STATE.planningTomorrow &&
       skipped.stage !== EVENING_CYCLE_STATE.preparing
     ) {
       throw invariantViolation('Зафиксирован неизвестный пропущенный этап вечернего цикла.');
@@ -706,6 +1100,79 @@ function assertRehydrationInvariants(data: EveningCycleRehydrationData): void {
     data.reflectionSignals ?? [],
     data.reflectionCorrections ?? [],
   );
+  if (
+    data.relaxation !== null &&
+    data.relaxation !== undefined &&
+    data.state !== EVENING_CYCLE_STATE.relaxing &&
+    data.state !== EVENING_CYCLE_STATE.sleepCheck &&
+    data.state !== EVENING_CYCLE_STATE.shutdown &&
+    data.state !== EVENING_CYCLE_STATE.completed
+  ) {
+    throw invariantViolation('Расслабление допустимо только после этапа среды.');
+  }
+  if (
+    data.relaxation !== null &&
+    data.relaxation !== undefined &&
+    data.mode !== EVENING_CYCLE_MODE.quick &&
+    data.relaxation.practiceDurationMinutes < 5
+  ) {
+    throw invariantViolation('Практика короче 5 минут допустима только в QUICK.');
+  }
+  if (
+    data.sleepCheck !== null &&
+    data.sleepCheck !== undefined &&
+    data.state !== EVENING_CYCLE_STATE.relaxing &&
+    data.state !== EVENING_CYCLE_STATE.sleepCheck &&
+    data.state !== EVENING_CYCLE_STATE.shutdown &&
+    data.state !== EVENING_CYCLE_STATE.completed
+  ) {
+    throw invariantViolation('Проверка сна допустима только после начала расслабления.');
+  }
+  const sleepCheck = data.sleepCheck ?? null;
+  if (data.state === EVENING_CYCLE_STATE.relaxing && sleepCheck !== null) {
+    if (sleepCheck.startedAt !== null || sleepCheck.completedAt !== null) {
+      throw invariantViolation('Оценки до расслабления не могут содержать начатую проверку сна.');
+    }
+  }
+  if (data.state === EVENING_CYCLE_STATE.sleepCheck) {
+    if (data.relaxation === null || data.relaxation === undefined) {
+      throw invariantViolation('Проверка сна требует сохранённый этап расслабления.');
+    }
+    if (sleepCheck === null || sleepCheck.startedAt === null || sleepCheck.completedAt !== null) {
+      throw invariantViolation('Активная проверка сна должна быть начата и не завершена.');
+    }
+  }
+  if (
+    sleepCheck !== null &&
+    sleepCheck.startedAt !== null &&
+    (data.relaxation === null ||
+      data.relaxation === undefined ||
+      !(data.mode === EVENING_CYCLE_MODE.quick
+        ? data.relaxation.readyForShortAt(sleepCheck.startedAt)
+        : data.relaxation.readyAt(sleepCheck.startedAt)))
+  ) {
+    throw invariantViolation('Проверка сна требует завершённый этап расслабления.');
+  }
+  if (
+    sleepCheck !== null &&
+    (data.state === EVENING_CYCLE_STATE.shutdown || data.state === EVENING_CYCLE_STATE.completed) &&
+    sleepCheck.completedAt === null
+  ) {
+    throw invariantViolation('После проверки сна допустим только завершённый снимок R6.');
+  }
+}
+
+function normalizeSkipReason(value: string | null): string | null {
+  if (value === null) return null;
+  const normalized = value.trim();
+  if (normalized.length === 0) return null;
+  if (normalized.length > 500) {
+    throw new DomainError(
+      'evening_cycle.skip_reason_too_long',
+      'Причина пропуска не должна превышать 500 символов.',
+    );
+  }
+  return normalized;
 }
 
 function assertOpenLoops(
@@ -755,6 +1222,46 @@ function uniqueIds(ids: readonly EntityId[]): readonly EntityId[] {
 
 function copySkippedStage(value: EveningStageSkip): EveningStageSkip {
   return Object.freeze({ ...value, skippedAt: copyDate(value.skippedAt) });
+}
+
+function copyRelaxation(value: RelaxationSnapshot | null): RelaxationSnapshot | null {
+  if (value === null) return null;
+  return RelaxationSnapshot.rehydrate({
+    defaultPractice: value.defaultPractice,
+    selectedPractice: value.selectedPractice,
+    defaultChangedForFuture: value.defaultChangedForFuture,
+    practiceDurationMinutes: value.practiceDurationMinutes,
+    drinkCompletedAt: value.drinkCompletedAt,
+    hygieneCompletedAt: value.hygieneCompletedAt,
+    practiceTimerStartedAt: value.practiceTimerStartedAt,
+    practiceCompletedAt: value.practiceCompletedAt,
+    screenFreeDurationMinutes: value.screenFreeDurationMinutes,
+    screenFreeState: value.screenFreeState,
+    screenFreeStartedAt: value.screenFreeStartedAt,
+    screenFreeSkippedAt: value.screenFreeSkippedAt,
+    screenFreeCompletedAt: value.screenFreeCompletedAt,
+    createdAt: value.createdAt,
+    updatedAt: value.updatedAt,
+  });
+}
+
+function copySleepCheck(value: SleepCheckSnapshot | null): SleepCheckSnapshot | null {
+  if (value === null) return null;
+  return SleepCheckSnapshot.rehydrate({
+    calmBefore: value.calmBefore,
+    sleepReadinessBefore: value.sleepReadinessBefore,
+    beforeRatedAt: value.beforeRatedAt,
+    calmAfter: value.calmAfter,
+    sleepReadinessAfter: value.sleepReadinessAfter,
+    afterRatedAt: value.afterRatedAt,
+    initialAnswers: value.initialAnswers,
+    retriedAnswers: value.retriedAnswers,
+    correctiveAction: value.correctiveAction,
+    startedAt: value.startedAt,
+    completedAt: value.completedAt,
+    createdAt: value.createdAt,
+    updatedAt: value.updatedAt,
+  });
 }
 
 function uniqueReferences(references: readonly OpenLoopReference[]): readonly OpenLoopReference[] {
@@ -807,6 +1314,21 @@ function sameQuestions(
   );
 }
 
+function sameQuestion(left: ReflectionQuestion, right: ReflectionQuestion): boolean {
+  return (
+    left.id === right.id &&
+    left.kind === right.kind &&
+    left.signal === right.signal &&
+    left.type === right.type &&
+    left.prompt === right.prompt &&
+    left.context === right.context &&
+    left.required === right.required &&
+    left.sourceEntityIds.map(String).join(':') === right.sourceEntityIds.map(String).join(':') &&
+    left.options.map(({ value, label }) => `${value}:${label}`).join('|') ===
+      right.options.map(({ value, label }) => `${value}:${label}`).join('|')
+  );
+}
+
 function assertReflection(
   cycleId: EntityId,
   questions: readonly ReflectionQuestion[],
@@ -814,8 +1336,7 @@ function assertReflection(
   signals: readonly ReflectionSignal[],
   corrections: readonly ReflectionCorrection[],
 ): void {
-  if (questions.length > 4)
-    throw invariantViolation('В цикле не может быть больше четырёх вопросов.');
+  if (questions.length > 5) throw invariantViolation('В цикле не может быть больше пяти вопросов.');
   const questionIds = new Set<string>();
   for (const question of questions) {
     if (!(question instanceof ReflectionQuestion) || questionIds.has(question.id)) {

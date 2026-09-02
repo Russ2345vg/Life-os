@@ -1,0 +1,568 @@
+/* Evening Center v3 — step-specific Tomorrow working form. The master shell stays untouched. */
+
+.evening-command-center-page
+  .evening-command-center-scene[data-scene='tomorrow']
+  > .evening-command-center-scene-content {
+  position: relative;
+  isolation: isolate;
+  box-sizing: border-box;
+  height: clamp(26rem, calc(100vh - 18.25rem), 33rem);
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--evening-v1-border-strong);
+  border-radius: var(--evening-v1-radius-lg);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--bg-canvas) 64%, transparent),
+      var(--bg-canvas)
+    ),
+    linear-gradient(
+      100deg,
+      color-mix(in srgb, var(--text-secondary) 8%, transparent),
+      transparent 56%,
+      color-mix(in srgb, var(--gold-main) 7%, transparent)
+    ),
+    url('/planning-tomorrow-atmosphere.png') center 42% / cover no-repeat,
+    var(--bg-canvas);
+  box-shadow:
+    inset 0 1px color-mix(in srgb, var(--text-primary) 5%, transparent),
+    var(--shadow-deep);
+}
+
+.evening-command-center-page
+  .evening-command-center-scene[data-scene='tomorrow']
+  > .evening-command-center-scene-content::before {
+  position: absolute;
+  z-index: -1;
+  top: 1.25rem;
+  right: clamp(2rem, 9vw, 7rem);
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 50%;
+  background: var(--gold-soft);
+  box-shadow:
+    inset -0.65rem -0.16rem 0 0.08rem var(--bg-canvas),
+    0 0 1.75rem color-mix(in srgb, var(--gold-soft) 16%, transparent);
+  content: '';
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.evening-command-center-page .evening-tomorrow-scene {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  grid-template-areas:
+    'body'
+    'actions';
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 0;
+  color: var(--evening-v1-text);
+}
+
+.evening-command-center-page .tomorrow-working-form-scroll {
+  grid-area: body;
+  min-height: 0;
+  padding: var(--space-4) var(--space-6) var(--space-3);
+  overflow-y: auto;
+  scrollbar-color: color-mix(in srgb, var(--gold-main) 36%, transparent) transparent;
+  scrollbar-width: thin;
+}
+
+.evening-command-center-page .tomorrow-working-date {
+  margin: 0 0 var(--space-3);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: capitalize;
+}
+
+.evening-command-center-page .tomorrow-working-date::first-letter {
+  color: var(--gold-soft);
+}
+
+.evening-command-center-page .tomorrow-dashboard {
+  display: grid;
+  grid-template-areas: none;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.evening-command-center-page
+  .tomorrow-dashboard
+  > :is(
+    .tomorrow-primary-card,
+    .tomorrow-outcomes,
+    .tomorrow-first-action-card,
+    .tomorrow-supporting,
+    .tomorrow-guidance,
+    .tomorrow-overload-note,
+    .form-error
+  ) {
+  grid-area: auto;
+}
+
+.evening-command-center-page
+  .evening-tomorrow-scene
+  :is(
+    .tomorrow-primary-card,
+    .tomorrow-outcomes,
+    .tomorrow-first-action-card,
+    .tomorrow-supporting
+  ),
+.evening-command-center-page .tomorrow-primary-card,
+.evening-command-center-page .tomorrow-primary-card.is-empty {
+  min-height: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--evening-v1-border);
+  border-radius: var(--radius-medium);
+  background: color-mix(in srgb, var(--surface-1) 88%, transparent);
+  box-shadow: inset 0 1px color-mix(in srgb, var(--text-primary) 3%, transparent);
+}
+
+.evening-command-center-page .tomorrow-primary-card,
+.evening-command-center-page .tomorrow-primary-card.is-empty {
+  background:
+    linear-gradient(110deg, color-mix(in srgb, var(--gold-main) 8%, transparent), transparent 48%),
+    color-mix(in srgb, var(--surface-1) 92%, transparent);
+}
+
+.evening-command-center-page .tomorrow-working-section-heading {
+  display: flex;
+  min-width: 0;
+  gap: var(--space-2);
+  align-items: center;
+  margin-bottom: var(--space-2);
+}
+
+.evening-command-center-page .tomorrow-working-section-heading p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  font-weight: 760;
+  letter-spacing: 0.11em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.evening-command-center-page .tomorrow-working-section-index {
+  display: grid;
+  width: 1.5rem;
+  height: 1.5rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--gold-main) 42%, var(--border-strong));
+  border-radius: 50%;
+  color: var(--gold-soft);
+  background: color-mix(in srgb, var(--gold-main) 8%, var(--surface-1));
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
+.evening-command-center-page .tomorrow-primary-empty,
+.evening-command-center-page .tomorrow-primary-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.evening-command-center-page .tomorrow-primary-empty {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.evening-command-center-page .tomorrow-primary-empty-cta {
+  display: flex;
+  width: 100%;
+  min-height: 3rem;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: space-between;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--gold-main) 42%, var(--border-strong));
+  border-radius: var(--radius-small);
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--bg-canvas) 78%, transparent);
+  box-shadow: none;
+  font-size: 0.875rem;
+  font-weight: 620;
+}
+
+.evening-command-center-page .tomorrow-primary-empty-cta:hover:not(:disabled),
+.evening-command-center-page .tomorrow-primary-empty-cta[aria-expanded='true'] {
+  color: var(--gold-soft);
+  border-color: var(--gold-main);
+  background: color-mix(in srgb, var(--gold-main) 7%, var(--surface-1));
+  box-shadow: 0 0 1rem color-mix(in srgb, var(--gold-main) 8%, transparent);
+}
+
+.evening-command-center-page .tomorrow-primary-copy {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-1);
+}
+
+.evening-command-center-page .tomorrow-primary-copy h3 {
+  max-width: 56ch;
+  margin: 0;
+  color: var(--text-primary);
+  font-size: clamp(1rem, 1.6vw, 1.25rem);
+  font-weight: 650;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.evening-command-center-page .tomorrow-primary-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.evening-command-center-page .tomorrow-primary-meta span {
+  padding: 0;
+  color: var(--text-muted);
+  background: transparent;
+  font-size: 0.75rem;
+}
+
+.evening-command-center-page .tomorrow-primary-meta span + span::before {
+  margin-right: var(--space-2);
+  color: var(--border-strong);
+  content: '·';
+}
+
+.evening-command-center-page .tomorrow-primary-change {
+  min-height: 2rem;
+  align-self: start;
+  padding: var(--space-1) var(--space-2);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+.evening-command-center-page .tomorrow-primary-controls {
+  display: flex;
+  gap: var(--space-2);
+  align-items: end;
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-soft);
+}
+
+.evening-command-center-page .tomorrow-primary-controls .tomorrow-compact-select {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.evening-command-center-page .tomorrow-inline-editor {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.evening-command-center-page .tomorrow-inline-editor label,
+.evening-command-center-page .tomorrow-compact-select,
+.evening-command-center-page .tomorrow-active-outcome-field {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-1);
+}
+
+.evening-command-center-page
+  :is(.tomorrow-inline-editor, .tomorrow-compact-select, .tomorrow-action-result-field)
+  label
+  > span,
+.evening-command-center-page .tomorrow-inline-editor label > span,
+.evening-command-center-page .tomorrow-compact-select > span,
+.evening-command-center-page .tomorrow-action-result-field > span {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+
+.evening-command-center-page
+  .evening-tomorrow-scene
+  :is(
+    .tomorrow-inline-editor input,
+    .tomorrow-inline-editor textarea,
+    .tomorrow-compact-select select,
+    .tomorrow-active-outcome-field textarea,
+    .tomorrow-supporting input,
+    .tomorrow-supporting select
+  ) {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-small);
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--bg-canvas) 84%, transparent);
+  font: inherit;
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
+.evening-command-center-page
+  .evening-tomorrow-scene
+  :is(
+    .tomorrow-inline-editor input,
+    .tomorrow-inline-editor textarea,
+    .tomorrow-compact-select select,
+    .tomorrow-active-outcome-field textarea,
+    .tomorrow-supporting input,
+    .tomorrow-supporting select
+  ):focus-visible {
+  border-color: var(--gold-main);
+  outline: 2px solid color-mix(in srgb, var(--gold-main) 30%, transparent);
+  outline-offset: 1px;
+  box-shadow: 0 0 1rem color-mix(in srgb, var(--gold-main) 8%, transparent);
+}
+
+.evening-command-center-page .tomorrow-outcomes,
+.evening-command-center-page .tomorrow-first-action-card,
+.evening-command-center-page .tomorrow-supporting {
+  border: 1px solid var(--evening-v1-border);
+  background: color-mix(in srgb, var(--surface-1) 86%, transparent);
+}
+
+.evening-command-center-page
+  :is(.tomorrow-outcomes, .tomorrow-first-action-card, .tomorrow-supporting)[data-disabled='true'] {
+  opacity: 0.48;
+}
+
+.evening-command-center-page .tomorrow-outcome-levels {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-small);
+  background: color-mix(in srgb, var(--bg-canvas) 76%, transparent);
+}
+
+.evening-command-center-page .tomorrow-outcome-levels > button {
+  display: inline-flex;
+  min-width: 0;
+  min-height: 2.75rem;
+  gap: var(--space-2);
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  color: var(--text-secondary);
+  background: transparent;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 680;
+  cursor: pointer;
+}
+
+.evening-command-center-page .tomorrow-outcome-levels > button + button {
+  border-left: 1px solid var(--border-strong);
+}
+
+.evening-command-center-page .tomorrow-outcome-levels > button > span {
+  width: 0.68rem;
+  height: 0.68rem;
+  flex: 0 0 auto;
+  border: 1px solid currentcolor;
+  border-radius: 50%;
+}
+
+.evening-command-center-page .tomorrow-outcome-levels > button.is-selected {
+  color: var(--gold-soft);
+  background: color-mix(in srgb, var(--gold-main) 10%, var(--surface-1));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold-main) 36%, transparent);
+}
+
+.evening-command-center-page .tomorrow-outcome-levels > button.is-selected > span {
+  border: 3px solid var(--gold-soft);
+  background: var(--gold-soft);
+}
+
+.evening-command-center-page .tomorrow-active-outcome-field {
+  margin-top: var(--space-2);
+}
+
+.evening-command-center-page .tomorrow-active-outcome-field textarea {
+  min-height: 3rem;
+  resize: none;
+}
+
+.evening-command-center-page .tomorrow-action-editor,
+.evening-command-center-page .tomorrow-inline-editor.tomorrow-action-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1.12fr) minmax(0, 0.88fr);
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.evening-command-center-page .tomorrow-action-result-field {
+  padding: 0;
+  border: 0;
+  opacity: 1;
+}
+
+.evening-command-center-page .tomorrow-action-result-field textarea {
+  min-height: 2.75rem;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-strong);
+  background: color-mix(in srgb, var(--bg-canvas) 84%, transparent);
+}
+
+.evening-command-center-page .tomorrow-supporting-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.evening-command-center-page .tomorrow-supporting-row,
+.evening-command-center-page .tomorrow-supporting-row.is-empty {
+  display: grid;
+  min-height: 2.75rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  align-items: center;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-small);
+  background: color-mix(in srgb, var(--bg-canvas) 74%, transparent);
+}
+
+.evening-command-center-page .tomorrow-supporting-row :is(input, select) {
+  min-height: 2rem;
+  padding-block: var(--space-1);
+  border: 0;
+  background: transparent;
+}
+
+.evening-command-center-page .tomorrow-supporting-add {
+  display: flex;
+  min-width: 0;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.evening-command-center-page .tomorrow-supporting-add select {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.evening-command-center-page .tomorrow-supporting-add-button {
+  display: inline-flex;
+  min-height: 2.75rem;
+  gap: var(--space-2);
+  align-items: center;
+  justify-content: center;
+  padding-inline: var(--space-3);
+  color: var(--text-secondary);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-small);
+}
+
+.evening-command-center-page .tomorrow-guidance,
+.evening-command-center-page .tomorrow-overload-note {
+  min-height: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-small);
+  background: color-mix(in srgb, var(--surface-1) 88%, transparent);
+}
+
+.evening-command-center-page .tomorrow-scene-footer {
+  display: flex;
+  grid-area: actions;
+  min-height: 4rem;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: flex-end;
+  padding: var(--space-2) var(--space-6);
+  border: 0;
+  border-top: 1px solid var(--evening-v1-border);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--bg-canvas) 92%, transparent);
+}
+
+.evening-command-center-page .tomorrow-scene-footer .primary-button {
+  width: min(100%, 21rem);
+  min-width: 16rem;
+  min-height: var(--evening-shell-primary-cta-height, 3.25rem);
+  border-color: var(--gold-soft);
+  color: var(--bg-canvas);
+  background: linear-gradient(180deg, var(--gold-soft), var(--gold-main));
+  box-shadow: 0 0.65rem 1.7rem color-mix(in srgb, var(--gold-main) 14%, transparent);
+}
+
+.evening-command-center-page .tomorrow-scene-footer .primary-button:disabled {
+  border-color: var(--border-strong);
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--surface-3) 88%, var(--bg-canvas));
+  box-shadow: none;
+}
+
+@media (max-width: 48rem) {
+  .evening-command-center-page
+    .evening-command-center-scene[data-scene='tomorrow']
+    > .evening-command-center-scene-content {
+    height: 42rem;
+  }
+
+  .evening-command-center-page .tomorrow-working-form-scroll {
+    padding: var(--space-3);
+  }
+
+  .evening-command-center-page .tomorrow-inline-editor,
+  .evening-command-center-page .tomorrow-action-editor,
+  .evening-command-center-page .tomorrow-inline-editor.tomorrow-action-editor {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .evening-command-center-page .tomorrow-primary-controls,
+  .evening-command-center-page .tomorrow-supporting-add {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .evening-command-center-page .tomorrow-outcome-levels > button {
+    min-height: 2.75rem;
+    padding-inline: var(--space-2);
+  }
+
+  .evening-command-center-page .tomorrow-scene-footer {
+    padding: var(--space-2) var(--space-3) calc(var(--space-2) + env(safe-area-inset-bottom));
+  }
+
+  .evening-command-center-page .tomorrow-scene-footer .primary-button {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 25rem) {
+  .evening-command-center-page .tomorrow-outcome-levels {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .evening-command-center-page .tomorrow-outcome-levels > button + button {
+    border-top: 1px solid var(--border-strong);
+    border-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .evening-command-center-page
+    .evening-command-center-scene[data-scene='tomorrow']
+    :is(button, input, select, textarea) {
+    transition-duration: 0.01ms !important;
+  }
+}

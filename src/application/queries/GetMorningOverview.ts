@@ -1,9 +1,6 @@
 import {
-  DECISION_KIND,
-  DECISION_STATUS,
   LIFE_ACTION_STATUS,
   MORNING_PHYSICAL_STATUS,
-  ROUTINE_BLOCK_ASSIGNMENT,
   type DayDate,
   type Decision,
   type EffectiveRoutineOccurrence,
@@ -19,6 +16,10 @@ import type { LifeActionRepository } from '../ports/LifeActionRepository';
 import type { MorningCycleRepository } from '../ports/MorningCycleRepository';
 import type { TomorrowPlanRepository } from '../ports/TomorrowPlanRepository';
 import type { GetRoutineBlocksForDate } from './GetRoutineBlocksForDate';
+import {
+  findMorningMainActionOccurrence,
+  selectMorningFirstStep,
+} from './GetMorningMainActionOverview';
 
 export const MORNING_NEXT_STEP = {
   startMorning: 'startMorning',
@@ -37,7 +38,6 @@ export interface MorningMainActionPresentation {
   readonly completed: boolean;
   readonly scheduledTime: string | null;
 }
-
 export interface MorningOverview {
   readonly date: DayDate;
   readonly mutable: boolean;
@@ -92,8 +92,9 @@ export class GetMorningOverview {
 }
 
 export function resolveMorningOverview(source: MorningOverviewSource): MorningOverview {
-  const action = selectMainAction(source.plan, source.decisions, source.lifeActions);
-  const scheduled = action === null ? null : findScheduledOccurrence(action, source.occurrences);
+  const action = selectMorningFirstStep(source.plan, source.decisions, source.lifeActions);
+  const scheduled =
+    action === null ? null : findMorningMainActionOccurrence(action, source.occurrences);
   const mainAction =
     action === null
       ? null
@@ -143,68 +144,4 @@ function resolveNextStep(
     return MORNING_NEXT_STEP.scheduleMainAction;
   }
   return MORNING_NEXT_STEP.goToDay;
-}
-
-function selectMainAction(
-  plan: TomorrowPlan | null,
-  decisions: readonly Decision[],
-  actions: readonly LifeAction[],
-): LifeAction | null {
-  const eligible = actions.filter(isEligibleAction);
-  if (plan?.firstActionId != null) {
-    const planned = eligible.find((action) => action.id.equals(plan.firstActionId!));
-    if (planned !== undefined) return planned;
-  }
-  const firstMain = [...decisions]
-    .filter(
-      (decision) =>
-        decision.kind === DECISION_KIND.main &&
-        !decision.isArchived() &&
-        !decision.isDeleted() &&
-        decision.status !== DECISION_STATUS.cancelled,
-    )
-    .sort(
-      (left, right) =>
-        (left.order ?? Number.MAX_SAFE_INTEGER) - (right.order ?? Number.MAX_SAFE_INTEGER) ||
-        left.createdAt.getTime() - right.createdAt.getTime(),
-    )[0];
-  if (firstMain === undefined) return null;
-  return (
-    eligible
-      .filter((action) => action.decisionId?.equals(firstMain.id) === true)
-      .sort(
-        (left, right) =>
-          actionRank(left) - actionRank(right) ||
-          left.createdAt.getTime() - right.createdAt.getTime(),
-      )[0] ?? null
-  );
-}
-
-function isEligibleAction(action: LifeAction): boolean {
-  return (
-    !action.isArchived() &&
-    (action.status === LIFE_ACTION_STATUS.inProgress ||
-      action.status === LIFE_ACTION_STATUS.ready ||
-      action.status === LIFE_ACTION_STATUS.completed)
-  );
-}
-
-function actionRank(action: LifeAction): number {
-  if (action.status === LIFE_ACTION_STATUS.inProgress) return 0;
-  if (action.status === LIFE_ACTION_STATUS.ready) return 1;
-  return 2;
-}
-
-function findScheduledOccurrence(
-  action: LifeAction,
-  occurrences: readonly EffectiveRoutineOccurrence[],
-): EffectiveRoutineOccurrence | null {
-  return (
-    occurrences.find(
-      (occurrence) =>
-        !occurrence.isSkipped &&
-        occurrence.effectiveAssignment.kind === ROUTINE_BLOCK_ASSIGNMENT.existingAction &&
-        occurrence.effectiveAssignment.actionId.equals(action.id),
-    ) ?? null
-  );
 }

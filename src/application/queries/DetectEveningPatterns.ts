@@ -1,7 +1,9 @@
 import {
+  EVENING_CYCLE_COMPLETION,
   EVENING_CYCLE_MODE,
   EVENING_CYCLE_STATE,
   EVENING_MODE_REASON,
+  RELAXATION_PRACTICE,
   REFLECTION_SIGNAL_TYPE,
   TOMORROW_PLAN_STATUS,
 } from '../../domain';
@@ -26,6 +28,8 @@ export const EVENING_PATTERN_TYPE = {
   unfinishedEvenings: 'UNFINISHED_EVENINGS',
   skippedReflection: 'SKIPPED_REFLECTION',
   insufficientPreparation: 'INSUFFICIENT_PREPARATION',
+  repeatedEnvironmentItemSkip: 'REPEATED_ENVIRONMENT_ITEM_SKIP',
+  relaxationPracticeCalmImprovement: 'RELAXATION_PRACTICE_CALM_IMPROVEMENT',
 } as const;
 
 export type EveningPatternType = (typeof EVENING_PATTERN_TYPE)[keyof typeof EVENING_PATTERN_TYPE];
@@ -63,6 +67,7 @@ export interface EveningPattern {
   readonly sourceEntities: readonly EveningPatternSourceEntity[];
   readonly supportingDayIds: readonly string[];
   readonly metrics: Readonly<Record<string, number>>;
+  readonly sourceLabel: string | null;
 }
 
 export interface EveningPatternDetectionResult {
@@ -81,9 +86,11 @@ interface PatternDraft {
   readonly sources?: readonly EveningPatternSourceEntity[];
   readonly metrics: Readonly<Record<string, number>>;
   readonly identity?: string;
+  readonly sourceLabel?: string;
 }
 
 const MIN_OCCURRENCES = 2;
+const MIN_AGGREGATE_OBSERVATIONS = 3;
 
 const TITLE_BY_TYPE: Readonly<Record<EveningPatternType, string>> = Object.freeze({
   [EVENING_PATTERN_TYPE.repeatedCarryForward]: 'Повторный перенос одного объекта',
@@ -96,6 +103,10 @@ const TITLE_BY_TYPE: Readonly<Record<EveningPatternType, string>> = Object.freez
   [EVENING_PATTERN_TYPE.unfinishedEvenings]: 'Вечерние циклы остаются незавершёнными',
   [EVENING_PATTERN_TYPE.skippedReflection]: 'Осмысление дня регулярно пропускается',
   [EVENING_PATTERN_TYPE.insufficientPreparation]: 'Подготовка к следующему дню недостаточна',
+  [EVENING_PATTERN_TYPE.repeatedEnvironmentItemSkip]:
+    'Один пункт подготовки регулярно пропускается',
+  [EVENING_PATTERN_TYPE.relaxationPracticeCalmImprovement]:
+    'После выбранной практики средняя оценка спокойствия выше',
 });
 
 export class DetectEveningPatterns {
@@ -111,12 +122,18 @@ export function detectEveningPatterns(
   history: EveningHistoryResult,
   summary: EveningHistorySummary,
 ): EveningPatternDetectionResult {
+  const eligibleItems = history.items.filter(
+    (item) => item.completion !== EVENING_CYCLE_COMPLETION.skipped,
+  );
+  const eligibleCount = Math.max(1, eligibleItems.length);
   const drafts: PatternDraft[] = [
-    ...detectRepeatedCarryForward(history.items, summary.cycleCount),
-    ...detectRepeatedReasons(history.items, summary.cycleCount),
+    ...detectRepeatedCarryForward(eligibleItems, eligibleItems.length),
+    ...detectRepeatedReasons(eligibleItems, eligibleItems.length),
+    ...detectRepeatedEnvironmentItemSkips(eligibleItems),
+    ...detectRelaxationCalmImprovement(eligibleItems),
   ];
 
-  const firstActionEligible = history.items.filter(
+  const firstActionEligible = eligibleItems.filter(
     (item) =>
       item.mode === EVENING_CYCLE_MODE.emergency &&
       item.hasTomorrowPlan &&
@@ -132,35 +149,35 @@ export function detectEveningPatterns(
   addFrequencyPattern(
     drafts,
     EVENING_PATTERN_TYPE.frequentQuickMode,
-    history.items.filter((item) => item.mode === EVENING_CYCLE_MODE.quick),
-    Math.max(1, summary.cycleCount),
+    eligibleItems.filter((item) => item.mode === EVENING_CYCLE_MODE.quick),
+    eligibleCount,
     0.35,
     { summaryOccurrences: summary.modeCounts.QUICK },
   );
   addFrequencyPattern(
     drafts,
     EVENING_PATTERN_TYPE.frequentLateCompletion,
-    history.items.filter(
+    eligibleItems.filter(
       (item) =>
         item.mode === EVENING_CYCLE_MODE.emergency ||
         item.modeReason === EVENING_MODE_REASON.lateNight,
     ),
-    Math.max(1, summary.cycleCount),
+    eligibleCount,
     0.3,
     { emergencyCount: summary.modeCounts.EMERGENCY },
   );
   addFrequencyPattern(
     drafts,
     EVENING_PATTERN_TYPE.unfinishedEvenings,
-    history.items.filter(
+    eligibleItems.filter(
       (item) => item.state !== EVENING_CYCLE_STATE.completed && item.startedAt !== null,
     ),
-    Math.max(1, summary.cycleCount),
+    eligibleCount,
     0.25,
     { summaryOccurrences: summary.unfinishedCount },
   );
 
-  const reflectionEligible = history.items.filter(
+  const reflectionEligible = eligibleItems.filter(
     (item) => item.mode === EVENING_CYCLE_MODE.quick || item.mode === EVENING_CYCLE_MODE.emergency,
   );
   addFrequencyPattern(
@@ -173,7 +190,7 @@ export function detectEveningPatterns(
     0.4,
   );
 
-  const preparationEligible = history.items.filter(
+  const preparationEligible = eligibleItems.filter(
     (item) => item.preparationState !== EVENING_HISTORY_PREPARATION_STATE.notCreated,
   );
   const weakPreparation = preparationEligible.filter(
@@ -214,6 +231,91 @@ export function detectEveningPatterns(
   return Object.freeze({
     analysisRange: history.range,
     patterns: Object.freeze(patterns),
+  });
+}
+
+function detectRepeatedEnvironmentItemSkips(
+  items: readonly EveningHistoryItem[],
+): readonly PatternDraft[] {
+  const byKey = new Map<string, { readonly label: string; readonly evidence: PatternEvidence[] }>();
+  for (const item of items) {
+    for (const environmentItem of item.environmentItems) {
+      if (environmentItem.status !== 'SKIPPED') continue;
+      const group = byKey.get(environmentItem.key) ?? {
+        label: environmentItem.title,
+        evidence: [],
+      };
+      group.evidence.push(toEvidence(item));
+      byKey.set(environmentItem.key, group);
+    }
+  }
+  return [...byKey.entries()].flatMap(([key, group]) => {
+    const evidence = uniqueEvidence(group.evidence);
+    if (evidence.length < MIN_OCCURRENCES) return [];
+    return [
+      {
+        type: EVENING_PATTERN_TYPE.repeatedEnvironmentItemSkip,
+        identity: key,
+        sourceLabel: group.label,
+        evidence,
+        sources: [{ entityType: 'ENVIRONMENT_ITEM', entityId: key }],
+        metrics: {
+          sampleSize: items.length,
+          occurrenceRate: ratio(evidence.length, items.length),
+          minimumOccurrences: MIN_OCCURRENCES,
+        },
+      },
+    ];
+  });
+}
+
+function detectRelaxationCalmImprovement(
+  items: readonly EveningHistoryItem[],
+): readonly PatternDraft[] {
+  const byPractice = new Map<string, EveningHistoryItem[]>();
+  for (const item of items) {
+    if (
+      item.relaxation?.practiceCompletedAt === null ||
+      item.relaxation === null ||
+      item.sleepCheck?.calmAfter === null ||
+      item.sleepCheck === null
+    ) {
+      continue;
+    }
+    const group = byPractice.get(item.relaxation.selectedPractice) ?? [];
+    group.push(item);
+    byPractice.set(item.relaxation.selectedPractice, group);
+  }
+  return [...byPractice.entries()].flatMap(([practice, observations]) => {
+    if (observations.length < MIN_AGGREGATE_OBSERVATIONS) return [];
+    const averageCalmBefore = average(observations.map((item) => item.sleepCheck!.calmBefore));
+    const averageCalmAfter = average(observations.map((item) => item.sleepCheck!.calmAfter!));
+    const averageCalmDelta = average(
+      observations.map((item) => item.sleepCheck!.calmAfter! - item.sleepCheck!.calmBefore),
+    );
+    if (averageCalmDelta <= 0) return [];
+    const evidence = uniqueEvidence(observations.map(toEvidence));
+    return [
+      {
+        type: EVENING_PATTERN_TYPE.relaxationPracticeCalmImprovement,
+        identity: practice,
+        sourceLabel: relaxationPracticeLabel(practice),
+        evidence,
+        sources: [{ entityType: 'RELAXATION_PRACTICE', entityId: practice }],
+        metrics: {
+          sampleSize: items.length,
+          pairedObservationCount: observations.length,
+          positiveObservationCount: observations.filter(
+            (item) => item.sleepCheck!.calmDelta !== null && item.sleepCheck!.calmDelta! > 0,
+          ).length,
+          averageCalmBefore,
+          averageCalmAfter,
+          averageCalmDelta,
+          occurrenceRate: ratio(observations.length, items.length),
+          minimumOccurrences: MIN_AGGREGATE_OBSERVATIONS,
+        },
+      },
+    ];
   });
 }
 
@@ -370,6 +472,7 @@ function toPattern(draft: PatternDraft): EveningPattern {
     range,
     sourceEntityIds: Object.freeze(sources.map((source) => source.entityId)),
     sourceEntities: Object.freeze(sources),
+    sourceLabel: draft.sourceLabel ?? null,
     supportingDayIds: Object.freeze(evidence.map((entry) => entry.dayId)),
     metrics: Object.freeze({ ...draft.metrics }),
   });
@@ -454,6 +557,19 @@ function severityRank(severity: EveningPatternSeverity): number {
 
 function ratio(count: number, sampleSize: number): number {
   return round(count / Math.max(1, sampleSize));
+}
+
+function average(values: readonly number[]): number {
+  return round(values.reduce((sum, value) => sum + value, 0) / values.length);
+}
+
+function relaxationPracticeLabel(practice: string): string {
+  if (practice === RELAXATION_PRACTICE.reading) return 'Чтение';
+  if (practice === RELAXATION_PRACTICE.breathing) return 'Дыхание';
+  if (practice === RELAXATION_PRACTICE.stretching) return 'Растяжка';
+  if (practice === RELAXATION_PRACTICE.meditation) return 'Медитация';
+  if (practice === RELAXATION_PRACTICE.calmMusic) return 'Спокойная музыка';
+  return practice;
 }
 
 function round(value: number): number {

@@ -10,15 +10,25 @@ import {
   type EveningCycleState,
   type EveningModeReason,
   type EveningStageSkipReason,
+  type CorrectiveActionKind,
+  type PreparationCategory,
+  type PreparationItemStatus,
   type PreparationPlan,
   type PreparationPlanStatus,
+  type RelaxationPractice,
   type ReflectionDaySignal,
+  type ReflectionAnswer,
   type ReflectionQuestionKind,
   type ReflectionSignalType,
+  type ScreenFreeState,
+  type SleepCheckAnswerValue,
+  type SleepCheckQuestionId,
+  type SubjectiveRating,
   type TomorrowPlan,
   type TomorrowPlanStatus,
   type TomorrowPlanningQuality,
 } from '../../domain';
+import type { PreparationArea } from '../../domain/preparation';
 import { DomainError } from '../../shared/errors/DomainError';
 import type { EveningHistoryReader } from '../ports/EveningHistoryReader';
 
@@ -61,7 +71,7 @@ export interface EveningHistoryReflectionAnswer {
   readonly questionId: string;
   readonly kind: ReflectionQuestionKind | null;
   readonly signal: ReflectionDaySignal | null;
-  readonly answer: string | readonly string[];
+  readonly answer: ReflectionAnswer;
   readonly answeredAt: string;
 }
 
@@ -91,6 +101,72 @@ export interface EveningHistorySkippedStage {
   readonly skippedAt: string;
 }
 
+export interface EveningHistoryEnvironmentItem {
+  readonly id: string;
+  readonly key: string;
+  readonly title: string;
+  readonly area: PreparationArea;
+  readonly category: PreparationCategory;
+  readonly required: boolean;
+  readonly recommendedDurationMinutes: number | null;
+  readonly status: PreparationItemStatus;
+  readonly completedAt: string | null;
+  readonly skippedAt: string | null;
+  readonly skipReason: string | null;
+}
+
+export interface EveningHistoryRelaxationFacts {
+  readonly defaultPractice: RelaxationPractice;
+  readonly selectedPractice: RelaxationPractice;
+  readonly plannedPracticeDurationMinutes: number;
+  readonly actualPracticeDurationMs: number | null;
+  readonly drinkCompletedAt: string | null;
+  readonly hygieneCompletedAt: string | null;
+  readonly practiceStartedAt: string | null;
+  readonly practiceCompletedAt: string | null;
+  readonly screenFreePlannedDurationMinutes: number;
+  readonly screenFreeOutcome: ScreenFreeState;
+  readonly screenFreeActualDurationMs: number | null;
+  readonly screenFreeStartedAt: string | null;
+  readonly screenFreeSkippedAt: string | null;
+  readonly screenFreeCompletedAt: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface EveningHistorySleepCheckAnswer {
+  readonly questionId: SleepCheckQuestionId;
+  readonly initialAnswer: SleepCheckAnswerValue;
+  readonly initialAnsweredAt: string;
+  readonly retriedAnswer: SleepCheckAnswerValue | null;
+  readonly retriedAnsweredAt: string | null;
+}
+
+export interface EveningHistoryCorrectiveAction {
+  readonly questionId: SleepCheckQuestionId;
+  readonly action: CorrectiveActionKind;
+  readonly selectedAt: string;
+  readonly completedAt: string | null;
+  readonly capturedThought: string | null;
+}
+
+export interface EveningHistorySleepCheckFacts {
+  readonly calmBefore: SubjectiveRating;
+  readonly calmAfter: SubjectiveRating | null;
+  readonly calmDelta: number | null;
+  readonly sleepReadinessBefore: SubjectiveRating;
+  readonly sleepReadinessAfter: SubjectiveRating | null;
+  readonly sleepReadinessDelta: number | null;
+  readonly beforeRatedAt: string;
+  readonly afterRatedAt: string | null;
+  readonly answers: readonly EveningHistorySleepCheckAnswer[];
+  readonly correctiveAction: EveningHistoryCorrectiveAction | null;
+  readonly startedAt: string | null;
+  readonly completedAt: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
 export const EVENING_HISTORY_PREPARATION_STATE = {
   notCreated: 'NOT_CREATED',
 } as const;
@@ -106,6 +182,7 @@ export interface EveningHistoryItem {
   readonly completion: EveningCycleCompletion | null;
   readonly mode: EveningCycleMode;
   readonly modeReason: EveningModeReason | null;
+  readonly skipReason: string | null;
   readonly startedAt: string | null;
   readonly completedAt: string | null;
   readonly durationMs: number | null;
@@ -131,6 +208,9 @@ export interface EveningHistoryItem {
     requiredSkipped: number;
     requiredPending: number;
   }>;
+  readonly environmentItems: readonly EveningHistoryEnvironmentItem[];
+  readonly relaxation: EveningHistoryRelaxationFacts | null;
+  readonly sleepCheck: EveningHistorySleepCheckFacts | null;
   readonly skippedStages: readonly EveningHistorySkippedStage[];
 }
 
@@ -242,6 +322,7 @@ function toHistoryItem(
     completion: cycle.state === EVENING_CYCLE_STATE.completed ? cycle.completion : null,
     mode: cycle.mode,
     modeReason: cycle.modeReason,
+    skipReason: cycle.skipReason,
     startedAt: startedAt?.toISOString() ?? null,
     completedAt: completedAt?.toISOString() ?? null,
     durationMs:
@@ -308,6 +389,25 @@ function toHistoryItem(
         (item) => item.required && item.status === PREPARATION_ITEM_STATUS.pending,
       ).length,
     }),
+    environmentItems: Object.freeze(
+      activePreparationItems.map((item) =>
+        Object.freeze({
+          id: item.id.toString(),
+          key: item.key,
+          title: item.title,
+          area: item.area,
+          category: item.category,
+          required: item.required,
+          recommendedDurationMinutes: item.recommendedDurationMinutes,
+          status: item.status,
+          completedAt: item.completedAt?.toISOString() ?? null,
+          skippedAt: item.skippedAt?.toISOString() ?? null,
+          skipReason: item.skipReason,
+        }),
+      ),
+    ),
+    relaxation: relaxationFacts(cycle),
+    sleepCheck: sleepCheckFacts(cycle),
     skippedStages: Object.freeze(
       cycle.skippedStages.map((stage) =>
         Object.freeze({
@@ -318,6 +418,88 @@ function toHistoryItem(
       ),
     ),
   });
+}
+
+function relaxationFacts(cycle: EveningCycle): EveningHistoryRelaxationFacts | null {
+  const relaxation = cycle.relaxation;
+  if (relaxation === null) return null;
+  return Object.freeze({
+    defaultPractice: relaxation.defaultPractice,
+    selectedPractice: relaxation.selectedPractice,
+    plannedPracticeDurationMinutes: relaxation.practiceDurationMinutes,
+    actualPracticeDurationMs: elapsedMs(
+      relaxation.practiceTimerStartedAt,
+      relaxation.practiceCompletedAt,
+    ),
+    drinkCompletedAt: relaxation.drinkCompletedAt?.toISOString() ?? null,
+    hygieneCompletedAt: relaxation.hygieneCompletedAt?.toISOString() ?? null,
+    practiceStartedAt: relaxation.practiceTimerStartedAt?.toISOString() ?? null,
+    practiceCompletedAt: relaxation.practiceCompletedAt?.toISOString() ?? null,
+    screenFreePlannedDurationMinutes: relaxation.screenFreeDurationMinutes,
+    screenFreeOutcome: relaxation.screenFreeState,
+    screenFreeActualDurationMs: elapsedMs(
+      relaxation.screenFreeStartedAt,
+      relaxation.screenFreeCompletedAt,
+    ),
+    screenFreeStartedAt: relaxation.screenFreeStartedAt?.toISOString() ?? null,
+    screenFreeSkippedAt: relaxation.screenFreeSkippedAt?.toISOString() ?? null,
+    screenFreeCompletedAt: relaxation.screenFreeCompletedAt?.toISOString() ?? null,
+    createdAt: relaxation.createdAt.toISOString(),
+    updatedAt: relaxation.updatedAt.toISOString(),
+  });
+}
+
+function sleepCheckFacts(cycle: EveningCycle): EveningHistorySleepCheckFacts | null {
+  const sleepCheck = cycle.sleepCheck;
+  if (sleepCheck === null) return null;
+  const retryByQuestion = new Map(
+    sleepCheck.retriedAnswers.map((answer) => [answer.questionId, answer]),
+  );
+  const correctiveAction = sleepCheck.correctiveAction;
+  return Object.freeze({
+    calmBefore: sleepCheck.calmBefore,
+    calmAfter: sleepCheck.calmAfter,
+    calmDelta: sleepCheck.calmAfter === null ? null : sleepCheck.calmAfter - sleepCheck.calmBefore,
+    sleepReadinessBefore: sleepCheck.sleepReadinessBefore,
+    sleepReadinessAfter: sleepCheck.sleepReadinessAfter,
+    sleepReadinessDelta:
+      sleepCheck.sleepReadinessAfter === null
+        ? null
+        : sleepCheck.sleepReadinessAfter - sleepCheck.sleepReadinessBefore,
+    beforeRatedAt: sleepCheck.beforeRatedAt.toISOString(),
+    afterRatedAt: sleepCheck.afterRatedAt?.toISOString() ?? null,
+    answers: Object.freeze(
+      sleepCheck.initialAnswers.map((answer) => {
+        const retry = retryByQuestion.get(answer.questionId) ?? null;
+        return Object.freeze({
+          questionId: answer.questionId,
+          initialAnswer: answer.value,
+          initialAnsweredAt: answer.answeredAt.toISOString(),
+          retriedAnswer: retry?.value ?? null,
+          retriedAnsweredAt: retry?.answeredAt.toISOString() ?? null,
+        });
+      }),
+    ),
+    correctiveAction:
+      correctiveAction === null
+        ? null
+        : Object.freeze({
+            questionId: correctiveAction.questionId,
+            action: correctiveAction.action,
+            selectedAt: correctiveAction.selectedAt.toISOString(),
+            completedAt: correctiveAction.completedAt?.toISOString() ?? null,
+            capturedThought: correctiveAction.capturedThought,
+          }),
+    startedAt: sleepCheck.startedAt?.toISOString() ?? null,
+    completedAt: sleepCheck.completedAt?.toISOString() ?? null,
+    createdAt: sleepCheck.createdAt.toISOString(),
+    updatedAt: sleepCheck.updatedAt.toISOString(),
+  });
+}
+
+function elapsedMs(startedAt: Date | null, completedAt: Date | null): number | null {
+  if (startedAt === null || completedAt === null) return null;
+  return Math.max(0, completedAt.getTime() - startedAt.getTime());
 }
 
 function emptyResolutionCounts(): {

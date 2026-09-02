@@ -139,6 +139,51 @@ describe('E10.6–E10.7 EveningAnalyticsPage', () => {
     expect(monthly.buckets.at(-1)?.label).toBe('20.08–21.08');
   });
 
+  it('оставляет SKIPPED в истории, но не снижает операционную аналитику', () => {
+    const model = eveningAnalyticsModel();
+    const completed = model.history.items[0]!;
+    const skipped: EveningHistoryItem = {
+      ...completed,
+      cycleId: 'skipped-cycle',
+      dateKey: '2026-08-21',
+      completion: EVENING_CYCLE_COMPLETION.skipped,
+      mode: EVENING_CYCLE_MODE.quick,
+      skipReason: 'Поздняя дорога домой',
+      startedAt: null,
+      completedAt: '2026-08-21T14:00:00.000Z',
+      durationMs: null,
+    };
+    const trends = createEveningTrendsPresentation(
+      { ...model.history, items: [completed, skipped] },
+      {
+        ...model.summary,
+        cycleCount: model.summary.cycleCount + 1,
+        skippedCount: model.summary.skippedCount + 1,
+      },
+    );
+    const markup = renderToStaticMarkup(
+      createElement(EveningAnalyticsView, {
+        model: {
+          ...model,
+          history: { ...model.history, items: [completed, skipped] },
+          trends,
+        },
+        rangeDays: 7,
+        actionRecommendationId: null,
+        actionError: null,
+        onPreviewRecommendation: () => undefined,
+        onDismissRecommendation: () => undefined,
+        onOpenEvening: () => undefined,
+      }),
+    );
+
+    expect(trends.completion).toEqual({ completedCount: 4, cycleCount: 5 });
+    expect(trends.buckets.at(-1)).toMatchObject({ cycleCount: 0, completionPercent: 0 });
+    expect(markup).toContain('Ритуал пропущен');
+    expect(markup).toContain('Причина: Поздняя дорога домой');
+    expect(markup).not.toContain('Завершено сокращённо');
+  });
+
   it('создаёт применение только после отдельного подтверждения предпросмотра', () => {
     const preview = targetOutcomePreview();
     const initial = createRecommendationDialogState(preview);
@@ -198,6 +243,7 @@ function eveningAnalyticsModel(): EveningAnalyticsModel {
     completion: EVENING_CYCLE_COMPLETION.completed,
     mode: EVENING_CYCLE_MODE.normal,
     modeReason: null,
+    skipReason: null,
     startedAt: '2026-08-20T12:00:00.000Z',
     completedAt: '2026-08-20T12:18:00.000Z',
     durationMs: 1_080_000,
@@ -223,6 +269,9 @@ function eveningAnalyticsModel(): EveningAnalyticsModel {
       requiredSkipped: 0,
       requiredPending: 0,
     },
+    environmentItems: [],
+    relaxation: null,
+    sleepCheck: null,
     skippedStages: [],
   };
   const signals = [1, 2, 3, 4].map((number) => ({
@@ -231,7 +280,7 @@ function eveningAnalyticsModel(): EveningAnalyticsModel {
     severity: EVENING_SIGNAL_SEVERITY.attention,
     title: `Сигнал ${number}`,
     summary: `Наблюдение ${number}`,
-    evidence: { occurrences: 2, range, occurrenceRate: 0.4 },
+    evidence: { occurrences: 2, range, occurrenceRate: 0.4, metrics: {} },
     sourcePatternIds: [],
     sourceEntityIds: [],
     supportingDayIds: [],
@@ -276,6 +325,7 @@ function eveningAnalyticsModel(): EveningAnalyticsModel {
         range,
         sourceEntityIds: [],
         sourceEntities: [],
+        sourceLabel: null,
         supportingDayIds: [],
         metrics: {},
       },

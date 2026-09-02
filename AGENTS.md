@@ -36,6 +36,70 @@
 - Один патч решает одну цель; не смешивай независимые изменения.
 - Практические сценарии и роли описаны в `docs/codex/CODEX_WORKFLOW.md`.
 
+## New Feature Design Gate
+
+Этот gate обязателен до реализации любой новой пользовательской функции, раздела, страницы,
+пользовательского сценария или UI-компонента LifeOS.
+
+1. Сначала классифицируй изменение:
+   - новый раздел;
+   - новая страница;
+   - новый пользовательский сценарий;
+   - новая функция существующей страницы;
+   - новый UI-компонент;
+   - изменение только бизнес-логики без нового UI.
+2. Если изменение затрагивает UI, обязательно полностью прочитай
+   `LifeOS_DESIGN_RULES_v1.md` до проектирования и реализации.
+3. До реализации определи и зафиксируй:
+   - раздел LifeOS;
+   - section accent;
+   - атмосферный мотив;
+   - главный визуальный центр;
+   - page archetype;
+   - необходимые существующие UI-компоненты;
+   - responsive/mobile-поведение;
+   - состояния loading / empty / error / success.
+4. До создания нового компонента проверь существующие shared components и design tokens. Не
+   создавай дубликат существующего компонента или параллельный визуальный паттерн.
+5. Для крупного или уникального интерфейса определи необходимость approved visual reference.
+   Approved-макет обязателен для:
+   - главной страницы нового крупного раздела;
+   - уникального ключевого пользовательского сценария;
+   - интерфейса, композиция которого не покрывается существующим архетипом;
+   - экрана, который пользователь явно попросил сначала утвердить визуально.
+
+   Approved-макет не обязателен для небольших внутренних форм, обычных таблиц, настроек, простых
+   модалок, стандартных списков и экранов, полностью собираемых из уже утверждённых компонентов.
+
+6. Для значимой новой функции создай design specification в `docs/design/features/` или page
+   specification в `docs/design/pages/`. Approved references храни или документируй в
+   `docs/design/references/`.
+7. До начала реализации покажи пользователю краткий дизайн-контракт:
+
+   ```text
+   FEATURE
+   → USER GOAL
+   → EXISTING LOGIC
+   → PAGE/COMPONENT ARCHETYPE
+   → SECTION COLOR
+   → MAIN VISUAL CENTER
+   → COMPONENTS TO REUSE
+   → MOBILE BEHAVIOR
+   → APPROVED REFERENCE: YES/NO
+   → TEST SCOPE
+   ```
+
+8. Начинай реализацию только после того, как дизайн-контракт определён. Если для задачи требуется
+   предварительное визуальное утверждение, дождись approved reference до реализации.
+9. Не меняй существующую бизнес-логику ради визуального оформления, если задача явно этого не
+   требует. Сохраняй авторитетный источник состояния и существующие application-контракты.
+10. После реализации выполни targeted/scoped tests, а для значимых UI-задач также visual review,
+    чек-лист Правила №38 из `LifeOS_DESIGN_RULES_v1.md` и desktop/mobile-проверку.
+11. Full regression всего LifeOS не является стандартной проверкой отдельной новой функции.
+    Запускай его только согласно общей testing strategy и `docs/codex/TEST_MATRIX.md`.
+12. Не помечай новый экран или компонент как `APPROVED` или `LOCKED`, пока пользователь явно не
+    утвердил визуальный результат, если для задачи предусмотрен visual review.
+
 ## Интерфейс
 
 - Для визуальных задач сначала изучи Figma или утверждённый референс и текущий компонент.
@@ -50,13 +114,109 @@
 - Не допускай одновременного изменения одних файлов несколькими агентами.
 - Перед завершением проверь `git diff --check`, изучи `git diff` и выполни `git status --short`.
 
+## Testing Stage Gate
+
+### R1 — аудит
+
+- Выполняй targeted read-only checks при необходимости.
+- Полный E2E не запускай.
+- Если файлы не менялись, `npm run verify` не обязателен.
+
+### R2–R8 — обычные этапы реализации
+
+После изменения:
+
+```text
+targeted tests
+→ npm run verify
+→ STOP
+```
+
+Полный E2E не запускай автоматически.
+
+### R9 — migration/backward compatibility
+
+После targeted migration tests:
+
+```text
+npm run verify
+→ npm run test:e2e
+```
+
+Полный E2E обязателен, потому что этап затрагивает persistence и совместимость.
+
+### R10 — Visual Fidelity + Mobile
+
+Обязательны:
+
+```text
+targeted visual/render tests
+→ npm run verify
+→ npm run test:e2e
+```
+
+Полный E2E обязателен из-за browser/mobile flows.
+
+### R11 — Analytics
+
+По умолчанию:
+
+```text
+targeted analytics tests
+→ npm run verify
+```
+
+Полный E2E запускай только при реальном изменении пользовательского сквозного flow.
+
+### R12 — Final Regression / Release
+
+Обязательно:
+
+```text
+npm run verify
+→ npm run test:e2e
+```
+
+Для R9, R10 и R12 можно использовать эквивалентный полный gate `npm run verify:full`.
+
+### Полный E2E вне R9/R10/R12
+
+Запускай полный E2E раньше только если текущий патч реально затрагивает:
+
+- маршрутизацию;
+- navigation state;
+- IndexedDB/persistence;
+- migration;
+- browser interaction;
+- desktop/mobile responsive flow;
+- сквозной Evening journey;
+- critical application startup/recovery.
+
+Перед запуском кратко объясни, почему полный E2E нужен именно этому этапу.
+
+Не запускай полный E2E «на всякий случай» после каждого небольшого UI/domain/application патча.
+Не запускай повторно уже зелёный полный suite без изменения кода, которое могло повлиять на него.
+
+### Hang handling
+
+Если E2E действительно завис:
+
+1. Не перезапускай весь suite автоматически несколько раз.
+2. Определи последний запущенный scenario/project.
+3. Запусти конкретный зависший тест отдельно.
+4. Найди root cause.
+5. Только после исправления повтори полный gate.
+
+Если progress/heartbeat продолжает двигаться, это не считается зависанием.
+
 ## Проверка
 
 - Канонический порядок: `npm run test:target -- <File.test.ts|tsx>` → при широком изменении
   `npm run test:fast` → `npm run typecheck` и `npm run lint` → после стабилизации полный
-  `npm run test`, `npm run test:infra`, `npm run test:alpha` → перед завершением
-  `npm run test:e2e`, `npm run build`, формат и Git hygiene. Полный gate запускай через
-  `npm run verify` один раз перед handoff, а не после каждого изменения.
+  `npm run test`, `npm run test:infra`, `npm run test:alpha` → `npm run build`, формат и Git
+  hygiene. Быстрый gate запускай через `npm run verify` один раз перед handoff, а не после каждого
+  изменения. Полный E2E запускай отдельно через `npm run test:e2e` или вместе с быстрым gate через
+  `npm run verify:full` только по правилам раздела `Testing Stage Gate`.
 - Не запускай голые `vitest`, `npx vitest` или `npm run dev` как проверку: это watch/долгоживущие
   режимы. Не передавай каноническому E2E `--ui`, `--debug`, `--headed` или `--config`.
 - Используй только bounded npm-команды из `docs/codex/TEST_MATRIX.md`; их process-level timeout

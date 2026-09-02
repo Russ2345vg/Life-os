@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 // @ts-expect-error — тест выполняется в Node, а production tsconfig не включает Node types.
 import { readFileSync } from 'node:fs';
 import {
+  DayDate,
   EntityId,
   PREPARATION_CATEGORY,
   EVENING_CYCLE_MODE,
@@ -12,13 +13,12 @@ import {
   PreparationPlan,
   type PreparationCategory,
 } from '../../domain';
-import {
-  PREPARATION_AREA,
-  type PreparationArea,
-} from '../../domain/preparation';
+import { PREPARATION_AREA, type PreparationArea } from '../../domain/preparation';
+import { createReadyLifeAction } from '../../test/helpers/LifeActionTestFactory';
 import type { PreparationSnapshot } from '../../application';
 import {
   PreparationEmptyState,
+  PreparationOperationAlert,
   PreparationSceneView,
   PreparationSection,
 } from './PreparationPanel';
@@ -36,9 +36,10 @@ const presentationSource = readFileSync(
   new URL('./PreparationPanelPresentation.ts', import.meta.url),
   'utf8',
 );
+const panelSource = readFileSync(new URL('./PreparationPanel.tsx', import.meta.url), 'utf8');
 
 describe('PreparationPanel completed history', () => {
-  it('предлагает явное ядро из четырёх пунктов без изменения исходов', () => {
+  it('показывает компактную фазу 4A с двумя равными группами и реальным контекстом завтра', () => {
     const sleep = [
       preparationItem(
         'sleep-core-one',
@@ -67,9 +68,13 @@ describe('PreparationPanel completed history', () => {
         PREPARATION_AREA.tomorrowStart,
       ),
     ];
+    const firstAction = createReadyLifeAction(
+      'открыть-проект-lifeos',
+      DayDate.create('2026-08-22'),
+    );
     const markup = renderToStaticMarkup(
       PreparationSceneView({
-        snapshot: preparationSnapshotForCore([...sleep, ...tomorrow]),
+        snapshot: { ...preparationSnapshotForCore([...sleep, ...tomorrow]), firstAction },
         mode: EVENING_CYCLE_MODE.normal,
         completedReview: false,
         completedReviewEditing: false,
@@ -81,19 +86,154 @@ describe('PreparationPanel completed history', () => {
       }),
     );
 
-    expect(markup).toContain('Настройте обязательное ядро');
-    expect(markup).toContain('Среда для сна');
-    expect(markup).toContain('Среда для завтра');
+    expect(markup).toContain('Подготовьте среду');
+    expect(markup).toContain('Несколько простых действий — и утро начнётся без лишней суеты.');
+    expect(renderedText(markup)).toContain('Выбрано 4 из 3–6');
+    expect(markup).toContain('Для спокойного вечера');
+    expect(markup).toContain('Для завтра');
+    expect(renderedText(markup)).toContain('Завтра: Действие открыть-проект-lifeos');
+    expect(markup).toContain('class="preparation-tomorrow-context"');
+    expect(markup).not.toContain('class="preparation-first-start"');
+    expect(markup).not.toContain('Первый старт завтра');
     expect(markup.match(/aria-pressed="true"/g)).toHaveLength(4);
-    expect(markup).toContain('Выбрано 4 из 3–6');
-    expect(markup).toMatch(/<button[^>]*>Подтвердить ядро<\/button>/);
+    expect(markup).toMatch(/<button[^>]*>Продолжить →<\/button>/);
+    expect(markup).toContain('preparation-core-actions');
+    expect(markup).not.toContain('aria-label="Краткая сводка готовности"');
     expect([...sleep, ...tomorrow].every((item) => item.status === 'PENDING')).toBe(true);
+  });
+
+  it('показывает фактическое первое действие в baseline item настройки', () => {
+    const firstActionItem = preparationItem(
+      'ENVIRONMENT:TOMORROW:FIRST_ACTION',
+      false,
+      PREPARATION_CATEGORY.cognitive,
+      PREPARATION_AREA.tomorrowStart,
+    );
+    const supportingItems = [
+      preparationItem(
+        'sleep-one',
+        false,
+        PREPARATION_CATEGORY.physical,
+        PREPARATION_AREA.sleepEnvironment,
+      ),
+      preparationItem(
+        'sleep-two',
+        false,
+        PREPARATION_CATEGORY.digital,
+        PREPARATION_AREA.sleepEnvironment,
+      ),
+      preparationItem(
+        'tomorrow-one',
+        false,
+        PREPARATION_CATEGORY.digital,
+        PREPARATION_AREA.tomorrowStart,
+      ),
+    ];
+    const snapshot = preparationSnapshotForCore([firstActionItem, ...supportingItems]);
+    const markup = renderToStaticMarkup(
+      PreparationSceneView({
+        snapshot: {
+          ...snapshot,
+          firstAction: createReadyLifeAction('открыть-проект-lifeos', DayDate.create('2026-08-22')),
+        },
+        mode: EVENING_CYCLE_MODE.normal,
+        completedReview: false,
+        completedReviewEditing: false,
+        busyItemId: null,
+        isContinuing: false,
+        onProcess: async () => undefined,
+        onContinue: async () => undefined,
+        onReviewEditingChange: vi.fn(),
+      }),
+    );
+
+    expect(markup).toContain('Подготовить всё для: Действие открыть-проект-lifeos');
+    expect(markup).not.toContain('Подготовить ENVIRONMENT:TOMORROW:FIRST_ACTION');
+  });
+
+  it('показывает рекомендуемую длительность пункта ритуала', () => {
+    const items = [
+      preparationItem(
+        'sleep-duration',
+        false,
+        PREPARATION_CATEGORY.physical,
+        PREPARATION_AREA.sleepEnvironment,
+        'Приглушить освещение',
+        17,
+      ),
+      preparationItem('sleep-two', false, PREPARATION_CATEGORY.physical),
+      preparationItem('tomorrow-one', false, PREPARATION_CATEGORY.digital),
+      preparationItem('tomorrow-two', false, PREPARATION_CATEGORY.cognitive),
+    ];
+    const markup = renderToStaticMarkup(
+      PreparationSceneView({
+        snapshot: preparationSnapshotForCore(
+          items,
+          items.map((item) => item.key),
+        ),
+        mode: EVENING_CYCLE_MODE.normal,
+        completedReview: false,
+        completedReviewEditing: false,
+        busyItemId: null,
+        isContinuing: false,
+        onProcess: async () => undefined,
+        onContinue: async () => undefined,
+        onReviewEditingChange: vi.fn(),
+      }),
+    );
+
+    expect(markup).toContain('Рекомендуемо: 17 мин');
+  });
+
+  it('уточняет legacy baseline copy без перезаписи сохранённого плана', () => {
+    const ventilation = preparationItem(
+      'ENVIRONMENT:SLEEP:VENTILATE_ROOM',
+      false,
+      PREPARATION_CATEGORY.physical,
+      PREPARATION_AREA.sleepEnvironment,
+      'Проверить комнату',
+    );
+    const supportingItems = ['sleep-two', 'tomorrow-one', 'tomorrow-two'].map((key, index) =>
+      preparationItem(
+        key,
+        false,
+        PREPARATION_CATEGORY.physical,
+        index === 0 ? PREPARATION_AREA.sleepEnvironment : PREPARATION_AREA.tomorrowStart,
+      ),
+    );
+    const markup = renderToStaticMarkup(
+      PreparationSceneView({
+        snapshot: preparationSnapshotForCore([ventilation, ...supportingItems]),
+        mode: EVENING_CYCLE_MODE.normal,
+        completedReview: false,
+        completedReviewEditing: false,
+        busyItemId: null,
+        isContinuing: false,
+        onProcess: async () => undefined,
+        onContinue: async () => undefined,
+        onReviewEditingChange: vi.fn(),
+      }),
+    );
+
+    expect(markup).toContain('Проветрить комнату');
+    expect(markup).not.toContain('Проверить комнату');
+    expect(ventilation.title).toBe('Проверить комнату');
   });
 
   it('блокирует подтверждение ядра вне диапазона от трёх до шести', () => {
     const items = [
-      preparationItem('one', false, PREPARATION_CATEGORY.physical, PREPARATION_AREA.sleepEnvironment),
-      preparationItem('two', false, PREPARATION_CATEGORY.physical, PREPARATION_AREA.sleepEnvironment),
+      preparationItem(
+        'one',
+        false,
+        PREPARATION_CATEGORY.physical,
+        PREPARATION_AREA.sleepEnvironment,
+      ),
+      preparationItem(
+        'two',
+        false,
+        PREPARATION_CATEGORY.physical,
+        PREPARATION_AREA.sleepEnvironment,
+      ),
       preparationItem('three', false, PREPARATION_CATEGORY.digital, PREPARATION_AREA.tomorrowStart),
       preparationItem('four', false, PREPARATION_CATEGORY.digital, PREPARATION_AREA.tomorrowStart),
     ];
@@ -126,18 +266,38 @@ describe('PreparationPanel completed history', () => {
       'additional-three',
     ]);
 
-    expect(two).toContain('Выбрано 2 из 3–6');
-    expect(two).toMatch(/<button[^>]*disabled=""[^>]*>Подтвердить ядро<\/button>/);
-    expect(seven).toContain('Выбрано 7 из 3–6');
-    expect(seven).toMatch(/<button[^>]*disabled=""[^>]*>Подтвердить ядро<\/button>/);
+    expect(renderedText(two)).toContain('Выбрано 2 из 3–6');
+    expect(two).toMatch(/<button[^>]*disabled=""[^>]*>Продолжить →<\/button>/);
+    expect(renderedText(seven)).toContain('Выбрано 7 из 3–6');
+    expect(seven).toMatch(/<button[^>]*disabled=""[^>]*>Продолжить →<\/button>/);
   });
 
   it('показывает первичную настройку ядра в emergency до первого подтверждения', () => {
     const items = [
-      preparationItem('sleep-one', false, PREPARATION_CATEGORY.physical, PREPARATION_AREA.sleepEnvironment),
-      preparationItem('sleep-two', false, PREPARATION_CATEGORY.physical, PREPARATION_AREA.sleepEnvironment),
-      preparationItem('tomorrow-one', false, PREPARATION_CATEGORY.digital, PREPARATION_AREA.tomorrowStart),
-      preparationItem('tomorrow-two', false, PREPARATION_CATEGORY.digital, PREPARATION_AREA.tomorrowStart),
+      preparationItem(
+        'sleep-one',
+        false,
+        PREPARATION_CATEGORY.physical,
+        PREPARATION_AREA.sleepEnvironment,
+      ),
+      preparationItem(
+        'sleep-two',
+        false,
+        PREPARATION_CATEGORY.physical,
+        PREPARATION_AREA.sleepEnvironment,
+      ),
+      preparationItem(
+        'tomorrow-one',
+        false,
+        PREPARATION_CATEGORY.digital,
+        PREPARATION_AREA.tomorrowStart,
+      ),
+      preparationItem(
+        'tomorrow-two',
+        false,
+        PREPARATION_CATEGORY.digital,
+        PREPARATION_AREA.tomorrowStart,
+      ),
     ];
     const markup = renderToStaticMarkup(
       PreparationSceneView({
@@ -153,8 +313,8 @@ describe('PreparationPanel completed history', () => {
       }),
     );
 
-    expect(markup).toContain('Настройте обязательное ядро');
-    expect(markup).toContain('Подтвердить ядро');
+    expect(renderedText(markup)).toContain('Выбрано 4 из 3–6');
+    expect(markup).toContain('Продолжить →');
     expect(markup).not.toContain('Настроить ядро</button>');
   });
 
@@ -221,6 +381,11 @@ describe('PreparationPanel completed history', () => {
       PREPARATION_AREA.tomorrowStart,
       'first-start',
     ]);
+    expect(buildPreparationPanelPresentation([first], true, false, false, true).action).toEqual({
+      intent: 'continue',
+      tone: 'primary',
+      label: 'Перейти к расслаблению →',
+    });
     expect(
       buildPreparationPanelPresentation([first.complete(NOW), second], true, true, false, true),
     ).toMatchObject({
@@ -277,9 +442,7 @@ describe('PreparationPanel completed history', () => {
       fullyReady: false,
       progressValue: 100,
     });
-    expect(
-      buildPreparationPanelPresentation([required], true, false, false, true),
-    ).toMatchObject({
+    expect(buildPreparationPanelPresentation([required], true, false, false, true)).toMatchObject({
       processed: 0,
       requiredPending: 1,
       fullyReady: false,
@@ -343,9 +506,7 @@ describe('PreparationPanel completed history', () => {
       PREPARATION_AREA.tomorrowStart,
     );
 
-    expect(
-      buildPreparationPanelPresentation([legacy], false, true, false, true).summary,
-    ).toEqual([
+    expect(buildPreparationPanelPresentation([legacy], false, true, false, true).summary).toEqual([
       {
         id: 'prepared',
         label: 'Было подготовлено',
@@ -411,6 +572,58 @@ describe('PreparationPanel completed history', () => {
     expect(activeCompletedMarkup).not.toContain('<button');
   });
 
+  it('оставляет checklist видимым и даёт operation-specific retry после ошибки сохранения', () => {
+    const markup = renderToStaticMarkup(
+      PreparationOperationAlert({
+        message: 'Не удалось сохранить пункт подготовки.',
+        retryLabel: 'Повторить сохранение пункта',
+        onRetry: vi.fn(),
+      }),
+    );
+
+    expect(markup).toContain('role="alert"');
+    expect(markup).toContain('Не удалось сохранить пункт подготовки.');
+    expect(markup).toContain('Повторить сохранение пункта');
+    const processItemSource = panelSource.slice(
+      panelSource.indexOf('async function processItem'),
+      panelSource.indexOf('async function configureRequiredCore'),
+    );
+    const continueSource = panelSource.slice(
+      panelSource.indexOf('async function continueToRelaxation'),
+      panelSource.indexOf('async function retryOperation'),
+    );
+    expect(processItemSource).not.toContain('setLoadState');
+    expect(continueSource).not.toContain('setLoadState');
+  });
+
+  it('назначает focus target первой реально видимой области, включая tomorrow-only QUICK', () => {
+    const tomorrowItems = ['tomorrow-one', 'tomorrow-two', 'tomorrow-three'].map((key) =>
+      preparationItem(key, true, PREPARATION_CATEGORY.digital, PREPARATION_AREA.tomorrowStart),
+    );
+    const snapshot = preparationSnapshotForCore(
+      tomorrowItems,
+      tomorrowItems.map((item) => item.key),
+    );
+    const markup = renderToStaticMarkup(
+      PreparationSceneView({
+        snapshot,
+        mode: EVENING_CYCLE_MODE.quick,
+        completedReview: false,
+        completedReviewEditing: false,
+        busyItemId: null,
+        isContinuing: false,
+        checklistHeadingRef: { current: null },
+        onProcess: async () => undefined,
+        onContinue: async () => undefined,
+        onReviewEditingChange: vi.fn(),
+      }),
+    );
+
+    expect(markup).toContain('Среда для завтра');
+    expect(markup).toContain('data-focus-target="true"');
+    expect(markup).not.toContain('Среда для сна');
+  });
+
   it('строит area-primary сводку с точными русскими labels', () => {
     expect(presentationSource).toContain("'Было подготовлено' : 'Подготовлено'");
     expect(presentationSource).toContain("'Среда сна'");
@@ -423,6 +636,8 @@ function preparationItem(
   required: boolean,
   category: PreparationCategory,
   area: PreparationArea = PREPARATION_AREA.tomorrowStart,
+  title = `Подготовить ${key}`,
+  recommendedDurationMinutes: number | null = null,
 ): PreparationItem {
   return PreparationItem.create({
     id: EntityId.create(`item-${key}`),
@@ -430,14 +645,18 @@ function preparationItem(
     key,
     area,
     category,
-    title: `Подготовить ${key}`,
+    title,
     sourceType: PREPARATION_SOURCE_TYPE.rule,
     sourceId: null,
     required,
+    recommendedDurationMinutes,
   });
 }
 
-function preparationSnapshotForCore(items: readonly PreparationItem[]): PreparationSnapshot {
+function preparationSnapshotForCore(
+  items: readonly PreparationItem[],
+  requiredCoreKeys: readonly string[] | null = null,
+): PreparationSnapshot {
   return {
     plan: PreparationPlan.rehydrate({
       id: EntityId.create('preparation-plan'),
@@ -445,7 +664,7 @@ function preparationSnapshotForCore(items: readonly PreparationItem[]): Preparat
       tomorrowPlanId: EntityId.create('core-tomorrow-plan'),
       targetDayId: EntityId.create('core-target-day'),
       items,
-      requiredCoreKeys: null,
+      requiredCoreKeys,
       sourceVersion: 1,
       generationSignature: 'core-fixture',
       status: PREPARATION_PLAN_STATUS.inProgress,
@@ -459,4 +678,11 @@ function preparationSnapshotForCore(items: readonly PreparationItem[]): Preparat
     primaryDecision: null,
     project: null,
   };
+}
+
+function renderedText(markup: string): string {
+  return markup
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }

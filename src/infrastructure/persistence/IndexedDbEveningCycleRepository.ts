@@ -54,6 +54,29 @@ export class IndexedDbEveningCycleRepository implements EveningCycleRepository {
     );
   }
 
+  public async findLatestWithSavedRelaxationDefaultBefore(
+    dateKey: DayDate,
+  ): Promise<EveningCycle | null> {
+    const database = await this.#indexedDb.open();
+    const records = await executeIndexedDbRequest<unknown[]>(
+      database,
+      LIFE_OS_STORE.eveningCycles,
+      'readonly',
+      (store) => store.getAll(),
+    );
+    return (
+      records
+        .map((record) => EveningCycleRecordMapper.fromRecord(record))
+        .filter(
+          (cycle) =>
+            cycle.dateKey.isBefore(dateKey) && cycle.relaxation?.defaultChangedForFuture === true,
+        )
+        .sort((left, right) =>
+          right.dateKey.toString().localeCompare(left.dateKey.toString()),
+        )[0] ?? null
+    );
+  }
+
   public async createIfAbsent(cycle: EveningCycle): Promise<EveningCycle> {
     const database = await this.#indexedDb.open();
     const transaction = database.transaction(LIFE_OS_STORE.eveningCycles, 'readwrite');

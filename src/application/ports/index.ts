@@ -10,6 +10,8 @@ export type {
 } from './DayCompletionUnitOfWork';
 export type { DecisionRepository } from './DecisionRepository';
 export type { EveningCycleRepository } from './EveningCycleRepository';
+export type { EveningRitualSettingsReader } from './EveningRitualSettingsReader';
+export type { ExerciseDefinitionRepository } from './ExerciseDefinitionRepository';
 export type {
   EveningHistoryReader,
   EveningHistoryReadRange,

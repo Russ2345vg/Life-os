@@ -3,13 +3,13 @@
 ## Status
 
 - Design: `APPROVED`
-- Implementation: `NOT STARTED`
+- Implementation: `COMPLETE`
 - Visual review: `PENDING`
 - Lock: `UNLOCKED`
 
 The architecture, persistence approach, required-core interaction, and UI contract were explicitly
-accepted by the user on 2026-08-30. The implementation and final rendered result are not approved
-or locked yet.
+accepted by the user on 2026-08-30. The implementation is complete and verified; the final rendered
+result is not yet explicitly approved or locked by the user.
 
 ## Scope classification
 
@@ -405,13 +405,13 @@ scoped Environment stage; the reason must be stated before running it.
 - [x] Domain/persistence contract approved by the user.
 - [x] UI/test contract approved by the user.
 - [x] Approved visual reference identified.
-- [ ] Written specification reviewed and approved by the user.
-- [ ] Failing tests added before production implementation.
-- [ ] Sleep and tomorrow areas implemented in the existing `PreparationPlan`.
-- [ ] Required core is explicitly configurable from 3–6 items.
-- [ ] Complete/skip outcomes persist and do not reorder rows.
-- [ ] Legacy Preparation history remains readable without fabricated data.
-- [ ] IndexedDB database version remains unchanged or any deviation is separately approved.
-- [ ] Targeted tests and `npm run verify` pass.
-- [ ] Desktop/mobile browser QA and Rule 38 review pass.
+- [x] Written specification reviewed and approved by the user.
+- [x] Failing tests added before production implementation.
+- [x] Sleep and tomorrow areas implemented in the existing `PreparationPlan`.
+- [x] Required core is explicitly configurable from 3–6 items.
+- [x] Complete/skip outcomes persist and do not reorder rows.
+- [x] Legacy Preparation history remains readable without fabricated data.
+- [x] IndexedDB database version remains unchanged or any deviation is separately approved.
+- [x] Targeted tests and `npm run verify` pass.
+- [x] Desktop/mobile browser QA and Rule 38 review pass.
 - [ ] Final visual result explicitly approved before `APPROVED`/`LOCKED` status.

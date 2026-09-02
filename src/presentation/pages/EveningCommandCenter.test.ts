@@ -12,7 +12,7 @@ import {
 } from '../../domain';
 import { EveningCommandCenter } from './EveningCommandCenter';
 import {
-  EVENING_JOURNEY,
+  EVENING_STEPS,
   buildEveningKpis,
   defaultEveningView,
   eveningJourneyIdForState,
@@ -31,6 +31,7 @@ describe('EveningCommandCenter', () => {
     expect(eveningJourneyIdForState(EVENING_CYCLE_STATE.reflecting)).toBe('reflection');
     expect(eveningJourneyIdForState(EVENING_CYCLE_STATE.planningTomorrow)).toBe('tomorrow');
     expect(eveningJourneyIdForState(EVENING_CYCLE_STATE.preparing)).toBe('preparation');
+    expect(eveningJourneyIdForState(EVENING_CYCLE_STATE.relaxing)).toBe('relaxation');
     expect(eveningJourneyIdForState(EVENING_CYCLE_STATE.shutdown)).toBe('shutdown');
     expect(eveningJourneyIdForState(EVENING_CYCLE_STATE.completed)).toBe('recovery');
   });
@@ -67,22 +68,23 @@ describe('EveningCommandCenter', () => {
     expect(markup).toContain('Быстрый');
     expect(markup).toContain('Позднее завершение');
     expect(markup).toContain('<select aria-label="Режим завершения">');
-    expect(markup).toContain('Текущий шаг');
-    expect(markup).toContain('Далее');
-    expect(EVENING_JOURNEY.map((item) => item.label)).toEqual([
+    expect(markup).toContain('Шаг 1 из 5');
+    expect(markup).not.toContain('Текущий шаг');
+    expect(markup).not.toContain('Далее');
+    expect(EVENING_STEPS.map((item) => item.label)).toEqual([
       'Сегодня',
       'Осмысление',
       'Завтра',
-      'Среда',
+      'Подготовка',
       'Завершение',
     ]);
-    expect(markup.match(/data-journey-stage=/g)).toHaveLength(5);
+    expect(markup.match(/data-evening-step=/g)).toHaveLength(5);
     expect(markup).not.toContain('RESOLVING');
     expect(markup).not.toContain('PREPARING');
     expect(markup).not.toContain('Экстренный');
   });
 
-  it('называет KPI подготовки средой, не меняя preparation view ID', () => {
+  it('не выводит legacy preparation KPI, сохраняя preparation view ID', () => {
     const occurredAt = new Date('2026-08-14T20:00:00.000+09:00');
     const cycle = EveningCycle.create({
       id: EntityId.create('environment-kpi-cycle'),
@@ -113,7 +115,7 @@ describe('EveningCommandCenter', () => {
       null,
     );
 
-    expect(kpis.find((item) => item.icon === 'preparation')?.label).toBe('Среда');
+    expect(kpis.map((item) => item.label)).toEqual(['Осталось сегодня', 'Завтра', 'Режим']);
     expect(eveningJourneyIdForState(EVENING_CYCLE_STATE.preparing)).toBe('preparation');
   });
 
@@ -140,13 +142,13 @@ describe('EveningCommandCenter', () => {
     const journeyMarkup = markup.slice(markup.indexOf('<nav'), markup.indexOf('</nav>') + 6);
 
     expect(journeyMarkup).toContain('data-domain-current="true" data-selected-view="true"');
-    expect(journeyMarkup).toContain('aria-current="page" aria-label="Сегодня: Текущий шаг"');
+    expect(journeyMarkup).toContain('aria-current="page" aria-label="Сегодня: активен"');
     expect(journeyMarkup.match(/disabled=""/g)).toHaveLength(4);
-    expect(journeyMarkup).toContain('Осмысление: Далее');
-    expect(journeyMarkup).toContain('Завершение: Далее');
+    expect(journeyMarkup).toContain('Осмысление: недоступен');
+    expect(journeyMarkup).toContain('Завершение: недоступен');
   });
 
-  it('после refresh выбирает Recovery отдельно от пяти завершённых этапов', () => {
+  it('после refresh выбирает Recovery отдельно от пяти завершённых шагов', () => {
     const occurredAt = new Date('2026-08-14T20:00:00.000+09:00');
     const cycle = EveningCycle.create({
       id: EntityId.create('completed-command-center-cycle'),
@@ -169,8 +171,9 @@ describe('EveningCommandCenter', () => {
 
     expect(defaultEveningView(cycle.state)).toBe('recovery');
     expect(markup).toContain('data-journey="recovery"');
-    expect(markup.match(/Завершено/g)).toHaveLength(10);
-    expect(markup.match(/data-journey-stage=/g)).toHaveLength(5);
+    expect(markup.match(/завершён/g)).toHaveLength(4);
+    expect(markup).toContain('Завершение: открыт для просмотра');
+    expect(markup.match(/data-evening-step=/g)).toHaveLength(5);
     expect(markup.match(/data-evening-icon="check"/g)).toHaveLength(5);
     expect(markup.match(/<button type="button"/g)).toHaveLength(5);
     expect(markup).not.toContain('aria-label="Сводка вечера"');
@@ -181,6 +184,7 @@ describe('EveningCommandCenter', () => {
     'reflection',
     'tomorrow',
     'preparation',
+    'relaxation',
     'shutdown',
     'recovery',
   ] satisfies readonly SelectedEveningView[])(
@@ -199,6 +203,7 @@ describe('EveningCommandCenter', () => {
     'reflection',
     'tomorrow',
     'preparation',
+    'relaxation',
     'shutdown',
   ] satisfies readonly SelectedEveningView[])(
     'в SHUTDOWN открывает %s как UI view, не откатывая domain state',
@@ -240,13 +245,13 @@ describe('EveningCommandCenter', () => {
     expect(markup).toContain('data-journey="tomorrow" data-domain-journey="shutdown"');
     expect(markup).toContain('class="evening-command-center is-history-view"');
     expect(markup).toContain('data-view-mode="history"');
-    expect(markup).toContain('Завтра: Открыто для просмотра');
-    expect(markup).toContain('Завершение: Текущий шаг');
+    expect(markup).toContain('Завтра: открыт для просмотра');
+    expect(markup).toContain('Завершение: активен');
     expect(markup).toContain('data-domain-current="true"');
     expect(markup).toContain('data-selected-view="true" data-selected-history="true"');
     expect(markup).toContain('class="evening-return-to-current"');
     expect(markup).toContain('Вернуться к завершению');
-    expect(markup).not.toContain('Завтра: Текущий шаг');
+    expect(markup).not.toContain('Завтра: активен');
     expect(cycle.state).toBe(EVENING_CYCLE_STATE.shutdown);
   });
 
@@ -254,6 +259,7 @@ describe('EveningCommandCenter', () => {
     expect(eveningReturnToCurrentLabel('reflection')).toBe('Вернуться к осмыслению');
     expect(eveningReturnToCurrentLabel('tomorrow')).toBe('Вернуться к планированию завтра');
     expect(eveningReturnToCurrentLabel('preparation')).toBe('Вернуться к среде');
+    expect(eveningReturnToCurrentLabel('relaxation')).toBe('Вернуться к расслаблению');
     expect(eveningReturnToCurrentLabel('shutdown')).toBe('Вернуться к завершению');
     expect(eveningReturnToCurrentLabel('recovery')).toBe('Вернуться к восстановлению');
   });
@@ -284,8 +290,8 @@ describe('EveningCommandCenter', () => {
     expect(markup).toContain('data-journey="tomorrow"');
     expect(markup).toContain('class="evening-command-center is-recovery is-history-view"');
     expect(markup).toContain('data-view-mode="history"');
-    expect(markup).toContain('Завтра: Открыто для просмотра');
-    expect(markup).not.toContain('Завтра: Текущий шаг');
+    expect(markup).toContain('Завтра: открыт для просмотра');
+    expect(markup).not.toContain('Завтра: активен');
     expect(markup).toContain('data-selected-view="true" data-selected-history="true"');
     expect(markup).not.toContain('data-domain-current="true" data-selected-view="true"');
     expect(markup).toContain('Сохранённый план завтра');
@@ -346,5 +352,6 @@ function createShutdownCycle(occurredAt: Date): EveningCycle {
   cycle.skipReflection(occurredAt);
   cycle.completeTomorrowPlanning(occurredAt);
   cycle.skipPreparation(occurredAt);
+  cycle.recoverLegacyRelaxation(occurredAt);
   return cycle;
 }

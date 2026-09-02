@@ -16,11 +16,12 @@ describe('PreparationCoreSelection', () => {
   it('инициализирует ненастроенное ядро из четырёх рекомендаций', () => {
     const items = preparationItems();
 
-    const draft = createPreparationCoreSelectionDraft(
-      items,
-      null,
-      ['tomorrow-water', 'sleep-bed', 'tomorrow-clothes', 'sleep-screens'],
-    );
+    const draft = createPreparationCoreSelectionDraft(items, null, [
+      'tomorrow-water',
+      'sleep-bed',
+      'tomorrow-clothes',
+      'sleep-screens',
+    ]);
 
     expect(draft.selectedKeys).toEqual([
       'sleep-screens',
@@ -74,9 +75,9 @@ describe('PreparationCoreSelection', () => {
   it('разрешает подтверждение только для трёх–шести уникальных активных ключей', () => {
     const items = preparationItems();
 
-    expect(
-      canConfirmPreparationCore({ selectedKeys: ['sleep-screens', 'sleep-bed'] }, items),
-    ).toBe(false);
+    expect(canConfirmPreparationCore({ selectedKeys: ['sleep-screens', 'sleep-bed'] }, items)).toBe(
+      false,
+    );
     expect(
       canConfirmPreparationCore(
         { selectedKeys: ['sleep-screens', 'sleep-bed', 'tomorrow-clothes'] },

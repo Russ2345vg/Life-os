@@ -103,6 +103,23 @@ export class ReflectionApplicationService {
   }
 
   public async answer(input: AnswerReflectionQuestionInput): Promise<ReflectionSession> {
+    const stored = await this.requiredCycle(input.cycleId);
+    const storedQuestion = requiredQuestion(stored, input.questionId);
+    const storedResult = stored.reflectionResults.find(
+      (result) => result.questionId === storedQuestion.id,
+    );
+    if (storedResult !== undefined) return sessionFrom(stored);
+
+    const context = await this.#getContext.execute(input.cycleId);
+    const followUp =
+      stored.mode === EVENING_CYCLE_MODE.normal
+        ? this.#engine.generateFollowUp({
+            context,
+            question: storedQuestion,
+            answer: input.answer,
+            currentQuestionCount: stored.reflectionQuestions.length,
+          })
+        : null;
     const cycle = await this.mutate(input.cycleId, (current, occurredAt) => {
       const question = requiredQuestion(current, input.questionId);
       const existing = current.reflectionResults.find(
@@ -112,6 +129,9 @@ export class ReflectionApplicationService {
       const result = ReflectionResult.answer(current.id, question, input.answer, occurredAt);
       const signal = createSignal(current, question, input.answer, occurredAt);
       current.recordReflectionResult(result, signal, occurredAt);
+      if (followUp !== null) {
+        current.insertReflectionFollowUp(question.id, followUp, occurredAt);
+      }
       if (current.mode === EVENING_CYCLE_MODE.quick) {
         current.completeReflectionForSelectedMode(occurredAt);
       } else if (current.reflectionProgress.complete) {
@@ -197,6 +217,8 @@ function sessionFrom(cycle: EveningCycle): ReflectionSession {
     cycle.state !== EVENING_CYCLE_STATE.reflecting &&
     cycle.state !== EVENING_CYCLE_STATE.planningTomorrow &&
     cycle.state !== EVENING_CYCLE_STATE.preparing &&
+    cycle.state !== EVENING_CYCLE_STATE.relaxing &&
+    cycle.state !== EVENING_CYCLE_STATE.sleepCheck &&
     cycle.state !== EVENING_CYCLE_STATE.shutdown &&
     cycle.state !== EVENING_CYCLE_STATE.completed
   ) {
@@ -262,7 +284,7 @@ function createSignal(
   ) {
     return null;
   }
-  const values = typeof answer === 'string' ? [answer] : answer;
+  const values = typeof answer === 'string' ? [answer] : Array.isArray(answer) ? answer : [];
   const signalType = values.map(signalTypeForFailureReason).find((value) => value !== null);
   const sourceEntityId = question.sourceEntityIds[0];
   if (signalType === undefined || signalType === null || sourceEntityId === undefined) return null;
@@ -275,5 +297,7 @@ function createSignal(
 }
 
 function answerText(answer: ReflectionAnswer): string {
-  return typeof answer === 'string' ? answer : answer.join(', ');
+  if (Array.isArray(answer)) return answer.join(', ');
+  if (typeof answer === 'boolean') return answer ? 'Да' : 'Нет';
+  return String(answer);
 }

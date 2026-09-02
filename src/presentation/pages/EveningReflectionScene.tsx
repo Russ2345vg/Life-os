@@ -1,17 +1,22 @@
-import { REFLECTION_QUESTION_TYPE, type ReflectionQuestion } from '../../domain';
+import { useEffect, useRef, type RefObject } from 'react';
+import {
+  REFLECTION_QUESTION_KIND,
+  REFLECTION_QUESTION_TYPE,
+  type ReflectionQuestion,
+} from '../../domain';
 import type { ReflectionSession } from '../../application';
 import { EveningVisualIcon } from '../components/EveningVisualIcon';
+import { reflectionAnswerFromDraft, type ReflectionAnswerDraft } from './ReflectionAnswerDraft';
+import '../styles/evening-reflection-v2.css';
 
 interface EveningReflectionSceneProps {
   readonly session: ReflectionSession;
-  readonly text: string;
-  readonly choices: readonly string[];
+  readonly draft: ReflectionAnswerDraft;
   readonly correctionAction: string;
   readonly lastAnsweredQuestionId: string | null;
   readonly disabled: boolean;
   readonly error: string | null;
-  readonly onTextChange: (value: string) => void;
-  readonly onChoicesChange: (values: readonly string[]) => void;
+  readonly onDraftChange: (draft: ReflectionAnswerDraft) => void;
   readonly onAnswer: () => void;
   readonly onSkip: () => void;
   readonly onCorrectionActionChange: (value: string) => void;
@@ -20,26 +25,38 @@ interface EveningReflectionSceneProps {
 
 export function EveningReflectionScene({
   session,
-  text,
-  choices,
+  draft,
   correctionAction,
   lastAnsweredQuestionId,
   disabled,
   error,
-  onTextChange,
-  onChoicesChange,
+  onDraftChange,
   onAnswer,
   onSkip,
   onCorrectionActionChange,
   onCreateCorrection,
 }: EveningReflectionSceneProps) {
   const question = session.currentQuestion;
+  const hasGuidance = question !== null && question.sourceEntityIds.length > 0;
+  const questionHeadingRef = useRef<HTMLHeadingElement>(null);
+  const errorRef = useRef<HTMLParagraphElement>(null);
+
+  useEffect(() => {
+    if (error !== null) {
+      errorRef.current?.focus();
+      return;
+    }
+    questionHeadingRef.current?.focus();
+  }, [error, question?.id]);
 
   return (
     <section
       className="evening-e9-scene evening-reflection-scene"
       aria-labelledby="reflection-title"
     >
+      <span className="evening-reflection-scene-moon" aria-hidden="true">
+        <EveningVisualIcon name="moon" />
+      </span>
       {question === null ? (
         <div className="evening-reflection-workspace is-complete">
           <article className="evening-e9-card evening-reflection-card evening-reflection-complete-card">
@@ -59,49 +76,50 @@ export function EveningReflectionScene({
           </article>
         </div>
       ) : (
-        <div className="evening-reflection-workspace">
+        <div className={`evening-reflection-workspace${hasGuidance ? '' : ' is-primary-only'}`}>
           <ReflectionQuestionCard
             question={question}
             processed={session.processed}
             total={session.total}
-            text={text}
-            choices={choices}
+            draft={draft}
             disabled={disabled}
-            onTextChange={onTextChange}
-            onChoicesChange={onChoicesChange}
+            onDraftChange={onDraftChange}
             onAnswer={onAnswer}
             onSkip={onSkip}
+            questionHeadingRef={questionHeadingRef}
           />
-          <aside className="evening-reflection-guidance" aria-label="Контекст осмысления">
-            <section className="evening-reflection-guidance-panel evening-reflection-insight">
-              <VisualIcon name="lightbulb" className="evening-reflection-guidance-icon" />
-              <div>
-                <p className="section-kicker gold">Инсайт</p>
-                <strong>{question.context}</strong>
-              </div>
-            </section>
-            <div className="evening-reflection-guidance-divider" aria-hidden="true" />
-            <section className="evening-reflection-guidance-panel evening-reflection-recommendation">
-              <VisualIcon name="recommendation" className="evening-reflection-guidance-icon" />
-              <div>
-                <p className="section-kicker gold">Рекомендация</p>
-                <p>{reflectionRecommendation(question, text, choices)}</p>
-                {lastAnsweredQuestionId === null ? null : (
-                  <ReflectionFollowUp
-                    correctionAction={correctionAction}
-                    disabled={disabled}
-                    onCorrectionActionChange={onCorrectionActionChange}
-                    onCreateCorrection={onCreateCorrection}
-                  />
-                )}
-              </div>
-            </section>
-          </aside>
+          {hasGuidance ? (
+            <aside className="evening-reflection-guidance" aria-label="Контекст осмысления">
+              <section className="evening-reflection-guidance-panel evening-reflection-insight">
+                <VisualIcon name="lightbulb" className="evening-reflection-guidance-icon" />
+                <div>
+                  <p className="section-kicker gold">Инсайт</p>
+                  <strong>{question.context}</strong>
+                </div>
+              </section>
+              <div className="evening-reflection-guidance-divider" aria-hidden="true" />
+              <section className="evening-reflection-guidance-panel evening-reflection-recommendation">
+                <VisualIcon name="recommendation" className="evening-reflection-guidance-icon" />
+                <div>
+                  <p className="section-kicker gold">Рекомендация</p>
+                  <p>{reflectionRecommendation(question, draft)}</p>
+                  {lastAnsweredQuestionId === null ? null : (
+                    <ReflectionFollowUp
+                      correctionAction={correctionAction}
+                      disabled={disabled}
+                      onCorrectionActionChange={onCorrectionActionChange}
+                      onCreateCorrection={onCreateCorrection}
+                    />
+                  )}
+                </div>
+              </section>
+            </aside>
+          ) : null}
         </div>
       )}
 
       {error === null ? null : (
-        <p className="form-error evening-e9-scene-error" role="alert">
+        <p className="form-error evening-e9-scene-error" role="alert" tabIndex={-1} ref={errorRef}>
           {error}
         </p>
       )}
@@ -113,10 +131,12 @@ function ReflectionCardHeading({
   title,
   processed,
   total,
+  description,
 }: {
   readonly title: string;
   readonly processed: number;
   readonly total: number;
+  readonly description?: string;
 }) {
   const questionNumber = total === 0 ? 0 : Math.min(processed + 1, total);
 
@@ -126,6 +146,9 @@ function ReflectionCardHeading({
       <div className="evening-reflection-heading-copy">
         <p className="section-kicker gold">Осмысление</p>
         <h3 id="reflection-title">{title}</h3>
+        {description === undefined ? null : (
+          <p className="evening-reflection-heading-description">{description}</p>
+        )}
       </div>
       <small
         className="evening-reflection-counter"
@@ -184,16 +207,21 @@ function ReflectionFollowUp({
 
 function reflectionRecommendation(
   question: ReflectionQuestion,
-  text: string,
-  choices: readonly string[],
+  draft: ReflectionAnswerDraft,
 ): string {
-  const selectedValues = question.type === REFLECTION_QUESTION_TYPE.multiChoice ? choices : [text];
+  const selectedValues =
+    question.type === REFLECTION_QUESTION_TYPE.multiChoice ? draft.choices : [draft.text];
   const selectedLabels = question.options
     .filter((option) => selectedValues.includes(option.value))
     .map((option) => option.label.toLocaleLowerCase('ru-RU'));
 
   if (selectedLabels.length > 0) return `Учтите завтра: ${selectedLabels.join(', ')}.`;
-  if (text.trim().length > 0) return 'Превратите этот вывод в один наблюдаемый шаг на завтра.';
+  if (draft.text.trim().length > 0)
+    return 'Превратите этот вывод в один наблюдаемый шаг на завтра.';
+  if (draft.yesNo !== null)
+    return draft.yesNo
+      ? 'Сохраните один короткий вывод без лишней детализации.'
+      : 'Дополнительный вопрос не нужен — можно продолжать.';
   if (question.options.length > 0)
     return 'Выберите наиболее точную причину — без лишней детализации.';
   return 'Сохраните один короткий вывод, который поможет скорректировать завтра.';
@@ -203,30 +231,32 @@ function ReflectionQuestionCard({
   question,
   processed,
   total,
-  text,
-  choices,
+  draft,
   disabled,
-  onTextChange,
-  onChoicesChange,
+  onDraftChange,
   onAnswer,
   onSkip,
+  questionHeadingRef,
 }: {
   readonly question: ReflectionQuestion;
   readonly processed: number;
   readonly total: number;
-  readonly text: string;
-  readonly choices: readonly string[];
+  readonly draft: ReflectionAnswerDraft;
   readonly disabled: boolean;
-  readonly onTextChange: (value: string) => void;
-  readonly onChoicesChange: (values: readonly string[]) => void;
+  readonly onDraftChange: (draft: ReflectionAnswerDraft) => void;
   readonly onAnswer: () => void;
   readonly onSkip: () => void;
+  readonly questionHeadingRef: RefObject<HTMLHeadingElement | null>;
 }) {
   const isSingleChoice = question.type === REFLECTION_QUESTION_TYPE.singleChoice;
   const isMultiChoice = question.type === REFLECTION_QUESTION_TYPE.multiChoice;
   const isChoice = isSingleChoice || isMultiChoice;
-  const canAnswer = isMultiChoice ? choices.length > 0 : text.trim().length > 0;
+  const isGeneralLearningChoice =
+    question.kind === REFLECTION_QUESTION_KIND.generalLearning &&
+    question.type === REFLECTION_QUESTION_TYPE.yesNo;
+  const canAnswer = reflectionAnswerFromDraft(question, draft) !== null;
   const isText =
+    question.type === REFLECTION_QUESTION_TYPE.shortCapture ||
     question.type === REFLECTION_QUESTION_TYPE.shortText ||
     question.type === REFLECTION_QUESTION_TYPE.optionalText;
 
@@ -240,18 +270,23 @@ function ReflectionQuestionCard({
         title="Один вопрос о сегодняшнем дне"
         processed={processed}
         total={total}
+        {...(isGeneralLearningChoice
+          ? { description: 'Кратко зафиксируйте один вывод, если он есть.' }
+          : {})}
       />
       <div className="evening-reflection-question-block">
         <p className="evening-reflection-question-label">Вопрос</p>
-        <h4>{question.prompt}</h4>
+        <h4 data-reflection-question-heading="true" tabIndex={-1} ref={questionHeadingRef}>
+          {question.prompt}
+        </h4>
       </div>
 
       {isChoice ? (
         <div className="evening-reflection-options">
           {question.options.map((option) => {
             const selected = isSingleChoice
-              ? text === option.value
-              : choices.includes(option.value);
+              ? draft.text === option.value
+              : draft.choices.includes(option.value);
             return (
               <label
                 className={selected ? 'is-selected' : ''}
@@ -267,13 +302,14 @@ function ReflectionQuestionCard({
                   disabled={disabled}
                   onChange={() => {
                     if (isSingleChoice) {
-                      onTextChange(option.value);
+                      onDraftChange({ ...draft, text: option.value });
                     } else {
-                      onChoicesChange(
-                        selected
-                          ? choices.filter((value) => value !== option.value)
-                          : [...choices, option.value],
-                      );
+                      onDraftChange({
+                        ...draft,
+                        choices: selected
+                          ? draft.choices.filter((value) => value !== option.value)
+                          : [...draft.choices, option.value],
+                      });
                     }
                   }}
                 />
@@ -288,16 +324,57 @@ function ReflectionQuestionCard({
         </div>
       ) : null}
 
+      {question.type === REFLECTION_QUESTION_TYPE.yesNo ? (
+        <div className="evening-reflection-yes-no" role="group" aria-label="Ответ">
+          {([true, false] as const).map((value) => {
+            const selected = draft.yesNo === value;
+            const label = value ? 'Да' : 'Нет';
+            return (
+              <button
+                className={selected ? 'is-selected' : ''}
+                type="button"
+                aria-label={label}
+                aria-pressed={selected}
+                disabled={disabled}
+                key={label}
+                onClick={() => onDraftChange({ ...draft, yesNo: value })}
+              >
+                <VisualIcon
+                  name={selected ? 'check' : 'choice'}
+                  className="evening-reflection-option-icon"
+                />
+                <span>{label}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+
+      {isGeneralLearningChoice && draft.yesNo === true ? (
+        <label className="evening-reflection-text evening-reflection-insight-field">
+          <span>Вывод дня</span>
+          <textarea
+            className="evening-reflection-insight-textarea"
+            rows={2}
+            maxLength={2000}
+            value={draft.text}
+            disabled={disabled}
+            placeholder="Коротко сформулируйте вывод дня"
+            onChange={(event) => onDraftChange({ ...draft, text: event.target.value })}
+          />
+        </label>
+      ) : null}
+
       {isText ? (
         <label className="evening-reflection-text">
           <span>{question.required ? 'Короткий вывод' : 'Ответ — по желанию'}</span>
           <textarea
             rows={3}
             maxLength={2000}
-            value={text}
+            value={draft.text}
             disabled={disabled}
             placeholder="Записать короткий вывод…"
-            onChange={(event) => onTextChange(event.target.value)}
+            onChange={(event) => onDraftChange({ ...draft, text: event.target.value })}
           />
         </label>
       ) : null}

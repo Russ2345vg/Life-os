@@ -27,6 +27,8 @@ import type { LifeActionRepository } from '../ports/LifeActionRepository';
 import type { PreparationPlanRepository } from '../ports/PreparationPlanRepository';
 import type { PreparationRuleRepository } from '../ports/PreparationRuleRepository';
 import type { PreparationUnitOfWork } from '../ports/PreparationUnitOfWork';
+import type { EveningRitualSettingsReader } from '../ports/EveningRitualSettingsReader';
+import type { EveningRitualSettings } from '../evening-settings';
 import type { ProjectRepository } from '../ports/ProjectRepository';
 import type { TomorrowPlanRepository } from '../ports/TomorrowPlanRepository';
 import {
@@ -57,6 +59,7 @@ interface GenerationContext {
   readonly primaryDecision: Decision | null;
   readonly project: Project | null;
   readonly rules: readonly PreparationRule[];
+  readonly ritualSettings: EveningRitualSettings | null;
 }
 
 export class PreparationService {
@@ -71,6 +74,7 @@ export class PreparationService {
     private readonly clock: Clock,
     private readonly ids: IdGenerator,
     private readonly unitOfWork: PreparationUnitOfWork,
+    private readonly settings?: EveningRitualSettingsReader,
   ) {}
 
   public async getOrGenerate(cycleDate: DayDate): Promise<PreparationSnapshot> {
@@ -100,6 +104,7 @@ export class PreparationService {
         created.synchronize(requirements, context.plan.version, signature, now, () =>
           this.ids.generate(),
         );
+        initializeRequiredCore(created, context, now);
         const stored = await this.preparationPlans.createIfAbsent(created);
         if (stored.id.equals(created.id)) return snapshot(created, context);
         continue;
@@ -116,6 +121,7 @@ export class PreparationService {
       changed.synchronize(requirements, context.plan.version, signature, this.clock.now(), () =>
         this.ids.generate(),
       );
+      initializeRequiredCore(changed, context, this.clock.now());
       if (await this.preparationPlans.saveIfVersionMatches(changed, expectedVersion)) {
         return snapshot(changed, context);
       }
@@ -160,9 +166,13 @@ export class PreparationService {
     return rule;
   }
 
-  public async continueToShutdown(cycleDate: DayDate): Promise<PreparationSnapshot> {
+  public async continueToRelaxation(cycleDate: DayDate): Promise<PreparationSnapshot> {
     const currentCycle = await this.cycles.findByDateKey(cycleDate);
-    if (currentCycle?.state === EVENING_CYCLE_STATE.shutdown) {
+    if (
+      currentCycle?.state === EVENING_CYCLE_STATE.relaxing ||
+      currentCycle?.state === EVENING_CYCLE_STATE.sleepCheck ||
+      currentCycle?.state === EVENING_CYCLE_STATE.shutdown
+    ) {
       return this.recoverCompletedPreparation(currentCycle);
     }
     const generated = await this.getOrGenerate(cycleDate);
@@ -188,7 +198,11 @@ export class PreparationService {
       return { ...generated, plan };
     } catch (error: unknown) {
       const concurrentCycle = await this.cycles.findByDateKey(cycleDate);
-      if (concurrentCycle?.state === EVENING_CYCLE_STATE.shutdown) {
+      if (
+        concurrentCycle?.state === EVENING_CYCLE_STATE.relaxing ||
+        concurrentCycle?.state === EVENING_CYCLE_STATE.sleepCheck ||
+        concurrentCycle?.state === EVENING_CYCLE_STATE.shutdown
+      ) {
         return this.recoverCompletedPreparation(concurrentCycle);
       }
       throw error;
@@ -199,8 +213,8 @@ export class PreparationService {
     const plan = await this.preparationPlans.findByCycleId(cycle.id);
     if (plan === null || plan.status !== 'COMPLETED') {
       throw new DomainError(
-        'preparation.inconsistent_shutdown',
-        'SHUTDOWN не содержит завершённого плана подготовки.',
+        'preparation.inconsistent_continuation',
+        'Продолжение после подготовки не содержит завершённого плана.',
       );
     }
     return snapshot(plan, await this.contextForCycle(cycle));
@@ -245,7 +259,15 @@ export class PreparationService {
       primaryDecision?.projectId === null || primaryDecision?.projectId === undefined
         ? null
         : await this.projects.findById(primaryDecision.projectId);
-    return { plan, cycle, firstAction, primaryDecision, project, rules };
+    return {
+      plan,
+      cycle,
+      firstAction,
+      primaryDecision,
+      project,
+      rules,
+      ritualSettings: this.settings?.loadEveningRitualSettings() ?? null,
+    };
   }
 
   private async historyContextForCycle(cycle: EveningCycle): Promise<GenerationContext> {
@@ -262,6 +284,7 @@ export class PreparationService {
       primaryDecision: null,
       project: null,
       rules: [],
+      ritualSettings: null,
     };
   }
 
@@ -313,6 +336,15 @@ function snapshot(plan: PreparationPlan, context: GenerationContext): Preparatio
   });
 }
 
+function initializeRequiredCore(
+  plan: PreparationPlan,
+  context: GenerationContext,
+  occurredAt: Date,
+): void {
+  if (plan.requiredCoreKeys !== null || context.ritualSettings === null) return;
+  plan.configureRequiredCore(context.ritualSettings.requiredCoreItems, occurredAt);
+}
+
 function generationSignature(context: GenerationContext): string {
   const ruleSignature = context.rules
     .map((rule) => `${rule.id.toString()}:${rule.version}`)
@@ -322,13 +354,40 @@ function generationSignature(context: GenerationContext): string {
     .map((item) => item.id.toString())
     .sort()
     .join(',');
-  return `environment:r4|tomorrow:${context.plan.version}|rules:${ruleSignature}|corrections:${corrections}`;
+  const ritualSignature =
+    context.ritualSettings === null
+      ? 'legacy'
+      : `${context.ritualSettings.requiredCoreItems.join(',')}:${context.ritualSettings.items
+          .map((item) => `${item.key}:${item.recommendedDurationMinutes}`)
+          .join(',')}`;
+  return `environment:r4|tomorrow:${context.plan.version}|rules:${ruleSignature}|corrections:${corrections}|ritual:${ritualSignature}`;
 }
 
 function generateRequirements(context: GenerationContext): readonly PreparationRequirement[] {
-  const requirements: PreparationRequirement[] = [
+  let environment: readonly PreparationRequirement[] = [
     ...environmentPreparationRequirements(context.firstAction),
   ];
+  if (context.ritualSettings !== null) {
+    const order = new Map(
+      context.ritualSettings.items.map((item, index) => [item.key, index] as const),
+    );
+    const durations = new Map(
+      context.ritualSettings.items.map(
+        (item) => [item.key, item.recommendedDurationMinutes] as const,
+      ),
+    );
+    environment = environment
+      .map((requirement) => ({
+        ...requirement,
+        recommendedDurationMinutes: durations.get(requirement.key) ?? null,
+      }))
+      .sort(
+        (left, right) =>
+          (order.get(left.key) ?? Number.MAX_SAFE_INTEGER) -
+          (order.get(right.key) ?? Number.MAX_SAFE_INTEGER),
+      );
+  }
+  const requirements: PreparationRequirement[] = [...environment];
   const actionText = normalizeMatchText(context.firstAction?.title.toString() ?? '');
   const decisionText = normalizeMatchText(context.primaryDecision?.title.toString() ?? '');
   const projectText = normalizeMatchText(context.project?.title ?? '');

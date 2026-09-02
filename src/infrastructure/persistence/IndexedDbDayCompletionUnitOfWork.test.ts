@@ -356,6 +356,7 @@ function completeEveningCycle(source: EveningCycle): EveningCycle {
   cycle.completeReflection(NOW);
   cycle.completeTomorrowPlanning(NOW);
   cycle.completePreparation(NOW);
+  cycle.recoverLegacyRelaxation(NOW);
   cycle.complete(NOW);
   return cycle;
 }

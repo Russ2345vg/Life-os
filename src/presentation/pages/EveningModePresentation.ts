@@ -17,6 +17,8 @@ export function eveningModeProgress(
           EVENING_CYCLE_STATE.reflecting,
           EVENING_CYCLE_STATE.planningTomorrow,
           EVENING_CYCLE_STATE.preparing,
+          EVENING_CYCLE_STATE.relaxing,
+          EVENING_CYCLE_STATE.sleepCheck,
           EVENING_CYCLE_STATE.shutdown,
         ]
       : mode === EVENING_CYCLE_MODE.quick
@@ -24,11 +26,15 @@ export function eveningModeProgress(
             EVENING_CYCLE_STATE.resolving,
             EVENING_CYCLE_STATE.planningTomorrow,
             EVENING_CYCLE_STATE.preparing,
+            EVENING_CYCLE_STATE.relaxing,
+            EVENING_CYCLE_STATE.sleepCheck,
             EVENING_CYCLE_STATE.shutdown,
           ]
         : [
             EVENING_CYCLE_STATE.resolving,
             EVENING_CYCLE_STATE.planningTomorrow,
+            EVENING_CYCLE_STATE.relaxing,
+            EVENING_CYCLE_STATE.sleepCheck,
             EVENING_CYCLE_STATE.shutdown,
           ];
   const order = Object.values(EVENING_CYCLE_STATE);

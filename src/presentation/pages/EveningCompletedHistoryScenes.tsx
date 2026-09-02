@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import type { EveningReviewSnapshot, ReflectionSession } from '../../application';
-import { REFLECTION_QUESTION_TYPE, type ReflectionQuestion } from '../../domain';
+import {
+  REFLECTION_QUESTION_TYPE,
+  type ReflectionAnswer,
+  type ReflectionQuestion,
+} from '../../domain';
 import { EveningVisualIcon, type EveningVisualIconName } from '../components/EveningVisualIcon';
 import {
   createEveningTodayHistoryModel,
@@ -381,7 +385,7 @@ function ReflectionHistoryAnswer({
   answer,
 }: {
   readonly question: ReflectionQuestion;
-  readonly answer: string | readonly string[] | null;
+  readonly answer: ReflectionAnswer | null;
 }) {
   const isChoice =
     question.type === REFLECTION_QUESTION_TYPE.singleChoice ||
@@ -416,9 +420,11 @@ function ReflectionHistoryAnswer({
 
 function reflectionAnswerValues(
   options: readonly Readonly<{ value: string; label: string }>[],
-  answer: string | readonly string[] | null,
+  answer: ReflectionAnswer | null,
 ): readonly string[] {
   if (answer === null) return [];
-  const values = typeof answer === 'string' ? [answer] : answer;
+  const values = Array.isArray(answer)
+    ? answer
+    : [typeof answer === 'boolean' ? (answer ? 'Да' : 'Нет') : String(answer)];
   return values.map((value) => options.find((option) => option.value === value)?.label ?? value);
 }

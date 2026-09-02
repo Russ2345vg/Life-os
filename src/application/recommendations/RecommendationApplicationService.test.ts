@@ -252,6 +252,33 @@ describe('E10.5 RecommendationApplicationService', () => {
     expect(second.commands.totalMutationCalls).toBe(0);
   });
 
+  it.each([
+    EVENING_RECOMMENDATION_TYPE.reviewEnvironmentItem,
+    EVENING_RECOMMENDATION_TYPE.considerRelaxationPractice,
+  ] as const)(
+    '%s требует acknowledgement и не изменяет ritual core или TomorrowPlan',
+    async (type) => {
+      const context = await createContext({ preparation: true });
+      const recommendation = recommendationOf(type);
+      const versionBefore = context.commands.snapshot.plan.version;
+
+      await expect(context.service.preview(recommendation)).resolves.toMatchObject({
+        kind: RECOMMENDATION_PREVIEW_KIND.processAcknowledgement,
+        confirmationRequired: true,
+      });
+      expect(context.commands.totalMutationCalls).toBe(0);
+
+      await expect(
+        context.service.apply(recommendation, {}, { kind: 'ACKNOWLEDGE' }),
+      ).resolves.toMatchObject({
+        status: RECOMMENDATION_APPLICATION_STATUS.applied,
+        resultMessage: 'Рекомендация принята к сведению.',
+      });
+      expect(context.commands.totalMutationCalls).toBe(0);
+      expect(context.commands.snapshot.plan.version).toBe(versionBefore);
+    },
+  );
+
   it('сохраняет DISMISSED, не возвращает карточку повторно и не трогает аналитику', async () => {
     const recommendation = recommendationOf(EVENING_RECOMMENDATION_TYPE.useQuickMode);
     const context = await createContext({ recommendations: [recommendation] });

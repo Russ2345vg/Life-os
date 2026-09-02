@@ -475,7 +475,11 @@ test('loads LifeOS and navigates between primary sections without runtime errors
 
   await page.goto('/');
 
-  await expect(page.getByText('LifeOS').first()).toBeVisible();
+  const brand = mobile
+    ? page.locator('.application-mobile-brand')
+    : page.locator('.application-brand-name');
+  await expect(brand).toHaveText('LifeOS');
+  await expect(brand).toBeVisible();
   const navigation = page.getByRole('navigation', { name: navigationName });
   await expect(navigation).toBeVisible();
 

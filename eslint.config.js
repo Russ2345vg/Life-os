@@ -14,7 +14,16 @@ const restrictedLayers = (layers) => [
 ];
 
 export default tseslint.config(
-  { ignores: ['dist', 'coverage', 'node_modules', '.worktrees/**'] },
+  {
+    ignores: [
+      'dist',
+      'coverage',
+      'node_modules',
+      '.worktrees/**',
+      'playwright-report/**',
+      'test-results/**',
+    ],
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

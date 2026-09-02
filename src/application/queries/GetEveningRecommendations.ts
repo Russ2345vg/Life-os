@@ -18,6 +18,8 @@ export const EVENING_RECOMMENDATION_TYPE = {
   useQuickMode: 'USE_QUICK_MODE',
   keepShortReflection: 'KEEP_SHORT_REFLECTION',
   simplifyPreparation: 'SIMPLIFY_PREPARATION',
+  reviewEnvironmentItem: 'REVIEW_ENVIRONMENT_ITEM',
+  considerRelaxationPractice: 'CONSIDER_RELAXATION_PRACTICE',
 } as const;
 
 export type EveningRecommendationType =
@@ -95,6 +97,8 @@ const RECOMMENDATION_ORDER: Readonly<Record<EveningRecommendationType, number>> 
   [EVENING_RECOMMENDATION_TYPE.keepShortReflection]: 7,
   [EVENING_RECOMMENDATION_TYPE.startEveningEarlier]: 8,
   [EVENING_RECOMMENDATION_TYPE.reviewQuickFrequency]: 9,
+  [EVENING_RECOMMENDATION_TYPE.reviewEnvironmentItem]: 10,
+  [EVENING_RECOMMENDATION_TYPE.considerRelaxationPractice]: 11,
 });
 
 export class GetEveningRecommendations {
@@ -231,6 +235,29 @@ export function getEveningRecommendations(
     applicability: EVENING_RECOMMENDATION_APPLICABILITY.preparationPlan,
     includeTargetEntityIds: false,
   });
+  addSingleTypeCandidate(candidates, byType, EVENING_PATTERN_TYPE.repeatedEnvironmentItemSkip, {
+    type: EVENING_RECOMMENDATION_TYPE.reviewEnvironmentItem,
+    priority: EVENING_RECOMMENDATION_PRIORITY.low,
+    title: 'Пересмотреть часто пропускаемый пункт подготовки',
+    action:
+      'Осознанно пересмотреть этот пункт подготовки без автоматического изменения обязательного ядра.',
+    applicability: EVENING_RECOMMENDATION_APPLICABILITY.preparationPlan,
+    includeTargetEntityIds: false,
+  });
+  addSingleTypeCandidate(
+    candidates,
+    byType,
+    EVENING_PATTERN_TYPE.relaxationPracticeCalmImprovement,
+    {
+      type: EVENING_RECOMMENDATION_TYPE.considerRelaxationPractice,
+      priority: EVENING_RECOMMENDATION_PRIORITY.info,
+      title: 'Учесть наблюдение о выбранной практике расслабления',
+      action:
+        'Учесть это субъективное наблюдение при следующем выборе практики; настройки автоматически не менять.',
+      applicability: EVENING_RECOMMENDATION_APPLICABILITY.eveningCycle,
+      includeTargetEntityIds: false,
+    },
+  );
 
   return Object.freeze(
     candidates

@@ -83,6 +83,74 @@ describe('E10.3 GetEveningSignals', () => {
     });
   });
 
+  it('создаёт наблюдаемый сигнал о повторном пропуске конкретного environment-item', () => {
+    const [signal] = getEveningSignals([
+      pattern(EVENING_PATTERN_TYPE.repeatedEnvironmentItemSkip, {
+        sourceLabel: 'Убрать телефон',
+        sourceEntityIds: ['ENVIRONMENT:SLEEP:PHONE_AWAY'],
+        sourceEntities: [
+          { entityType: 'ENVIRONMENT_ITEM', entityId: 'ENVIRONMENT:SLEEP:PHONE_AWAY' },
+        ],
+        occurrences: 2,
+        supportingDayIds: ['day-01', 'day-03'],
+        metrics: { sampleSize: 4, occurrenceRate: 0.5, minimumOccurrences: 2 },
+      }),
+    ]);
+
+    expect(signal).toMatchObject({
+      title: 'Пункт «Убрать телефон» часто пропускается',
+      summary: 'За 7 дней пункт был осознанно пропущен 2 раза.',
+      sourceEntityIds: ['ENVIRONMENT:SLEEP:PHONE_AWAY'],
+      evidence: { occurrences: 2, occurrenceRate: 0.5 },
+    });
+  });
+
+  it('формулирует связь practice/calm как наблюдение, а не причинный вывод', () => {
+    const [signal] = getEveningSignals([
+      pattern(EVENING_PATTERN_TYPE.relaxationPracticeCalmImprovement, {
+        sourceLabel: 'Дыхание',
+        sourceEntityIds: ['BREATHING'],
+        sourceEntities: [{ entityType: 'RELAXATION_PRACTICE', entityId: 'BREATHING' }],
+        occurrences: 3,
+        supportingDayIds: ['day-01', 'day-02', 'day-03'],
+        metrics: {
+          sampleSize: 3,
+          occurrenceRate: 1,
+          pairedObservationCount: 3,
+          averageCalmDelta: 1.333,
+        },
+      }),
+    ]);
+
+    expect(signal).toMatchObject({
+      title: 'После практики «Дыхание» средняя оценка спокойствия была выше',
+      summary:
+        'В 3 парных наблюдениях средняя оценка спокойствия после практики была выше на 1.333.',
+      evidence: {
+        occurrences: 3,
+        metrics: expect.objectContaining({ averageCalmDelta: 1.333 }),
+      },
+    });
+    expect(signal!.summary.toLocaleLowerCase('ru')).not.toContain('улучшает');
+  });
+
+  it('не объединяет разные environment-items в один signal', () => {
+    const signals = getEveningSignals([
+      pattern(EVENING_PATTERN_TYPE.repeatedEnvironmentItemSkip, {
+        id: 'pattern-phone',
+        sourceEntityIds: ['PHONE_AWAY'],
+        sourceEntities: [{ entityType: 'ENVIRONMENT_ITEM', entityId: 'PHONE_AWAY' }],
+      }),
+      pattern(EVENING_PATTERN_TYPE.repeatedEnvironmentItemSkip, {
+        id: 'pattern-water',
+        sourceEntityIds: ['WATER'],
+        sourceEntities: [{ entityType: 'ENVIRONMENT_ITEM', entityId: 'WATER' }],
+      }),
+    ]);
+
+    expect(signals.map((signal) => signal.sourceEntityIds)).toEqual([['PHONE_AWAY'], ['WATER']]);
+  });
+
   it.each([
     [EVENING_PATTERN_SEVERITY.low, EVENING_SIGNAL_SEVERITY.info],
     [EVENING_PATTERN_SEVERITY.medium, EVENING_SIGNAL_SEVERITY.attention],
@@ -268,6 +336,7 @@ function pattern(type: EveningPatternType, patch: Partial<EveningPattern> = {}):
     range: { startDate: '2026-08-01', endDate: '2026-08-07', dayCount: 7 },
     sourceEntityIds: ['decision-a'],
     sourceEntities: [{ entityType: 'DECISION', entityId: 'decision-a' }],
+    sourceLabel: null,
     supportingDayIds: ['day-01', 'day-02', 'day-04', 'day-07'],
     metrics: { sampleSize: 7, occurrenceRate: 0.571 },
     ...patch,

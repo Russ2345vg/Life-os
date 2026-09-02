@@ -17,7 +17,11 @@ export type AppIconName =
   | 'collapse'
   | 'expand'
   | 'menu'
-  | 'close';
+  | 'close'
+  | 'focus'
+  | 'lock'
+  | 'water'
+  | 'shower';
 
 interface AppIconProps extends SVGProps<SVGSVGElement> {
   readonly name: AppIconName;
@@ -144,5 +148,30 @@ function iconPath(name: AppIconName) {
       return <path d="M4 7h16M4 12h16M4 17h16" />;
     case 'close':
       return <path d="m6 6 12 12M18 6 6 18" />;
+    case 'focus':
+      return (
+        <>
+          <circle cx="12" cy="12" r="3" />
+          <path d="M8 4H5a1 1 0 0 0-1 1v3M16 4h3a1 1 0 0 1 1 1v3M8 20H5a1 1 0 0 1-1-1v-3M16 20h3a1 1 0 0 0 1-1v-3" />
+        </>
+      );
+    case 'lock':
+      return (
+        <>
+          <rect x="5" y="10" width="14" height="10" rx="2" />
+          <path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v2" />
+        </>
+      );
+    case 'water':
+      return (
+        <path d="M12 3.5c-2.8 3.8-5.5 6.9-5.5 10.2a5.5 5.5 0 0 0 11 0C17.5 10.4 14.8 7.3 12 3.5Z" />
+      );
+    case 'shower':
+      return (
+        <>
+          <path d="M5 9a7 7 0 0 1 14 0" />
+          <path d="M4 9h16M8 13v1M12 13v2M16 13v1M8 18v1M12 19v1M16 18v1" />
+        </>
+      );
   }
 }

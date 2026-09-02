@@ -9,6 +9,10 @@ const commandCenterSource = readFileSync(
 const tomorrowSource = readFileSync(new URL('./TomorrowComposer.tsx', import.meta.url), 'utf8');
 const routineSource = readFileSync(new URL('./RoutinePage.tsx', import.meta.url), 'utf8');
 const globalCss = readFileSync(new URL('../styles/global.css', import.meta.url), 'utf8');
+const tomorrowFormCss = readFileSync(
+  new URL('../styles/evening-tomorrow-form-v3.css', import.meta.url),
+  'utf8',
+);
 const notStartedCss = globalCss.slice(
   globalCss.indexOf('/* NOT_STARTED: approved Evening Command Center start state */'),
 );
@@ -31,24 +35,24 @@ describe('E9.5A Evening Command Center workspace', () => {
 
   it('строит сцену Завтра как единый V2A-план с одним главным акцентом', () => {
     expect(tomorrowSource).toContain('className="tomorrow-dashboard"');
-    expect(tomorrowSource).toContain('Выбрать или создать Решение');
+    expect(tomorrowSource).toContain('Выбрать или создать решение');
     expect(tomorrowSource).toContain('Выбрать существующее');
-    expect(tomorrowSource).toContain('Новое Решение');
+    expect(tomorrowSource).toContain('Новое решение');
     expect(tomorrowSource).toContain('Конкретное первое действие');
-    expect(tomorrowSource).toContain('Если останется ресурс');
+    expect(tomorrowSource).toContain('Дополнительные решения');
     expect(tomorrowSource).toContain('supportingIds.slice(0, 2)');
-    expect(tomorrowSource).toContain('Подготовить завтра →');
+    expect(tomorrowSource).toContain('Продолжить →');
     expect(tomorrowSource).not.toContain('aria-hidden="true">01');
     expect(tomorrowSource).not.toContain('aria-hidden="true">03');
     expect(tomorrowSource).toContain('rows={1}');
-    expect(tomorrowV2Css).toMatch(
-      /\.tomorrow-dashboard\s*{[^}]*grid-template-areas:\s*'primary primary'\s*'outcomes outcomes'/,
+    expect(tomorrowFormCss).toMatch(
+      /\.tomorrow-dashboard\s*{[^}]*grid-template-areas:\s*none;[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/,
     );
-    expect(tomorrowV2Css).toMatch(
-      /\.tomorrow-primary-card\.is-empty\s*{[^}]*min-height:\s*0;[^}]*place-items:\s*stretch/,
+    expect(tomorrowFormCss).toMatch(
+      /\.tomorrow-primary-card\.is-empty\s*{[^}]*background:\s*linear-gradient/,
     );
-    expect(tomorrowV2Css).toMatch(
-      /:is\(\s*\.tomorrow-primary-card,[\s\S]*?\.tomorrow-supporting\s*\)\s*{[^}]*border:\s*0/,
+    expect(tomorrowFormCss).toMatch(
+      /:is\(\s*\.tomorrow-primary-card,[\s\S]*?\.tomorrow-supporting\s*\)[\s\S]*?min-height:\s*0;[^}]*border:\s*1px solid/,
     );
   });
 
@@ -69,22 +73,37 @@ describe('E9.5A Evening Command Center workspace', () => {
     expect(notStartedCss).not.toContain('overflow-x: auto');
   });
 
-  it('выстраивает completed summary как иерархию без табличной сетки', () => {
+  it('выстраивает compact current и подробный history summary без табличной сетки', () => {
     const summaryStart = tomorrowSource.indexOf('function TomorrowCompleteSummary');
     const summaryEnd = tomorrowSource.indexOf('function ComposerFrame');
     const summarySource = tomorrowSource.slice(summaryStart, summaryEnd);
+    const historyStart = summarySource.indexOf('const primaryIsCarried');
+    const currentSource = summarySource.slice(0, historyStart);
+    const historySource = summarySource.slice(historyStart);
 
-    const primary = summarySource.indexOf('Главное Решение');
-    const outcome = summarySource.indexOf('className="tomorrow-complete-outcomes"');
-    const firstStep = summarySource.indexOf('Первый шаг');
-    const supporting = summarySource.indexOf('Дополнительно');
-    const action = summarySource.indexOf('{actionLabel}');
+    const currentPrimary = currentSource.indexOf('Главное решение');
+    const currentOutcome = currentSource.indexOf('Граница результата');
+    const currentFirstStep = currentSource.indexOf('Первый шаг');
+    const currentSupporting = currentSource.indexOf('Дополнительно');
+    const currentAction = currentSource.indexOf('{actionLabel}');
 
-    expect(primary).toBeGreaterThan(-1);
-    expect(outcome).toBeGreaterThan(primary);
-    expect(firstStep).toBeGreaterThan(outcome);
-    expect(supporting).toBeGreaterThan(firstStep);
-    expect(action).toBeGreaterThan(supporting);
+    expect(currentPrimary).toBeGreaterThan(-1);
+    expect(currentOutcome).toBeGreaterThan(currentPrimary);
+    expect(currentFirstStep).toBeGreaterThan(currentOutcome);
+    expect(currentSupporting).toBeGreaterThan(currentFirstStep);
+    expect(currentAction).toBeGreaterThan(currentSupporting);
+
+    const historyPrimary = historySource.indexOf('Главное Решение');
+    const historyOutcome = historySource.indexOf('className="tomorrow-complete-outcomes"');
+    const historyFirstStep = historySource.indexOf('Первый шаг');
+    const historySupporting = historySource.indexOf('Дополнительно');
+    const historyAction = historySource.indexOf('{actionLabel}');
+
+    expect(historyPrimary).toBeGreaterThan(-1);
+    expect(historyOutcome).toBeGreaterThan(historyPrimary);
+    expect(historyFirstStep).toBeGreaterThan(historyOutcome);
+    expect(historySupporting).toBeGreaterThan(historyFirstStep);
+    expect(historyAction).toBeGreaterThan(historySupporting);
     expect(summarySource).not.toContain('<dl>');
     expect(summarySource).not.toContain('tomorrow-complete-sequence');
     expect(tomorrowV2Css).toMatch(

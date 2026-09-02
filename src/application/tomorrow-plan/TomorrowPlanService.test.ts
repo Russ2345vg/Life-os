@@ -111,6 +111,30 @@ describe('TomorrowPlanService', () => {
     ).toHaveLength(1);
   });
 
+  it('назначает кандидата первого шага по целевой дате из Morning Center', async () => {
+    await context.service.getOrCreate(SOURCE);
+    await context.service.createPrimaryDecision(SOURCE, {
+      title: 'Главное действие утра',
+      expectedResult: 'Понятный результат',
+    });
+    const first = await context.service.createFirstAction(SOURCE, {
+      title: 'Первый кандидат',
+      expectedResult: 'Первый результат',
+    });
+    const second = await context.service.createFirstAction(SOURCE, {
+      title: 'Второй кандидат',
+      expectedResult: 'Второй результат',
+    });
+    expect(second.plan.firstActionId?.equals(second.firstAction!.id)).toBe(true);
+
+    const selected = await context.service.assignFirstActionForTargetDate(
+      TARGET,
+      first.firstAction!.id,
+    );
+
+    expect(selected.plan.firstActionId?.equals(first.firstAction!.id)).toBe(true);
+  });
+
   it('подхватывает CARRY_FORWARD из E3 и показывает SCOPE_TOO_LARGE из E4 без автокоррекции', async () => {
     const carried = createDecision('carried-main', DECISION_KIND.main, 1);
     const cycle = planningCycle(carried.id, true);

@@ -21,9 +21,11 @@ export { IndexedDbTomorrowPlanRepository } from './persistence/IndexedDbTomorrow
 export { IndexedDbTomorrowPlanUnitOfWork } from './persistence/IndexedDbTomorrowPlanUnitOfWork';
 export { IndexedDbPreparationPlanRepository } from './persistence/IndexedDbPreparationPlanRepository';
 export { IndexedDbEveningHistoryReader } from './persistence/IndexedDbEveningHistoryReader';
+export { IndexedDbExerciseDefinitionRepository } from './persistence/IndexedDbExerciseDefinitionRepository';
 export { IndexedDbPreparationRuleRepository } from './persistence/IndexedDbPreparationRuleRepository';
 export { IndexedDbPreparationUnitOfWork } from './persistence/IndexedDbPreparationUnitOfWork';
 export { InMemoryDecisionRepository } from './persistence/InMemoryDecisionRepository';
+export { InMemoryExerciseDefinitionRepository } from './persistence/InMemoryExerciseDefinitionRepository';
 export { InMemoryDirectionRepository } from './persistence/InMemoryDirectionRepository';
 export { InMemoryGoalRepository } from './persistence/InMemoryGoalRepository';
 export { InMemoryDayRepository } from './persistence/InMemoryDayRepository';
@@ -71,6 +73,7 @@ export type {
   DirectionRecord,
   LifeActionRecord,
   MorningCycleRecord,
+  MorningStartStateRecord,
   GoalProgressRecord,
   GoalRecord,
   ProjectRecord,
@@ -87,5 +90,7 @@ export type {
   PauseIntervalRecord,
 } from './persistence/records';
 export { InMemoryWalkCaptureRepository } from './persistence/InMemoryWalkCaptureRepository';
+export { ExerciseDefinitionRecordMapper } from './persistence/mappers/ExerciseDefinitionRecordMapper';
+export type { ExerciseDefinitionRecord } from './persistence/records/ExerciseDefinitionRecord';
 export { IndexedDbWalkCaptureRepository } from './persistence/IndexedDbWalkCaptureRepository';
 export { WalkCaptureRecordMapper } from './persistence/mappers/WalkCaptureRecordMapper';

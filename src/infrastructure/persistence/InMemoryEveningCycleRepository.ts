@@ -31,6 +31,21 @@ export class InMemoryEveningCycleRepository implements EveningCycleRepository {
     );
   }
 
+  public async findLatestWithSavedRelaxationDefaultBefore(
+    dateKey: DayDate,
+  ): Promise<EveningCycle | null> {
+    return (
+      [...this.#byDateKey.values()]
+        .filter(
+          (cycle) =>
+            cycle.dateKey.isBefore(dateKey) && cycle.relaxation?.defaultChangedForFuture === true,
+        )
+        .sort((left, right) =>
+          right.dateKey.toString().localeCompare(left.dateKey.toString()),
+        )[0] ?? null
+    );
+  }
+
   public async createIfAbsent(cycle: EveningCycle): Promise<EveningCycle> {
     const existing = await this.findByDateKey(cycle.dateKey);
     if (existing !== null) return existing;

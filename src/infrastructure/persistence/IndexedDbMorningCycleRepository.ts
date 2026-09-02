@@ -47,6 +47,34 @@ export class IndexedDbMorningCycleRepository implements MorningCycleRepository {
     });
   }
 
+  public async findBetween(startDate: DayDate, endDate: DayDate): Promise<readonly MorningCycle[]> {
+    const database = await this.indexedDb.open();
+    const transaction = database.transaction(LIFE_OS_STORE.morningCycles, 'readonly');
+    const request = transaction
+      .objectStore(LIFE_OS_STORE.morningCycles)
+      .index('byDateKey')
+      .openCursor(IDBKeyRange.bound(startDate.toString(), endDate.toString()), 'prev');
+
+    return new Promise((resolve, reject) => {
+      const cycles: MorningCycle[] = [];
+      request.addEventListener('success', () => {
+        const cursor = request.result;
+        if (cursor === null) {
+          resolve(cycles);
+          return;
+        }
+        try {
+          cycles.push(MorningCycleRecordMapper.fromRecord(cursor.value));
+          cursor.continue();
+        } catch (error: unknown) {
+          reject(error);
+        }
+      });
+      request.addEventListener('error', () => reject(request.error));
+      transaction.addEventListener('abort', () => reject(transaction.error));
+    });
+  }
+
   public async createIfAbsent(cycle: MorningCycle): Promise<MorningCycle> {
     const database = await this.indexedDb.open();
     const transaction = database.transaction(LIFE_OS_STORE.morningCycles, 'readwrite');

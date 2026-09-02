@@ -1,4 +1,9 @@
 import { APP_SECTION, type AppSection } from '../navigation/AppSection';
+import {
+  copyEveningRitualSettings,
+  DEFAULT_EVENING_RITUAL_SETTINGS,
+  type EveningRitualSettings,
+} from '../../application/evening-settings';
 
 export const INTERFACE_DENSITY = {
   comfortable: 'comfortable',
@@ -12,6 +17,7 @@ export interface LocalSettings {
   readonly interfaceDensity: InterfaceDensity;
   readonly reduceMotion: boolean;
   readonly showMobileWeekday: boolean;
+  readonly eveningRitual: EveningRitualSettings;
 }
 
 export const DEFAULT_LOCAL_SETTINGS: LocalSettings = Object.freeze({
@@ -19,6 +25,7 @@ export const DEFAULT_LOCAL_SETTINGS: LocalSettings = Object.freeze({
   interfaceDensity: INTERFACE_DENSITY.comfortable,
   reduceMotion: false,
   showMobileWeekday: true,
+  eveningRitual: DEFAULT_EVENING_RITUAL_SETTINGS,
 });
 
 export function copyLocalSettings(settings: LocalSettings): LocalSettings {
@@ -27,6 +34,7 @@ export function copyLocalSettings(settings: LocalSettings): LocalSettings {
     interfaceDensity: settings.interfaceDensity,
     reduceMotion: settings.reduceMotion,
     showMobileWeekday: settings.showMobileWeekday,
+    eveningRitual: copyEveningRitualSettings(settings.eveningRitual),
   };
 }
 

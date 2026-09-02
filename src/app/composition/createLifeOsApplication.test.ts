@@ -1,5 +1,6 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it, vi } from 'vitest';
+import { SleepCheckApplicationService } from '../../application';
 import {
   ACTION_SESSION_STATUS,
   ActionActualResult,
@@ -9,8 +10,10 @@ import {
   DECISION_PRIORITY,
   DECISION_STATUS,
   EntityId,
+  EXERCISE_MEASUREMENT_TYPE,
   GOAL_STATUS,
   LIFE_ACTION_STATUS,
+  MorningCycle,
   SESSION_COMPLETION_KIND,
 } from '../../domain';
 import { SystemClock } from '../../infrastructure/clock/SystemClock';
@@ -21,6 +24,7 @@ import { IndexedDbDayRepository } from '../../infrastructure/persistence/Indexed
 import { IndexedDbDecisionRepository } from '../../infrastructure/persistence/IndexedDbDecisionRepository';
 import { IndexedDbLifeActionRepository } from '../../infrastructure/persistence/IndexedDbLifeActionRepository';
 import { IndexedDbMorningCycleRepository } from '../../infrastructure/persistence/IndexedDbMorningCycleRepository';
+import { IndexedDbExerciseDefinitionRepository } from '../../infrastructure/persistence/IndexedDbExerciseDefinitionRepository';
 import { IndexedDbGoalRepository } from '../../infrastructure/persistence/IndexedDbGoalRepository';
 import { IndexedDbJournalRepository } from '../../infrastructure/persistence/IndexedDbJournalRepository';
 import { LifeOsIndexedDb } from '../../infrastructure/persistence/indexed-db/LifeOsIndexedDb';
@@ -48,6 +52,9 @@ describe('createLifeOsApplication', () => {
     expect(application.actionSessionRepository).toBeInstanceOf(IndexedDbActionSessionRepository);
     expect(application.journalRepository).toBeInstanceOf(IndexedDbJournalRepository);
     expect(application.morningCycleRepository).toBeInstanceOf(IndexedDbMorningCycleRepository);
+    expect(application.exerciseDefinitionRepository).toBeInstanceOf(
+      IndexedDbExerciseDefinitionRepository,
+    );
     expect(application.goalRepository).toBeInstanceOf(IndexedDbGoalRepository);
     expect(application.createGoal).toBeDefined();
     expect(application.getGoalById).toBeDefined();
@@ -56,6 +63,13 @@ describe('createLifeOsApplication', () => {
     expect(application.archiveGoal).toBeDefined();
     expect(application.morningCycle).toBeDefined();
     expect(application.getMorningOverview).toBeDefined();
+    expect(
+      await application.getMorningCenterOverview.execute(application.currentDate),
+    ).toMatchObject({
+      cycleState: null,
+      canStart: true,
+      quickStart: { resolvedCount: 0, total: 2 },
+    });
     expect(application.clock).toBeInstanceOf(SystemClock);
     expect(application.currentDateProvider).toBeInstanceOf(SystemCurrentDateProvider);
     expect(application.idGenerator).toBeInstanceOf(CryptoIdGenerator);
@@ -81,6 +95,9 @@ describe('createLifeOsApplication', () => {
     expect(application.recommendationApplications).toBeDefined();
     expect(application.recommendationApplicationRepository).toBeDefined();
     expect(application.getApplicationMode).toBeDefined();
+    expect(application.relaxation).toBeDefined();
+    expect(application.relaxation.getOrInitialize).toBeDefined();
+    expect(application.sleepCheck).toBeInstanceOf(SleepCheckApplicationService);
     expect(application.completeCurrentDay).toBeDefined();
     expect(application.completeEveningCycle).toBeDefined();
     expect(application.startLifeActionSession).toBeDefined();
@@ -104,7 +121,116 @@ describe('createLifeOsApplication', () => {
       application.dayRepository.findByDate(application.currentDateProvider.getCurrentDate()),
     ).resolves.not.toBeNull();
 
+    const occurredAt = application.clock.now();
+    const sharedCycle = MorningCycle.create({
+      id: EntityId.create('morning-center-composition-cycle'),
+      dayId: EntityId.create('morning-center-composition-day'),
+      dateKey: application.currentDate,
+      occurredAt,
+    });
+    sharedCycle.start(occurredAt);
+    sharedCycle.completeWater(occurredAt, 250);
+    await application.morningCycleRepository.createIfAbsent(sharedCycle);
+
+    await expect(
+      application.getMorningCenterOverview.execute(application.currentDate),
+    ).resolves.toMatchObject({
+      startedAt: occurredAt,
+      quickStart: { resolvedCount: 1 },
+    });
+
     application.close();
+  });
+
+  it('восстанавливает выбранный план и пользовательское упражнение после перезапуска', async () => {
+    const indexedDb = new IDBFactory();
+    const first = await createLifeOsApplication({
+      database: new LifeOsIndexedDb(indexedDb),
+      clock: new FakeClock(NOW),
+      currentDateProvider: new FakeCurrentDateProvider(TODAY),
+      idGenerator: new FakeIdGenerator('morning-physical'),
+    });
+    await first.morningCycle.start(TODAY);
+    await first.morningCycle.selectPhysicalExercise(
+      TODAY,
+      EntityId.create('morning-exercise.push-ups'),
+    );
+    await first.morningExerciseCatalog.createCustom(
+      'Вис на перекладине',
+      EXERCISE_MEASUREMENT_TYPE.duration,
+    );
+    first.close();
+
+    const reopened = await createLifeOsApplication({
+      database: new LifeOsIndexedDb(indexedDb),
+      clock: new FakeClock(NOW),
+      currentDateProvider: new FakeCurrentDateProvider(TODAY),
+      idGenerator: new FakeIdGenerator('reopened'),
+    });
+    const overview = await reopened.getMorningPhysicalActivationOverview.execute(TODAY);
+
+    expect(overview.summary).toEqual({ selectedCount: 1, totalSets: 3, estimatedMinutes: 6 });
+    expect(overview.library.map(({ name }) => name)).toContain('Вис на перекладине');
+    reopened.close();
+  });
+
+  it('восстанавливает paused physical execution через composed query после перезапуска', async () => {
+    const indexedDb = new IDBFactory();
+    const clock = new FakeClock(NOW);
+    const first = await createLifeOsApplication({
+      database: new LifeOsIndexedDb(indexedDb),
+      clock,
+      currentDateProvider: new FakeCurrentDateProvider(TODAY),
+      idGenerator: new FakeIdGenerator('morning-execution'),
+    });
+    await first.morningCycle.start(TODAY);
+    await first.morningCycle.selectPhysicalExercise(
+      TODAY,
+      EntityId.create('morning-exercise.push-ups'),
+    );
+    await first.morningCycle.adjustPhysicalExercise(
+      TODAY,
+      EntityId.create('morning-exercise.push-ups'),
+      { field: 'sets', delta: -1 },
+    );
+    clock.setTime(new Date('2026-08-02T08:01:00.000+09:00'));
+    await first.morningCycle.startPhysicalExecution(TODAY);
+    clock.setTime(new Date('2026-08-02T08:02:00.000+09:00'));
+    await first.morningCycle.completePhysicalSet(
+      TODAY,
+      EntityId.create('morning-exercise.push-ups'),
+      1,
+      { measurementType: EXERCISE_MEASUREMENT_TYPE.repetitions, actualReps: 14 },
+    );
+    clock.setTime(new Date('2026-08-02T08:03:00.000+09:00'));
+    await first.morningCycle.advancePhysicalExecution(TODAY);
+    clock.setTime(new Date('2026-08-02T08:04:00.000+09:00'));
+    await first.morningCycle.pausePhysicalExecution(TODAY);
+    first.close();
+
+    const reopened = await createLifeOsApplication({
+      database: new LifeOsIndexedDb(indexedDb),
+      clock: new FakeClock(new Date('2026-08-02T08:10:00.000+09:00')),
+      currentDateProvider: new FakeCurrentDateProvider(TODAY),
+      idGenerator: new FakeIdGenerator('reopened-execution'),
+    });
+    const overview = await reopened.getMorningPhysicalExecutionOverview.execute(TODAY);
+
+    expect(overview).toMatchObject({
+      state: 'paused',
+      workedDurationMs: 3 * 60_000,
+      resolvedSets: 1,
+      completedSets: 1,
+      totalActualReps: 14,
+      canResume: true,
+      currentSet: {
+        name: 'Отжимания',
+        setNumber: 2,
+        globalSetIndex: 2,
+        status: 'PENDING',
+      },
+    });
+    reopened.close();
   });
 
   it('exposes a persistent Goal API integrated with existing Directions', async () => {
@@ -319,10 +445,27 @@ describe('createLifeOsApplication', () => {
     });
     await firstApplication.tomorrowPlan.complete(TODAY);
     const preparation = await firstApplication.preparation.getOrGenerate(TODAY);
-    for (const item of preparation.plan.activeItems.filter((candidate) => candidate.required)) {
+    const configuredPreparation = await firstApplication.preparation.configureRequiredCore(
+      TODAY,
+      preparation.recommendedCoreKeys,
+    );
+    for (const item of configuredPreparation.plan.activeItems.filter(
+      (candidate) => candidate.required,
+    )) {
       await firstApplication.preparation.skipItem(TODAY, item.id, 'Тестовый осознанный пропуск');
     }
-    await firstApplication.preparation.continueToShutdown(TODAY);
+    await firstApplication.preparation.continueToRelaxation(TODAY);
+    await expect(firstApplication.getEveningReview.execute(TODAY)).resolves.toMatchObject({
+      cycle: { state: 'RELAXING' },
+    });
+    await firstApplication.relaxation.getOrInitialize(TODAY);
+    await firstApplication.sleepCheck.setBeforeRatings(TODAY, 2, 3);
+    await firstApplication.relaxation.completeDrink(TODAY);
+    await firstApplication.relaxation.completeHygiene(TODAY);
+    await firstApplication.relaxation.completePractice(TODAY);
+    await firstApplication.relaxation.skipScreenFree(TODAY);
+    await firstApplication.relaxation.complete(TODAY);
+    await completeSleepCheck(firstApplication.sleepCheck, TODAY);
     const completion = await firstApplication.completeCurrentDay.execute({
       summary: 'Полный цикл завершён без ручного изменения данных',
       actionResolutions: [],
@@ -463,14 +606,28 @@ describe('createLifeOsApplication', () => {
     });
     await recoveryApplication.tomorrowPlan.complete(staleDate);
     const preparation = await recoveryApplication.preparation.getOrGenerate(staleDate);
-    for (const item of preparation.plan.activeItems.filter((candidate) => candidate.required)) {
+    const configuredPreparation = await recoveryApplication.preparation.configureRequiredCore(
+      staleDate,
+      preparation.recommendedCoreKeys,
+    );
+    for (const item of configuredPreparation.plan.activeItems.filter(
+      (candidate) => candidate.required,
+    )) {
       await recoveryApplication.preparation.skipItem(
         staleDate,
         item.id,
         'Тестовый осознанный пропуск',
       );
     }
-    await recoveryApplication.preparation.continueToShutdown(staleDate);
+    await recoveryApplication.preparation.continueToRelaxation(staleDate);
+    await recoveryApplication.relaxation.getOrInitialize(staleDate);
+    await recoveryApplication.sleepCheck.setBeforeRatings(staleDate, 2, 3);
+    await recoveryApplication.relaxation.completeDrink(staleDate);
+    await recoveryApplication.relaxation.completeHygiene(staleDate);
+    await recoveryApplication.relaxation.completePractice(staleDate);
+    await recoveryApplication.relaxation.skipScreenFree(staleDate);
+    await recoveryApplication.relaxation.complete(staleDate);
+    await completeSleepCheck(recoveryApplication.sleepCheck, staleDate);
     const completion = await recoveryApplication.completeCurrentDay.execute(
       {
         summary: 'Прошлый день завершён через безопасное восстановление',
@@ -1471,4 +1628,15 @@ async function createTestApplication(indexedDbFactory: IDBFactory, idGenerator: 
     currentDateProvider: new FakeCurrentDateProvider(TODAY),
     idGenerator,
   });
+}
+
+async function completeSleepCheck(
+  service: SleepCheckApplicationService,
+  dateKey: DayDate,
+): Promise<void> {
+  await service.setAfterRatings(dateKey, 4, 5);
+  await service.answerQuestion(dateKey, 'CALM_MIND', 'YES');
+  await service.answerQuestion(dateKey, 'HOLDING_THOUGHT', 'NO');
+  await service.answerQuestion(dateKey, 'READY_FOR_SLEEP', 'YES');
+  await service.complete(dateKey);
 }

@@ -15,6 +15,11 @@ import type {
   GetDecisionOverview,
   GetDecisionsForDate,
   GetEveningReview,
+  GetMorningCenterOverview,
+  GetMorningCompletionOverview,
+  GetMorningHistory,
+  GetMorningPhysicalActivationOverview,
+  GetMorningPhysicalExecutionOverview,
   GetLifeActionsForDecision,
   GetRoutineActionDetails,
   GetRoutineActionOptions,
@@ -50,7 +55,11 @@ import type {
   ReflectionApplicationService,
   TomorrowPlanService,
   PreparationService,
+  RelaxationApplicationService,
+  SleepCheckApplicationService,
   EveningCycleApplicationService,
+  MorningCycleApplicationService,
+  MorningExerciseCatalogService,
 } from '../../application';
 import {
   DECISION_STATUS,
@@ -111,8 +120,13 @@ import {
   eveningBlockStatusLabel,
   type EveningBlockStatus,
 } from '../routine/RoutineEveningPresentation';
-import { ROUTINE_SECTION, type RoutineSection } from '../routine/RoutineNavigation';
+import {
+  ROUTINE_SECTION,
+  type RoutineMorningView,
+  type RoutineSection,
+} from '../routine/RoutineNavigation';
 import { EveningReviewPanel } from './EveningReviewPanel';
+import { MorningCenterPage } from './MorningCenterPage';
 import { useSpheres } from '../components/sphereReferenceModel';
 import { useProjects } from '../management/projectReferenceModel';
 
@@ -126,6 +140,9 @@ interface RoutinePageProps {
   readonly onDateChange: (date: DayDate) => void;
   readonly activeSection?: RoutineSection;
   readonly onSectionChange?: (section: RoutineSection) => void;
+  readonly morningView?: RoutineMorningView | null;
+  readonly onMorningViewChange?: (view: RoutineMorningView | null) => void;
+  readonly onMorningWorkBlockStarted?: () => void;
   readonly onCurrentDayChange?: (day: Day) => void;
   readonly createRoutineBlock: CreateRoutineBlock;
   readonly updateRoutineBlock: UpdateRoutineBlock;
@@ -148,6 +165,45 @@ interface RoutinePageProps {
   readonly routineReturnTarget?: RoutineWalkDestinationRequest | null;
   readonly onRoutineReturnHandled?: () => void;
   readonly workflow?: RoutinePageWorkflowServices;
+  readonly morningCenter?: MorningCenterWorkflowServices;
+}
+
+export interface MorningCenterWorkflowServices {
+  readonly getOverview: Pick<GetMorningCenterOverview, 'execute'>;
+  readonly getPhysicalOverview: Pick<GetMorningPhysicalActivationOverview, 'execute'>;
+  readonly getPhysicalExecutionOverview: Pick<GetMorningPhysicalExecutionOverview, 'execute'>;
+  readonly getCompletionOverview: Pick<GetMorningCompletionOverview, 'execute'>;
+  readonly getHistory: Pick<GetMorningHistory, 'execute'>;
+  readonly cycle: Pick<
+    MorningCycleApplicationService,
+    | 'start'
+    | 'recordStartState'
+    | 'completeWater'
+    | 'completeColdShower'
+    | 'skipColdShower'
+    | 'shorten'
+    | 'activateShortened'
+    | 'revertShortened'
+    | 'abandonUnfinished'
+    | 'selectPhysicalExercise'
+    | 'deselectPhysicalExercise'
+    | 'adjustPhysicalExercise'
+    | 'startPhysicalExecution'
+    | 'recoverPhysicalExecution'
+    | 'pausePhysicalExecution'
+    | 'resumePhysicalExecution'
+    | 'completePhysicalSet'
+    | 'skipPhysicalSet'
+    | 'advancePhysicalExecution'
+    | 'completePhysicalExecution'
+    | 'completeMirror'
+    | 'skipMainAction'
+    | 'reconcileReadyToWork'
+    | 'finish'
+  >;
+  readonly exerciseCatalog: Pick<MorningExerciseCatalogService, 'createCustom'>;
+  readonly tomorrowPlan: Pick<TomorrowPlanService, 'assignFirstActionForTargetDate'>;
+  readonly clock: Pick<Clock, 'now'>;
 }
 
 export interface RoutinePageWorkflowServices {
@@ -158,7 +214,7 @@ export interface RoutinePageWorkflowServices {
   readonly completeCurrentDay: Pick<CompleteCurrentDay, 'execute'>;
   readonly eveningCycle?: Pick<
     EveningCycleApplicationService,
-    'get' | 'start' | 'selectMode' | 'skipPreparation'
+    'get' | 'start' | 'startShort' | 'selectMode' | 'skipPreparation'
   >;
   readonly resolveOpenLoop?: Pick<ResolveOpenLoop, 'execute'>;
   readonly reflection?: Pick<
@@ -182,8 +238,24 @@ export interface RoutinePageWorkflowServices {
   >;
   readonly preparation?: Pick<
     PreparationService,
-    'getOrGenerate' | 'completeItem' | 'skipItem' | 'continueToShutdown'
+    'getOrGenerate' | 'configureRequiredCore' | 'completeItem' | 'skipItem' | 'continueToRelaxation'
   >;
+  readonly relaxation?: Pick<
+    RelaxationApplicationService,
+    | 'getOrInitialize'
+    | 'getStored'
+    | 'choosePractice'
+    | 'setPracticeDuration'
+    | 'completeDrink'
+    | 'completeHygiene'
+    | 'startPracticeTimer'
+    | 'completePractice'
+    | 'startScreenFree'
+    | 'shortenScreenFree'
+    | 'skipScreenFree'
+    | 'complete'
+  >;
+  readonly sleepCheck?: SleepCheckApplicationService;
   readonly getSpheres?: Pick<GetSpheres, 'execute'>;
   readonly getProjects?: Pick<GetProjects, 'execute'>;
   readonly getDecisionById: Pick<GetDecisionById, 'execute'>;
@@ -391,6 +463,20 @@ export function RoutinePage(props: RoutinePageProps) {
   function selectSection(section: RoutineSection): void {
     if (props.onSectionChange === undefined) setLocalSection(section);
     props.onSectionChange?.(section);
+  }
+
+  function scheduleMorningMainAction(actionId: EntityId): void {
+    setEditing(null);
+    setErrors({});
+    setForm({
+      ...createEmptyRoutineBlockForm(props.selectedDate),
+      title: 'Главное действие',
+      category: ROUTINE_BLOCK_CATEGORY.work,
+      required: true,
+      assignmentKind: ROUTINE_BLOCK_ASSIGNMENT.existingAction,
+      actionId: actionId.toString(),
+    });
+    selectSection(ROUTINE_SECTION.day);
   }
 
   function closeEveningCenter(): void {
@@ -783,12 +869,53 @@ export function RoutinePage(props: RoutinePageProps) {
           {...(workflow.reflection === undefined ? {} : { reflection: workflow.reflection })}
           {...(workflow.tomorrowPlan === undefined ? {} : { tomorrowPlan: workflow.tomorrowPlan })}
           {...(workflow.preparation === undefined ? {} : { preparation: workflow.preparation })}
+          {...(workflow.relaxation === undefined ? {} : { relaxation: workflow.relaxation })}
+          {...(workflow.sleepCheck === undefined ? {} : { sleepCheck: workflow.sleepCheck })}
           reviewDate={activeEveningReviewDate}
           onClose={closeEveningCenter}
           onCompleted={(result) => {
             setEveningCycleState(EVENING_CYCLE_STATE.completed);
             if (result.day.date.equals(props.currentDate)) props.onCurrentDayChange?.(result.day);
           }}
+        />
+      </main>
+    );
+  }
+
+  if (activeSection === ROUTINE_SECTION.morning && props.morningCenter !== undefined) {
+    return (
+      <main className="section-page routine-page routine-morning-page">
+        <SectionPageHeader
+          eyebrow="Утро"
+          title="Утренний распорядок"
+          description="Единый центр запуска и восстановления утреннего цикла."
+          action={
+            <RoutineSectionNavigation activeSection={activeSection} onSelect={selectSection} />
+          }
+        />
+        <MorningCenterPage
+          key={props.selectedDate.toString()}
+          date={props.selectedDate}
+          dateNavigation={
+            <SectionDateNavigator
+              currentDate={props.currentDate}
+              selectedDate={props.selectedDate}
+              onDateChange={props.onDateChange}
+            />
+          }
+          getOverview={props.morningCenter.getOverview}
+          getPhysicalOverview={props.morningCenter.getPhysicalOverview}
+          getPhysicalExecutionOverview={props.morningCenter.getPhysicalExecutionOverview}
+          getCompletionOverview={props.morningCenter.getCompletionOverview}
+          getHistory={props.morningCenter.getHistory}
+          morningView={props.morningView ?? null}
+          onMorningViewChange={(view) => props.onMorningViewChange?.(view)}
+          cycle={props.morningCenter.cycle}
+          exerciseCatalog={props.morningCenter.exerciseCatalog}
+          tomorrowPlan={props.morningCenter.tomorrowPlan}
+          onScheduleMainAction={scheduleMorningMainAction}
+          onWorkBlockStarted={() => props.onMorningWorkBlockStarted?.()}
+          clock={props.morningCenter.clock}
         />
       </main>
     );

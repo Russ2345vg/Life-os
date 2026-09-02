@@ -63,6 +63,7 @@ function historyItem(index: number): EveningHistoryItem {
     completion: EVENING_CYCLE_COMPLETION.completed,
     mode: index % 4 === 0 ? EVENING_CYCLE_MODE.quick : EVENING_CYCLE_MODE.normal,
     modeReason: null,
+    skipReason: null,
     startedAt: `${dateKey}T20:00:00.000Z`,
     completedAt: `${dateKey}T21:00:00.000Z`,
     durationMs: 3_600_000,
@@ -99,6 +100,9 @@ function historyItem(index: number): EveningHistoryItem {
       requiredSkipped: 0,
       requiredPending: 0,
     },
+    environmentItems: [],
+    relaxation: null,
+    sleepCheck: null,
     skippedStages: [],
   };
 }

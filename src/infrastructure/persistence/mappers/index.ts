@@ -3,6 +3,7 @@ export { DayRecordMapper } from './DayRecordMapper';
 export { DecisionRecordMapper } from './DecisionRecordMapper';
 export { DirectionRecordMapper } from './DirectionRecordMapper';
 export { EveningCycleRecordMapper } from './EveningCycleRecordMapper';
+export { ExerciseDefinitionRecordMapper } from './ExerciseDefinitionRecordMapper';
 export { TomorrowPlanRecordMapper } from './TomorrowPlanRecordMapper';
 export { PreparationPlanRecordMapper } from './PreparationPlanRecordMapper';
 export { RecommendationApplicationRecordMapper } from './RecommendationApplicationRecordMapper';

@@ -14,9 +14,11 @@ import {
 } from './TomorrowScenePresentation';
 
 const tomorrowSource = readFileSync(new URL('./TomorrowComposer.tsx', import.meta.url), 'utf8');
-const globalCss = readFileSync(new URL('../styles/global.css', import.meta.url), 'utf8');
-const v2aMarker = '/* E11.3G-A: TomorrowScene visual fidelity V2A */';
-const v2aCss = globalCss.slice(globalCss.lastIndexOf(v2aMarker));
+const v2aCss = readFileSync(
+  new URL('../styles/evening-tomorrow-form-v3.css', import.meta.url),
+  'utf8',
+);
+const v2aMarker = '/* Evening Center v3 — step-specific Tomorrow working form.';
 const activeSource = tomorrowSource.slice(
   tomorrowSource.indexOf('<form'),
   tomorrowSource.indexOf('function TomorrowCompleteSummary'),
@@ -30,13 +32,13 @@ const LONG_TARGET_OUTCOME = `Норма ${'с подробным проверя�
 
 describe('E11.3G-A TomorrowScene V2A', () => {
   it('выстраивает активную сцену по иерархии референса', () => {
-    const context = activeSource.indexOf('tomorrow-scene-context-copy');
-    const primary = activeSource.indexOf('Что действительно должно продвинуть день?');
-    const outcomes = activeSource.indexOf('Границы результата');
+    const context = activeSource.indexOf('tomorrow-working-date');
+    const primary = activeSource.indexOf('Главное решение');
+    const outcomes = activeSource.indexOf('Граница результата');
     const firstStep = activeSource.indexOf('Первый шаг');
-    const supporting = activeSource.indexOf('Дополнительные Решения');
+    const supporting = activeSource.indexOf('Дополнительные решения');
     const contextualOutput = activeSource.indexOf('Контекстный вывод');
-    const action = activeSource.indexOf('Подготовить завтра →');
+    const action = activeSource.indexOf('Продолжить →');
 
     expect(context).toBeGreaterThan(-1);
     expect(primary).toBeGreaterThan(context);
@@ -45,7 +47,6 @@ describe('E11.3G-A TomorrowScene V2A', () => {
     expect(supporting).toBeGreaterThan(firstStep);
     expect(contextualOutput).toBeGreaterThan(supporting);
     expect(action).toBeGreaterThan(contextualOutput);
-    expect(activeSource).toContain('<EveningVisualIcon name="target"');
     expect(activeSource).toContain('Изменить');
     expect(activeSource).toContain('supportingIds.slice(0, 2)');
   });
@@ -117,52 +118,48 @@ describe('E11.3G-A TomorrowScene V2A', () => {
   it('использует одну плановую поверхность и компактный empty hero', () => {
     expect(v2aCss).toContain(v2aMarker);
     expect(v2aCss).toMatch(
-      /\.tomorrow-dashboard\s*\{[^}]*grid-template-areas:\s*'primary primary'\s*'outcomes outcomes'\s*'first supporting'\s*'context context'/,
+      /\.tomorrow-dashboard\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/,
     );
     expect(v2aCss).toMatch(
-      /:is\(\s*\.tomorrow-primary-card,\s*\.tomorrow-first-action-card,\s*\.tomorrow-outcomes,\s*\.tomorrow-supporting\s*\)\s*\{[^}]*border:\s*0;/,
+      /data-scene='tomorrow'[\s\S]*?height:\s*clamp\(26rem, calc\(100vh - 18\.25rem\), 33rem\)/,
     );
     expect(v2aCss).toMatch(
-      /\.tomorrow-primary-card\.is-empty\s*\{[^}]*min-height:\s*0;[^}]*place-items:\s*stretch;/,
+      /data-scene='tomorrow'[\s\S]*?box-sizing:\s*border-box;[\s\S]*?padding:\s*0/,
     );
-    expect(v2aCss).not.toContain('min-height: 6.6rem');
+    expect(v2aCss).toMatch(
+      /\.evening-tomorrow-scene\s*\{[^}]*grid-template-areas:\s*'body'\s*'actions';[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/,
+    );
+    expect(v2aCss).toMatch(/\.tomorrow-working-form-scroll\s*\{[^}]*grid-area:\s*body/);
+    expect(v2aCss).toMatch(/\.tomorrow-scene-footer\s*\{[^}]*grid-area:\s*actions/);
+    expect(v2aCss).toMatch(/\.tomorrow-primary-empty-cta\s*\{[^}]*min-height:\s*3rem/);
+    expect(v2aCss).not.toContain("'first supporting'");
   });
 
-  it('сохраняет Норму главным сегментом и расширяет поля по содержимому', () => {
+  it('показывает одну выбранную границу через общий segmented control', () => {
     expect(v2aCss).toMatch(
-      /\.tomorrow-outcome-boundaries\s*\{[^}]*grid-template-areas:\s*'minimum target stretch'/,
+      /\.tomorrow-outcome-levels\s*\{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/,
     );
     expect(v2aCss).toMatch(
-      /\.tomorrow-outcome-segment\.is-target\s*\{[^}]*border:\s*1px solid #806027;[^}]*background:/,
+      /\.tomorrow-outcome-levels > button\.is-selected\s*\{[^}]*color:\s*var\(--gold-soft\)/,
     );
-    expect(v2aCss).toMatch(/\.tomorrow-outcome-segment\.is-stretch\s*\{[^}]*opacity:\s*0\.58/);
-    expect(v2aCss).toContain('field-sizing: content');
-    expect(v2aCss).toContain('max-height: none');
-    expect(v2aCss).not.toMatch(/max-height:\s*\d/);
-    expect(v2aCss).not.toContain('overflow-y:');
+    expect(activeSource).toContain('role="radiogroup"');
+    expect(activeSource).toContain('role="radio"');
+    expect(activeSource).toContain('workingForm.activeOutcome.value');
   });
 
   it('задаёт точный mobile-порядок и не вводит горизонтальный scroll', () => {
     const mobileCss = v2aCss.slice(v2aCss.indexOf('@media (max-width: 48rem)'));
 
+    expect(mobileCss).toMatch(/data-scene='tomorrow'[\s\S]*?height:\s*42rem/);
+    expect(mobileCss).toMatch(/\.tomorrow-inline-editor,[\s\S]*?minmax\(0, 1fr\)/);
     expect(mobileCss).toMatch(
-      /\.tomorrow-dashboard\s*\{[^}]*grid-template-areas:\s*'primary'\s*'outcomes'\s*'first'\s*'supporting'\s*'context'\s*'overload'\s*'error'\s*'actions';[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/,
-    );
-    expect(mobileCss).toMatch(
-      /\.tomorrow-outcome-boundaries[\s\S]*?grid-template-areas:\s*'target'\s*'minimum'\s*'stretch'/,
-    );
-    expect(mobileCss).toMatch(
-      /\.tomorrow-scene-footer \.primary-button,[\s\S]*?width:\s*100%;[^}]*min-width:\s*0/,
+      /\.tomorrow-scene-footer \.primary-button\s*\{[^}]*width:\s*100%;[^}]*min-width:\s*0/,
     );
     expect(v2aCss).not.toMatch(/overflow-x:\s*(auto|scroll)/);
     expect(v2aCss).toContain('overflow-wrap: anywhere');
-    expect(v2aCss).toMatch(
-      /\.tomorrow-supporting-row strong\s*\{[^}]*white-space:\s*normal;[^}]*overflow-wrap:\s*anywhere/,
-    );
-    expect(v2aCss).not.toMatch(/\n\.(?:tomorrow|evening-tomorrow)/);
   });
 
-  it('заменяет completed/history строки тем же модульным каркасом и показывает реальные данные', () => {
+  it('показывает compact current summary и сохраняет подробный history-каркас', () => {
     const snapshot = createCompletedSnapshot();
     const html = renderToStaticMarkup(
       createElement(TomorrowCompleteSummary, {
@@ -173,7 +170,7 @@ describe('E11.3G-A TomorrowScene V2A', () => {
         actionLabel: 'Вернуться к текущему этапу',
       }),
     );
-    const primary = html.indexOf('Главное Решение');
+    const primary = html.indexOf('Главное решение');
     const outcome = html.indexOf('Норма');
     const firstStep = html.indexOf('Первый шаг');
     const supporting = html.indexOf('Дополнительно');
@@ -187,17 +184,13 @@ describe('E11.3G-A TomorrowScene V2A', () => {
     expect(html).toContain(LONG_TARGET_OUTCOME);
     expect(html).toContain('Решение tomorrow-support-1');
     expect(html).toContain('Решение tomorrow-support-2');
+    expect(html).not.toContain('Минимальный результат');
+    expect(html).not.toContain('Максимальный результат');
     expect(completedSource).toContain('snapshot.supportingDecisions.slice(0, 2).map');
     expect(completedSource).not.toContain('в резерве дня');
     expect(completedSource).not.toContain('<table');
     expect(completedSource).not.toContain('<dl>');
     expect(completedSource).not.toContain('tomorrow-complete-sequence');
-    expect(v2aCss).toMatch(
-      /\.tomorrow-complete-plan\s*\{[^}]*grid-template-areas:\s*'primary primary'\s*'outcomes outcomes'\s*'lower lower'/,
-    );
-    expect(v2aCss).toMatch(
-      /\.tomorrow-complete-lower-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0, 0\.92fr\) minmax\(0, 1\.08fr\)/,
-    );
 
     const historyHtml = renderToStaticMarkup(
       createElement(TomorrowCompleteSummary, {
@@ -210,6 +203,8 @@ describe('E11.3G-A TomorrowScene V2A', () => {
       }),
     );
     expect(historyHtml).toContain('tomorrow-complete-summary is-history');
+    expect(historyHtml).toContain('Минимальный результат');
+    expect(historyHtml).toContain('Максимальный результат');
     expect(historyHtml).toContain('class="secondary-button is-ghost"');
     expect(historyHtml).not.toContain(
       'class="primary-button" type="button">Вернуться к текущему этапу',
@@ -253,7 +248,7 @@ describe('E11.3G-A TomorrowScene V2A', () => {
     expect(html.indexOf('Минимум')).toBeLessThan(html.indexOf('Максимум'));
   });
 
-  it('показывает только предоставленный contextual strip и нумерует supporting Решения', () => {
+  it('убирает contextual strip и нумерацию из current summary, сохраняя их в history', () => {
     const snapshot = createCompletedSnapshot();
     const html = renderToStaticMarkup(
       createElement(TomorrowCompleteSummary, {
@@ -265,10 +260,24 @@ describe('E11.3G-A TomorrowScene V2A', () => {
       }),
     );
 
-    expect(html).toContain('Контекстный вывод');
-    expect(html).toContain('Сегодня объём главного Решения оказался слишком большим.');
-    expect(html).toContain('<span>02</span>');
-    expect(html).toContain('<span>03</span>');
+    expect(html).not.toContain('Контекстный вывод');
+    expect(html).not.toContain('<span>02</span>');
+    expect(html).not.toContain('<span>03</span>');
+
+    const historyHtml = renderToStaticMarkup(
+      createElement(TomorrowCompleteSummary, {
+        snapshot: { ...snapshot, scopeTooLargeWarning: true },
+        isQuick: false,
+        onEdit: () => undefined,
+        onContinue: () => undefined,
+        actionLabel: 'Вернуться к текущему этапу',
+        historyView: true,
+      }),
+    );
+    expect(historyHtml).toContain('Контекстный вывод');
+    expect(historyHtml).toContain('Сегодня объём главного Решения оказался слишком большим.');
+    expect(historyHtml).toContain('<span>02</span>');
+    expect(historyHtml).toContain('<span>03</span>');
   });
 });
 

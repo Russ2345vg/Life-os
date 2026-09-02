@@ -28,10 +28,15 @@ import { PreparationSceneState, PreparationSceneView } from './PreparationPanel'
 const DATE = DayDate.create('2026-08-22');
 const NOW = new Date('2026-08-21T12:00:00.000Z');
 const PLAN_ID = EntityId.create('v2b-preparation-plan');
-const environmentCss = readFileSync(new URL('../styles/evening-environment.css', import.meta.url), 'utf8');
+const environmentCss = readFileSync(
+  new URL('../styles/evening-environment.css', import.meta.url),
+  'utf8',
+);
 const preparationSource = readFileSync(new URL('./PreparationPanel.tsx', import.meta.url), 'utf8');
 const globalCss = readFileSync(new URL('../styles/global.css', import.meta.url), 'utf8');
-const v2bCss = globalCss.slice(globalCss.lastIndexOf('/* E11.3G-B: PreparationScene visual fidelity V2B */'));
+const v2bCss = globalCss.slice(
+  globalCss.lastIndexOf('/* E11.3G-B: PreparationScene visual fidelity V2B */'),
+);
 const reviewSource = readFileSync(new URL('./EveningReviewPanel.tsx', import.meta.url), 'utf8');
 
 describe('R4 Environment PreparationScene', () => {
@@ -48,11 +53,18 @@ describe('R4 Environment PreparationScene', () => {
 
   it('показывает явные complete и skip actions для pending и текстовый статус обработанного required', () => {
     const items = [
-      preparationItem('pending', true, PREPARATION_CATEGORY.physical, PREPARATION_AREA.sleepEnvironment),
-      preparationItem('skipped', true, PREPARATION_CATEGORY.digital, PREPARATION_AREA.tomorrowStart).skip(
-        NOW,
-        'Сегодня не требуется',
+      preparationItem(
+        'pending',
+        true,
+        PREPARATION_CATEGORY.physical,
+        PREPARATION_AREA.sleepEnvironment,
       ),
+      preparationItem(
+        'skipped',
+        true,
+        PREPARATION_CATEGORY.digital,
+        PREPARATION_AREA.tomorrowStart,
+      ).skip(NOW, 'Сегодня не требуется'),
       preparationItem('third', true, PREPARATION_CATEGORY.digital, PREPARATION_AREA.tomorrowStart),
       preparationItem('fourth', true, PREPARATION_CATEGORY.digital, PREPARATION_AREA.tomorrowStart),
     ];
@@ -63,15 +75,37 @@ describe('R4 Environment PreparationScene', () => {
     expect(markup).toContain('Обязательное ядро');
     expect(markup).toContain('Осознанно пропущено');
     expect(markup.match(/Осознанно пропущено/g)).toHaveLength(1);
-    expect(markup.indexOf('Подготовить skipped')).toBeGreaterThan(markup.indexOf('Подготовить pending'));
+    expect(markup.indexOf('Подготовить skipped')).toBeGreaterThan(
+      markup.indexOf('Подготовить pending'),
+    );
   });
 
   it('не блокирует continuation для skipped required и pending optional', () => {
     const items = [
-      preparationItem('required', true, PREPARATION_CATEGORY.physical, PREPARATION_AREA.sleepEnvironment).skip(NOW),
-      preparationItem('optional', false, PREPARATION_CATEGORY.digital, PREPARATION_AREA.tomorrowStart),
-      preparationItem('third', true, PREPARATION_CATEGORY.digital, PREPARATION_AREA.tomorrowStart).complete(NOW),
-      preparationItem('fourth', true, PREPARATION_CATEGORY.digital, PREPARATION_AREA.tomorrowStart).complete(NOW),
+      preparationItem(
+        'required',
+        true,
+        PREPARATION_CATEGORY.physical,
+        PREPARATION_AREA.sleepEnvironment,
+      ).skip(NOW),
+      preparationItem(
+        'optional',
+        false,
+        PREPARATION_CATEGORY.digital,
+        PREPARATION_AREA.tomorrowStart,
+      ),
+      preparationItem(
+        'third',
+        true,
+        PREPARATION_CATEGORY.digital,
+        PREPARATION_AREA.tomorrowStart,
+      ).complete(NOW),
+      preparationItem(
+        'fourth',
+        true,
+        PREPARATION_CATEGORY.digital,
+        PREPARATION_AREA.tomorrowStart,
+      ).complete(NOW),
     ];
     const markup = renderScene(preparationSnapshot(items));
 
@@ -83,7 +117,9 @@ describe('R4 Environment PreparationScene', () => {
     const error = renderToStaticMarkup(
       PreparationSceneState({ status: 'error', message: 'Сбой read model', onRetry: vi.fn() }),
     );
-    const emergency = renderScene(preparationSnapshot(coreItems()), { mode: EVENING_CYCLE_MODE.emergency });
+    const emergency = renderScene(preparationSnapshot(coreItems()), {
+      mode: EVENING_CYCLE_MODE.emergency,
+    });
 
     expect(loading).toContain('role="status"');
     expect(error).toContain('role="alert"');
@@ -97,7 +133,7 @@ describe('R4 Environment PreparationScene', () => {
       completedReview: true,
     });
 
-    expect(active).toContain('Настройте обязательное ядро');
+    expect(active.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ')).toContain('Выбрано 0 из 3–6');
     expect(active).not.toContain('data-category=');
     expect(history).toContain('Сохранённая подготовка');
     expect(history).toContain('Дополнительных пунктов подготовки не требовалось.');
@@ -133,12 +169,36 @@ describe('R4 Environment PreparationScene', () => {
     const expectedResult = `Ожидаемый результат ${'проверяемый результат '.repeat(7)}`.trim();
     const itemTitle = `Подготовить ${'длинное название препятствия '.repeat(6)}`.trim();
     const projectTitle = `Проект ${'устойчивого запуска '.repeat(7)}`.trim();
-    const project = Project.create({ id: EntityId.create('v2b-long-project'), title: projectTitle, now: NOW });
+    const project = Project.create({
+      id: EntityId.create('v2b-long-project'),
+      title: projectTitle,
+      now: NOW,
+    });
     const items = [
-      preparationItem('required-a', true, PREPARATION_CATEGORY.physical, PREPARATION_AREA.sleepEnvironment),
-      preparationItem('required-b', true, PREPARATION_CATEGORY.physical, PREPARATION_AREA.sleepEnvironment),
-      preparationItem('required-c', true, PREPARATION_CATEGORY.digital, PREPARATION_AREA.tomorrowStart),
-      preparationItem('OPTIONAL-UNIQUE', false, PREPARATION_CATEGORY.digital, PREPARATION_AREA.tomorrowStart),
+      preparationItem(
+        'required-a',
+        true,
+        PREPARATION_CATEGORY.physical,
+        PREPARATION_AREA.sleepEnvironment,
+      ),
+      preparationItem(
+        'required-b',
+        true,
+        PREPARATION_CATEGORY.physical,
+        PREPARATION_AREA.sleepEnvironment,
+      ),
+      preparationItem(
+        'required-c',
+        true,
+        PREPARATION_CATEGORY.digital,
+        PREPARATION_AREA.tomorrowStart,
+      ),
+      preparationItem(
+        'OPTIONAL-UNIQUE',
+        false,
+        PREPARATION_CATEGORY.digital,
+        PREPARATION_AREA.tomorrowStart,
+      ),
       preparationItem(
         'long-copy',
         true,
@@ -148,7 +208,10 @@ describe('R4 Environment PreparationScene', () => {
       ),
     ];
     const markup = renderScene(
-      preparationSnapshot(items, { firstAction: longFirstAction(actionTitle, expectedResult), project }),
+      preparationSnapshot(items, {
+        firstAction: longFirstAction(actionTitle, expectedResult),
+        project,
+      }),
       { mode: EVENING_CYCLE_MODE.quick },
     );
 
@@ -167,7 +230,9 @@ describe('R4 Environment PreparationScene', () => {
     expect(v2bCss).toContain('min-width: 0;');
     expect(v2bCss).toContain('overflow-wrap: anywhere;');
     expect(v2bCss).not.toMatch(/overflow-x:\s*(?:auto|scroll)/);
-    expect(v2bCss).toMatch(/@media \(max-width: 48rem\)[\s\S]*?\.preparation-readiness[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\)/);
+    expect(v2bCss).toMatch(
+      /@media \(max-width: 48rem\)[\s\S]*?\.preparation-readiness[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\)/,
+    );
     expect(preparationSource.indexOf('preparation-first-start')).toBeLessThan(
       preparationSource.indexOf('<PreparationSummaryStrip'),
     );
@@ -179,9 +244,51 @@ describe('R4 Environment PreparationScene', () => {
   it('фиксирует Environment CSS: grid, mobile, touch, focus и reduced motion', () => {
     expect(environmentCss).toContain('.preparation-environment-areas');
     expect(environmentCss).toMatch(/grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
-    expect(environmentCss).toMatch(/@media \(max-width: 900px\)[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\)/);
+    expect(environmentCss).toMatch(
+      /@media \(max-width: 900px\)[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\)/,
+    );
     expect(environmentCss).toMatch(/@media \(max-width: 640px\)[\s\S]*?min-height:\s*44px/);
     expect(environmentCss).toContain('min-height: 2.75rem');
+    expect(environmentCss).toMatch(
+      /\.preparation-core-option\s*\{[\s\S]*?background:\s*var\(--surface-2\)/,
+    );
+    expect(environmentCss).toMatch(
+      /\.preparation-core-option\[aria-pressed='true'\]\s*\{[\s\S]*?border-color:\s*var\(--gold-main\)/,
+    );
+    expect(environmentCss).toMatch(
+      /\.preparation-core-option\[aria-pressed='true'\]\s*\{[\s\S]*?color:\s*var\(--text-primary\)/,
+    );
+    expect(environmentCss).toMatch(
+      /\.preparation-core-option:not\(\[aria-pressed='true'\]\)\s*\{[\s\S]*?color:\s*var\(--text-secondary\)/,
+    );
+    expect(environmentCss).not.toMatch(
+      /\.preparation-core-(?:option|selected-indicator)[^{]*\{[^}]*color:\s*var\(--success\)/,
+    );
+    expect(environmentCss).toContain('.preparation-tomorrow-context');
+    expect(environmentCss).toMatch(
+      /\.evening-preparation-scene\[data-core-configuring='true'\][\s\S]*?background:[\s\S]*?var\(--evening-v1-border-strong\)/,
+    );
+    expect(environmentCss).not.toContain('var(--info)');
+    expect(environmentCss).not.toContain('var(--space-7)');
+    expect(environmentCss).toMatch(
+      /\.evening-preparation-scene\[data-core-configuring='true'\]::before[\s\S]*?z-index:\s*0;[\s\S]*?border-radius:\s*50%[\s\S]*?box-shadow:/,
+    );
+    expect(environmentCss).toMatch(
+      /\.evening-preparation-scene\[data-core-configuring='true'\]::before[\s\S]*?right:\s*var\(--space-8\)/,
+    );
+    expect(environmentCss).toMatch(
+      /\.preparation-core-configuration\s*\{[\s\S]*?background:\s*linear-gradient\(/,
+    );
+    expect(environmentCss).toMatch(
+      /\.evening-preparation-scene\[data-core-configuring='true'\] > \*[\s\S]*?position:\s*relative;[\s\S]*?z-index:\s*1;/,
+    );
+    expect(environmentCss).toMatch(
+      /\[data-core-configuring='true'\][\s\S]*?\.evening-preparation-heading[\s\S]*?h3[\s\S]*?font-size:\s*clamp\(/,
+    );
+    expect(environmentCss).toContain('.preparation-core-actions');
+    expect(environmentCss).toMatch(
+      /@media \(min-width: 901px\)[\s\S]*?\.preparation-core-option[\s\S]*?min-height:\s*2\.5rem/,
+    );
     expect(environmentCss).toMatch(
       /@media \(max-width: 640px\)[\s\S]*?\.preparation-core-edit[\s\S]*?min-height:\s*44px/,
     );
@@ -254,10 +361,30 @@ function preparationSnapshot(
 
 function coreItems(): readonly PreparationItem[] {
   return [
-    preparationItem('sleep-one', true, PREPARATION_CATEGORY.physical, PREPARATION_AREA.sleepEnvironment),
-    preparationItem('sleep-two', true, PREPARATION_CATEGORY.physical, PREPARATION_AREA.sleepEnvironment),
-    preparationItem('tomorrow-one', true, PREPARATION_CATEGORY.digital, PREPARATION_AREA.tomorrowStart),
-    preparationItem('tomorrow-two', true, PREPARATION_CATEGORY.digital, PREPARATION_AREA.tomorrowStart),
+    preparationItem(
+      'sleep-one',
+      true,
+      PREPARATION_CATEGORY.physical,
+      PREPARATION_AREA.sleepEnvironment,
+    ),
+    preparationItem(
+      'sleep-two',
+      true,
+      PREPARATION_CATEGORY.physical,
+      PREPARATION_AREA.sleepEnvironment,
+    ),
+    preparationItem(
+      'tomorrow-one',
+      true,
+      PREPARATION_CATEGORY.digital,
+      PREPARATION_AREA.tomorrowStart,
+    ),
+    preparationItem(
+      'tomorrow-two',
+      true,
+      PREPARATION_CATEGORY.digital,
+      PREPARATION_AREA.tomorrowStart,
+    ),
   ];
 }
 

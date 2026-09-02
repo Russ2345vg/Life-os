@@ -26,6 +26,7 @@ import {
   buildRoutineRoute,
   parseRoutineRoute,
   ROUTINE_SECTION,
+  type RoutineMorningView,
   type RoutineSection,
 } from '../presentation/routine/RoutineNavigation';
 import { loadApplicationStartup } from './ApplicationStartup';
@@ -76,6 +77,16 @@ const WalksPage = lazy(() =>
   import('../presentation/pages/WalksPage').then((module) => ({ default: module.WalksPage })),
 );
 
+interface RoutineBrowserTarget {
+  readonly location: Pick<Location, 'hash' | 'pathname' | 'search'>;
+  readonly history: Pick<History, 'pushState'>;
+}
+
+export function clearRoutineRouteFromBrowser(target: RoutineBrowserTarget): void {
+  if (parseRoutineRoute(target.location.hash) === null) return;
+  target.history.pushState(null, '', `${target.location.pathname}${target.location.search}`);
+}
+
 export function ApplicationShell() {
   const application = useLifeOsApplication();
   const [initialRoutineRoute] = useState(() =>
@@ -105,6 +116,9 @@ export function ApplicationShell() {
   const [routineSection, setRoutineSection] = useState<RoutineSection>(
     initialRoutineRoute?.section ?? ROUTINE_SECTION.day,
   );
+  const [morningView, setMorningView] = useState<RoutineMorningView | null>(
+    initialRoutineRoute?.morningView ?? null,
+  );
   const [openCreateRequested, setOpenCreateRequested] = useState(false);
   const [decisionLaunchRequest, setDecisionLaunchRequest] =
     useState<DecisionWalkLaunchRequest | null>(null);
@@ -128,13 +142,21 @@ export function ApplicationShell() {
     readonly projectId: string | null;
     readonly sequence: number;
   }>({ projectId: null, sequence: 0 });
-  const openProject = useCallback((projectId: string): void => {
-    setManagementProjectRequest((current) => ({
-      projectId,
-      sequence: current.sequence + 1,
-    }));
-    setActiveSection(APP_SECTION.management);
+  const leaveRoutineRoute = useCallback((): void => {
+    setMorningView(null);
+    clearRoutineRouteFromBrowser(window);
   }, []);
+  const openProject = useCallback(
+    (projectId: string): void => {
+      setManagementProjectRequest((current) => ({
+        projectId,
+        sequence: current.sequence + 1,
+      }));
+      leaveRoutineRoute();
+      setActiveSection(APP_SECTION.management);
+    },
+    [leaveRoutineRoute],
+  );
 
   useEffect(() => {
     let active = true;
@@ -168,6 +190,7 @@ export function ApplicationShell() {
       if (route === null) return;
       setActiveSection(APP_SECTION.routine);
       setRoutineSection(route.section);
+      setMorningView(route.morningView);
       if (route.date !== null) setSelectedDate(route.date);
     };
 
@@ -196,11 +219,13 @@ export function ApplicationShell() {
       }
       setStartupStorageError(false);
       if (result.status === 'active-walk') {
+        leaveRoutineRoute();
         setActiveSection(APP_SECTION.walks);
         setSelectedDate(result.date);
         return;
       }
       if (result.status !== 'evening') return;
+      leaveRoutineRoute();
       setActiveSection(APP_SECTION.today);
       setSelectedDate(result.date);
       setStartupEveningDate(result.date);
@@ -213,7 +238,7 @@ export function ApplicationShell() {
     return () => {
       active = false;
     };
-  }, [application, initialRoutineRoute, startupRetryToken]);
+  }, [application, initialRoutineRoute, leaveRoutineRoute, startupRetryToken]);
 
   const refreshPendingWalkReentry = useCallback(async (): Promise<void> => {
     setPendingWalkReentryState(await loadPendingWalkReentry(application.getPendingWalkReentry));
@@ -250,6 +275,8 @@ export function ApplicationShell() {
       reflection: application.reflection,
       tomorrowPlan: application.tomorrowPlan,
       preparation: application.preparation,
+      relaxation: application.relaxation,
+      sleepCheck: application.sleepCheck,
       getDecisionById: application.getDecisionById,
       getDecisionOverview: application.getDecisionOverview,
       getLifeActionsForDecision: application.getLifeActionsForDecision,
@@ -283,32 +310,49 @@ export function ApplicationShell() {
     }
     if (section === APP_SECTION.routine) {
       setRoutineSection(ROUTINE_SECTION.day);
+      setMorningView(null);
       writeRoutineRoute(ROUTINE_SECTION.day, selectedDate);
-    } else if (parseRoutineRoute(window.location.hash) !== null) {
-      window.history.pushState(null, '', `${window.location.pathname}${window.location.search}`);
-    }
+    } else leaveRoutineRoute();
     setActiveSection(section);
   }
 
   function openRoutineSection(section: RoutineSection): void {
     setRoutineSection(section);
-    writeRoutineRoute(section, selectedDate);
+    const nextMorningView = section === ROUTINE_SECTION.morning ? morningView : null;
+    if (section !== ROUTINE_SECTION.morning) setMorningView(null);
+    writeRoutineRoute(section, selectedDate, false, nextMorningView);
   }
 
   function openCompletedEvening(date: DayDate): void {
     setSelectedDate(date);
     setRoutineSection(ROUTINE_SECTION.evening);
+    setMorningView(null);
     setActiveSection(APP_SECTION.routine);
     writeRoutineRoute(ROUTINE_SECTION.evening, date);
   }
 
   function changeRoutineDate(date: DayDate): void {
     setSelectedDate(date);
-    writeRoutineRoute(routineSection, date, true);
+    writeRoutineRoute(
+      routineSection,
+      date,
+      true,
+      routineSection === ROUTINE_SECTION.morning ? morningView : null,
+    );
   }
 
-  function writeRoutineRoute(section: RoutineSection, date: DayDate, replace = false): void {
-    const route = buildRoutineRoute(section, date);
+  function changeMorningView(view: RoutineMorningView | null): void {
+    setMorningView(view);
+    writeRoutineRoute(ROUTINE_SECTION.morning, selectedDate, false, view);
+  }
+
+  function writeRoutineRoute(
+    section: RoutineSection,
+    date: DayDate,
+    replace = false,
+    view: RoutineMorningView | null = null,
+  ): void {
+    const route = buildRoutineRoute(section, date, view);
     if (replace) {
       window.history.replaceState(null, '', route);
       return;
@@ -317,6 +361,7 @@ export function ApplicationShell() {
   }
 
   function openToday(): void {
+    leaveRoutineRoute();
     setActiveSection(APP_SECTION.today);
   }
 
@@ -350,6 +395,7 @@ export function ApplicationShell() {
     if (selectedDate.isBefore(currentDate)) {
       setSelectedDate(currentDate);
     }
+    leaveRoutineRoute();
     setActiveSection(APP_SECTION.today);
     setOpenCreateRequested(true);
   }
@@ -450,6 +496,8 @@ export function ApplicationShell() {
       reflection={application.reflection}
       tomorrowPlan={application.tomorrowPlan}
       preparation={application.preparation}
+      relaxation={application.relaxation}
+      sleepCheck={application.sleepCheck}
       updateDayResultSphere={application.updateDayResultSphere}
       getDecisionsForDate={application.getDecisionsForDate}
       getLifeActionsForDate={application.getLifeActionsForDate}
@@ -587,6 +635,9 @@ export function ApplicationShell() {
             onDateChange={changeRoutineDate}
             activeSection={routineSection}
             onSectionChange={openRoutineSection}
+            morningView={morningView}
+            onMorningViewChange={changeMorningView}
+            onMorningWorkBlockStarted={openToday}
             onCurrentDayChange={setCurrentDay}
             createRoutineBlock={application.createRoutineBlock}
             updateRoutineBlock={application.updateRoutineBlock}
@@ -604,6 +655,17 @@ export function ApplicationShell() {
             completeRoutineOccurrence={application.completeRoutineOccurrence}
             abandonRoutineOccurrence={application.abandonRoutineOccurrence}
             getActiveWalk={application.getActiveWalk}
+            morningCenter={{
+              getOverview: application.getMorningCenterOverview,
+              getPhysicalOverview: application.getMorningPhysicalActivationOverview,
+              getPhysicalExecutionOverview: application.getMorningPhysicalExecutionOverview,
+              getCompletionOverview: application.getMorningCompletionOverview,
+              getHistory: application.getMorningHistory,
+              cycle: application.morningCycle,
+              exerciseCatalog: application.morningExerciseCatalog,
+              tomorrowPlan: application.tomorrowPlan,
+              clock: application.clock,
+            }}
             onOpenWalks={() => openSection(APP_SECTION.walks)}
             onStartWalk={(request) => {
               setDecisionLaunchRequest(null);
@@ -629,6 +691,7 @@ export function ApplicationShell() {
             onOpenHistoryRoutine={(request) => {
               setSelectedDate(request.date);
               setRoutineSection(ROUTINE_SECTION.day);
+              setMorningView(null);
               setRoutineReturnTarget(request);
               writeRoutineRoute(ROUTINE_SECTION.day, request.date);
               setActiveSection(APP_SECTION.routine);
@@ -655,6 +718,7 @@ export function ApplicationShell() {
             onReturnToRoutine={(request) => {
               setSelectedDate(request.date);
               setRoutineSection(ROUTINE_SECTION.day);
+              setMorningView(null);
               setRoutineReturnTarget(request);
               writeRoutineRoute(ROUTINE_SECTION.day, request.date);
               setActiveSection(APP_SECTION.routine);

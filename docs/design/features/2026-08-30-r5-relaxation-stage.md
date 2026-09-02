@@ -2,11 +2,10 @@
 
 ## Status
 
-- Design: `APPROVED IN CHAT`
-- Written specification: `APPROVED`
-- Implementation: `NOT STARTED`
-- Visual review: `NOT STARTED`
-- Lock: `UNLOCKED`
+- Design: `APPROVED`
+- Implementation: `APPROVED`
+- Visual review: `APPROVED`
+- Lock: `LOCKED`
 
 The architecture, readiness gate, persistent default-practice behavior, screen-free durations, and
 UI contract were accepted by the user on 2026-08-30. The written specification was reviewed and
@@ -635,7 +634,7 @@ reason under `AGENTS.md`; R5 must not silently expand into R9, R10, R12, or R6.
 - [ ] Failing tests added before production implementation.
 - [ ] R5 implemented without starting R6.
 - [ ] Persistence, refresh, optional timer, manual completion, screen-free skip, and default carry
-  forward verified.
+      forward verified.
 - [ ] Targeted tests and `npm run verify` pass on the final current tree.
 - [ ] Desktop/mobile browser QA, console review, and Rule 38 review complete.
 - [ ] Final result reported as `R5 COMPLETE — WAITING FOR USER APPROVAL`.

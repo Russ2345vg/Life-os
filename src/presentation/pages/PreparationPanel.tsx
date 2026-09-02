@@ -12,6 +12,12 @@ import { EveningVisualIcon, type EveningVisualIconName } from '../components/Eve
 import '../styles/evening-environment.css';
 import { visiblePreparationItemsForMode } from './EveningModePresentation';
 import {
+  canConfirmPreparationCore,
+  createPreparationCoreSelectionDraft,
+  togglePreparationCoreKey,
+  type PreparationCoreSelectionDraft,
+} from './PreparationCoreSelection';
+import {
   buildPreparationPanelPresentation,
   preparationHeading,
   type PreparationSummaryItem,
@@ -21,7 +27,7 @@ interface PreparationPanelProps {
   readonly cycleDate: DayDate;
   readonly service: Pick<
     PreparationService,
-    'getOrGenerate' | 'configureRequiredCore' | 'completeItem' | 'skipItem' | 'continueToShutdown'
+    'getOrGenerate' | 'configureRequiredCore' | 'completeItem' | 'skipItem' | 'continueToRelaxation'
   >;
   readonly onContinued: () => void;
   readonly onClose: () => void;
@@ -45,16 +51,29 @@ const AREA_LABELS: Readonly<Record<PreparationArea, string>> = {
   [PREPARATION_AREA.tomorrowStart]: 'Среда для завтра',
 };
 
+const CORE_AREA_LABELS: Readonly<Record<PreparationArea, string>> = {
+  [PREPARATION_AREA.sleepEnvironment]: 'Для спокойного вечера',
+  [PREPARATION_AREA.tomorrowStart]: 'Для завтра',
+};
+
 const AREA_ICONS: Readonly<Record<PreparationArea, EveningVisualIconName>> = {
   [PREPARATION_AREA.sleepEnvironment]: 'chair',
   [PREPARATION_AREA.tomorrowStart]: 'sun',
 };
 
-interface PreparationCoreSelectionDraft {
+interface PreparationCoreSelectionState extends PreparationCoreSelectionDraft {
   readonly planId: string;
   readonly savedCoreSignature: string;
-  readonly selectedKeys: readonly string[];
 }
+
+type PreparationOperationError =
+  | Readonly<{
+      kind: 'item';
+      message: string;
+      item: PreparationItem;
+      skip: boolean;
+    }>
+  | Readonly<{ kind: 'continue'; message: string }>;
 
 export function PreparationPanel({
   cycleDate,
@@ -70,11 +89,13 @@ export function PreparationPanel({
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
   const [isContinuing, setIsContinuing] = useState(false);
   const [completedReviewEditing, setCompletedReviewEditing] = useState(false);
-  const [coreDraft, setCoreDraft] = useState<PreparationCoreSelectionDraft | null>(null);
+  const [coreDraft, setCoreDraft] = useState<PreparationCoreSelectionState | null>(null);
   const [isConfiguringCore, setIsConfiguringCore] = useState(false);
   const [isSavingCore, setIsSavingCore] = useState(false);
   const [coreError, setCoreError] = useState<string | null>(null);
+  const [operationError, setOperationError] = useState<PreparationOperationError | null>(null);
   const coreErrorRef = useRef<HTMLDivElement | null>(null);
+  const operationErrorRef = useRef<HTMLDivElement | null>(null);
   const checklistHeadingRef = useRef<HTMLHeadingElement | null>(null);
 
   function acceptSnapshot(snapshot: PreparationSnapshot): void {
@@ -92,6 +113,10 @@ export function PreparationPanel({
   useEffect(() => {
     if (coreError !== null) coreErrorRef.current?.focus();
   }, [coreError]);
+
+  useEffect(() => {
+    if (operationError !== null) operationErrorRef.current?.focus();
+  }, [operationError]);
 
   useEffect(() => {
     let cancelled = false;
@@ -112,20 +137,32 @@ export function PreparationPanel({
 
   async function processItem(item: PreparationItem, skip: boolean): Promise<void> {
     setBusyItemId(item.id.toString());
+    setOperationError(null);
     try {
       const snapshot = skip
         ? await service.skipItem(cycleDate, item.id)
         : await service.completeItem(cycleDate, item.id);
       acceptSnapshot(snapshot);
     } catch {
-      setLoadState({ status: 'error', message: 'Не удалось сохранить пункт подготовки.' });
+      setOperationError({
+        kind: 'item',
+        message: 'Не удалось сохранить пункт подготовки.',
+        item,
+        skip,
+      });
     } finally {
       setBusyItemId(null);
     }
   }
 
   async function configureRequiredCore(): Promise<void> {
-    if (coreDraft === null || !isValidCoreSelection(coreDraft.selectedKeys)) return;
+    if (
+      coreDraft === null ||
+      loadState.status !== 'ready' ||
+      !canConfirmPreparationCore(coreDraft, loadState.snapshot.plan.activeItems)
+    ) {
+      return;
+    }
     setIsSavingCore(true);
     setCoreError(null);
     try {
@@ -140,23 +177,33 @@ export function PreparationPanel({
     }
   }
 
-  async function continueToShutdown(): Promise<void> {
+  async function continueToRelaxation(): Promise<void> {
     setIsContinuing(true);
+    setOperationError(null);
     try {
-      const snapshot = await service.continueToShutdown(cycleDate);
+      const snapshot = await service.continueToRelaxation(cycleDate);
       acceptSnapshot(snapshot);
       if (completedReview) {
         setCompletedReviewEditing(false);
       }
       onContinued();
     } catch {
-      setLoadState({
-        status: 'error',
+      setOperationError({
+        kind: 'continue',
         message: 'Обработайте все обязательные пункты перед продолжением.',
       });
     } finally {
       setIsContinuing(false);
     }
+  }
+
+  async function retryOperation(): Promise<void> {
+    if (operationError === null) return;
+    if (operationError.kind === 'item') {
+      await processItem(operationError.item, operationError.skip);
+      return;
+    }
+    await continueToRelaxation();
   }
 
   if (loadState.status === 'loading') {
@@ -195,15 +242,18 @@ export function PreparationPanel({
         isSavingCore={isSavingCore}
         coreError={coreError}
         coreErrorRef={coreErrorRef}
+        operationError={operationError}
+        operationErrorRef={operationErrorRef}
         checklistHeadingRef={checklistHeadingRef}
         onCoreDraftChange={setCoreDraft}
         onConfigureCore={configureRequiredCore}
+        onRetryOperation={retryOperation}
         onConfigureCoreChange={(configuring) => {
           setCoreError(null);
           setIsConfiguringCore(configuring);
         }}
         onProcess={processItem}
-        onContinue={continueToShutdown}
+        onContinue={continueToRelaxation}
         onReviewEditingChange={setCompletedReviewEditing}
       />
     </PreparationFrame>
@@ -222,9 +272,12 @@ export function PreparationSceneView({
   isSavingCore,
   coreError,
   coreErrorRef,
+  operationError,
+  operationErrorRef,
   checklistHeadingRef,
   onCoreDraftChange,
   onConfigureCore,
+  onRetryOperation,
   onConfigureCoreChange,
   onProcess,
   onContinue,
@@ -236,14 +289,17 @@ export function PreparationSceneView({
   readonly completedReviewEditing: boolean;
   readonly busyItemId: string | null;
   readonly isContinuing: boolean;
-  readonly coreDraft?: PreparationCoreSelectionDraft;
+  readonly coreDraft?: PreparationCoreSelectionState;
   readonly isConfiguringCore?: boolean;
   readonly isSavingCore?: boolean;
   readonly coreError?: string | null;
   readonly coreErrorRef?: RefObject<HTMLDivElement | null> | undefined;
+  readonly operationError?: PreparationOperationError | null;
+  readonly operationErrorRef?: RefObject<HTMLDivElement | null> | undefined;
   readonly checklistHeadingRef?: RefObject<HTMLHeadingElement | null> | undefined;
-  readonly onCoreDraftChange?: (draft: PreparationCoreSelectionDraft) => void;
+  readonly onCoreDraftChange?: (draft: PreparationCoreSelectionState) => void;
   readonly onConfigureCore?: () => Promise<void>;
+  readonly onRetryOperation?: () => Promise<void>;
   readonly onConfigureCoreChange?: (configuring: boolean) => void;
   readonly onProcess: (item: PreparationItem, skip: boolean) => Promise<void>;
   readonly onContinue: () => Promise<void>;
@@ -253,6 +309,7 @@ export function PreparationSceneView({
   const resolvedCoreDraft = coreDraft ?? coreSelectionDraft(snapshot);
   const configuringCore = isConfiguringCore ?? false;
   const savingCore = isSavingCore ?? false;
+  const visibleOperationError = operationError ?? null;
   const coreConfigured = snapshot.plan.requiredCoreKeys !== null;
   const isEmergency = mode === EVENING_CYCLE_MODE.emergency;
   const showCoreConfiguration =
@@ -266,7 +323,12 @@ export function PreparationSceneView({
       coreConfigured,
     );
   const editable = !completedReview || completedReviewEditing;
-  const heading = preparationHeading(completedReview);
+  const heading = showCoreConfiguration
+    ? {
+        kicker: 'Подготовка',
+        title: 'Подготовьте среду',
+      }
+    : preparationHeading(completedReview);
   const historyEmpty = completedReview && items.length === 0;
   const areas = AREA_ORDER.flatMap((area) => {
     const areaItems = items.filter((item) => item.area === area);
@@ -279,61 +341,74 @@ export function PreparationSceneView({
       data-scene-mode={completedReview ? 'history' : 'active'}
       data-ready={fullyReady ? 'true' : 'false'}
       data-history-empty={historyEmpty ? 'true' : undefined}
+      data-core-configuring={showCoreConfiguration ? 'true' : undefined}
     >
       <header className="evening-preparation-heading">
         <p className="section-kicker gold">{heading.kicker}</p>
         <h3>{heading.title}</h3>
+        {showCoreConfiguration ? (
+          <p className="evening-preparation-secondary">
+            Несколько простых действий — и утро начнётся без лишней суеты.
+          </p>
+        ) : null}
       </header>
 
       <div className="preparation-workspace">
-        <section className="preparation-first-start" aria-labelledby="preparation-action-title">
-          <div className="preparation-first-start-icon" aria-hidden="true">
-            <EveningVisualIcon name="sun" size={30} />
-          </div>
-          <div className="preparation-first-start-copy">
-            <p className="section-kicker gold">
-              {completedReview ? 'Первый старт был определён' : 'Первый старт завтра'}
-            </p>
-            <h4 id="preparation-action-title">
-              {snapshot.firstAction?.title.toString() ?? 'Первый шаг не определён'}
-            </h4>
-            {snapshot.firstAction?.description === null ||
-            snapshot.firstAction?.description === undefined ? null : (
-              <p className="preparation-first-start-description">
-                {snapshot.firstAction.description}
-              </p>
-            )}
-            <div className="preparation-first-start-context">
-              {snapshot.firstAction?.expectedResult === null ||
-              snapshot.firstAction?.expectedResult === undefined ? null : (
-                <p>
-                  <span>Результат шага</span>
-                  <strong>{snapshot.firstAction.expectedResult.toString()}</strong>
-                </p>
-              )}
-              {historyEmpty && snapshot.primaryDecision !== null ? (
-                <p>
-                  <span>Главное Решение</span>
-                  <strong>{snapshot.primaryDecision.title.toString()}</strong>
-                </p>
-              ) : null}
-              {snapshot.project === null ? null : (
-                <p>
-                  <span>Проект</span>
-                  <strong>{snapshot.project.title}</strong>
-                </p>
-              )}
-              {!historyEmpty && snapshot.primaryDecision !== null ? (
-                <p>
-                  <span>Главное Решение</span>
-                  <strong>{snapshot.primaryDecision.title.toString()}</strong>
-                </p>
-              ) : null}
+        {showCoreConfiguration ? (
+          <p className="preparation-tomorrow-context">
+            <span>Завтра:</span>{' '}
+            <strong>{snapshot.firstAction?.title.toString() ?? 'Первый шаг не определён'}</strong>
+          </p>
+        ) : (
+          <section className="preparation-first-start" aria-labelledby="preparation-action-title">
+            <div className="preparation-first-start-icon" aria-hidden="true">
+              <EveningVisualIcon name="sun" size={30} />
             </div>
-          </div>
-        </section>
+            <div className="preparation-first-start-copy">
+              <p className="section-kicker gold">
+                {completedReview ? 'Первый старт был определён' : 'Первый старт завтра'}
+              </p>
+              <h4 id="preparation-action-title">
+                {snapshot.firstAction?.title.toString() ?? 'Первый шаг не определён'}
+              </h4>
+              {snapshot.firstAction?.description === null ||
+              snapshot.firstAction?.description === undefined ? null : (
+                <p className="preparation-first-start-description">
+                  {snapshot.firstAction.description}
+                </p>
+              )}
+              <div className="preparation-first-start-context">
+                {snapshot.firstAction?.expectedResult === null ||
+                snapshot.firstAction?.expectedResult === undefined ? null : (
+                  <p>
+                    <span>Результат шага</span>
+                    <strong>{snapshot.firstAction.expectedResult.toString()}</strong>
+                  </p>
+                )}
+                {historyEmpty && snapshot.primaryDecision !== null ? (
+                  <p>
+                    <span>Главное Решение</span>
+                    <strong>{snapshot.primaryDecision.title.toString()}</strong>
+                  </p>
+                ) : null}
+                {snapshot.project === null ? null : (
+                  <p>
+                    <span>Проект</span>
+                    <strong>{snapshot.project.title}</strong>
+                  </p>
+                )}
+                {!historyEmpty && snapshot.primaryDecision !== null ? (
+                  <p>
+                    <span>Главное Решение</span>
+                    <strong>{snapshot.primaryDecision.title.toString()}</strong>
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          </section>
+        )}
 
-        {historyEmpty ? null : <PreparationSummaryStrip items={summary} />}
+        {historyEmpty || showCoreConfiguration ? null : <PreparationSummaryStrip items={summary} />}
 
         {showCoreConfiguration ? (
           <PreparationCoreConfiguration
@@ -342,6 +417,7 @@ export function PreparationSceneView({
             isSaving={savingCore}
             error={coreError ?? null}
             errorRef={coreErrorRef}
+            firstActionTitle={snapshot.firstAction?.title.toString() ?? null}
             onDraftChange={onCoreDraftChange}
             onConfirm={onConfigureCore}
           />
@@ -355,7 +431,7 @@ export function PreparationSceneView({
             className={`preparation-sections preparation-environment-areas preparation-sections-${areas.length}`}
             aria-label="Области подготовки среды"
           >
-            {areas.map(({ area, items: areaItems }) => (
+            {areas.map(({ area, items: areaItems }, areaIndex) => (
               <PreparationSection
                 area={area}
                 items={areaItems}
@@ -364,11 +440,25 @@ export function PreparationSceneView({
                 reviewEditing={completedReviewEditing}
                 completedReview={completedReview}
                 onProcess={onProcess}
-                headingRef={area === PREPARATION_AREA.sleepEnvironment ? checklistHeadingRef : undefined}
+                headingRef={areaIndex === 0 ? checklistHeadingRef : undefined}
+                focusTarget={areaIndex === 0 && checklistHeadingRef !== undefined}
                 key={area}
               />
             ))}
           </div>
+        )}
+
+        {showCoreConfiguration || historyEmpty || visibleOperationError === null ? null : (
+          <PreparationOperationAlert
+            message={visibleOperationError.message}
+            retryLabel={
+              visibleOperationError.kind === 'item'
+                ? 'Повторить сохранение пункта'
+                : 'Повторить переход'
+            }
+            onRetry={() => void onRetryOperation?.()}
+            errorRef={operationErrorRef}
+          />
         )}
 
         {showCoreConfiguration || historyEmpty ? null : (
@@ -479,17 +569,17 @@ function summaryIcon(id: PreparationSummaryItem['id']): EveningVisualIconName {
   return AREA_ICONS[id];
 }
 
-function coreSelectionDraft(snapshot: PreparationSnapshot): PreparationCoreSelectionDraft {
-  const selectedKeys = snapshot.plan.requiredCoreKeys ?? snapshot.recommendedCoreKeys;
+function coreSelectionDraft(snapshot: PreparationSnapshot): PreparationCoreSelectionState {
+  const selection = createPreparationCoreSelectionDraft(
+    snapshot.plan.activeItems,
+    snapshot.plan.requiredCoreKeys,
+    snapshot.recommendedCoreKeys,
+  );
   return {
     planId: snapshot.plan.id.toString(),
-    savedCoreSignature: [...selectedKeys].sort().join('|'),
-    selectedKeys: [...selectedKeys],
+    savedCoreSignature: [...selection.selectedKeys].sort().join('|'),
+    selectedKeys: selection.selectedKeys,
   };
-}
-
-function isValidCoreSelection(keys: readonly string[]): boolean {
-  return keys.length >= 3 && keys.length <= 6;
 }
 
 export function PreparationSceneState({
@@ -521,38 +611,67 @@ export function PreparationSceneState({
   );
 }
 
+export function PreparationOperationAlert({
+  message,
+  retryLabel,
+  onRetry,
+  errorRef,
+}: {
+  readonly message: string;
+  readonly retryLabel: string;
+  readonly onRetry: () => void;
+  readonly errorRef?: RefObject<HTMLDivElement | null> | undefined;
+}) {
+  return (
+    <div className="preparation-operation-error" role="alert" tabIndex={-1} ref={errorRef}>
+      <span>{message}</span>
+      <button className="text-button" type="button" onClick={onRetry}>
+        {retryLabel}
+      </button>
+    </div>
+  );
+}
+
 function PreparationCoreConfiguration({
   items,
   draft,
   isSaving,
   error,
   errorRef,
+  firstActionTitle,
   onDraftChange,
   onConfirm,
 }: {
   readonly items: readonly PreparationItem[];
-  readonly draft: PreparationCoreSelectionDraft;
+  readonly draft: PreparationCoreSelectionState;
   readonly isSaving: boolean;
   readonly error: string | null;
   readonly errorRef?: RefObject<HTMLDivElement | null> | undefined;
-  readonly onDraftChange?: ((draft: PreparationCoreSelectionDraft) => void) | undefined;
+  readonly firstActionTitle: string | null;
+  readonly onDraftChange?: ((draft: PreparationCoreSelectionState) => void) | undefined;
   readonly onConfirm?: (() => Promise<void>) | undefined;
 }) {
   const selected = new Set(draft.selectedKeys);
   return (
     <section className="preparation-core-configuration" aria-labelledby="preparation-core-title">
-      <header>
-        <p className="section-kicker gold">Обязательное ядро</p>
-        <h4 id="preparation-core-title">Настройте обязательное ядро</h4>
-        <p id="preparation-core-count">Выбрано {selected.size} из 3–6</p>
+      <header className="preparation-core-heading">
+        <h4 id="preparation-core-title">
+          <span id="preparation-core-count" aria-live="polite">
+            Выбрано {selected.size} из 3–6
+          </span>
+        </h4>
       </header>
       <div className="preparation-core-areas" aria-describedby="preparation-core-count">
         {AREA_ORDER.map((area) => {
           const areaItems = items.filter((item) => item.area === area);
           if (areaItems.length === 0) return null;
           return (
-            <section className="preparation-core-area" aria-labelledby={`core-area-${area}`} key={area}>
-              <h5 id={`core-area-${area}`}>{AREA_LABELS[area]}</h5>
+            <section
+              className="preparation-core-area"
+              aria-labelledby={`core-area-${area}`}
+              key={area}
+            >
+              <h5 id={`core-area-${area}`}>{CORE_AREA_LABELS[area]}</h5>
               <ul>
                 {areaItems.map((item) => {
                   const selectedItem = selected.has(item.key);
@@ -565,16 +684,14 @@ function PreparationCoreConfiguration({
                         disabled={isSaving}
                         onClick={() => {
                           if (onDraftChange === undefined) return;
-                          const nextKeys = selectedItem
-                            ? draft.selectedKeys.filter((key) => key !== item.key)
-                            : [...draft.selectedKeys, item.key];
-                          onDraftChange({ ...draft, selectedKeys: nextKeys });
+                          const nextDraft = togglePreparationCoreKey(draft, item.key, items);
+                          onDraftChange({ ...draft, selectedKeys: nextDraft.selectedKeys });
                         }}
                       >
                         <span className="preparation-core-selected-indicator" aria-hidden="true">
                           {selectedItem ? '✓' : '○'}
                         </span>
-                        <span>{item.title}</span>
+                        <span>{preparationCoreOptionTitle(item, firstActionTitle)}</span>
                       </button>
                     </li>
                   );
@@ -597,16 +714,31 @@ function PreparationCoreConfiguration({
           </button>
         </div>
       )}
-      <button
-        className="primary-button preparation-core-confirm"
-        type="button"
-        disabled={isSaving || !isValidCoreSelection(draft.selectedKeys)}
-        onClick={() => void onConfirm?.()}
-      >
-        {isSaving ? 'Сохраняем…' : 'Подтвердить ядро'}
-      </button>
+      <div className="preparation-core-actions">
+        <button
+          className="primary-button preparation-core-confirm"
+          type="button"
+          disabled={isSaving || !canConfirmPreparationCore(draft, items)}
+          onClick={() => void onConfirm?.()}
+        >
+          {isSaving ? 'Сохраняем…' : 'Продолжить →'}
+        </button>
+      </div>
     </section>
   );
+}
+
+function preparationCoreOptionTitle(
+  item: PreparationItem,
+  firstActionTitle: string | null,
+): string {
+  if (item.key === 'ENVIRONMENT:SLEEP:VENTILATE_ROOM') {
+    return 'Проветрить комнату';
+  }
+  if (item.key === 'ENVIRONMENT:TOMORROW:FIRST_ACTION' && firstActionTitle !== null) {
+    return `Подготовить всё для: ${firstActionTitle}`;
+  }
+  return item.title;
 }
 
 export function PreparationSection({
@@ -618,6 +750,7 @@ export function PreparationSection({
   completedReview,
   onProcess,
   headingRef,
+  focusTarget = false,
 }: {
   readonly area: PreparationArea;
   readonly items: readonly PreparationItem[];
@@ -627,6 +760,7 @@ export function PreparationSection({
   readonly completedReview: boolean;
   readonly onProcess: (item: PreparationItem, skip: boolean) => Promise<void>;
   readonly headingRef?: RefObject<HTMLHeadingElement | null> | undefined;
+  readonly focusTarget?: boolean;
 }) {
   const areaKey = area.toLowerCase();
   return (
@@ -639,7 +773,12 @@ export function PreparationSection({
         <span aria-hidden="true">
           <EveningVisualIcon name={AREA_ICONS[area]} size={22} />
         </span>
-        <h4 id={`preparation-${areaKey}`} ref={headingRef} tabIndex={-1}>
+        <h4
+          id={`preparation-${areaKey}`}
+          ref={headingRef}
+          tabIndex={-1}
+          data-focus-target={focusTarget ? 'true' : undefined}
+        >
           {AREA_LABELS[area]}
         </h4>
         <small>
@@ -666,6 +805,9 @@ export function PreparationSection({
                 </span>
                 <span>
                   <strong>{item.title}</strong>
+                  {item.recommendedDurationMinutes === null ? null : (
+                    <small>Рекомендуемо: {item.recommendedDurationMinutes} мин</small>
+                  )}
                   {pending ? <small>{preparationItemStatus(item, completedReview)}</small> : null}
                   {item.required ? <em>Обязательное ядро</em> : null}
                 </span>
@@ -690,7 +832,9 @@ export function PreparationSection({
                   </button>
                 </div>
               ) : reviewEditing && pending ? null : (
-                <span className="preparation-item-outcome">{preparationItemStatus(item, completedReview)}</span>
+                <span className="preparation-item-outcome">
+                  {preparationItemStatus(item, completedReview)}
+                </span>
               )}
             </li>
           );

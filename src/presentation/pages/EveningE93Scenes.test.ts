@@ -9,10 +9,13 @@ const globalCss = readFileSync(new URL('../styles/global.css', import.meta.url),
 
 describe('E9.3 tomorrow scene contract', () => {
   it('показывает архитектуру дня вместо последовательности технических полей', () => {
-    const primary = tomorrowSource.indexOf('Главное Решение');
-    const outcomes = tomorrowSource.indexOf('Границы результата');
-    const firstAction = tomorrowSource.indexOf('Первый шаг');
-    const supporting = tomorrowSource.indexOf('Дополнительно');
+    const workingFormStart = tomorrowSource.indexOf('className="tomorrow-dashboard"');
+    const workingFormEnd = tomorrowSource.indexOf('snapshot.scopeTooLargeWarning');
+    const workingFormSource = tomorrowSource.slice(workingFormStart, workingFormEnd);
+    const primary = workingFormSource.indexOf('<p>Главное решение</p>');
+    const outcomes = workingFormSource.indexOf('<p>Граница результата</p>');
+    const firstAction = workingFormSource.indexOf('<p>Первый шаг</p>');
+    const supporting = workingFormSource.indexOf('<p>Дополнительные решения</p>');
 
     expect(primary).toBeGreaterThan(-1);
     expect(outcomes).toBeGreaterThan(primary);
@@ -33,7 +36,7 @@ describe('E9.3 tomorrow scene contract', () => {
   });
 
   it('имеет отдельные состояния quick, emergency, перегруза и завершённого плана', () => {
-    expect(tomorrowSource).toContain("isQuick ? 'Быстро подготовить завтра' : 'Завтра'");
+    expect(tomorrowSource).toContain('isQuick ? current.plan.targetOutcome : target');
     expect(tomorrowSource).toContain('Завтра уже насыщенно');
     expect(tomorrowSource).toContain('Завтра определено');
     expect(tomorrowSource).toContain("onEdit('all')");

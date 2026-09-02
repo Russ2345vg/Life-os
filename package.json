@@ -1,7 +1,7 @@
 {
   "name": "lifeos-app",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -16,7 +16,8 @@
     "test:e2e:list": "node scripts/run-playwright-e2e.mjs --list",
     "format": "prettier --write .",
     "format:check": "node scripts/run-check.mjs format-check",
-    "verify": "node scripts/verify.mjs",
+    "verify": "npm run typecheck && npm run lint && npm run test && npm run test:infra && npm run test:alpha && npm run build && npm run format:check && git diff --check",
+    "verify:full": "npm run verify && npm run test:e2e",
     "test:alpha": "node scripts/run-vitest.mjs alpha"
   },
   "dependencies": {

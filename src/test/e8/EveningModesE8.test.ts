@@ -69,14 +69,14 @@ describe('E8 — Fast & Emergency Evening Modes', () => {
   it('считает прогресс относительно выбранного режима', () => {
     expect(eveningModeProgress(EVENING_CYCLE_MODE.normal, EVENING_CYCLE_STATE.preparing)).toEqual({
       completed: 3,
-      total: 5,
+      total: 7,
     });
     expect(eveningModeProgress(EVENING_CYCLE_MODE.quick, EVENING_CYCLE_STATE.preparing)).toEqual({
       completed: 2,
-      total: 4,
+      total: 6,
     });
     expect(eveningModeProgress(EVENING_CYCLE_MODE.emergency, EVENING_CYCLE_STATE.shutdown)).toEqual(
-      { completed: 2, total: 3 },
+      { completed: 4, total: 5 },
     );
   });
 
@@ -84,10 +84,14 @@ describe('E8 — Fast & Emergency Evening Modes', () => {
     const plan = configuredPreparationPlan();
 
     expect(
-      visiblePreparationItemsForMode(plan.activeItems, EVENING_CYCLE_MODE.quick).map((item) => item.key),
+      visiblePreparationItemsForMode(plan.activeItems, EVENING_CYCLE_MODE.quick).map(
+        (item) => item.key,
+      ),
     ).toEqual(['required-completed', 'required-skipped', 'required-pending', 'required-fourth']);
     expect(
-      visiblePreparationItemsForMode(plan.activeItems, EVENING_CYCLE_MODE.normal).map((item) => item.key),
+      visiblePreparationItemsForMode(plan.activeItems, EVENING_CYCLE_MODE.normal).map(
+        (item) => item.key,
+      ),
     ).toEqual([
       'required-completed',
       'required-skipped',
@@ -110,7 +114,9 @@ describe('E8 — Fast & Emergency Evening Modes', () => {
 
     expect(cycle.mode).toBe(EVENING_CYCLE_MODE.normal);
     expect(plan.requiredCoreKeys).toEqual(coreBefore);
-    expect(plan.items.map((item) => ({ key: item.key, status: item.status }))).toEqual(outcomesBefore);
+    expect(plan.items.map((item) => ({ key: item.key, status: item.status }))).toEqual(
+      outcomesBefore,
+    );
     expect(visiblePreparationItemsForMode(plan.activeItems, cycle.mode)).toHaveLength(5);
   });
 
@@ -223,6 +229,7 @@ function completeSpecial(
   cycle.skipReflection(NOW);
   cycle.completeTomorrowPlanning(NOW);
   cycle.skipPreparation(NOW);
+  cycle.recoverLegacyRelaxation(NOW);
   cycle.complete(LATER);
   return cycle;
 }

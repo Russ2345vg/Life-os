@@ -5,6 +5,8 @@ import {
   DayDate,
   DECISION_KIND,
   JOURNAL_ENTRY_TYPE,
+  SLEEP_CHECK_ANSWER,
+  SLEEP_CHECK_QUESTION,
   SESSION_COMPLETION_KIND,
 } from '../../domain';
 import { LifeOsIndexedDb } from '../../infrastructure/persistence/indexed-db/LifeOsIndexedDb';
@@ -201,10 +203,36 @@ describe('Stage 16.1 journal integration', () => {
       TODAY,
       preparation.recommendedCoreKeys,
     );
-    for (const item of configuredPreparation.plan.activeItems.filter((candidate) => candidate.required)) {
+    for (const item of configuredPreparation.plan.activeItems.filter(
+      (candidate) => candidate.required,
+    )) {
       await application.preparation.skipItem(TODAY, item.id, 'Тестовый осознанный пропуск');
     }
-    await application.preparation.continueToShutdown(TODAY);
+    await application.preparation.continueToRelaxation(TODAY);
+    await application.relaxation.getOrInitialize(TODAY);
+    await application.sleepCheck.setBeforeRatings(TODAY, 2, 3);
+    await application.relaxation.completeDrink(TODAY);
+    await application.relaxation.completeHygiene(TODAY);
+    await application.relaxation.completePractice(TODAY);
+    await application.relaxation.skipScreenFree(TODAY);
+    await application.relaxation.complete(TODAY);
+    await application.sleepCheck.setAfterRatings(TODAY, 4, 4);
+    await application.sleepCheck.answerQuestion(
+      TODAY,
+      SLEEP_CHECK_QUESTION.calmMind,
+      SLEEP_CHECK_ANSWER.yes,
+    );
+    await application.sleepCheck.answerQuestion(
+      TODAY,
+      SLEEP_CHECK_QUESTION.holdingThought,
+      SLEEP_CHECK_ANSWER.no,
+    );
+    await application.sleepCheck.answerQuestion(
+      TODAY,
+      SLEEP_CHECK_QUESTION.readyForSleep,
+      SLEEP_CHECK_ANSWER.yes,
+    );
+    await application.sleepCheck.complete(TODAY);
     const completedDay = await application.completeCurrentDay.execute({
       summary: 'Выпускной цикл завершён',
       actionResolutions: [],

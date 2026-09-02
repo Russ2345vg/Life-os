@@ -17,12 +17,16 @@ import {
   PREPARATION_ITEM_STATUS,
   PREPARATION_PLAN_STATUS,
   PREPARATION_SOURCE_TYPE,
+  RELAXATION_PRACTICE,
+  RelaxationSnapshot,
   PreparationItem,
   PreparationPlan,
   REFLECTION_DAY_SIGNAL,
   REFLECTION_QUESTION_KIND,
   REFLECTION_QUESTION_TYPE,
   REFLECTION_SIGNAL_TYPE,
+  SCREEN_FREE_STATE,
+  SleepCheckSnapshot,
   ReflectionQuestion,
   ReflectionResult,
   ReflectionSignal,
@@ -89,6 +93,76 @@ describe('E10.1 GetEveningHistory', () => {
     ]);
   });
 
+  it('проецирует Evening Ritual v2 факты без изменения исходных агрегатов', async () => {
+    const cycle = completedV2Cycle();
+    const preparation = preparationPlanFor(cycle);
+    const history = queryWith({
+      cycles: [cycle],
+      tomorrowPlans: [],
+      preparationPlans: [preparation],
+    });
+
+    const result = await history.execute({
+      kind: EVENING_HISTORY_RANGE_KIND.custom,
+      startDate: NORMAL_DATE,
+      endDate: NORMAL_DATE,
+    });
+
+    expect(result.items[0]).toMatchObject({
+      mode: EVENING_CYCLE_MODE.normal,
+      startedAt: '2026-08-20T21:50:00.000Z',
+      completedAt: '2026-08-20T22:47:00.000Z',
+      durationMs: 57 * 60 * 1_000,
+      environmentItems: [
+        {
+          key: 'first-action:ready',
+          status: PREPARATION_ITEM_STATUS.completed,
+          required: true,
+          completedAt: '2026-08-20T15:12:00.000Z',
+        },
+        {
+          key: 'reflection:note',
+          status: PREPARATION_ITEM_STATUS.skipped,
+          required: false,
+          skippedAt: '2026-08-20T15:13:00.000Z',
+          skipReason: 'Не требуется',
+        },
+      ],
+      relaxation: {
+        selectedPractice: RELAXATION_PRACTICE.breathing,
+        plannedPracticeDurationMinutes: 15,
+        actualPracticeDurationMs: 15 * 60 * 1_000,
+        screenFreePlannedDurationMinutes: 25,
+        screenFreeOutcome: SCREEN_FREE_STATE.completed,
+        screenFreeActualDurationMs: 25 * 60 * 1_000,
+        practiceStartedAt: '2026-08-20T22:00:00.000Z',
+        practiceCompletedAt: '2026-08-20T22:15:00.000Z',
+        screenFreeStartedAt: '2026-08-20T22:15:00.000Z',
+        screenFreeCompletedAt: '2026-08-20T22:40:00.000Z',
+      },
+      sleepCheck: {
+        calmBefore: 2,
+        calmAfter: 4,
+        calmDelta: 2,
+        sleepReadinessBefore: 3,
+        sleepReadinessAfter: 4,
+        sleepReadinessDelta: 1,
+        answers: [
+          { questionId: 'CALM_MIND', initialAnswer: 'YES', retriedAnswer: null },
+          { questionId: 'HOLDING_THOUGHT', initialAnswer: 'YES', retriedAnswer: 'NO' },
+          { questionId: 'READY_FOR_SLEEP', initialAnswer: 'YES', retriedAnswer: null },
+        ],
+        correctiveAction: {
+          questionId: 'HOLDING_THOUGHT',
+          action: 'CAPTURE_THOUGHT',
+          completedAt: '2026-08-20T22:45:00.000Z',
+        },
+        startedAt: '2026-08-20T22:40:00.000Z',
+        completedAt: '2026-08-20T22:47:00.000Z',
+      },
+    });
+  });
+
   it('возвращает QUICK, EMERGENCY и начатый незавершённый цикл', async () => {
     const quick = simpleCompletedCycle(QUICK_DATE, EVENING_CYCLE_MODE.quick, [
       EVENING_CYCLE_STATE.reflecting,
@@ -131,8 +205,14 @@ describe('E10.1 GetEveningHistory', () => {
     ]);
     expect(result.items[2]).toMatchObject({
       completion: EVENING_CYCLE_COMPLETION.skipped,
+      skipReason: 'Осознанный пропуск',
       durationMs: null,
       preparationState: 'NOT_CREATED',
+    });
+    expect(result.items[1]).toMatchObject({
+      environmentItems: [],
+      relaxation: null,
+      sleepCheck: null,
     });
   });
 
@@ -181,7 +261,7 @@ describe('E10.1 GetEveningHistory', () => {
       cycleCount: 3,
       completedCount: 2,
       skippedCount: 1,
-      modeCounts: { NORMAL: 1, QUICK: 1, EMERGENCY: 1 },
+      modeCounts: { NORMAL: 1, QUICK: 1, EMERGENCY: 0 },
       resolutionCounts: { COMPLETE: 1, CARRY_FORWARD: 1, REVISE: 0, DROP: 1 },
       reflectionAnswerCount: 1,
       signalCount: 1,
@@ -314,6 +394,79 @@ function simpleCompletedCycle(
   });
 }
 
+function completedV2Cycle(): EveningCycle {
+  const relaxation = RelaxationSnapshot.rehydrate({
+    defaultPractice: RELAXATION_PRACTICE.reading,
+    selectedPractice: RELAXATION_PRACTICE.breathing,
+    defaultChangedForFuture: false,
+    practiceDurationMinutes: 15,
+    drinkCompletedAt: new Date('2026-08-20T21:55:00.000Z'),
+    hygieneCompletedAt: new Date('2026-08-20T21:58:00.000Z'),
+    practiceTimerStartedAt: new Date('2026-08-20T22:00:00.000Z'),
+    practiceCompletedAt: new Date('2026-08-20T22:15:00.000Z'),
+    screenFreeDurationMinutes: 25,
+    screenFreeState: SCREEN_FREE_STATE.completed,
+    screenFreeStartedAt: new Date('2026-08-20T22:15:00.000Z'),
+    screenFreeSkippedAt: null,
+    screenFreeCompletedAt: new Date('2026-08-20T22:40:00.000Z'),
+    createdAt: new Date('2026-08-20T21:55:00.000Z'),
+    updatedAt: new Date('2026-08-20T22:40:00.000Z'),
+  });
+  const sleepCheck = SleepCheckSnapshot.rehydrate({
+    calmBefore: 2,
+    sleepReadinessBefore: 3,
+    beforeRatedAt: new Date('2026-08-20T21:55:00.000Z'),
+    calmAfter: 4,
+    sleepReadinessAfter: 4,
+    afterRatedAt: new Date('2026-08-20T22:41:00.000Z'),
+    initialAnswers: [
+      { questionId: 'CALM_MIND', value: 'YES', answeredAt: new Date('2026-08-20T22:42:00.000Z') },
+      {
+        questionId: 'HOLDING_THOUGHT',
+        value: 'YES',
+        answeredAt: new Date('2026-08-20T22:43:00.000Z'),
+      },
+      {
+        questionId: 'READY_FOR_SLEEP',
+        value: 'YES',
+        answeredAt: new Date('2026-08-20T22:44:00.000Z'),
+      },
+    ],
+    retriedAnswers: [
+      {
+        questionId: 'HOLDING_THOUGHT',
+        value: 'NO',
+        answeredAt: new Date('2026-08-20T22:46:00.000Z'),
+      },
+    ],
+    correctiveAction: {
+      questionId: 'HOLDING_THOUGHT',
+      action: 'CAPTURE_THOUGHT',
+      selectedAt: new Date('2026-08-20T22:44:30.000Z'),
+      completedAt: new Date('2026-08-20T22:45:00.000Z'),
+      capturedThought: 'Оставить до завтра',
+    },
+    startedAt: new Date('2026-08-20T22:40:00.000Z'),
+    completedAt: new Date('2026-08-20T22:47:00.000Z'),
+    createdAt: new Date('2026-08-20T21:55:00.000Z'),
+    updatedAt: new Date('2026-08-20T22:47:00.000Z'),
+  });
+  return EveningCycle.rehydrate({
+    id: EntityId.create('cycle-2026-08-20'),
+    dayId: EntityId.create('day-2026-08-20'),
+    dateKey: NORMAL_DATE,
+    state: EVENING_CYCLE_STATE.completed,
+    mode: EVENING_CYCLE_MODE.normal,
+    completion: EVENING_CYCLE_COMPLETION.completed,
+    startedAt: new Date('2026-08-20T21:50:00.000Z'),
+    updatedAt: new Date('2026-08-20T22:47:00.000Z'),
+    completedAt: new Date('2026-08-20T22:47:00.000Z'),
+    relaxation,
+    sleepCheck,
+    version: 12,
+  });
+}
+
 function skippedCycle(date: DayDate, mode: EveningCycleMode): EveningCycle {
   const completed = new Date(`${date.toString()}T22:00:00.000Z`);
   return EveningCycle.rehydrate({
@@ -324,6 +477,7 @@ function skippedCycle(date: DayDate, mode: EveningCycleMode): EveningCycle {
     mode,
     modeReason: EVENING_MODE_REASON.interrupted,
     completion: EVENING_CYCLE_COMPLETION.skipped,
+    skipReason: 'Осознанный пропуск',
     startedAt: null,
     updatedAt: completed,
     completedAt: completed,

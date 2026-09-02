@@ -25,6 +25,8 @@ import {
   type Project,
 } from '../../domain';
 import { SphereSelect } from '../components/SphereReference';
+import { EveningVisualIcon } from '../components/EveningVisualIcon';
+import '../styles/planning-tomorrow.css';
 import {
   createEmptyDecisionCreationErrors,
   submitDecisionCreation,
@@ -98,6 +100,12 @@ export function TomorrowPlanningCenter({
   const isEditing = state.mode.kind === 'edit';
   const formReady = isPlanningFormReady(state.form);
   const capacityReached = !isEditing && plan.count >= TOMORROW_PLAN_CAPACITY;
+  const linkedProjectCount = new Set(
+    plan.decisions.flatMap((decision) =>
+      decision.projectId === null ? [] : [decision.projectId.toString()],
+    ),
+  ).size;
+  const activeStepIndex = Math.min(plan.count, TOMORROW_PLAN_CAPACITY - 1);
 
   useEffect(
     () => () => {
@@ -270,26 +278,137 @@ export function TomorrowPlanningCenter({
           <span aria-hidden="true">←</span>
           <span>Назад</span>
         </button>
-        <div>
+        <div className="tomorrow-planning-heading-copy">
           <p className="tomorrow-planning-kicker">Центр планирования</p>
           <h1>Планирование завтра</h1>
           <p className="tomorrow-planning-date">{formatPlanningDate(plannedDate)}</p>
           <p className="tomorrow-planning-intro">
-            Определите до трёх Решений, которые приблизят вас к результату.
+            Определите до трёх решений,
+            <br />
+            которые приблизят вас к результату.
           </p>
         </div>
       </header>
 
       <div className="tomorrow-planning-grid">
         <section
+          className="tomorrow-planning-card tomorrow-plan-card"
+          aria-labelledby="tomorrow-plan-title"
+        >
+          <div className="tomorrow-card-heading tomorrow-plan-heading">
+            <div className="tomorrow-card-title">
+              <EveningVisualIcon name="calendar" size={22} />
+              <h2 id="tomorrow-plan-title">План на завтра</h2>
+            </div>
+            <strong className="tomorrow-plan-count">
+              {plan.count} из {TOMORROW_PLAN_CAPACITY} решений
+            </strong>
+          </div>
+
+          <ol className="tomorrow-plan-path" aria-label="Этапы формирования плана">
+            {['Главное решение', 'Второе решение', 'Третье решение'].map((label, index) => {
+              const stepState =
+                plan.count >= TOMORROW_PLAN_CAPACITY || index < activeStepIndex
+                  ? 'complete'
+                  : index === activeStepIndex
+                    ? 'current'
+                    : 'future';
+              return (
+                <li
+                  className={`tomorrow-plan-step is-${stepState}`}
+                  key={label}
+                  {...(stepState === 'current' ? { 'aria-current': 'step' as const } : {})}
+                >
+                  <span className="tomorrow-plan-step-number" aria-hidden="true">
+                    {stepState === 'complete' ? '✓' : index + 1}
+                  </span>
+                  <span>{label}</span>
+                </li>
+              );
+            })}
+          </ol>
+
+          <p className="tomorrow-plan-guidance">Выберите до трёх главных решений на завтра.</p>
+          <p className="visually-hidden" role="status">
+            {plan.status}
+          </p>
+
+          <ol className="tomorrow-plan-slots">
+            {Array.from({ length: TOMORROW_PLAN_CAPACITY }, (_, index) => {
+              const decision = plan.decisions[index];
+              const slot = String(index + 1).padStart(2, '0');
+              const emptyLabel = [
+                'Добавьте главное решение',
+                'Добавьте второе решение',
+                'Добавьте третье решение',
+              ][index];
+              return (
+                <li key={decision?.id.toString() ?? slot}>
+                  {decision === undefined ? (
+                    <button
+                      className="tomorrow-plan-slot tomorrow-plan-slot-empty"
+                      type="button"
+                      onClick={focusCreationForm}
+                    >
+                      <span className="tomorrow-slot-number">{slot}</span>
+                      <span className="tomorrow-slot-add" aria-hidden="true">
+                        +
+                      </span>
+                      <strong>{emptyLabel}</strong>
+                      <span className="tomorrow-slot-star" aria-hidden="true">
+                        ☆
+                      </span>
+                    </button>
+                  ) : (
+                    <article className="tomorrow-plan-slot tomorrow-plan-slot-filled">
+                      <span className="tomorrow-slot-number">{slot}</span>
+                      <div className="tomorrow-slot-copy">
+                        <strong>{decision.title.toString()}</strong>
+                        {decision.projectReference === null ? null : (
+                          <small>{decision.projectReference}</small>
+                        )}
+                        <span className="tomorrow-decision-kind">
+                          {decision.kind === DECISION_KIND.main ? 'Главное' : 'Дополнительное'}
+                        </span>
+                      </div>
+                      <div className="tomorrow-slot-actions">
+                        <button
+                          type="button"
+                          aria-label={`Редактировать Решение «${decision.title.toString()}»`}
+                          title="Редактировать"
+                          onClick={() => {
+                            dispatch({ type: 'edit_requested', decision, plannedDate });
+                            setTimeout(() => titleInputRef.current?.focus(), 0);
+                          }}
+                        >
+                          <EveningVisualIcon name="pencil" size={18} />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`Удалить Решение «${decision.title.toString()}»`}
+                          title="Удалить"
+                          onClick={() => dispatch({ type: 'delete_requested', decision })}
+                        >
+                          <EveningVisualIcon name="close" size={18} />
+                        </button>
+                      </div>
+                    </article>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+
+        <section
           className="tomorrow-planning-card tomorrow-planning-form-card"
           aria-labelledby="tomorrow-form-title"
         >
           <div className="tomorrow-card-heading">
-            <div>
-              <p className="tomorrow-card-kicker">Решение</p>
+            <div className="tomorrow-card-title">
+              <EveningVisualIcon name="spark" size={23} />
               <h2 id="tomorrow-form-title">
-                {isEditing ? 'Редактирование Решения' : 'Новое Решение'}
+                {isEditing ? 'Редактирование решения' : 'Новое решение'}
               </h2>
             </div>
             {isEditing ? (
@@ -306,7 +425,7 @@ export function TomorrowPlanningCenter({
             noValidate
           >
             <PlanningField
-              label="Название Решения"
+              label="Название решения"
               error={state.errors.title}
               fieldId="tomorrow-decision-title"
             >
@@ -367,7 +486,7 @@ export function TomorrowPlanningCenter({
             </PlanningField>
 
             <PlanningField
-              label="Связь с проектом"
+              label="Связь с проектом / целью (необязательно)"
               error={state.errors.projectReference}
               fieldId="tomorrow-project-reference"
             >
@@ -381,7 +500,7 @@ export function TomorrowPlanningCenter({
                   'tomorrow-project-reference',
                   state.errors.projectReference,
                 )}
-                placeholder="Проект или цель (необязательно)"
+                placeholder="Проект или цель"
                 onChange={(event: ChangeEvent<HTMLInputElement>) =>
                   dispatch({
                     type: 'form_changed',
@@ -415,27 +534,39 @@ export function TomorrowPlanningCenter({
               error={state.errors.expectedResult}
               fieldId="tomorrow-expected-result"
             >
-              <textarea
-                id="tomorrow-expected-result"
-                value={state.form.expectedResult}
-                rows={3}
-                maxLength={1000}
-                disabled={state.isSaving || capacityReached}
-                aria-required={state.form.kind === DECISION_KIND.main}
-                aria-invalid={state.errors.expectedResult !== null}
-                aria-describedby={errorId('tomorrow-expected-result', state.errors.expectedResult)}
-                placeholder="Какой результат вы хотите получить?"
-                onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
-                  dispatch({
-                    type: 'form_changed',
-                    form: { ...state.form, expectedResult: event.target.value },
-                  })
-                }
-              />
+              <span className="tomorrow-textarea-shell">
+                <textarea
+                  id="tomorrow-expected-result"
+                  value={state.form.expectedResult}
+                  rows={3}
+                  maxLength={1000}
+                  disabled={state.isSaving || capacityReached}
+                  aria-required={state.form.kind === DECISION_KIND.main}
+                  aria-invalid={state.errors.expectedResult !== null}
+                  aria-describedby={errorId(
+                    'tomorrow-expected-result',
+                    state.errors.expectedResult,
+                  )}
+                  placeholder="Какой результат вы хотите получить?"
+                  onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
+                    dispatch({
+                      type: 'form_changed',
+                      form: { ...state.form, expectedResult: event.target.value },
+                    })
+                  }
+                />
+                <small aria-hidden="true">{state.form.expectedResult.length} / 1000</small>
+              </span>
             </PlanningField>
 
             <details className="tomorrow-planning-more">
-              <summary>Дополнительно</summary>
+              <summary>
+                <span aria-hidden="true">›</span>
+                <span>
+                  <strong>Дополнительно</strong>
+                  <small>Детали, условия, напоминания, зависимости и ресурсы.</small>
+                </span>
+              </summary>
               <div className="tomorrow-planning-more-fields">
                 <PlanningField
                   label="Сфера"
@@ -498,7 +629,7 @@ export function TomorrowPlanningCenter({
                   />
                 </PlanningField>
                 <PlanningField
-                  label="Цена Решения"
+                  label="Цена решения"
                   error={state.errors.price}
                   fieldId="tomorrow-price"
                 >
@@ -567,118 +698,67 @@ export function TomorrowPlanningCenter({
               ) : (
                 <>
                   <span>{isEditing ? 'Сохранить изменения' : 'Добавить в план'}</span>
-                  <span className="button-cta-arrow" aria-hidden="true">
-                    →
-                  </span>
+                  <EveningVisualIcon name="arrow-right" size={18} />
                 </>
               )}
             </button>
           </form>
         </section>
 
-        <section
-          className="tomorrow-planning-card tomorrow-plan-card"
-          aria-labelledby="tomorrow-plan-title"
-        >
-          <div className="tomorrow-plan-summary">
-            <div className="tomorrow-card-heading">
-              <div>
-                <p className="tomorrow-card-kicker">Баланс</p>
-                <h2 id="tomorrow-plan-title">План на завтра</h2>
-              </div>
-              <strong className="tomorrow-plan-count">
-                {plan.count} из {TOMORROW_PLAN_CAPACITY}
-              </strong>
-            </div>
-            <div
-              className="tomorrow-plan-progress"
-              role="progressbar"
-              aria-label="Готовность плана"
-              aria-valuemin={0}
-              aria-valuemax={TOMORROW_PLAN_CAPACITY}
-              aria-valuenow={plan.count}
-            >
-              <span style={{ width: `${plan.progress}%` }} />
-            </div>
-            <p className={`tomorrow-plan-status${plan.status === 'План готов' ? ' is-ready' : ''}`}>
-              <span aria-hidden="true" />
-              {plan.status}
-            </p>
+        <section className="tomorrow-focus-summary" aria-labelledby="tomorrow-focus-title">
+          <div className="tomorrow-focus-copy">
+            <p id="tomorrow-focus-title">Завтра в фокусе</p>
+            <span>
+              {plan.count === 0 ? 'План пока не сформирован.' : 'Главные ориентиры определены.'}
+            </span>
           </div>
-
-          <ol className="tomorrow-plan-slots">
-            {Array.from({ length: TOMORROW_PLAN_CAPACITY }, (_, index) => {
-              const decision = plan.decisions[index];
-              const slot = String(index + 1).padStart(2, '0');
-              return (
-                <li key={decision?.id.toString() ?? slot}>
-                  {decision === undefined ? (
-                    <button
-                      className="tomorrow-plan-slot tomorrow-plan-slot-empty"
-                      type="button"
-                      onClick={focusCreationForm}
-                    >
-                      <span>{slot}</span>
-                      <strong>Добавьте ещё одно Решение</strong>
-                    </button>
-                  ) : (
-                    <article className="tomorrow-plan-slot tomorrow-plan-slot-filled">
-                      <span className="tomorrow-slot-number">{slot}</span>
-                      <div className="tomorrow-slot-copy">
-                        <strong>{decision.title.toString()}</strong>
-                        {decision.projectReference === null ? null : (
-                          <small>{decision.projectReference}</small>
-                        )}
-                        <span className="tomorrow-decision-kind">
-                          {decision.kind === DECISION_KIND.main ? 'Главное' : 'Дополнительное'}
-                        </span>
-                      </div>
-                      <div className="tomorrow-slot-actions">
-                        <button
-                          type="button"
-                          aria-label={`Редактировать Решение «${decision.title.toString()}»`}
-                          title="Редактировать"
-                          onClick={() => {
-                            dispatch({ type: 'edit_requested', decision, plannedDate });
-                            setTimeout(() => titleInputRef.current?.focus(), 0);
-                          }}
-                        >
-                          ✎
-                        </button>
-                        <button
-                          type="button"
-                          aria-label={`Удалить Решение «${decision.title.toString()}»`}
-                          title="Удалить"
-                          onClick={() => dispatch({ type: 'delete_requested', decision })}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    </article>
-                  )}
-                </li>
-              );
-            })}
-          </ol>
-
-          <div className="tomorrow-plan-save">
-            <button
-              className="tomorrow-plan-primary"
-              type="button"
-              disabled={!plan.hasMain}
-              onClick={handlePlanSave}
-            >
-              <span>Сохранить план на завтра</span>
-              <span className="button-cta-arrow" aria-hidden="true">
-                →
-              </span>
-            </button>
-            {plan.hasMain ? null : (
-              <p>Добавьте хотя бы одно главное Решение, чтобы сохранить план.</p>
-            )}
+          <div
+            className="tomorrow-focus-metric"
+            aria-label={`${plan.count} ${formatCount(plan.count, 'решение', 'решения', 'решений')}`}
+          >
+            <EveningVisualIcon name="target" size={20} />
+            <strong>{plan.count}</strong>
+            <span>{formatCount(plan.count, 'решение', 'решения', 'решений')}</span>
+          </div>
+          <div
+            className="tomorrow-focus-metric"
+            aria-label={`${linkedProjectCount} ${formatCount(linkedProjectCount, 'проект', 'проекта', 'проектов')}`}
+          >
+            <EveningVisualIcon name="preparation" size={20} />
+            <strong>{linkedProjectCount}</strong>
+            <span>{formatCount(linkedProjectCount, 'проект', 'проекта', 'проектов')}</span>
+          </div>
+          <div className="tomorrow-focus-metric">
+            <EveningVisualIcon name="clock" size={20} />
+            <strong>—</strong>
+            <span>ориентир</span>
           </div>
         </section>
+
+        <div className="tomorrow-plan-save">
+          <button
+            className="tomorrow-plan-primary"
+            type="button"
+            disabled={!plan.hasMain}
+            onClick={handlePlanSave}
+          >
+            <span>Сохранить план на завтра</span>
+            <EveningVisualIcon name="arrow-right" size={19} />
+          </button>
+          {plan.hasMain ? null : (
+            <p>Добавьте хотя бы одно главное Решение, чтобы сохранить план.</p>
+          )}
+        </div>
       </div>
+
+      <aside className="tomorrow-planning-quote" aria-label="Принцип планирования">
+        <span aria-hidden="true">“</span>
+        <p>
+          Правильные решения сегодня — это результаты завтра.
+          <br />
+          Сфокусируйтесь на главном. Остальное подождёт.
+        </p>
+      </aside>
 
       {state.deleteCandidate === null ? null : (
         <div className="decision-delete-backdrop" role="presentation">
@@ -776,6 +856,15 @@ function errorsForUpdateCode(code: string): DecisionCreationFormErrors {
 
 function errorId(fieldId: string, error: string | null): string | undefined {
   return error === null ? undefined : `${fieldId}-error`;
+}
+
+function formatCount(count: number, one: string, few: string, many: string): string {
+  const normalized = Math.abs(count) % 100;
+  const lastDigit = normalized % 10;
+  if (normalized > 10 && normalized < 20) return many;
+  if (lastDigit === 1) return one;
+  if (lastDigit > 1 && lastDigit < 5) return few;
+  return many;
 }
 
 function formatPlanningDate(date: DayDate): string {

@@ -145,7 +145,18 @@ describe('NOT_STARTED Evening Command Center visual contract', () => {
 
   it('сохраняет вызов существующей application-команды и pre-render double-click guard', () => {
     expect(reviewSource).toContain('!tryBeginEveningStart(startRequestRef)');
-    expect(reviewSource).toContain('await eveningCycle.start(loadState.snapshot.currentDate)');
+    expect(reviewSource).toContain(
+      'await executeEveningStartChoice(eveningCycle, loadState.snapshot.currentDate, choice)',
+    );
+    expect(reviewSource).toContain('await service.start(dateKey)');
+    expect(reviewSource).toContain('await service.startShort(dateKey)');
     expect(reviewSource).not.toContain('loadState.snapshot.cycle.start(');
+  });
+
+  it('не предлагает late SHORT в recovery прошлого дня', () => {
+    expect(reviewSource).toContain('loadState.snapshot.isRecoveryReview');
+    expect(reviewSource).toMatch(
+      /const lateOffer = loadState\.snapshot\.isRecoveryReview\s*\? null\s*: buildLateEveningOffer/,
+    );
   });
 });

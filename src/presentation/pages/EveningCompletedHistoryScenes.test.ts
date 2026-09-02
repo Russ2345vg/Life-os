@@ -43,7 +43,10 @@ import { PREPARATION_AREA, type PreparationArea } from '../../domain/preparation
 import { createPlannedDecision } from '../../test/helpers/DecisionTestFactory';
 import { FakeClock, FakeIdGenerator } from '../../test/helpers/Fakes';
 import { createReadyLifeAction } from '../../test/helpers/LifeActionTestFactory';
-import { TestDecisionRepository, TestLifeActionRepository } from '../../test/helpers/TestRepositories';
+import {
+  TestDecisionRepository,
+  TestLifeActionRepository,
+} from '../../test/helpers/TestRepositories';
 import { PreparationService } from '../../application/preparation/PreparationService';
 import {
   EveningReflectionHistoryScene,
@@ -77,8 +80,14 @@ describe('completed evening history scenes', () => {
     const plan = completedPreparationPlan([
       sleepItem,
       tomorrowItem,
-      preparationItem('sleep-required', 'Убрать экран', PREPARATION_AREA.sleepEnvironment).complete(NOW),
-      preparationItem('tomorrow-required', 'Поставить воду', PREPARATION_AREA.tomorrowStart).complete(NOW),
+      preparationItem('sleep-required', 'Убрать экран', PREPARATION_AREA.sleepEnvironment).complete(
+        NOW,
+      ),
+      preparationItem(
+        'tomorrow-required',
+        'Поставить воду',
+        PREPARATION_AREA.tomorrowStart,
+      ).complete(NOW),
     ]);
     const versionBefore = plan.version;
 
@@ -573,7 +582,8 @@ function preparationAreaMarkup(
   nextArea?: 'tomorrow_start',
 ): string {
   const start = markup.indexOf(`data-area="${area}"`);
-  const end = nextArea === undefined ? markup.length : markup.indexOf(`data-area="${nextArea}"`, start);
+  const end =
+    nextArea === undefined ? markup.length : markup.indexOf(`data-area="${nextArea}"`, start);
   expect(start).toBeGreaterThanOrEqual(0);
   expect(end).toBeGreaterThan(start);
   return markup.slice(start, end);

@@ -20,7 +20,9 @@ describe('LifeOsIndexedDb', () => {
       const request = factory.open(LIFE_OS_DATABASE_NAME, 17);
       request.onupgradeneeded = () => {
         for (const name of Object.values(LIFE_OS_STORE)) {
-          if (name === LIFE_OS_STORE.walkCaptures) continue;
+          if (name === LIFE_OS_STORE.walkCaptures || name === LIFE_OS_STORE.exerciseDefinitions) {
+            continue;
+          }
           const store = request.result.createObjectStore(name, { keyPath: 'id' });
           if (name === LIFE_OS_STORE.walks) {
             store.createIndex('byDate', 'date');
@@ -88,6 +90,7 @@ describe('LifeOsIndexedDb', () => {
       LIFE_OS_STORE.decisions,
       LIFE_OS_STORE.directions,
       LIFE_OS_STORE.eveningCycles,
+      LIFE_OS_STORE.exerciseDefinitions,
       LIFE_OS_STORE.goals,
       LIFE_OS_STORE.journal,
       LIFE_OS_STORE.lifeActions,
@@ -111,6 +114,44 @@ describe('LifeOsIndexedDb', () => {
     }
 
     indexedDb.close();
+  });
+
+  it('добавляет единый каталог упражнений при обновлении literal v18 без потери данных', async () => {
+    const factory = new IDBFactory();
+    const legacy = await openLiteralVersion18Database(factory);
+    const morningRecord = { id: 'morning-v18', dateKey: '2026-08-27', version: 3 };
+    const transaction = legacy.transaction(LIFE_OS_STORE.morningCycles, 'readwrite');
+    transaction.objectStore(LIFE_OS_STORE.morningCycles).put(morningRecord);
+    await transactionDone(transaction);
+    legacy.close();
+
+    const adapter = new LifeOsIndexedDb(factory);
+    const upgraded = await adapter.open();
+    const restoredMorning = await executeIndexedDbRequest(
+      upgraded,
+      LIFE_OS_STORE.morningCycles,
+      'readonly',
+      (store) => store.get('morning-v18'),
+    );
+    const definitions = await executeIndexedDbRequest<Array<{ name: string }>>(
+      upgraded,
+      'exerciseDefinitions',
+      'readonly',
+      (store) => store.getAll(),
+    );
+
+    expect(upgraded.version).toBe(19);
+    expect(restoredMorning).toEqual(morningRecord);
+    expect(
+      indexesOf(upgraded.transaction('exerciseDefinitions').objectStore('exerciseDefinitions')),
+    ).toEqual({
+      byNormalizedName: true,
+    });
+    expect(definitions).toHaveLength(5);
+    expect(definitions.map(({ name }) => name)).toEqual(
+      expect.arrayContaining(['Отжимания', 'Подтягивания', 'Приседания', 'Планка', 'Пресс']),
+    );
+    adapter.close();
   });
 
   it('создаёт минимальные индексы с заданной уникальностью', async () => {
@@ -176,6 +217,9 @@ describe('LifeOsIndexedDb', () => {
       byDayId: true,
       byState: false,
     });
+    expect(indexesOf(transaction.objectStore(LIFE_OS_STORE.exerciseDefinitions))).toEqual({
+      byNormalizedName: true,
+    });
     expect(indexesOf(transaction.objectStore(LIFE_OS_STORE.tomorrowPlans))).toEqual({
       byCycleId: true,
       byStatus: false,
@@ -236,7 +280,7 @@ describe('LifeOsIndexedDb', () => {
     const secondConnection = await indexedDb.open();
 
     expect(secondConnection).not.toBe(firstConnection);
-    expect([...secondConnection.objectStoreNames]).toHaveLength(20);
+    expect([...secondConnection.objectStoreNames]).toHaveLength(21);
     indexedDb.close();
   });
 
@@ -618,7 +662,12 @@ function openDatabaseVersion16(factory: IDBFactory): Promise<IDBDatabase> {
     const request = factory.open(LIFE_OS_DATABASE_NAME, 16);
     request.addEventListener('upgradeneeded', () => {
       for (const storeName of Object.values(LIFE_OS_STORE)) {
-        if (storeName === LIFE_OS_STORE.walkCaptures) continue;
+        if (
+          storeName === LIFE_OS_STORE.walkCaptures ||
+          storeName === LIFE_OS_STORE.exerciseDefinitions
+        ) {
+          continue;
+        }
         const store = request.result.createObjectStore(storeName, { keyPath: 'id' });
         if (storeName === LIFE_OS_STORE.goals) {
           store.createIndex('byStatus', 'status', { unique: false });
@@ -686,7 +735,8 @@ function openVersion13Database(factory: IDBFactory): Promise<IDBDatabase> {
           storeName !== LIFE_OS_STORE.recommendationApplications &&
           storeName !== LIFE_OS_STORE.morningCycles &&
           storeName !== LIFE_OS_STORE.goals &&
-          storeName !== LIFE_OS_STORE.walkCaptures
+          storeName !== LIFE_OS_STORE.walkCaptures &&
+          storeName !== LIFE_OS_STORE.exerciseDefinitions
         ) {
           request.result.createObjectStore(storeName, { keyPath: 'id' });
         }
@@ -836,6 +886,24 @@ function transactionDone(transaction: IDBTransaction): Promise<void> {
     transaction.addEventListener('complete', () => resolve());
     transaction.addEventListener('error', () => reject(transaction.error));
     transaction.addEventListener('abort', () => reject(transaction.error));
+  });
+}
+
+function openLiteralVersion18Database(factory: IDBFactory): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = factory.open(LIFE_OS_DATABASE_NAME, 18);
+    request.addEventListener('upgradeneeded', () => {
+      for (const name of Object.values(LIFE_OS_STORE)) {
+        if (name === 'exerciseDefinitions') continue;
+        const store = request.result.createObjectStore(name, { keyPath: 'id' });
+        if (name === LIFE_OS_STORE.morningCycles) {
+          store.createIndex('byDayId', 'dayId', { unique: true });
+          store.createIndex('byDateKey', 'dateKey', { unique: true });
+        }
+      }
+    });
+    request.addEventListener('success', () => resolve(request.result));
+    request.addEventListener('error', () => reject(request.error));
   });
 }
 

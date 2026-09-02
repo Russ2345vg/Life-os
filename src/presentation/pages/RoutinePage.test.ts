@@ -5,7 +5,10 @@ import {
   CreateRoutineBlock,
   DeleteRoutineBlock,
   GetRoutineBlocksForDate,
+  MORNING_CENTER_STAGE_ID,
+  MORNING_CENTER_STAGE_STATUS,
   resolveRoutinePlanFactPresentation,
+  type MorningCenterOverview,
   UpdateRoutineBlock,
 } from '../../application';
 import {
@@ -27,10 +30,11 @@ import { RoutineBlockForm } from '../routine/RoutineBlockForm';
 import { createEmptyRoutineBlockForm } from '../routine/RoutineBlockFormState';
 import { findRoutineBlockOverlaps } from '../routine/RoutineBlockOverlaps';
 import { deviationLabel, deviationTitle } from '../routine/RoutineDeviationPresentation';
-import { ROUTINE_SECTION } from '../routine/RoutineNavigation';
+import { ROUTINE_MORNING_VIEW, ROUTINE_SECTION } from '../routine/RoutineNavigation';
 import { eveningBlockStatus } from '../routine/RoutineEveningPresentation';
 import {
   EveningBlockCard,
+  type MorningCenterWorkflowServices,
   RoutinePage,
   RoutinePlanFact,
   RoutineRecoveryPanel,
@@ -100,6 +104,54 @@ describe('RoutinePage', () => {
     expect(markup).toContain('aria-selected="true">Вечер</button>');
     expect(markup).toContain('Вечерний блок');
     expect(markup).not.toContain('На этот день распорядок пока не составлен.');
+  });
+
+  it('renders the Morning Center boundary instead of ordinary morning blocks when wired', () => {
+    const repository = new InMemoryRoutineBlockRepository();
+    const clock = new FakeClock(new Date('2026-08-08T00:00:00.000Z'));
+    const markup = renderToStaticMarkup(
+      createElement(RoutinePage, {
+        currentDate: DATE,
+        selectedDate: DATE,
+        activeSection: ROUTINE_SECTION.morning,
+        onDateChange: () => undefined,
+        createRoutineBlock: new CreateRoutineBlock(repository, clock, new FakeIdGenerator()),
+        updateRoutineBlock: new UpdateRoutineBlock(repository, clock),
+        deleteRoutineBlock: new DeleteRoutineBlock(repository),
+        getRoutineBlocksForDate: new GetRoutineBlocksForDate(repository),
+        morningCenter: morningCenterWorkflow(clock),
+      }),
+    );
+
+    expect(markup).toContain('Утренний распорядок');
+    expect(markup).toContain('Загружаем утренний центр');
+    expect(markup.indexOf('routine-section-navigation')).toBeLessThan(markup.indexOf('</header>'));
+    expect(markup).not.toContain('Блоки распорядка');
+    expect(markup).not.toContain('Создать блок');
+  });
+
+  it('forwards the route-owned MOR-03 execution view to Morning Center', () => {
+    const repository = new InMemoryRoutineBlockRepository();
+    const clock = new FakeClock(new Date('2026-08-08T00:00:00.000Z'));
+
+    const markup = renderToStaticMarkup(
+      createElement(RoutinePage, {
+        currentDate: DATE,
+        selectedDate: DATE,
+        activeSection: ROUTINE_SECTION.morning,
+        morningView: ROUTINE_MORNING_VIEW.physicalExecution,
+        onMorningViewChange: () => undefined,
+        onDateChange: () => undefined,
+        createRoutineBlock: new CreateRoutineBlock(repository, clock, new FakeIdGenerator()),
+        updateRoutineBlock: new UpdateRoutineBlock(repository, clock),
+        deleteRoutineBlock: new DeleteRoutineBlock(repository),
+        getRoutineBlocksForDate: new GetRoutineBlocksForDate(repository),
+        morningCenter: morningCenterWorkflow(clock),
+      }),
+    );
+
+    expect(markup).toContain('Загружаем выполнение…');
+    expect(markup).not.toContain('Загружаем утренний центр');
   });
 
   it('renders explicit routine subsections and all evening block statuses', () => {
@@ -237,6 +289,135 @@ describe('RoutinePage', () => {
     expect(markup).not.toContain('Изменить');
   });
 });
+
+function notStartedMorningOverview(): MorningCenterOverview {
+  return {
+    date: DATE,
+    mutable: true,
+    cycleState: null,
+    startedAt: null,
+    finishedAt: null,
+    canStart: true,
+    canUseQuickStart: false,
+    canShorten: false,
+    canRevertShortened: false,
+    canAbandonPrevious: false,
+    canRecordStartState: true,
+    shortenedMode: false,
+    shortenedModeState: null,
+    shortenedConfiguration: null,
+    overallProgressPercent: 0,
+    remainingMinutes: 50,
+    currentStageId: MORNING_CENTER_STAGE_ID.quickStart,
+    stages: [
+      {
+        id: MORNING_CENTER_STAGE_ID.quickStart,
+        status: MORNING_CENTER_STAGE_STATUS.current,
+        estimatedMinutes: 5,
+        scenarioStatus: 'normal',
+      },
+      {
+        id: MORNING_CENTER_STAGE_ID.physicalActivation,
+        status: MORNING_CENTER_STAGE_STATUS.upcoming,
+        estimatedMinutes: 10,
+        scenarioStatus: 'normal',
+      },
+      {
+        id: MORNING_CENTER_STAGE_ID.mirror,
+        status: MORNING_CENTER_STAGE_STATUS.upcoming,
+        estimatedMinutes: 5,
+        scenarioStatus: 'normal',
+      },
+      {
+        id: MORNING_CENTER_STAGE_ID.mainAction,
+        status: MORNING_CENTER_STAGE_STATUS.upcoming,
+        estimatedMinutes: 5,
+        scenarioStatus: 'normal',
+      },
+      {
+        id: MORNING_CENTER_STAGE_ID.workBlock,
+        status: MORNING_CENTER_STAGE_STATUS.upcoming,
+        estimatedMinutes: 25,
+        scenarioStatus: 'normal',
+      },
+    ],
+    previousUnfinished: null,
+    startState: null,
+    quickStart: {
+      water: 'pending' as const,
+      coldShower: 'pending' as const,
+      resolvedCount: 0,
+      total: 2 as const,
+      completed: false,
+    },
+    physicalPlan: { selectedCount: 0, totalSets: 0, estimatedMinutes: 0 },
+    physicalExecution: {
+      statusText: null,
+      resolvedSets: 0,
+      totalSets: 0,
+      canContinue: false,
+    },
+    mirror: {
+      status: 'pending' as const,
+      completedAt: null,
+      canOpen: false,
+      canComplete: false,
+    },
+    mainAction: {
+      decisionId: null,
+      decisionTitle: null,
+      expectedResult: null,
+      firstStepId: null,
+      firstStepTitle: null,
+      scheduledTime: null,
+      completed: false,
+      ready: false,
+      candidates: [],
+    },
+  };
+}
+
+function morningCenterWorkflow(clock: FakeClock): MorningCenterWorkflowServices {
+  const notCalled = async (): Promise<never> => {
+    throw new Error('not called during server render');
+  };
+  return {
+    getOverview: { execute: async () => notStartedMorningOverview() },
+    getPhysicalOverview: { execute: notCalled },
+    getPhysicalExecutionOverview: { execute: notCalled },
+    getCompletionOverview: { execute: notCalled },
+    getHistory: { execute: notCalled },
+    cycle: {
+      start: notCalled,
+      recordStartState: notCalled,
+      completeWater: notCalled,
+      completeColdShower: notCalled,
+      skipColdShower: notCalled,
+      shorten: notCalled,
+      activateShortened: notCalled,
+      revertShortened: notCalled,
+      abandonUnfinished: notCalled,
+      selectPhysicalExercise: notCalled,
+      deselectPhysicalExercise: notCalled,
+      adjustPhysicalExercise: notCalled,
+      startPhysicalExecution: notCalled,
+      recoverPhysicalExecution: notCalled,
+      pausePhysicalExecution: notCalled,
+      resumePhysicalExecution: notCalled,
+      completePhysicalSet: notCalled,
+      skipPhysicalSet: notCalled,
+      advancePhysicalExecution: notCalled,
+      completePhysicalExecution: notCalled,
+      completeMirror: notCalled,
+      skipMainAction: notCalled,
+      reconcileReadyToWork: notCalled,
+      finish: notCalled,
+    },
+    exerciseCatalog: { createCustom: notCalled },
+    tomorrowPlan: { assignFirstActionForTargetDate: notCalled },
+    clock,
+  };
+}
 
 describe('RoutineBlockForm', () => {
   it('renders every stage 13.1 field including weekday selection', () => {

@@ -5,6 +5,7 @@ import {
   REFLECTION_QUESTION_KIND,
   REFLECTION_QUESTION_TYPE,
   ReflectionQuestion,
+  type ReflectionAnswer,
   type ReflectionDaySignal,
   type ReflectionQuestionKind,
   type ReflectionQuestionOption,
@@ -54,12 +55,29 @@ const FAILURE_REASON_OPTIONS: readonly ReflectionQuestionOption[] = Object.freez
   { value: REFLECTION_FAILURE_REASON.nextStepUnclear, label: 'Неясный следующий шаг' },
   { value: REFLECTION_FAILURE_REASON.timeInsufficient, label: 'Недостаток времени' },
   { value: REFLECTION_FAILURE_REASON.scopeTooLarge, label: 'Слишком большой объём' },
-  { value: REFLECTION_FAILURE_REASON.priorityLost, label: 'Потеря приоритета' },
-  { value: REFLECTION_FAILURE_REASON.energyLow, label: 'Не хватило энергии' },
-  { value: REFLECTION_FAILURE_REASON.externalCause, label: 'Внешняя причина' },
-  { value: REFLECTION_FAILURE_REASON.purposeLost, label: 'Задача потеряла смысл' },
+  { value: REFLECTION_FAILURE_REASON.energyLow, label: 'Усталость' },
+  { value: REFLECTION_FAILURE_REASON.distractions, label: 'Отвлечения' },
+  { value: REFLECTION_FAILURE_REASON.priorityLost, label: 'Изменился приоритет' },
+  { value: REFLECTION_FAILURE_REASON.externalCause, label: 'Внешние обстоятельства' },
+  { value: REFLECTION_FAILURE_REASON.purposeLost, label: 'Решение потеряло смысл' },
   { value: REFLECTION_FAILURE_REASON.other, label: 'Другое' },
 ]);
+
+const SUCCESS_FACTOR_OPTIONS: readonly ReflectionQuestionOption[] = Object.freeze([
+  { value: 'CLEAR_NEXT_STEP', label: 'Был ясен следующий шаг' },
+  { value: 'PROTECTED_TIME', label: 'Удалось защитить время' },
+  { value: 'MANAGEABLE_SCOPE', label: 'Объём был реалистичным' },
+  { value: 'ENOUGH_ENERGY', label: 'Хватило энергии' },
+  { value: 'SUPPORTIVE_ENVIRONMENT', label: 'Помогла среда' },
+  { value: 'OTHER', label: 'Другое' },
+]);
+
+export interface ReflectionFollowUpInput {
+  readonly context: ReflectionContext;
+  readonly question: ReflectionQuestion;
+  readonly answer: ReflectionAnswer;
+  readonly currentQuestionCount: number;
+}
 
 export class ReflectionEngine {
   public generate(context: ReflectionContext): readonly ReflectionQuestion[] {
@@ -92,6 +110,22 @@ export class ReflectionEngine {
       selected.length > 0 ? selected : [generalLearningCandidate(context).question],
     );
   }
+
+  public generateFollowUp(input: ReflectionFollowUpInput): ReflectionQuestion | null {
+    if (input.currentQuestionCount >= 5) return null;
+    const data = followUpData(input);
+    if (data === null) return null;
+    return ReflectionQuestion.create({
+      id: `${input.question.id}:FOLLOW_UP`,
+      kind: data.kind,
+      signal: data.signal,
+      type: data.type,
+      prompt: data.prompt,
+      context: data.context,
+      required: true,
+      sourceEntityIds: input.question.sourceEntityIds,
+    });
+  }
 }
 
 function mainDecisionCandidate(context: ReflectionContext): readonly QuestionCandidate[] {
@@ -105,10 +139,11 @@ function mainDecisionCandidate(context: ReflectionContext): readonly QuestionCan
         main,
         REFLECTION_QUESTION_KIND.mainDecisionSuccess,
         REFLECTION_DAY_SIGNAL.success,
-        REFLECTION_QUESTION_TYPE.shortText,
+        REFLECTION_QUESTION_TYPE.singleChoice,
         `Главное Решение «${main.title}» завершено.`,
         'Что больше всего помогло получить результат?',
         true,
+        SUCCESS_FACTOR_OPTIONS,
       ),
     ];
   }
@@ -260,13 +295,79 @@ function generalLearningCandidate(context: ReflectionContext): QuestionCandidate
     tieBreaker: context.cycleId.toString(),
     kind: REFLECTION_QUESTION_KIND.generalLearning,
     signal: REFLECTION_DAY_SIGNAL.learning,
-    type: REFLECTION_QUESTION_TYPE.optionalText,
+    type: REFLECTION_QUESTION_TYPE.yesNo,
     context: 'Значимых отклонений или результатов сегодня не зафиксировано.',
-    prompt: 'Есть ли один вывод, который стоит перенести в следующий день?',
-    required: false,
+    prompt: 'Есть ли один полезный вывод из сегодняшнего дня?',
+    required: true,
     sourceEntityIds: [],
     options: [],
   });
+}
+
+interface ReflectionFollowUpData {
+  readonly kind: ReflectionQuestionKind;
+  readonly signal: ReflectionDaySignal;
+  readonly type: ReflectionQuestionType;
+  readonly prompt: string;
+  readonly context: string;
+}
+
+function followUpData(input: ReflectionFollowUpInput): ReflectionFollowUpData | null {
+  const { question, answer } = input;
+  if (
+    question.kind === REFLECTION_QUESTION_KIND.mainDecisionSuccess &&
+    typeof answer === 'string'
+  ) {
+    return {
+      kind: REFLECTION_QUESTION_KIND.mainDecisionSuccess,
+      signal: REFLECTION_DAY_SIGNAL.success,
+      type: REFLECTION_QUESTION_TYPE.yesNo,
+      prompt: 'Сохранить этот подход для следующего похожего Решения?',
+      context: question.context,
+    };
+  }
+  if (
+    question.kind === REFLECTION_QUESTION_KIND.mainDecisionFailureReason &&
+    typeof answer === 'string'
+  ) {
+    return {
+      kind: REFLECTION_QUESTION_KIND.mainDecisionFailureLearning,
+      signal: REFLECTION_DAY_SIGNAL.learning,
+      type: REFLECTION_QUESTION_TYPE.shortCapture,
+      prompt:
+        answer === REFLECTION_FAILURE_REASON.other
+          ? 'Что именно помешало завершить Решение?'
+          : 'Что конкретно изменить в следующей попытке?',
+      context: question.context,
+    };
+  }
+  if (
+    question.kind === REFLECTION_QUESTION_KIND.repeatedFriction &&
+    Array.isArray(answer) &&
+    answer.length > 0
+  ) {
+    return {
+      kind: REFLECTION_QUESTION_KIND.significantCarry,
+      signal: REFLECTION_DAY_SIGNAL.learning,
+      type: REFLECTION_QUESTION_TYPE.shortCapture,
+      prompt: 'Какую одну корректировку попробовать в следующий раз?',
+      context: question.context,
+    };
+  }
+  if (
+    question.kind === REFLECTION_QUESTION_KIND.generalLearning &&
+    typeof answer === 'boolean' &&
+    answer
+  ) {
+    return {
+      kind: REFLECTION_QUESTION_KIND.generalLearning,
+      signal: REFLECTION_DAY_SIGNAL.learning,
+      type: REFLECTION_QUESTION_TYPE.shortCapture,
+      prompt: 'Какой один вывод стоит сохранить?',
+      context: question.context,
+    };
+  }
+  return null;
 }
 
 function candidate(

@@ -22,6 +22,12 @@ export class InMemoryMorningCycleRepository implements MorningCycleRepository {
     );
   }
 
+  public async findBetween(startDate: DayDate, endDate: DayDate): Promise<readonly MorningCycle[]> {
+    return [...this.#byDate.values()]
+      .filter((cycle) => !cycle.dateKey.isBefore(startDate) && !cycle.dateKey.isAfter(endDate))
+      .sort((left, right) => right.dateKey.toString().localeCompare(left.dateKey.toString()));
+  }
+
   public async createIfAbsent(cycle: MorningCycle): Promise<MorningCycle> {
     const existing = await this.findByDateKey(cycle.dateKey);
     if (existing !== null) return existing;

@@ -63,6 +63,15 @@ describe('TodayPage layout contract', () => {
     );
   });
 
+  it('сохраняет 44px touch targets у действий закрытого дня', () => {
+    expect(globalCss).toMatch(
+      /\.today-closed-sphere \.secondary-button\s*{[^}]*min-height:\s*2\.75rem/,
+    );
+    expect(globalCss).toMatch(
+      /\.today-tomorrow-card \.today-closed-primary\s*{[^}]*min-height:\s*2\.75rem/,
+    );
+  });
+
   it('на tablet и mobile разворачивает колонки в заданном порядке без горизонтального scroll', () => {
     expect(globalCss).toMatch(
       /@media \(max-width:\s*74\.99rem\)[\s\S]*?\.today-dashboard-main,[\s\S]*?display:\s*contents/,

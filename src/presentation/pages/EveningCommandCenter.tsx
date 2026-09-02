@@ -2,15 +2,17 @@ import { useEffect, useRef, type ReactNode, type RefObject } from 'react';
 import type { EveningReviewSnapshot } from '../../application';
 import { EVENING_CYCLE_MODE, EVENING_CYCLE_STATE, type EveningCycleMode } from '../../domain';
 import {
-  EVENING_JOURNEY,
+  EVENING_STEPS,
   eveningJourneyIdForState,
   eveningModeLabel,
   eveningReturnToCurrentLabel,
-  isEveningViewAvailable,
+  eveningStepIdForView,
   type EveningKpiItem,
+  type EveningStepId,
   type SelectedEveningView,
 } from './EveningCommandCenterPresentation';
 import { EveningVisualIcon } from '../components/EveningVisualIcon';
+import '../styles/evening-center-v2.css';
 
 interface EveningCommandCenterProps {
   readonly cycle: EveningReviewSnapshot['cycle'];
@@ -42,7 +44,8 @@ export function EveningCommandCenter({
   const domainView = eveningJourneyIdForState(cycle.state);
   const visibleView = selectedView ?? domainView;
   const isHistoryView = visibleView !== domainView;
-  const activeIndex = EVENING_JOURNEY.findIndex((item) => item.id === domainView);
+  const activeStepId = eveningStepIdForView(domainView);
+  const activeIndex = EVENING_STEPS.findIndex((item) => item.id === activeStepId);
   const activeJourneyItem = useRef<HTMLLIElement | null>(null);
 
   useEffect(() => {
@@ -109,6 +112,7 @@ export function EveningCommandCenter({
 
         <EveningJourney
           state={cycle.state}
+          domainView={domainView}
           selectedView={visibleView}
           activeIndex={activeIndex}
           activeJourneyItem={activeJourneyItem}
@@ -141,12 +145,14 @@ export function EveningCommandCenter({
 
 function EveningJourney({
   state,
+  domainView,
   selectedView,
   activeIndex,
   activeJourneyItem,
   onSelectView,
 }: {
   readonly state: EveningReviewSnapshot['cycle']['state'];
+  readonly domainView: SelectedEveningView;
   readonly selectedView: SelectedEveningView;
   readonly activeIndex: number;
   readonly activeJourneyItem: RefObject<HTMLLIElement | null>;
@@ -154,19 +160,21 @@ function EveningJourney({
 }) {
   return (
     <nav className="evening-command-center-journey" aria-label="Путь завершения дня">
+      <span className="evening-command-center-step-count">Шаг {activeIndex + 1} из 5</span>
       <ol>
-        {EVENING_JOURNEY.map((item, index) => {
+        {EVENING_STEPS.map((item, index) => {
           const isComplete = state === EVENING_CYCLE_STATE.completed || index < activeIndex;
           const isCurrent = state !== EVENING_CYCLE_STATE.completed && index === activeIndex;
-          const isSelected = item.id === selectedView;
+          const isSelected = item.id === eveningStepIdForView(selectedView);
           const isSelectedHistory = isSelected && !isCurrent;
-          const isAvailable = isEveningViewAvailable(state, item.id);
+          const isAvailable = state === EVENING_CYCLE_STATE.completed || index <= activeIndex;
           const status = journeyStatusLabel(isComplete, isCurrent, isSelectedHistory);
+          const targetView = stepTargetView(item.id, domainView, isCurrent);
           return (
             <li
               className={`${isComplete ? 'is-complete' : isCurrent ? 'is-current' : ''}${isSelectedHistory ? ' is-selected-history' : ''}`}
               key={item.id}
-              data-journey-stage={item.id}
+              data-evening-step={item.id}
               data-domain-current={isCurrent ? 'true' : undefined}
               data-selected-view={isSelected ? 'true' : undefined}
               data-selected-history={isSelectedHistory ? 'true' : undefined}
@@ -177,14 +185,13 @@ function EveningJourney({
                 disabled={!isAvailable || onSelectView === undefined}
                 aria-current={isSelected ? 'page' : undefined}
                 aria-label={`${item.label}: ${status}`}
-                onClick={() => onSelectView?.(item.id)}
+                onClick={() => onSelectView?.(targetView)}
               >
                 <span aria-hidden="true">
                   {isComplete ? <EveningVisualIcon name="check" size={18} /> : index + 1}
                 </span>
                 <span className="evening-journey-copy">
                   <strong>{item.label}</strong>
-                  <small>{status}</small>
                 </span>
               </button>
             </li>
@@ -200,10 +207,18 @@ function journeyStatusLabel(
   isCurrent: boolean,
   isSelectedHistory: boolean,
 ): string {
-  if (isSelectedHistory) return 'Открыто для просмотра';
-  if (isCurrent) return 'Текущий шаг';
-  if (isComplete) return 'Завершено';
-  return 'Далее';
+  if (isSelectedHistory) return 'открыт для просмотра';
+  if (isCurrent) return 'активен';
+  if (isComplete) return 'завершён';
+  return 'недоступен';
+}
+
+function stepTargetView(
+  stepId: EveningStepId,
+  domainView: SelectedEveningView,
+  isCurrent: boolean,
+): SelectedEveningView {
+  return isCurrent ? domainView : stepId;
 }
 
 function EveningKpiRow({ items }: { readonly items: readonly EveningKpiItem[] }) {
@@ -240,9 +255,13 @@ function canSwitchMode(current: EveningCycleMode, target: EveningCycleMode): boo
 }
 
 const EMPTY_KPIS: readonly EveningKpiItem[] = Object.freeze([
-  { label: 'Незавершённое', value: '—', meta: 'Данные уточняются', icon: 'list', tone: 'neutral' },
-  { label: 'Осмысление', value: '—', meta: 'Ожидает этапа', icon: 'reflection', tone: 'neutral' },
-  { label: 'Завтра', value: '—', meta: 'Ожидает этапа', icon: 'calendar', tone: 'neutral' },
-  { label: 'Среда', value: '—', meta: 'Ожидает этапа', icon: 'preparation', tone: 'neutral' },
+  {
+    label: 'Осталось сегодня',
+    value: '—',
+    meta: 'Данные уточняются',
+    icon: 'list',
+    tone: 'neutral',
+  },
+  { label: 'Завтра', value: '—', meta: 'Данные уточняются', icon: 'calendar', tone: 'neutral' },
   { label: 'Режим', value: '—', meta: 'Режим не выбран', icon: 'moon', tone: 'neutral' },
 ]);

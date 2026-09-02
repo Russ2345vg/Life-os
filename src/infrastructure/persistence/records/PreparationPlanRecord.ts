@@ -8,6 +8,7 @@ export interface PreparationItemRecord {
   readonly sourceType: string;
   readonly sourceId: string | null;
   readonly required: boolean;
+  readonly recommendedDurationMinutes?: number | null;
   readonly status: string;
   readonly active: boolean;
   readonly completedAt: string | null;

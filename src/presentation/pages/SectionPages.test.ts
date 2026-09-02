@@ -231,6 +231,17 @@ describe('section overview pages', () => {
     expect(markup).toContain('Плотность интерфейса');
     expect(markup).toContain('Уменьшить движение');
     expect(markup).toContain('Показывать день недели на телефоне');
+    expect(markup).toContain('Вечерний ритуал');
+    expect(markup).toContain('Базовое время сна');
+    expect(markup).toContain('Практика расслабления по умолчанию');
+    expect(markup).toContain('Без экранов по умолчанию');
+    expect(markup).toContain('Адаптивное расслабление');
+    expect(markup).toContain('Одно вечернее напоминание');
+    expect(markup).toContain('Разрешить осознанный пропуск');
+    expect(markup).toContain('Обязательные пункты: 4 из 6');
+    expect(markup).toContain('Рекомендуемая длительность');
+    expect(markup).toContain('Переместить выше');
+    expect(markup).toContain('min="20" max="30"');
     expect(markup).toContain('Сохранить настройки');
     expect(markup).toContain('Сбросить настройки');
     expect(markup).toContain('Предметные записи не изменяются');

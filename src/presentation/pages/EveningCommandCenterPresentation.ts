@@ -14,11 +14,23 @@ export const EVENING_JOURNEY = [
   { id: 'reflection', label: 'Осмысление', title: 'Осмысление дня' },
   { id: 'tomorrow', label: 'Завтра', title: 'ЗАВТРА' },
   { id: 'preparation', label: 'Среда', title: 'СРЕДА' },
+  { id: 'relaxation', label: 'Расслабление', title: 'Расслабление' },
+  { id: 'sleep', label: 'Сон', title: 'Проверка перед сном' },
   { id: 'shutdown', label: 'Завершение', title: 'Завершение дня' },
 ] as const;
 
 export type EveningJourneyId = (typeof EVENING_JOURNEY)[number]['id'];
 export type SelectedEveningView = EveningJourneyId | 'recovery';
+
+export const EVENING_STEPS = [
+  { id: 'today', label: 'Сегодня' },
+  { id: 'reflection', label: 'Осмысление' },
+  { id: 'tomorrow', label: 'Завтра' },
+  { id: 'preparation', label: 'Подготовка' },
+  { id: 'shutdown', label: 'Завершение' },
+] as const;
+
+export type EveningStepId = (typeof EVENING_STEPS)[number]['id'];
 
 export interface EveningKpiItem {
   readonly label: string;
@@ -47,6 +59,8 @@ export function eveningJourneyIdForState(state: EveningCycleState): SelectedEven
   if (state === EVENING_CYCLE_STATE.reflecting) return 'reflection';
   if (state === EVENING_CYCLE_STATE.planningTomorrow) return 'tomorrow';
   if (state === EVENING_CYCLE_STATE.preparing) return 'preparation';
+  if (state === EVENING_CYCLE_STATE.relaxing) return 'relaxation';
+  if (state === EVENING_CYCLE_STATE.sleepCheck) return 'sleep';
   if (state === EVENING_CYCLE_STATE.shutdown) return 'shutdown';
   if (state === EVENING_CYCLE_STATE.completed) return 'recovery';
   return 'today';
@@ -54,6 +68,12 @@ export function eveningJourneyIdForState(state: EveningCycleState): SelectedEven
 
 export function defaultEveningView(state: EveningCycleState): SelectedEveningView {
   return eveningJourneyIdForState(state);
+}
+
+export function eveningStepIdForView(view: SelectedEveningView): EveningStepId {
+  if (view === 'relaxation' || view === 'sleep') return 'preparation';
+  if (view === 'recovery') return 'shutdown';
+  return view;
 }
 
 export function isEveningViewAvailable(
@@ -73,6 +93,8 @@ export function eveningReturnToCurrentLabel(view: SelectedEveningView): string {
   if (view === 'reflection') return 'Вернуться к осмыслению';
   if (view === 'tomorrow') return 'Вернуться к планированию завтра';
   if (view === 'preparation') return 'Вернуться к среде';
+  if (view === 'relaxation') return 'Вернуться к расслаблению';
+  if (view === 'sleep') return 'Вернуться к проверке сна';
   if (view === 'shutdown') return 'Вернуться к завершению';
   if (view === 'recovery') return 'Вернуться к восстановлению';
   return 'Вернуться к разбору дня';
@@ -89,38 +111,27 @@ export function selectEveningView(
 export function buildEveningKpis(
   snapshot: EveningReviewSnapshot,
   reflection: ReflectionSession | null,
+  tomorrowPlanPrepared = false,
 ): readonly EveningKpiItem[] {
   const cycle = reflection?.cycle ?? snapshot.cycle;
   const openLoopCount = snapshot.openLoops?.remaining;
-  const reflectionValue =
-    reflection === null
-      ? journeyStageValue(cycle.state, 'reflection')
-      : `${reflection.processed}/${reflection.total}`;
-  const tomorrowValue =
-    snapshot.tomorrowDecisions.length > 0
-      ? `${snapshot.tomorrowDecisions.length} ${pluralize(
-          snapshot.tomorrowDecisions.length,
-          'решение',
-          'решения',
-          'решений',
-        )}`
-      : journeyStageValue(cycle.state, 'tomorrow');
-  const preparationTone = journeyTone(cycle.state, 'preparation');
+  const tomorrowCount = snapshot.tomorrowDecisions.length;
+  const tomorrowPrepared = tomorrowPlanPrepared || tomorrowCount > 0;
 
   return Object.freeze([
     Object.freeze({
-      label: 'Незавершённое',
+      label: 'Осталось сегодня',
       value:
         openLoopCount === undefined
           ? '—'
           : openLoopCount === 0
-            ? 'Нет'
+            ? 'Всё разобрано'
             : `${openLoopCount} ${pluralize(openLoopCount, 'элемент', 'элемента', 'элементов')}`,
       meta:
         openLoopCount === undefined
           ? 'Данные уточняются'
           : openLoopCount === 0
-            ? 'Всё разобрано'
+            ? 'День собран'
             : 'Требует решения',
       icon: 'list',
       tone:
@@ -131,38 +142,21 @@ export function buildEveningKpis(
             : journeyTone(cycle.state, 'today'),
     }),
     Object.freeze({
-      label: 'Осмысление',
-      value: reflectionValue,
-      meta:
-        reflection?.complete === true
-          ? 'Выводы сохранены'
-          : reflection === null
-            ? stageMeta(journeyTone(cycle.state, 'reflection'))
-            : 'Вопросов обработано',
-      icon: 'reflection',
-      tone: reflection?.complete === true ? 'ready' : journeyTone(cycle.state, 'reflection'),
-    }),
-    Object.freeze({
       label: 'Завтра',
-      value: tomorrowValue,
+      value: tomorrowPrepared ? 'Подготовлено' : 'Не подготовлено',
       meta:
-        snapshot.tomorrowDecisions.length > 0
-          ? 'Решения сохранены'
-          : stageMeta(journeyTone(cycle.state, 'tomorrow')),
+        tomorrowCount > 0
+          ? `${tomorrowCount} ${pluralize(tomorrowCount, 'решение', 'решения', 'решений')}`
+          : tomorrowPrepared
+            ? 'План сохранён'
+            : 'Соберём во время вечера',
       icon: 'calendar',
-      tone: journeyTone(cycle.state, 'tomorrow'),
-    }),
-    Object.freeze({
-      label: 'Среда',
-      value: journeyStageValue(cycle.state, 'preparation'),
-      meta: stageMeta(preparationTone),
-      icon: 'preparation',
-      tone: preparationTone,
+      tone: tomorrowPrepared ? 'ready' : 'neutral',
     }),
     Object.freeze({
       label: 'Режим',
-      value: cycle.mode === EVENING_CYCLE_MODE.emergency ? 'Позднее' : eveningModeLabel(cycle.mode),
-      meta: eveningModeMeta(cycle.mode),
+      value: eveningModeLabel(cycle.mode),
+      meta: 'Режим завершения',
       icon: 'moon',
       tone: 'neutral',
     }),
@@ -183,7 +177,7 @@ export function buildEveningNotStartedSceneModel(
   return Object.freeze({
     eyebrow: 'Сегодня',
     title: 'Сегодняшний вечер ещё не начат',
-    description: 'Разберите остатки дня и подготовьте ясный старт завтра.',
+    description: 'Завершите день спокойно и подготовьте ясный старт завтра.',
     facts: Object.freeze([
       Object.freeze({
         label: 'Незавершённое',
@@ -228,13 +222,6 @@ export function eveningModeLabel(mode: EveningCycleMode): string {
   return 'Обычный';
 }
 
-function journeyStageValue(state: EveningCycleState, journeyId: EveningJourneyId): string {
-  const tone = journeyTone(state, journeyId);
-  if (tone === 'ready') return 'Готово';
-  if (tone === 'current') return 'Сейчас';
-  return 'Ожидает';
-}
-
 function journeyTone(
   state: EveningCycleState,
   journeyId: EveningJourneyId,
@@ -245,18 +232,6 @@ function journeyTone(
   if (state === EVENING_CYCLE_STATE.completed || itemIndex < activeIndex) return 'ready';
   if (itemIndex === activeIndex) return 'current';
   return 'neutral';
-}
-
-function stageMeta(tone: EveningKpiItem['tone']): string {
-  if (tone === 'ready') return 'Этап подтверждён';
-  if (tone === 'current') return 'Текущий этап';
-  return 'Ожидает этапа';
-}
-
-function eveningModeMeta(mode: EveningCycleMode): string {
-  if (mode === EVENING_CYCLE_MODE.quick) return 'Сокращённый сценарий';
-  if (mode === EVENING_CYCLE_MODE.emergency) return 'Только необходимое';
-  return 'Полный вечерний цикл';
 }
 
 function pluralize(value: number, one: string, few: string, many: string): string {

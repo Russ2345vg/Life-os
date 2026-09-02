@@ -45,6 +45,9 @@ export class GetEveningHistorySummary {
 }
 
 export function summarizeEveningHistory(history: EveningHistoryResult): EveningHistorySummary {
+  const modeEligibleItems = history.items.filter(
+    (item) => item.completion !== EVENING_CYCLE_COMPLETION.skipped,
+  );
   const durations = history.items
     .map((item) => item.durationMs)
     .filter((duration): duration is number => duration !== null);
@@ -71,9 +74,10 @@ export function summarizeEveningHistory(history: EveningHistoryResult): EveningH
     unfinishedCount: history.items.filter((item) => item.state !== EVENING_CYCLE_STATE.completed)
       .length,
     modeCounts: Object.freeze({
-      NORMAL: history.items.filter((item) => item.mode === EVENING_CYCLE_MODE.normal).length,
-      QUICK: history.items.filter((item) => item.mode === EVENING_CYCLE_MODE.quick).length,
-      EMERGENCY: history.items.filter((item) => item.mode === EVENING_CYCLE_MODE.emergency).length,
+      NORMAL: modeEligibleItems.filter((item) => item.mode === EVENING_CYCLE_MODE.normal).length,
+      QUICK: modeEligibleItems.filter((item) => item.mode === EVENING_CYCLE_MODE.quick).length,
+      EMERGENCY: modeEligibleItems.filter((item) => item.mode === EVENING_CYCLE_MODE.emergency)
+        .length,
     }),
     totalDurationMs,
     averageDurationMs: durations.length === 0 ? null : totalDurationMs / durations.length,

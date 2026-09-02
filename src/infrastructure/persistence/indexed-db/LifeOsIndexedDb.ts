@@ -1,7 +1,12 @@
 import { DomainError } from '../../../shared/errors/DomainError';
+import {
+  EXERCISE_DEFINITION_SOURCE,
+  SYSTEM_EXERCISE_DEFINITION_SEEDS,
+  normalizeExerciseDefinitionName,
+} from '../../../domain';
 
 export const LIFE_OS_DATABASE_NAME = 'lifeos';
-export const LIFE_OS_DATABASE_VERSION = 18;
+export const LIFE_OS_DATABASE_VERSION = 19;
 
 export const LIFE_OS_STORE = {
   days: 'days',
@@ -18,6 +23,7 @@ export const LIFE_OS_STORE = {
   directions: 'directions',
   projects: 'projects',
   eveningCycles: 'eveningCycles',
+  exerciseDefinitions: 'exerciseDefinitions',
   tomorrowPlans: 'tomorrowPlans',
   preparationPlans: 'preparationPlans',
   preparationRules: 'preparationRules',
@@ -101,6 +107,7 @@ export class LifeOsIndexedDb {
           if (oldVersion < 16) createVersionSixteenSchema(request.result);
           if (oldVersion < 17) createVersionSeventeenSchema(request.transaction);
           if (oldVersion < 18) createVersionEighteenSchema(request.result);
+          if (oldVersion < 19) createVersionNineteenSchema(request.result);
         } catch (error: unknown) {
           upgradeError = error;
           request.transaction?.abort();
@@ -139,6 +146,28 @@ export class LifeOsIndexedDb {
           );
         }
       });
+    });
+  }
+}
+
+function createVersionNineteenSchema(database: IDBDatabase): void {
+  const definitions = database.createObjectStore(LIFE_OS_STORE.exerciseDefinitions, {
+    keyPath: 'id',
+  });
+  definitions.createIndex('byNormalizedName', 'normalizedName', { unique: true });
+  const seedTime = new Date(0).toISOString();
+  for (const seed of SYSTEM_EXERCISE_DEFINITION_SEEDS) {
+    definitions.add({
+      schemaVersion: 1,
+      id: seed.id,
+      name: seed.name,
+      normalizedName: normalizeExerciseDefinitionName(seed.name),
+      measurementType: seed.measurementType,
+      source: EXERCISE_DEFINITION_SOURCE.system,
+      createdAt: seedTime,
+      updatedAt: seedTime,
+      archivedAt: null,
+      version: 1,
     });
   }
 }

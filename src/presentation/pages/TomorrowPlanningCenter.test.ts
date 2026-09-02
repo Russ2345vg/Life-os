@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { DayDate, DECISION_KIND } from '../../domain';
+import { DayDate, DECISION_KIND, EntityId } from '../../domain';
 import { createPlannedDecision } from '../../test/helpers/DecisionTestFactory';
 import { TomorrowPlanningCenter } from './TomorrowPlanningCenter';
 import {
@@ -44,9 +44,53 @@ describe('TomorrowPlanningCenter', () => {
     expect(markup).toContain('Планирование завтра');
     expect(markup).toContain('0 из 3');
     expect(markup).toContain('Добавьте главное Решение');
-    expect(markup.match(/Добавьте ещё одно Решение/g)).toHaveLength(3);
+    expect(markup).toContain('Добавьте главное решение');
+    expect(markup).toContain('Добавьте второе решение');
+    expect(markup).toContain('Добавьте третье решение');
     expect(markup).toContain('Добавьте хотя бы одно главное Решение');
     expect(markup).toContain('tomorrow-plan-primary" type="button" disabled=""');
+  });
+
+  it('показывает управляемый путь из трёх шагов и отмечает текущий шаг без зависимости от цвета', () => {
+    const markup = renderCenter([mainDecision('guided-path')]);
+
+    expect(markup).toContain('aria-label="Этапы формирования плана"');
+    expect(markup).toContain('Главное решение');
+    expect(markup).toContain('Второе решение');
+    expect(markup).toContain('Третье решение');
+    expect(markup).toContain('aria-current="step"');
+    expect(markup.match(/class="tomorrow-plan-step /g)).toHaveLength(3);
+  });
+
+  it('сохраняет mobile-поток слоты плана → форма → итог → сохранение', () => {
+    const markup = renderCenter();
+    const slots = markup.indexOf('class="tomorrow-plan-slots"');
+    const form = markup.indexOf('id="tomorrow-form-title"');
+    const focus = markup.indexOf('id="tomorrow-focus-title"');
+    const save = markup.indexOf('class="tomorrow-plan-primary"');
+
+    expect(slots).toBeLessThan(form);
+    expect(form).toBeLessThan(focus);
+    expect(focus).toBeLessThan(save);
+  });
+
+  it('сводит количество решений и уникальных связанных проектов в блоке Завтра в фокусе', () => {
+    const sharedProjectId = EntityId.create('project-focus');
+    const plan = [
+      createPlannedDecision('focus-main', PLANNED_DATE, DECISION_KIND.main, 1, sharedProjectId),
+      createPlannedDecision(
+        'focus-additional',
+        PLANNED_DATE,
+        DECISION_KIND.additional,
+        1,
+        sharedProjectId,
+      ),
+    ];
+    const markup = renderCenter(plan);
+
+    expect(markup).toContain('Завтра в фокусе');
+    expect(markup).toContain('2 решения');
+    expect(markup).toContain('1 проект');
   });
 
   it('различает одно главное Решение и главное с дополнительным', () => {
@@ -134,7 +178,7 @@ describe('TomorrowPlanningCenter', () => {
 
     expect(markup.match(/tomorrow-plan-primary/g)).toHaveLength(1);
     expect(markup.match(/Сохранить план на завтра/g)).toHaveLength(1);
-    expect(markup).toContain('class="button-cta-arrow" aria-hidden="true">→</span>');
+    expect(markup).toContain('data-evening-icon="arrow-right"');
     expect(markup).not.toContain('today-workspace');
     expect(markup).not.toContain('Командный модуль');
   });

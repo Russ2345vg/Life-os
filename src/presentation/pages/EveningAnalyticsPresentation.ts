@@ -93,13 +93,14 @@ export function createEveningTrendsPresentation(
     summary.preparationCounts.COMPLETED;
   const modeCount =
     summary.modeCounts.NORMAL + summary.modeCounts.QUICK + summary.modeCounts.EMERGENCY;
+  const operationalCycleCount = Math.max(0, summary.cycleCount - summary.skippedCount);
 
   return Object.freeze({
     periodLabel: bucketSize === 1 ? 'По дням' : 'По неделям',
     buckets: Object.freeze(scaledBuckets),
     completion: Object.freeze({
       completedCount: summary.completedCount,
-      cycleCount: summary.cycleCount,
+      cycleCount: operationalCycleCount,
     }),
     carryForwardCount: summary.resolutionCounts.CARRY_FORWARD,
     preparation: Object.freeze({
@@ -195,9 +196,12 @@ function createTrendBuckets(
     const dates = Array.from({ length: bucketDayCount }, (_, index) =>
       shiftDate(startDate, offset + index),
     );
-    const items = dates
+    const historyItems = dates
       .map((date) => itemsByDate.get(formatDateKey(date)))
       .filter((item) => item !== undefined);
+    const items = historyItems.filter(
+      (item) => item.completion !== EVENING_CYCLE_COMPLETION.skipped,
+    );
     const completedCount = items.filter(
       (item) => item.completion === EVENING_CYCLE_COMPLETION.completed,
     ).length;

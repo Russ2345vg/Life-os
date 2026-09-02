@@ -179,6 +179,44 @@ describe('E10.4 GetEveningRecommendations', () => {
     });
   });
 
+  it('повторный environment skip → только подтверждаемое ручное рассмотрение пункта', () => {
+    const [recommendation] = getEveningRecommendations([
+      signal(EVENING_PATTERN_TYPE.repeatedEnvironmentItemSkip, {
+        sourceEntityIds: ['ENVIRONMENT:SLEEP:PHONE_AWAY'],
+      }),
+    ]);
+
+    expect(recommendation).toMatchObject({
+      type: EVENING_RECOMMENDATION_TYPE.reviewEnvironmentItem,
+      priority: EVENING_RECOMMENDATION_PRIORITY.low,
+      applicability: EVENING_RECOMMENDATION_APPLICABILITY.preparationPlan,
+      proposedAction: {
+        description:
+          'Осознанно пересмотреть этот пункт подготовки без автоматического изменения обязательного ядра.',
+        requiresUserConfirmation: true,
+      },
+    });
+  });
+
+  it('practice/calm observation → информационная recommendation без медицинского вывода', () => {
+    const [recommendation] = getEveningRecommendations([
+      signal(EVENING_PATTERN_TYPE.relaxationPracticeCalmImprovement, {
+        sourceEntityIds: ['BREATHING'],
+      }),
+    ]);
+
+    expect(recommendation).toMatchObject({
+      type: EVENING_RECOMMENDATION_TYPE.considerRelaxationPractice,
+      priority: EVENING_RECOMMENDATION_PRIORITY.info,
+      applicability: EVENING_RECOMMENDATION_APPLICABILITY.eveningCycle,
+      proposedAction: {
+        description:
+          'Учесть это субъективное наблюдение при следующем выборе практики; настройки автоматически не менять.',
+        requiresUserConfirmation: true,
+      },
+    });
+  });
+
   it('ранжирует главное Решение, структурный сбой и процесс выше INFO', () => {
     const recommendations = getEveningRecommendations([
       signal(EVENING_PATTERN_TYPE.frequentQuickMode, {
@@ -287,6 +325,7 @@ function signal(type: EveningPatternType, patch: Partial<EveningSignal> = {}): E
         dayCount: 7,
       }),
       occurrenceRate: 0.571,
+      metrics: Object.freeze({ sampleSize: 7, occurrenceRate: 0.571 }),
     }),
     sourcePatternIds: Object.freeze([`pattern-${type.toLowerCase()}`]),
     sourceEntityIds: Object.freeze(['decision-a']),

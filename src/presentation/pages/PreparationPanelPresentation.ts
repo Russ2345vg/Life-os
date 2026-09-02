@@ -1,13 +1,10 @@
-import {
-  PREPARATION_ITEM_STATUS,
-  type PreparationItem,
-} from '../../domain';
+import { PREPARATION_ITEM_STATUS, type PreparationItem } from '../../domain';
 import { PREPARATION_AREA, type PreparationArea } from '../../domain/preparation';
 
 export type PreparationPanelAction = Readonly<{
   intent: 'continue' | 'beginEdit' | 'finishEdit';
   tone: 'primary' | 'secondary';
-  label: 'Перейти к завершению →' | 'Изменить подготовку' | 'Завершить редактирование';
+  label: 'Перейти к расслаблению →' | 'Изменить подготовку' | 'Завершить редактирование';
 }>;
 
 export type PreparationSummaryTone = 'ready' | 'neutral';
@@ -54,7 +51,7 @@ export function buildPreparationPanelPresentation(
   ).length;
   const fullyReady = coreConfigured && requiredPending === 0;
   const action: PreparationPanelAction | null = !completedReview
-    ? { intent: 'continue', tone: 'primary', label: 'Перейти к завершению →' }
+    ? { intent: 'continue', tone: 'primary', label: 'Перейти к расслаблению →' }
     : items.length === 0
       ? null
       : completedReviewEditing

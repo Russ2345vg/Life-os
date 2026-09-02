@@ -48,6 +48,7 @@ export interface PreparationRequirement {
   readonly sourceType: PreparationSourceType;
   readonly sourceId: EntityId | null;
   readonly required: boolean;
+  readonly recommendedDurationMinutes?: number | null;
 }
 
 export interface PreparationItemData extends PreparationRequirement {
@@ -70,6 +71,7 @@ export class PreparationItem {
   public readonly sourceType: PreparationSourceType;
   public readonly sourceId: EntityId | null;
   public readonly required: boolean;
+  public readonly recommendedDurationMinutes: number | null;
   public readonly status: PreparationItemStatus;
   public readonly active: boolean;
   public readonly completedAt: Date | null;
@@ -87,6 +89,7 @@ export class PreparationItem {
     this.sourceType = data.sourceType;
     this.sourceId = data.sourceId;
     this.required = data.required;
+    this.recommendedDurationMinutes = normalizeRecommendedDuration(data.recommendedDurationMinutes);
     this.status = data.status;
     this.active = data.active;
     this.completedAt = copyOptionalDate(data.completedAt);
@@ -164,6 +167,7 @@ export class PreparationItem {
       sourceType: this.sourceType,
       sourceId: this.sourceId,
       required: this.required,
+      recommendedDurationMinutes: this.recommendedDurationMinutes,
       status: this.status,
       active: this.active,
       completedAt: this.completedAt,
@@ -551,9 +555,7 @@ function normalizeRequiredCoreKeys(
     );
   }
   const selected = new Set(requiredCoreKeys);
-  const activeByKey = new Map(
-    items.filter((item) => item.active).map((item) => [item.key, item]),
-  );
+  const activeByKey = new Map(items.filter((item) => item.active).map((item) => [item.key, item]));
   if (requiredCoreKeys.some((key) => !activeByKey.has(key))) {
     throw new DomainError(
       'preparation.required_core_item_not_found',
@@ -615,6 +617,17 @@ function normalizeOptionalText(value: string | null): string | null {
   if (value === null) return null;
   const normalized = value.trim();
   return normalized.length === 0 ? null : normalized.slice(0, 1_000);
+}
+
+function normalizeRecommendedDuration(value: number | null | undefined): number | null {
+  if (value === null || value === undefined) return null;
+  if (!Number.isInteger(value) || value < 1 || value > 60) {
+    throw new DomainError(
+      'preparation.invalid_recommended_duration',
+      'Рекомендуемая длительность пункта должна быть от 1 до 60 минут.',
+    );
+  }
+  return value;
 }
 
 function assertDate(value: Date, code: string): void {

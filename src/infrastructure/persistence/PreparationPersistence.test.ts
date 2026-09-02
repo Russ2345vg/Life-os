@@ -73,6 +73,9 @@ describe('Preparation persistence', () => {
 
     expect(restored?.requiredCoreKeys).toEqual(plan.requiredCoreKeys);
     expect(restored?.items.map((item) => item.area)).toEqual(plan.items.map((item) => item.area));
+    expect(restored?.items.map((item) => item.recommendedDurationMinutes)).toEqual(
+      plan.items.map((item) => item.recommendedDurationMinutes),
+    );
     expect(restored?.items.map((item) => item.status)).toEqual(
       plan.items.map((item) => item.status),
     );
@@ -80,7 +83,8 @@ describe('Preparation persistence', () => {
       restored?.items.find((item) => item.status === PREPARATION_ITEM_STATUS.skipped)?.skipReason,
     ).toBe('Сегодня сознательно сокращаю подготовку');
     expect(
-      restored?.items.find((item) => item.status === PREPARATION_ITEM_STATUS.completed)?.completedAt,
+      restored?.items.find((item) => item.status === PREPARATION_ITEM_STATUS.completed)
+        ?.completedAt,
     ).toEqual(expectedCompleted?.completedAt);
     expect(
       restored?.items.find((item) => item.status === PREPARATION_ITEM_STATUS.skipped)?.skippedAt,
@@ -107,6 +111,7 @@ describe('Preparation persistence', () => {
       PREPARATION_AREA.tomorrowStart,
       PREPARATION_AREA.tomorrowStart,
     ]);
+    expect(restored?.items.map((item) => item.recommendedDurationMinutes)).toEqual([null, null]);
     database.close();
   });
 
@@ -141,7 +146,7 @@ describe('Preparation persistence', () => {
     database.close();
   });
 
-  it('восстанавливает сохранённый SHUTDOWN после перезапуска', async () => {
+  it('восстанавливает сохранённый RELAXING после перезапуска', async () => {
     const database = new LifeOsIndexedDb(new IDBFactory());
     const plans = new IndexedDbPreparationPlanRepository(database);
     const cycles = new IndexedDbEveningCycleRepository(database);
@@ -177,7 +182,11 @@ describe('Preparation persistence', () => {
     );
     const restored = await new IndexedDbEveningCycleRepository(database).findByDateKey(DATE);
 
-    expect(restoredPlan?.requiredCoreKeys).toEqual(['sleep-lights', 'tomorrow-clothes', 'tomorrow-water']);
+    expect(restoredPlan?.requiredCoreKeys).toEqual([
+      'sleep-lights',
+      'tomorrow-clothes',
+      'tomorrow-water',
+    ]);
     expect(restoredPlan?.items.map((item) => item.area)).toEqual([
       PREPARATION_AREA.sleepEnvironment,
       PREPARATION_AREA.tomorrowStart,
@@ -196,10 +205,11 @@ describe('Preparation persistence', () => {
         ?.completedAt,
     ).toEqual(expectedCompleted?.completedAt);
     expect(
-      restoredPlan?.items.find((item) => item.skipReason === 'Сегодня сознательно сокращаю подготовку')
-        ?.skippedAt,
+      restoredPlan?.items.find(
+        (item) => item.skipReason === 'Сегодня сознательно сокращаю подготовку',
+      )?.skippedAt,
     ).toEqual(expectedSkipped?.skippedAt);
-    expect(restored?.state).toBe(EVENING_CYCLE_STATE.shutdown);
+    expect(restored?.state).toBe(EVENING_CYCLE_STATE.relaxing);
     expect(restored?.completedAt).toBeNull();
     expect((await database.open()).version).toBe(LIFE_OS_DATABASE_VERSION);
     database.close();
@@ -267,6 +277,7 @@ function createEnvironmentPlan(cycleId = 'environment-cycle'): PreparationPlan {
         sourceType: PREPARATION_SOURCE_TYPE.rule,
         sourceId: id('sleep-lights-rule'),
         required: false,
+        recommendedDurationMinutes: 8,
       },
       {
         key: 'tomorrow-clothes',

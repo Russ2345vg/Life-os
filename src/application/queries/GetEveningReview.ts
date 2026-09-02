@@ -1,5 +1,6 @@
 import {
   ROUTINE_EXECUTION_STATUS,
+  ROUTINE_BLOCK_CATEGORY,
   DayDate,
   resolveRoutineOccurrencesForDate,
   type ActionSession,
@@ -21,12 +22,15 @@ import type { RoutineOccurrenceOverrideRepository } from '../ports/RoutineOccurr
 import type { EveningCycleApplicationService } from '../evening-cycle';
 import type { EnsureCurrentDay } from '../commands/EnsureCurrentDay';
 import { GetOpenLoopsForDay, type OpenLoopsForDaySnapshot } from './GetOpenLoopsForDay';
+import type { EveningRitualSettings } from '../evening-settings';
+import type { EveningRitualSettingsReader } from '../ports/EveningRitualSettingsReader';
 
 export interface EveningRoutineSummary {
   readonly plannedCount: number;
   readonly startedCount: number;
   readonly completedCount: number;
   readonly runningExecution: RoutineOccurrenceExecution | null;
+  readonly targetSleepTime: string | null;
 }
 
 export interface EveningReviewSnapshot {
@@ -42,6 +46,7 @@ export interface EveningReviewSnapshot {
   readonly tomorrowDecisions: readonly Decision[];
   readonly openLoops?: OpenLoopsForDaySnapshot;
   readonly routineSummary?: EveningRoutineSummary;
+  readonly eveningRitualSettings?: EveningRitualSettings;
 }
 
 export class GetEveningCycleReview {
@@ -201,6 +206,7 @@ export class GetEveningCycleReview {
         startedCount: 0,
         completedCount: 0,
         runningExecution: null,
+        targetSleepTime: null,
       });
     }
     const [blocks, overrides, executions] = await Promise.all([
@@ -211,6 +217,10 @@ export class GetEveningCycleReview {
     const occurrences = resolveRoutineOccurrencesForDate(blocks, overrides, date).filter(
       (occurrence) => !occurrence.isSkipped,
     );
+    const targetSleepTime =
+      occurrences
+        .filter((occurrence) => occurrence.category === ROUTINE_BLOCK_CATEGORY.sleep)
+        .at(-1)?.effectiveStartTime ?? null;
     const relevant = occurrences.flatMap((occurrence) => {
       const execution = executions.find(
         (candidate) =>
@@ -227,19 +237,39 @@ export class GetEveningCycleReview {
       ).length,
       runningExecution:
         relevant.find((execution) => execution.status === ROUTINE_EXECUTION_STATUS.running) ?? null,
+      targetSleepTime,
     });
   }
 }
 
 export class GetEveningReview {
   readonly #core: Pick<GetEveningCycleReview, 'execute'>;
+  readonly #settings: EveningRitualSettingsReader | null;
 
-  public constructor(core: Pick<GetEveningCycleReview, 'execute'>) {
+  public constructor(
+    core: Pick<GetEveningCycleReview, 'execute'>,
+    settings?: EveningRitualSettingsReader,
+  ) {
     this.#core = core;
+    this.#settings = settings ?? null;
   }
 
-  public execute(reviewDate?: DayDate): Promise<EveningReviewSnapshot> {
-    return this.#core.execute(reviewDate);
+  public async execute(reviewDate?: DayDate): Promise<EveningReviewSnapshot> {
+    const snapshot = await this.#core.execute(reviewDate);
+    if (this.#settings === null) return snapshot;
+    const eveningRitualSettings = this.#settings.loadEveningRitualSettings();
+    return Object.freeze({
+      ...snapshot,
+      eveningRitualSettings,
+      ...(snapshot.routineSummary === undefined
+        ? {}
+        : {
+            routineSummary: Object.freeze({
+              ...snapshot.routineSummary,
+              targetSleepTime: eveningRitualSettings.targetSleepTime,
+            }),
+          }),
+    });
   }
 }
 

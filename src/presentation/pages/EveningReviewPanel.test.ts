@@ -1,5 +1,8 @@
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+// @ts-expect-error -- Node types are intentionally absent from the browser application project.
+import { readFileSync } from 'node:fs';
+import { describe, expect, it, vi } from 'vitest';
+import { createElement } from 'react';
 import {
   ActionSession,
   DAY_STATUS,
@@ -14,7 +17,10 @@ import {
   REFLECTION_QUESTION_KIND,
   REFLECTION_QUESTION_TYPE,
   EVENING_CYCLE_MODE,
+  EVENING_CYCLE_COMPLETION,
+  EVENING_CYCLE_STATE,
   EVENING_MODE_REASON,
+  EVENING_STAGE_SKIP_REASON,
   OPEN_LOOP_ENTITY_TYPE,
   OPEN_LOOP_REQUIREMENT,
   OPEN_LOOP_RESOLUTION,
@@ -22,7 +28,12 @@ import {
   type LifeAction,
   type ReflectionQuestionType,
 } from '../../domain';
-import type { EveningReviewSnapshot, OpenLoopItem, ReflectionSession } from '../../application';
+import type {
+  EveningCycleRepository,
+  EveningReviewSnapshot,
+  OpenLoopItem,
+  ReflectionSession,
+} from '../../application';
 import { DomainError } from '../../shared/errors/DomainError';
 import { createPlannedDecision } from '../../test/helpers/DecisionTestFactory';
 import {
@@ -30,7 +41,20 @@ import {
   createReadyLifeAction,
   markLifeActionInProgress,
 } from '../../test/helpers/LifeActionTestFactory';
-import { EveningNotStartedScene, EveningReviewPanelView } from './EveningReviewPanel';
+import {
+  EmergencyPreparationSkipPanel,
+  EveningPreparationScene,
+  EveningNotStartedScene,
+  EveningSkipDialog,
+  EveningSkippedScene,
+  EveningReviewPanelView,
+  buildEveningSkipCompletionInput,
+  executeEveningStartChoice,
+  skipEmergencyPreparation,
+} from './EveningReviewPanel';
+import { EveningCycleApplicationService } from '../../application/evening-cycle/EveningCycleApplicationService';
+import { FakeClock, FakeDayRepository, FakeIdGenerator } from '../../test/helpers/Fakes';
+import { EMPTY_REFLECTION_ANSWER_DRAFT } from './ReflectionAnswerDraft';
 import { buildEveningNotStartedSceneModel } from './EveningCommandCenterPresentation';
 import { loadEveningReviewState } from './EveningReviewLoadState';
 import { EveningRecoveryScene, EveningShutdownScene } from './EveningShutdownScene';
@@ -60,6 +84,7 @@ import {
 const TODAY = DayDate.create('2026-08-05');
 const TOMORROW = DayDate.create('2026-08-06');
 const NOOP = () => undefined;
+const panelSource = readFileSync(new URL('./EveningReviewPanel.tsx', import.meta.url), 'utf8');
 
 function renderPanel(
   snapshot: EveningReviewSnapshot,
@@ -71,6 +96,7 @@ function renderPanel(
     readonly reflectionSession?: ReflectionSession;
     readonly reflectionText?: string;
     readonly reflectionChoices?: readonly string[];
+    readonly reflectionYesNo?: boolean | null;
     readonly lastAnsweredQuestionId?: string | null;
     readonly correctionAction?: string;
     readonly embedded?: boolean;
@@ -97,12 +123,15 @@ function renderPanel(
         ? {}
         : { reflectionSession: options.reflectionSession }),
       adaptiveReflectionEnabled: options.reflectionSession !== undefined,
-      reflectionText: options.reflectionText ?? '',
-      reflectionChoices: options.reflectionChoices ?? [],
+      reflectionDraft: {
+        ...EMPTY_REFLECTION_ANSWER_DRAFT,
+        text: options.reflectionText ?? '',
+        choices: options.reflectionChoices ?? [],
+        yesNo: options.reflectionYesNo ?? null,
+      },
       lastAnsweredQuestionId: options.lastAnsweredQuestionId ?? null,
       correctionAction: options.correctionAction ?? '',
-      onReflectionTextChange: NOOP,
-      onReflectionChoicesChange: NOOP,
+      onReflectionDraftChange: NOOP,
       onReflectionAnswer: NOOP,
       onReflectionSkip: NOOP,
       onCorrectionActionChange: NOOP,
@@ -124,6 +153,106 @@ function renderPanel(
 }
 
 describe('EveningReviewPanel', () => {
+  it('маршрутизирует current и history Relaxation через отдельную сцену без R6', () => {
+    expect(panelSource).toContain(
+      "import { EveningRelaxationScene } from './EveningRelaxationScene'",
+    );
+    expect(panelSource).toContain("activeSelectedView === 'relaxation'");
+    expect(panelSource).toContain('activeCycleState === EVENING_CYCLE_STATE.relaxing');
+    expect(panelSource).toContain('readOnly');
+    expect(panelSource).not.toContain('Sleep Check');
+    expect(panelSource).not.toContain('beforeRating');
+    expect(panelSource).not.toContain('afterRating');
+  });
+
+  it('не монтирует PreparationPanel и не вызывает preparation service в composed emergency PREPARING ветке', () => {
+    const cycle = createEmergencyPreparingCycle();
+    const getOrGenerate = vi.fn(async (): Promise<never> => {
+      throw new Error('EMERGENCY не должен генерировать план среды');
+    });
+    const completeItem = vi.fn(async (): Promise<never> => {
+      throw new Error('EMERGENCY не должен завершать пункт среды');
+    });
+    const skipItem = vi.fn(async (): Promise<never> => {
+      throw new Error('EMERGENCY не должен пропускать пункт среды');
+    });
+    const continueToRelaxation = vi.fn(async (): Promise<never> => {
+      throw new Error('EMERGENCY не должен продолжать через PreparationService');
+    });
+    const configureRequiredCore = vi.fn(async (): Promise<never> => {
+      throw new Error('EMERGENCY не должен настраивать обязательное ядро среды');
+    });
+    const markup = renderToStaticMarkup(
+      createElement(EveningPreparationScene, {
+        cycle,
+        preparation: {
+          getOrGenerate,
+          completeItem,
+          skipItem,
+          continueToRelaxation,
+          configureRequiredCore,
+        },
+        isSubmitting: false,
+        submitError: null,
+        onEmergencyContinue: NOOP,
+        onPreparationContinued: NOOP,
+        onClose: NOOP,
+        embedded: true,
+      }),
+    );
+
+    expect(markup).toContain('Позднее завершение · Среда');
+    expect(markup).toContain('Перейти к расслаблению');
+    expect(markup).not.toContain('Настройте обязательное ядро');
+    expect(markup).not.toContain('Собираем подготовку к первому старту…');
+    expect(getOrGenerate).not.toHaveBeenCalled();
+    expect(completeItem).not.toHaveBeenCalled();
+    expect(skipItem).not.toHaveBeenCalled();
+    expect(continueToRelaxation).not.toHaveBeenCalled();
+    expect(configureRequiredCore).not.toHaveBeenCalled();
+  });
+
+  it('называет emergency этап средой и передаёт только cycle skip затем reload', async () => {
+    const cycles = createEveningCycleRepository();
+    const cycle = createEmergencyPreparingCycle();
+    const eveningCycle = new EveningCycleApplicationService(
+      cycles,
+      new FakeDayRepository(),
+      new FakeClock(new Date('2026-08-05T20:10:00.000+09:00')),
+      new FakeIdGenerator('emergency-preparation'),
+    );
+    const reload = vi.fn(async (): Promise<void> => undefined);
+    await cycles.createIfAbsent(cycle);
+    const skip = vi.spyOn(eveningCycle, 'skipPreparation');
+    const markup = renderToStaticMarkup(
+      createElement(EmergencyPreparationSkipPanel, {
+        busy: false,
+        error: null,
+        onContinue: NOOP,
+        onClose: NOOP,
+        embedded: true,
+      }),
+    );
+
+    await skipEmergencyPreparation(eveningCycle, TODAY, reload);
+    const stored = await cycles.findByDateKey(TODAY);
+
+    expect(markup).toContain('Позднее завершение · Среда');
+    expect(skip).toHaveBeenCalledOnce();
+    expect(skip).toHaveBeenCalledWith(TODAY);
+    expect(reload).toHaveBeenCalledOnce();
+    const [skipCall] = skip.mock.invocationCallOrder;
+    const [reloadCall] = reload.mock.invocationCallOrder;
+    if (skipCall === undefined || reloadCall === undefined) {
+      throw new Error('Expected emergency skip and reload calls.');
+    }
+    expect(skipCall).toBeLessThan(reloadCall);
+    expect(stored?.skippedStages.at(-1)).toMatchObject({
+      stage: EVENING_CYCLE_STATE.preparing,
+      reason: EVENING_STAGE_SKIP_REASON.emergencyMode,
+    });
+  });
+
   it('показывает стартовый интерфейс для NOT_STARTED', () => {
     const markup = renderToStaticMarkup(
       EveningNotStartedScene({
@@ -131,21 +260,62 @@ describe('EveningReviewPanel', () => {
         busy: false,
         error: null,
         startDisabled: false,
+        lateOfferMinutes: null,
         onStart: NOOP,
+        onStartShort: NOOP,
+        onOpenSkip: NOOP,
       }),
     );
 
     expect(markup).toContain('class="evening-not-started-card"');
     expect(markup).toContain('Сегодняшний вечер ещё не начат');
-    expect(markup).toContain('Разберите остатки дня и подготовьте ясный старт завтра.');
-    expect(markup).toContain('Незавершённое');
-    expect(markup).toContain('Активная сессия');
-    expect(markup).toContain('Завтра');
+    expect(markup).toContain('Завершите день спокойно и подготовьте ясный старт завтра.');
+    expect(markup).not.toContain('class="evening-not-started-summary"');
     expect(markup).toContain('Начать вечер');
-    expect(markup).toContain('data-evening-icon="sun"');
+    expect(markup).toContain('≈ 10–15 минут');
+    expect(markup).toContain('Пропустить вечерний ритуал');
+    expect(markup).toContain('class="evening-not-started-cta-zone"');
+    expect(markup).toContain('data-evening-icon="clock"');
     expect(markup).toContain('data-evening-icon="arrow-right"');
     expect(markup).toContain('aria-busy="false"');
     expect(markup).not.toContain('<dl');
+  });
+
+  it('выстраивает луну над заголовком стартовой сцены', () => {
+    const markup = renderToStaticMarkup(
+      EveningNotStartedScene({
+        snapshot: createSnapshot(),
+        busy: false,
+        error: null,
+        startDisabled: false,
+        lateOfferMinutes: null,
+        onStart: NOOP,
+        onStartShort: NOOP,
+        onOpenSkip: NOOP,
+      }),
+    );
+
+    expect(markup).toMatch(
+      /class="evening-not-started-moon"[\s\S]*?data-evening-icon="moon"[\s\S]*?<h3 id="evening-start-title"/,
+    );
+  });
+
+  it('скрывает осознанный пропуск, когда он выключен в settings', () => {
+    const markup = renderToStaticMarkup(
+      EveningNotStartedScene({
+        snapshot: createSnapshot(),
+        busy: false,
+        error: null,
+        startDisabled: false,
+        lateOfferMinutes: null,
+        allowConsciousSkip: false,
+        onStart: NOOP,
+        onStartShort: NOOP,
+        onOpenSkip: NOOP,
+      }),
+    );
+
+    expect(markup).not.toContain('Пропустить вечерний ритуал');
   });
 
   it('показывает loading, disabled и retryable command error без второй CTA', () => {
@@ -155,7 +325,10 @@ describe('EveningReviewPanel', () => {
         busy: true,
         error: 'Не удалось начать вечер.',
         startDisabled: false,
+        lateOfferMinutes: null,
         onStart: NOOP,
+        onStartShort: NOOP,
+        onOpenSkip: NOOP,
       }),
     );
 
@@ -166,6 +339,87 @@ describe('EveningReviewPanel', () => {
     expect(markup).toContain('Не удалось начать вечер.');
     expect(markup.match(/evening-not-started-primary/g)).toHaveLength(1);
     expect(markup).not.toContain('data-evening-icon="arrow-right"');
+  });
+
+  it('предлагает поздний SHORT явно и оставляет выбор обычного режима', () => {
+    const onStart = vi.fn();
+    const onStartShort = vi.fn();
+    const markup = renderToStaticMarkup(
+      EveningNotStartedScene({
+        snapshot: createSnapshot(),
+        busy: false,
+        error: null,
+        startDisabled: false,
+        lateOfferMinutes: 24,
+        onStart,
+        onStartShort,
+        onOpenSkip: NOOP,
+      }),
+    );
+
+    expect(markup).toContain('До сна осталось 24 минут. Перейти в короткий режим?');
+    expect(markup).toContain('Короткий');
+    expect(markup).toContain('Обычный');
+    expect(onStart).not.toHaveBeenCalled();
+    expect(onStartShort).not.toHaveBeenCalled();
+  });
+
+  it('маршрутизирует явный выбор SHORT и NORMAL в разные application-команды', async () => {
+    const cycle = createSnapshot().cycle;
+    const start = vi.fn(async () => cycle);
+    const startShort = vi.fn(async () => cycle);
+    const service = { start, startShort };
+
+    await executeEveningStartChoice(service, TODAY, 'SHORT');
+    await executeEveningStartChoice(service, TODAY, 'NORMAL');
+
+    expect(startShort).toHaveBeenCalledOnce();
+    expect(startShort).toHaveBeenCalledWith(TODAY);
+    expect(start).toHaveBeenCalledOnce();
+    expect(start).toHaveBeenCalledWith(TODAY);
+  });
+
+  it('показывает нейтральное подтверждение пропуска и необязательную причину', () => {
+    const markup = renderToStaticMarkup(
+      createElement(EveningSkipDialog, {
+        reason: 'Поздняя дорога домой',
+        busy: false,
+        onReasonChange: NOOP,
+        onConfirm: NOOP,
+        onCancel: NOOP,
+      }),
+    );
+
+    expect(markup).toContain('Пропустить вечерний ритуал сегодня?');
+    expect(markup).toContain('Причина (необязательно)');
+    expect(markup).toContain('Поздняя дорога домой');
+    expect(markup).toContain('Пропустить');
+    expect(markup).toContain('Отмена');
+    expect(markup).not.toContain('page-error');
+  });
+
+  it('подтверждает skip отдельной командой, а отмена ничего не сохраняет', () => {
+    expect(buildEveningSkipCompletionInput('CANCEL', 'Неважно')).toBeNull();
+    expect(buildEveningSkipCompletionInput('CONFIRM', '  Нужен отдых  ')).toEqual({
+      skipEvening: true,
+      summary: 'Нужен отдых',
+      actionResolutions: [],
+      tomorrowDecisions: [],
+    });
+    expect(buildEveningSkipCompletionInput('CONFIRM', '   ')?.summary).toBe('');
+  });
+
+  it('показывает сохранённый SKIPPED нейтрально после refresh', () => {
+    const cycle = createSnapshot().cycle;
+    cycle.skip(new Date('2026-08-05T21:20:00.000+09:00'), 'Нужен отдых');
+    const markup = renderToStaticMarkup(
+      createElement(EveningSkippedScene, { cycle, onClose: NOOP }),
+    );
+
+    expect(cycle.completion).toBe(EVENING_CYCLE_COMPLETION.skipped);
+    expect(markup).toContain('Вечерний ритуал пропущен');
+    expect(markup).toContain('Нужен отдых');
+    expect(markup).not.toContain('page-error');
   });
 
   it('маппит 0, 1 и несколько незавершённых элементов без дроби решений и действий', () => {
@@ -734,6 +988,8 @@ describe('EveningReviewPanel', () => {
   it.each([
     REFLECTION_QUESTION_TYPE.singleChoice,
     REFLECTION_QUESTION_TYPE.multiChoice,
+    REFLECTION_QUESTION_TYPE.yesNo,
+    REFLECTION_QUESTION_TYPE.shortCapture,
     REFLECTION_QUESTION_TYPE.shortText,
     REFLECTION_QUESTION_TYPE.optionalText,
   ] as const)('E9.2 отображает существующий тип ответа %s без внутренней терминологии', (type) => {
@@ -759,6 +1015,7 @@ describe('EveningReviewPanel', () => {
         type === REFLECTION_QUESTION_TYPE.multiChoice
           ? [REFLECTION_FAILURE_REASON.scopeTooLarge]
           : [],
+      reflectionYesNo: type === REFLECTION_QUESTION_TYPE.yesNo ? false : null,
     });
 
     expect(markup).toContain('Главное Решение переносится третий день подряд.');
@@ -771,6 +1028,7 @@ describe('EveningReviewPanel', () => {
     if (type === REFLECTION_QUESTION_TYPE.optionalText) expect(markup).toContain('Пропустить');
     if (
       type === REFLECTION_QUESTION_TYPE.shortText ||
+      type === REFLECTION_QUESTION_TYPE.shortCapture ||
       type === REFLECTION_QUESTION_TYPE.optionalText
     ) {
       expect(markup).toContain('Записать короткий вывод…');
@@ -804,6 +1062,29 @@ describe('EveningReviewPanel', () => {
   });
 });
 
+function createEveningCycleRepository(): EveningCycleRepository {
+  const cycles = new Map<string, EveningCycle>();
+  return {
+    findById: async (id) => cycles.get(id.toString()) ?? null,
+    findByDayId: async (dayId) =>
+      [...cycles.values()].find((cycle) => cycle.dayId.equals(dayId)) ?? null,
+    findByDateKey: async (dateKey) =>
+      [...cycles.values()].find((cycle) => cycle.dateKey.equals(dateKey)) ?? null,
+    createIfAbsent: async (cycle) => {
+      const existing = cycles.get(cycle.id.toString());
+      if (existing !== undefined) return existing;
+      cycles.set(cycle.id.toString(), cycle);
+      return cycle;
+    },
+    saveIfVersionMatches: async (cycle, expectedVersion) => {
+      const stored = cycles.get(cycle.id.toString());
+      if (stored === undefined || stored.version !== expectedVersion) return false;
+      cycles.set(cycle.id.toString(), cycle);
+      return true;
+    },
+  };
+}
+
 function createSnapshot(overrides: Partial<EveningReviewSnapshot> = {}): EveningReviewSnapshot {
   return {
     cycle: overrides.cycle ?? createEveningCycle(),
@@ -831,6 +1112,15 @@ function createEveningCycle(): EveningCycle {
   cycle.start(occurredAt);
   cycle.beginResolving(occurredAt);
   cycle.completeResolving(occurredAt);
+  return cycle;
+}
+
+function createEmergencyPreparingCycle(): EveningCycle {
+  const cycle = createEveningCycle();
+  const occurredAt = new Date('2026-08-05T20:05:00.000+09:00');
+  cycle.switchMode(EVENING_CYCLE_MODE.emergency, EVENING_MODE_REASON.userSelected, occurredAt);
+  cycle.skipReflection(occurredAt);
+  cycle.completeTomorrowPlanning(occurredAt);
   return cycle;
 }
 

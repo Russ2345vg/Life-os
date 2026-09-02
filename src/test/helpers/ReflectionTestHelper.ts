@@ -3,7 +3,12 @@ import type {
   ReflectionApplicationService,
   ReflectionSession,
 } from '../../application';
-import { REFLECTION_QUESTION_TYPE, type DayDate, type ReflectionAnswer } from '../../domain';
+import {
+  REFLECTION_QUESTION_TYPE,
+  type DayDate,
+  type ReflectionAnswer,
+  type ReflectionQuestionType,
+} from '../../domain';
 
 interface ReflectionTestApplication {
   readonly getEveningReview: Pick<GetEveningReview, 'execute'>;
@@ -30,8 +35,10 @@ export async function answerAllReflectionQuestions(
   return session;
 }
 
-function testAnswer(type: string, options: readonly string[]): ReflectionAnswer {
+function testAnswer(type: ReflectionQuestionType, options: readonly string[]): ReflectionAnswer {
+  if (type === REFLECTION_QUESTION_TYPE.yesNo) return true;
   if (type === REFLECTION_QUESTION_TYPE.singleChoice) return options[0] ?? 'OTHER';
   if (type === REFLECTION_QUESTION_TYPE.multiChoice) return [options[0] ?? 'OTHER'];
+  if (type === REFLECTION_QUESTION_TYPE.rating1To5) return 4;
   return 'Зафиксирован вывод для следующей попытки';
 }

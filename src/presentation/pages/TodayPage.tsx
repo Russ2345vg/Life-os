@@ -47,6 +47,8 @@ import type {
   CompleteCurrentDayResult,
   TomorrowPlanService,
   PreparationService,
+  RelaxationApplicationService,
+  SleepCheckApplicationService,
   EveningCycleApplicationService,
 } from '../../application';
 import {
@@ -202,7 +204,7 @@ interface TodayPageProps {
   readonly completeCurrentDay: Pick<CompleteCurrentDay, 'execute'>;
   readonly eveningCycle?: Pick<
     EveningCycleApplicationService,
-    'start' | 'selectMode' | 'skipPreparation'
+    'start' | 'startShort' | 'selectMode' | 'skipPreparation'
   >;
   readonly resolveOpenLoop?: Pick<ResolveOpenLoop, 'execute'>;
   readonly reflection?: Pick<
@@ -226,8 +228,24 @@ interface TodayPageProps {
   >;
   readonly preparation?: Pick<
     PreparationService,
-    'getOrGenerate' | 'configureRequiredCore' | 'completeItem' | 'skipItem' | 'continueToShutdown'
+    'getOrGenerate' | 'configureRequiredCore' | 'completeItem' | 'skipItem' | 'continueToRelaxation'
   >;
+  readonly relaxation?: Pick<
+    RelaxationApplicationService,
+    | 'getOrInitialize'
+    | 'getStored'
+    | 'choosePractice'
+    | 'setPracticeDuration'
+    | 'completeDrink'
+    | 'completeHygiene'
+    | 'startPracticeTimer'
+    | 'completePractice'
+    | 'startScreenFree'
+    | 'shortenScreenFree'
+    | 'skipScreenFree'
+    | 'complete'
+  >;
+  readonly sleepCheck?: SleepCheckApplicationService;
   readonly updateDayResultSphere: Pick<UpdateDayResultSphere, 'execute'>;
   readonly getDecisionsForDate: Pick<GetDecisionsForDate, 'execute'>;
   readonly getLifeActionsForDate: Pick<GetLifeActionsForDate, 'execute'>;
@@ -280,6 +298,8 @@ export function TodayPage({
   reflection,
   tomorrowPlan,
   preparation,
+  relaxation,
+  sleepCheck,
   updateDayResultSphere,
   getDecisionsForDate,
   getLifeActionsForDate,
@@ -1671,6 +1691,8 @@ export function TodayPage({
           {...(reflection === undefined ? {} : { reflection })}
           {...(tomorrowPlan === undefined ? {} : { tomorrowPlan })}
           {...(preparation === undefined ? {} : { preparation })}
+          {...(relaxation === undefined ? {} : { relaxation })}
+          {...(sleepCheck === undefined ? {} : { sleepCheck })}
           reviewDate={eveningReviewDate}
           onClose={() => setEveningReviewDate(null)}
           onCompleted={handleDayCompleted}

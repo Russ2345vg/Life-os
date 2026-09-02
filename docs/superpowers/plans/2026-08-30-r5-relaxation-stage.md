@@ -59,6 +59,7 @@
 ### Task 1: Define the R5 domain snapshot and state-machine transitions
 
 **Files:**
+
 - Create: `src/domain/evening-cycle/RelaxationSnapshot.ts`
 - Create: `src/domain/evening-cycle/RelaxationSnapshot.test.ts`
 - Modify: `src/domain/evening-cycle/EveningCycleState.ts`
@@ -68,6 +69,7 @@
 - Modify: `src/domain/index.ts`
 
 **Interfaces:**
+
 - Consumes: existing `DomainError`, `EveningCycleMode`, `copyDate`, `copyOptionalDate`, and aggregate version/timestamp conventions.
 - Produces: `RELAXATION_PRACTICE`, `RelaxationPractice`, `SCREEN_FREE_STATE`, `ScreenFreeState`, `RelaxationSnapshot`, `EveningCycle.relaxation`, initialization/action methods, and `EVENING_CYCLE_STATE.relaxing` for all later tasks.
 
@@ -129,10 +131,8 @@ export const SCREEN_FREE_STATE = {
   completed: 'COMPLETED',
 } as const;
 
-export type RelaxationPractice =
-  (typeof RELAXATION_PRACTICE)[keyof typeof RELAXATION_PRACTICE];
-export type ScreenFreeState =
-  (typeof SCREEN_FREE_STATE)[keyof typeof SCREEN_FREE_STATE];
+export type RelaxationPractice = (typeof RELAXATION_PRACTICE)[keyof typeof RELAXATION_PRACTICE];
+export type ScreenFreeState = (typeof SCREEN_FREE_STATE)[keyof typeof SCREEN_FREE_STATE];
 export type ScreenFreeDurationMinutes = 10 | 25;
 ```
 
@@ -260,6 +260,7 @@ If every staged hunk belongs to R5, commit only reviewed hunks with message `fea
 ### Task 2: Persist R5 additively and support latest-default lookup
 
 **Files:**
+
 - Modify: `src/infrastructure/persistence/records/EveningCycleRecord.ts`
 - Modify: `src/infrastructure/persistence/mappers/EveningCycleRecordMapper.ts`
 - Modify: `src/infrastructure/persistence/IndexedDbEveningCycleRepository.ts`
@@ -268,6 +269,7 @@ If every staged hunk belongs to R5, commit only reviewed hunks with message `fea
 - Modify: `src/application/ports/EveningCycleRepository.ts`
 
 **Interfaces:**
+
 - Consumes: `EveningCycle.relaxation`, `RelaxationSnapshot.rehydrate`, existing schema-version-1 mapper helpers, and `DayDate` ordering.
 - Produces: additive `EveningCycleRecord.relaxation?` and `findLatestWithRelaxationBefore(dateKey): Promise<EveningCycle | null>`.
 
@@ -281,9 +283,7 @@ it('round-trips the complete relaxation snapshot without changing database versi
   const restored = await repository.findByDateKey(DayDate.fromString('2026-08-30'));
   expect(restored?.relaxation?.selectedPractice).toBe(RELAXATION_PRACTICE.breathing);
   expect(restored?.relaxation?.screenFreeState).toBe(SCREEN_FREE_STATE.skipped);
-  expect(restored?.relaxation?.screenFreeSkippedAt?.toISOString()).toBe(
-    '2026-08-30T13:10:00.000Z',
-  );
+  expect(restored?.relaxation?.screenFreeSkippedAt?.toISOString()).toBe('2026-08-30T13:10:00.000Z');
 });
 
 it('reads a legacy schema-version-1 record without relaxation facts', async () => {
@@ -291,9 +291,7 @@ it('reads a legacy schema-version-1 record without relaxation facts', async () =
 });
 
 it('finds the latest strictly prior cycle that contains a relaxation default', async () => {
-  const latest = await repository.findLatestWithRelaxationBefore(
-    DayDate.fromString('2026-08-30'),
-  );
+  const latest = await repository.findLatestWithRelaxationBefore(DayDate.fromString('2026-08-30'));
   expect(latest?.dateKey.toString()).toBe('2026-08-29');
 });
 ```
@@ -341,9 +339,12 @@ Map missing `relaxation` to `null`. Parse every enum and date with explicit vali
 Add the method to the port, in-memory adapter, and IndexedDB adapter. The IndexedDB implementation may use the existing bounded `getAll()` pattern, then map/filter/sort:
 
 ```ts
-return cycles
-  .filter((cycle) => cycle.dateKey.isBefore(dateKey) && cycle.relaxation !== null)
-  .sort((left, right) => right.dateKey.toString().localeCompare(left.dateKey.toString()))[0] ?? null;
+return (
+  cycles
+    .filter((cycle) => cycle.dateKey.isBefore(dateKey) && cycle.relaxation !== null)
+    .sort((left, right) => right.dateKey.toString().localeCompare(left.dateKey.toString()))[0] ??
+  null
+);
 ```
 
 If `DayDate` has no `isBefore`, express strict-before as `!candidate.dateKey.equals(dateKey) && !candidate.dateKey.isAfter(dateKey)` and test it. Do not add an index or bump version 19.
@@ -375,12 +376,14 @@ Commit only reviewed R5 hunks as `feat: persist evening relaxation state`; other
 ### Task 3: Add the focused Relaxation application service
 
 **Files:**
+
 - Create: `src/application/evening-cycle/RelaxationApplicationService.ts`
 - Create: `src/application/evening-cycle/RelaxationApplicationService.test.ts`
 - Modify: `src/application/evening-cycle/index.ts`
 - Modify: `src/application/index.ts`
 
 **Interfaces:**
+
 - Consumes: `EveningCycleRepository.findLatestWithRelaxationBefore`, `Clock`, aggregate R5 methods, and `cloneEveningCycle`.
 - Produces: `RelaxationApplicationService` with one initialization/read path and ten focused commands returning `Promise<EveningCycle>`.
 
@@ -422,10 +425,7 @@ Export this class surface:
 
 ```ts
 export class RelaxationApplicationService {
-  public constructor(
-    cycles: EveningCycleRepository,
-    clock: Clock,
-  );
+  public constructor(cycles: EveningCycleRepository, clock: Clock);
 
   public getOrInitialize(dateKey: DayDate): Promise<EveningCycle>;
   public getStored(dateKey: DayDate): Promise<EveningCycle | null>;
@@ -494,6 +494,7 @@ Commit only reviewed R5 hunks as `feat: add relaxation application commands`; ot
 ### Task 4: Redirect R4 into R5 and preserve legacy day recovery
 
 **Files:**
+
 - Modify: `src/application/preparation/PreparationService.ts`
 - Modify: `src/application/preparation/PreparationService.test.ts`
 - Modify: `src/application/evening-cycle/EveningCycleApplicationService.ts`
@@ -504,6 +505,7 @@ Commit only reviewed R5 hunks as `feat: add relaxation application commands`; ot
 - Modify: `src/presentation/pages/PreparationPanel.test.ts`
 
 **Interfaces:**
+
 - Consumes: `EveningCycle.completePreparation()` now targeting `RELAXING` and recovery-only `recoverLegacyRelaxation()`.
 - Produces: `PreparationService.continueToRelaxation(dateKey)` and exact user copy `Перейти к расслаблению →`.
 
@@ -514,9 +516,7 @@ Update/add tests before production renaming:
 ```ts
 const result = await service.continueToRelaxation(cycleDate);
 expect(result.plan.status).toBe(PREPARATION_PLAN_STATUS.completed);
-expect((await cycles.findByDateKey(cycleDate))?.state).toBe(
-  EVENING_CYCLE_STATE.relaxing,
-);
+expect((await cycles.findByDateKey(cycleDate))?.state).toBe(EVENING_CYCLE_STATE.relaxing);
 ```
 
 Prove the `PreparationUnitOfWork` still commits plan completion and cycle transition atomically, concurrent recovery recognizes `RELAXING`, and emergency `skipPreparation` reaches `RELAXING` while retaining the `PREPARING` skip record.
@@ -580,12 +580,14 @@ Commit only reviewed R5 hunks as `feat: route environment into relaxation`; othe
 ### Task 5: Build the pure R5 presentation contract and Evening Journey mapping
 
 **Files:**
+
 - Create: `src/presentation/pages/EveningRelaxationPresentation.ts`
 - Create: `src/presentation/pages/EveningRelaxationPresentation.test.ts`
 - Modify: `src/presentation/pages/EveningCommandCenterPresentation.ts`
 - Modify: `src/presentation/pages/EveningCommandCenter.test.ts`
 
 **Interfaces:**
+
 - Consumes: stored `RelaxationSnapshot`, current `Date`, `EveningCycleState`, and existing journey/KPI tone semantics.
 - Produces: `EveningRelaxationModel`, countdown formatting, disabled-reason copy, history labels, `relaxation` journey id, and Relaxation KPI.
 
@@ -668,12 +670,14 @@ Commit reviewed R5-only hunks as `feat: present evening relaxation state`, or re
 ### Task 6: Implement the active/history Relaxation scene and responsive visual layer
 
 **Files:**
+
 - Create: `src/presentation/pages/EveningRelaxationScene.tsx`
 - Create: `src/presentation/pages/EveningRelaxationScene.test.ts`
 - Create: `src/presentation/pages/EveningRelaxationVisual.test.ts`
 - Create: `src/presentation/styles/evening-relaxation.css`
 
 **Interfaces:**
+
 - Consumes: `RelaxationApplicationService` public methods, `buildEveningRelaxationModel`, `DayDate`, and `onContinued(): void`.
 - Produces: `EveningRelaxationScene` with current/history modes and `data-relaxation-*` hooks for browser QA.
 
@@ -791,6 +795,7 @@ Commit reviewed R5-only files as `feat: add relaxation evening scene`.
 ### Task 7: Wire R5 through Evening review, composition, refresh, and history
 
 **Files:**
+
 - Modify: `src/presentation/pages/EveningReviewPanel.tsx`
 - Modify: `src/presentation/pages/EveningReviewPanel.test.ts`
 - Modify: `src/presentation/pages/RoutinePage.tsx`
@@ -802,6 +807,7 @@ Commit reviewed R5-only files as `feat: add relaxation evening scene`.
 - Modify: `src/app/composition/createLifeOsApplication.test.ts`
 
 **Interfaces:**
+
 - Consumes: `RelaxationApplicationService`, `EveningRelaxationScene`, `EVENING_CYCLE_STATE.relaxing`, and the renamed `continueToRelaxation` Preparation API.
 - Produces: real application wiring, current scene selection, completed-history scene selection, and refresh-safe service propagation.
 
@@ -858,7 +864,7 @@ Pick<
   | 'shortenScreenFree'
   | 'skipScreenFree'
   | 'complete'
->
+>;
 ```
 
 In `EveningReviewPanel`:
@@ -915,10 +921,12 @@ ApplicationShell, RoutinePage, or composition edits already present in the workt
 ### Task 8: Prove real persistence, refresh, mobile behavior, and the final R5 gate
 
 **Files:**
+
 - Create: `tests/e2e/evening-relaxation.acceptance.spec.ts`
 - Modify: `docs/design/features/2026-08-30-r5-relaxation-stage.md` only after current-tree evidence passes.
 
 **Interfaces:**
+
 - Consumes: the fully composed real application and stable `data-relaxation-*` hooks from Task 6.
 - Produces: browser evidence for R5 acceptance and final documented implementation status.
 

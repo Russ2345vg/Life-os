@@ -4,19 +4,128 @@ import { cloneMorningCycle } from '../../application';
 import {
   DayDate,
   EntityId,
+  EXERCISE_MEASUREMENT_TYPE,
   MORNING_CYCLE_STATE,
   MORNING_PHYSICAL_STATUS,
+  MORNING_STAGE_ID,
   MORNING_STAGE_STATUS,
   MorningCycle,
 } from '../../domain';
 import { IndexedDbMorningCycleRepository } from './IndexedDbMorningCycleRepository';
 import { LIFE_OS_STORE, LifeOsIndexedDb } from './indexed-db/LifeOsIndexedDb';
+import { MorningCycleRecordMapper } from './mappers/MorningCycleRecordMapper';
 
 const DATE = DayDate.create('2026-08-23');
 const START = new Date('2026-08-23T07:12:00.000+09:00');
 const WATER = new Date('2026-08-23T07:14:00.000+09:00');
+const EXECUTION_START = new Date('2026-08-23T07:16:00.000+09:00');
+const FIRST_RESULT = new Date('2026-08-23T07:18:00.000+09:00');
+const ADVANCED = new Date('2026-08-23T07:19:00.000+09:00');
+const PAUSED = new Date('2026-08-23T07:20:00.000+09:00');
+const LATER = new Date('2026-08-23T08:00:00.000+09:00');
 
 describe('IndexedDbMorningCycleRepository', () => {
+  it('восстанавливает paused execution с результатом и worked duration после нового открытия', async () => {
+    const factory = new IDBFactory();
+    const firstDatabase = new LifeOsIndexedDb(factory);
+    const repository = new IndexedDbMorningCycleRepository(firstDatabase);
+    const cycle = morningCycle('cycle-with-execution');
+    cycle.start(START);
+    cycle.selectPhysicalExercise(
+      EntityId.create('morning-exercise.push-ups'),
+      EXERCISE_MEASUREMENT_TYPE.repetitions,
+      WATER,
+    );
+    cycle.startPhysicalExecution(EXECUTION_START);
+    cycle.completePhysicalSet(
+      EntityId.create('morning-exercise.push-ups'),
+      1,
+      { measurementType: EXERCISE_MEASUREMENT_TYPE.repetitions, actualReps: 14 },
+      FIRST_RESULT,
+    );
+    cycle.advancePhysicalExecution(ADVANCED);
+    cycle.pausePhysicalExecution(PAUSED);
+    await repository.createIfAbsent(cycle);
+    firstDatabase.close();
+
+    const reopenedDatabase = new LifeOsIndexedDb(factory);
+    const restored = await new IndexedDbMorningCycleRepository(reopenedDatabase).findByDateKey(
+      DATE,
+    );
+
+    expect(restored?.physicalExecution?.activeSetIndex).toBe(1);
+    expect(restored?.physicalExecution?.pausedAt).toEqual(PAUSED);
+    expect(restored?.physicalExecution?.sets[0]).toMatchObject({
+      status: 'COMPLETED',
+      actualReps: 14,
+      resolvedAt: FIRST_RESULT,
+    });
+    expect(restored?.physicalExecution?.workedDurationAt(LATER)).toBe(4 * 60_000);
+    reopenedDatabase.close();
+  });
+
+  it('повторно открывает результат и паузу с одинаковой меткой времени', async () => {
+    const factory = new IDBFactory();
+    const firstDatabase = new LifeOsIndexedDb(factory);
+    const cycle = morningCycle('cycle-with-boundary-pause');
+    cycle.start(START);
+    cycle.selectPhysicalExercise(
+      EntityId.create('morning-exercise.push-ups'),
+      EXERCISE_MEASUREMENT_TYPE.repetitions,
+      WATER,
+    );
+    cycle.startPhysicalExecution(EXECUTION_START);
+    cycle.completePhysicalSet(
+      EntityId.create('morning-exercise.push-ups'),
+      1,
+      { measurementType: EXERCISE_MEASUREMENT_TYPE.repetitions, actualReps: 14 },
+      FIRST_RESULT,
+    );
+    cycle.pausePhysicalExecution(FIRST_RESULT);
+    await new IndexedDbMorningCycleRepository(firstDatabase).createIfAbsent(cycle);
+    firstDatabase.close();
+
+    const reopenedDatabase = new LifeOsIndexedDb(factory);
+    const restored = await new IndexedDbMorningCycleRepository(reopenedDatabase).findByDateKey(
+      DATE,
+    );
+
+    expect(restored?.physicalExecution?.pausedAt).toEqual(FIRST_RESULT);
+    expect(restored?.physicalExecution?.currentSet).toMatchObject({
+      status: 'COMPLETED',
+      actualReps: 14,
+      resolvedAt: FIRST_RESULT,
+    });
+    reopenedDatabase.close();
+  });
+
+  it('восстанавливает raw legacy записи с отсутствующим и null physicalExecution', async () => {
+    const factory = new IDBFactory();
+    const firstDatabase = new LifeOsIndexedDb(factory);
+    const missingSource = MorningCycleRecordMapper.toRecord(
+      morningCycleFor('legacy-missing', 'legacy-missing-day', '2026-08-21'),
+    );
+    const nullSource = MorningCycleRecordMapper.toRecord(
+      morningCycleFor('legacy-null', 'legacy-null-day', '2026-08-22'),
+    );
+    const missingExecution = { ...missingSource };
+    Reflect.deleteProperty(missingExecution, 'physicalExecution');
+    await putRawMorningCycleRecords(firstDatabase, [
+      missingExecution,
+      { ...nullSource, physicalExecution: null },
+    ]);
+    firstDatabase.close();
+
+    const reopenedDatabase = new LifeOsIndexedDb(factory);
+    const repository = new IndexedDbMorningCycleRepository(reopenedDatabase);
+    const restoredMissing = await repository.findByDateKey(DayDate.create('2026-08-21'));
+    const restoredNull = await repository.findByDateKey(DayDate.create('2026-08-22'));
+
+    expect(restoredMissing?.physicalExecution).toBeNull();
+    expect(restoredNull?.physicalExecution).toBeNull();
+    reopenedDatabase.close();
+  });
+
   it('восстанавливает старт, воду и пропуск после повторного открытия', async () => {
     const database = new LifeOsIndexedDb(new IDBFactory());
     const repository = new IndexedDbMorningCycleRepository(database);
@@ -33,6 +142,48 @@ describe('IndexedDbMorningCycleRepository', () => {
     expect(restored?.waterCompletedAt).toEqual(WATER);
     expect(restored?.waterAmountMl).toBe(250);
     expect(restored?.physicalStatus).toBe('SKIPPED');
+    database.close();
+  });
+
+  it('сохраняет выбранный физический план после повторного открытия', async () => {
+    const database = new LifeOsIndexedDb(new IDBFactory());
+    const repository = new IndexedDbMorningCycleRepository(database);
+    const cycle = morningCycle('cycle-with-physical-plan');
+    cycle.start(START);
+    cycle.selectPhysicalExercise(
+      EntityId.create('morning-exercise.push-ups'),
+      EXERCISE_MEASUREMENT_TYPE.repetitions,
+      WATER,
+    );
+    cycle.selectPhysicalExercise(
+      EntityId.create('morning-exercise.plank'),
+      EXERCISE_MEASUREMENT_TYPE.duration,
+      WATER,
+    );
+    cycle.adjustPhysicalExercise(
+      EntityId.create('morning-exercise.plank'),
+      { field: 'target', delta: 1 },
+      WATER,
+    );
+    await repository.createIfAbsent(cycle);
+    database.close();
+
+    const restored = await new IndexedDbMorningCycleRepository(database).findByDateKey(DATE);
+
+    expect(restored?.physicalPlanItems).toEqual([
+      {
+        exerciseDefinitionId: EntityId.create('morning-exercise.push-ups'),
+        measurementType: EXERCISE_MEASUREMENT_TYPE.repetitions,
+        sets: 3,
+        targetReps: 10,
+      },
+      {
+        exerciseDefinitionId: EntityId.create('morning-exercise.plank'),
+        measurementType: EXERCISE_MEASUREMENT_TYPE.duration,
+        sets: 3,
+        targetDurationSeconds: 35,
+      },
+    ]);
     database.close();
   });
 
@@ -78,6 +229,53 @@ describe('IndexedDbMorningCycleRepository', () => {
     database.close();
   });
 
+  it('восстанавливает выбранный cold shower факт после повторного открытия', async () => {
+    const database = new LifeOsIndexedDb(new IDBFactory());
+    const repository = new IndexedDbMorningCycleRepository(database);
+    const cycle = morningCycle('cycle-with-cold-shower');
+    cycle.start(START);
+    cycle.skipColdShower(WATER);
+    await repository.createIfAbsent(cycle);
+    database.close();
+
+    const restored = await new IndexedDbMorningCycleRepository(database).findByDateKey(DATE);
+
+    expect(restored?.stageStates).toContainEqual({
+      stageId: MORNING_STAGE_ID.coldShower,
+      status: MORNING_STAGE_STATUS.skipped,
+      updatedAt: WATER,
+    });
+    database.close();
+  });
+
+  it('восстанавливает завершённый Mirror после повторного открытия', async () => {
+    const database = new LifeOsIndexedDb(new IDBFactory());
+    const repository = new IndexedDbMorningCycleRepository(database);
+    const cycle = morningCycle('cycle-with-mirror');
+    const showerAt = new Date('2026-08-23T07:15:00.000+09:00');
+    const physicalAt = new Date('2026-08-23T07:16:00.000+09:00');
+    const mirrorAt = new Date('2026-08-23T07:17:00.000+09:00');
+    cycle.start(START);
+    cycle.completeWater(WATER, 250);
+    cycle.completeColdShower(showerAt);
+    cycle.skipPhysical(physicalAt);
+    cycle.completeMirror(mirrorAt);
+    await repository.createIfAbsent(cycle);
+    database.close();
+
+    const restored = await new IndexedDbMorningCycleRepository(database).findByDateKey(DATE);
+
+    expect(restored?.stageStates).toContainEqual({
+      stageId: MORNING_STAGE_ID.mirror,
+      status: MORNING_STAGE_STATUS.completed,
+      updatedAt: mirrorAt,
+    });
+    expect(
+      restored?.stageStates.find((stage) => stage.stageId === MORNING_STAGE_ID.mirror)?.updatedAt,
+    ).not.toBe(mirrorAt);
+    database.close();
+  });
+
   it('находит последний активный запуск строго до даты и пропускает terminal-записи', async () => {
     const database = new LifeOsIndexedDb(new IDBFactory());
     const repository = new IndexedDbMorningCycleRepository(database);
@@ -98,6 +296,23 @@ describe('IndexedDbMorningCycleRepository', () => {
     const found = await repository.findLatestUnfinishedBefore(DATE);
 
     expect(found?.id.equals(previous.id)).toBe(true);
+    database.close();
+  });
+
+  it('читает включённый диапазон истории от новой даты к старой', async () => {
+    const database = new LifeOsIndexedDb(new IDBFactory());
+    const repository = new IndexedDbMorningCycleRepository(database);
+    await repository.createIfAbsent(morningCycleFor('older', 'older-day', '2026-08-20'));
+    await repository.createIfAbsent(morningCycleFor('start', 'start-day', '2026-08-21'));
+    await repository.createIfAbsent(morningCycleFor('end', 'end-day', '2026-08-23'));
+    await repository.createIfAbsent(morningCycleFor('newer', 'newer-day', '2026-08-24'));
+
+    const found = await repository.findBetween(
+      DayDate.create('2026-08-21'),
+      DayDate.create('2026-08-23'),
+    );
+
+    expect(found.map((cycle) => cycle.id.toString())).toEqual(['end', 'start']);
     database.close();
   });
 
@@ -159,5 +374,20 @@ function morningCycleFor(id: string, dayId: string, date: string): MorningCycle 
     dayId: EntityId.create(dayId),
     dateKey: DayDate.create(date),
     occurredAt: new Date('2026-08-23T06:50:00.000+09:00'),
+  });
+}
+
+async function putRawMorningCycleRecords(
+  database: LifeOsIndexedDb,
+  records: readonly object[],
+): Promise<void> {
+  const opened = await database.open();
+  await new Promise<void>((resolve, reject) => {
+    const transaction = opened.transaction(LIFE_OS_STORE.morningCycles, 'readwrite');
+    const store = transaction.objectStore(LIFE_OS_STORE.morningCycles);
+    for (const record of records) store.put(record);
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(transaction.error);
   });
 }

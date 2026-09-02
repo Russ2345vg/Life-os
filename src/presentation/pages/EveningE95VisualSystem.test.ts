@@ -16,7 +16,10 @@ import { EveningCommandCenter } from './EveningCommandCenter';
 import { buildEveningKpis } from './EveningCommandCenterPresentation';
 
 const globalCss = readFileSync(new URL('../styles/global.css', import.meta.url), 'utf8');
-const environmentCss = readFileSync(new URL('../styles/evening-environment.css', import.meta.url), 'utf8');
+const environmentCss = readFileSync(
+  new URL('../styles/evening-environment.css', import.meta.url),
+  'utf8',
+);
 const preparationSource = readFileSync(new URL('./PreparationPanel.tsx', import.meta.url), 'utf8');
 const resolvingSource = readFileSync(
   new URL('./EveningResolvingScene.tsx', import.meta.url),
@@ -31,19 +34,13 @@ const shutdownSource = readFileSync(new URL('./EveningShutdownScene.tsx', import
 const reviewSource = readFileSync(new URL('./EveningReviewPanel.tsx', import.meta.url), 'utf8');
 
 describe('E9.5 unified evening visual system', () => {
-  it('строит KPI только из существующего снимка и пользовательского режима', () => {
+  it('строит KPI этапов только из существующего снимка', () => {
     const snapshot = createSnapshot();
     const kpis = buildEveningKpis(snapshot, null);
 
-    expect(kpis.map((item) => item.label)).toEqual([
-      'Незавершённое',
-      'Осмысление',
-      'Завтра',
-      'Среда',
-      'Режим',
-    ]);
-    expect(kpis[0]).toMatchObject({ value: 'Нет', tone: 'ready' });
-    expect(kpis[4]).toMatchObject({ value: 'Позднее', tone: 'neutral' });
+    expect(kpis.map((item) => item.label)).toEqual(['Осталось сегодня', 'Завтра', 'Режим']);
+    expect(kpis[0]).toMatchObject({ value: 'Всё разобрано', tone: 'ready' });
+    expect(kpis[2]).toMatchObject({ value: 'Позднее завершение', tone: 'neutral' });
   });
 
   it('использует золото для Незавершённого только при известном ненулевом количестве', () => {
@@ -95,8 +92,9 @@ describe('E9.5 unified evening visual system', () => {
 
     expect(markup).toContain('aria-label="Сводка вечера"');
     expect(markup).toContain('Позднее завершение');
-    expect(markup).toContain('Текущий шаг');
-    expect(markup).toContain('Далее');
+    expect(markup).toContain('Шаг 1 из 5');
+    expect(markup).not.toContain('Текущий шаг');
+    expect(markup).not.toContain('Далее');
     expect(markup).not.toContain('RESOLVING');
     expect(markup).not.toContain('SHUTDOWN');
   });
@@ -131,7 +129,7 @@ describe('E9.5 unified evening visual system', () => {
     expect(reflectionSource).toContain('Рекомендация');
     expect(reflectionSource).not.toContain('Signal');
     expect(tomorrowSource).toContain('Вывод на завтра');
-    expect(tomorrowSource).toContain('Подготовить завтра →');
+    expect(tomorrowSource).toContain('Продолжить →');
     expect(preparationSource).toContain('PREPARATION_AREA.sleepEnvironment,');
     expect(preparationSource).toContain('PREPARATION_AREA.tomorrowStart,');
     expect(preparationSource).toContain("[PREPARATION_AREA.sleepEnvironment]: 'Среда для сна'");

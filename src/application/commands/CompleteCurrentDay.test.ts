@@ -32,6 +32,7 @@ import { DomainError } from '../../shared/errors/DomainError';
 import { FakeClock, FakeIdGenerator } from '../../test/helpers/Fakes';
 import type { EveningReviewSnapshot } from '../queries/GetEveningReview';
 import { CompleteCurrentDay, CompleteEveningCycle } from './CompleteCurrentDay';
+import { DEFAULT_EVENING_RITUAL_SETTINGS } from '../evening-settings';
 
 const DAY_DATE = DayDate.create('2026-08-05');
 const TARGET_DATE = DayDate.create('2026-08-06');
@@ -49,6 +50,63 @@ class FakeDayCompletionUnitOfWork implements DayCompletionUnitOfWork {
 }
 
 describe('CompleteEveningCycle shutdown', () => {
+  it('атомарно сохраняет осознанный SKIPPED с timestamp и optional reason', async () => {
+    const day = createOpenDay();
+    const cycle = EveningCycle.create({
+      id: id('skipped-cycle'),
+      dayId: day.id,
+      dateKey: day.date,
+      occurredAt: STARTED_AT,
+    });
+    const context = createContext({ day, cycle });
+
+    const result = await context.command.execute(
+      {
+        summary: '  Слишком поздний старт  ',
+        skipEvening: true,
+        actionResolutions: [],
+        tomorrowDecisions: [],
+      },
+      DAY_DATE,
+    );
+
+    expect(result.ok).toBe(true);
+    const commit = context.unitOfWork.commits[0]!;
+    expect(commit.eveningCycle.completion).toBe('SKIPPED');
+    expect(commit.eveningCycle.completedAt).toEqual(COMPLETED_AT);
+    expect(commit.eveningCycle.skipReason).toBe('Слишком поздний старт');
+    expect(commit.day.status).toBe(DAY_STATUS.completed);
+  });
+
+  it('отклоняет SKIPPED, когда осознанный пропуск выключен в настройках', async () => {
+    const day = createOpenDay();
+    const cycle = EveningCycle.create({
+      id: id('skip-disabled-cycle'),
+      dayId: day.id,
+      dateKey: day.date,
+      occurredAt: STARTED_AT,
+    });
+    const snapshot = createSnapshot({ day, cycle });
+    const unitOfWork = new FakeDayCompletionUnitOfWork();
+    const command = createCommand(snapshot, unitOfWork, null, null, {
+      loadEveningRitualSettings: () => ({
+        ...DEFAULT_EVENING_RITUAL_SETTINGS,
+        allowConsciousSkip: false,
+      }),
+    });
+
+    const result = await command.execute(
+      { summary: '', skipEvening: true, actionResolutions: [], tomorrowDecisions: [] },
+      DAY_DATE,
+    );
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: 'evening_cycle.conscious_skip_disabled' },
+    });
+    expect(unitOfWork.commits).toHaveLength(0);
+  });
+
   it('атомарно завершает SHUTDOWN и возвращает единый ShutdownRecord', async () => {
     const context = createContext();
     const result = await context.command.execute(completionInput(), DAY_DATE);
@@ -102,6 +160,8 @@ describe('CompleteEveningCycle shutdown', () => {
     EVENING_CYCLE_STATE.reflecting,
     EVENING_CYCLE_STATE.planningTomorrow,
     EVENING_CYCLE_STATE.preparing,
+    EVENING_CYCLE_STATE.relaxing,
+    EVENING_CYCLE_STATE.sleepCheck,
   ] as const)('запрещает преждевременное завершение из %s', async (state) => {
     const context = createContext({ cycle: cycleInState(state) });
     const result = await context.command.execute(completionInput(), DAY_DATE);
@@ -201,6 +261,9 @@ function createCommand(
   unitOfWork: FakeDayCompletionUnitOfWork,
   tomorrowPlan: TomorrowPlan | null,
   preparationPlan: PreparationPlan | null,
+  settings?: {
+    loadEveningRitualSettings: () => typeof DEFAULT_EVENING_RITUAL_SETTINGS;
+  },
 ): CompleteEveningCycle {
   return new CompleteEveningCycle(
     { execute: async () => snapshot },
@@ -209,6 +272,7 @@ function createCommand(
     new FakeIdGenerator('shutdown'),
     tomorrowRepository(tomorrowPlan),
     preparationRepository(preparationPlan),
+    settings,
   );
 }
 
@@ -230,6 +294,7 @@ function createSnapshot(overrides: Partial<EveningReviewSnapshot> = {}): Evening
       startedCount: 0,
       completedCount: 0,
       runningExecution: null,
+      targetSleepTime: null,
     },
     ...overrides,
   };
@@ -259,6 +324,7 @@ function createShutdownCycle(day = createOpenDay()): EveningCycle {
   cycle.completeReflection(STARTED_AT);
   cycle.completeTomorrowPlanning(STARTED_AT);
   cycle.completePreparation(STARTED_AT);
+  cycle.recoverLegacyRelaxation(STARTED_AT);
   return cycle;
 }
 
@@ -278,6 +344,8 @@ function cycleInState(state: EveningCycleState): EveningCycle {
   cycle.completeReflection(STARTED_AT);
   if (state === EVENING_CYCLE_STATE.planningTomorrow) return cycle;
   cycle.completeTomorrowPlanning(STARTED_AT);
+  if (state === EVENING_CYCLE_STATE.preparing) return cycle;
+  cycle.completePreparation(STARTED_AT);
   return cycle;
 }
 

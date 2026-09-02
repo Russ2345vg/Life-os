@@ -7,6 +7,8 @@ import {
   DayDate,
   DECISION_KIND,
   LIFE_ACTION_STATUS,
+  SLEEP_CHECK_ANSWER,
+  SLEEP_CHECK_QUESTION,
   SESSION_COMPLETION_KIND,
   type EntityId,
 } from '../../domain';
@@ -243,14 +245,40 @@ describe('Alpha 0.1 — выпускной барьер полного цикл�
           currentDate,
           preparation.recommendedCoreKeys,
         );
-        for (const item of configuredPreparation.plan.activeItems.filter((candidate) => candidate.required)) {
+        for (const item of configuredPreparation.plan.activeItems.filter(
+          (candidate) => candidate.required,
+        )) {
           await restoredApplication.preparation.skipItem(
             currentDate,
             item.id,
             'Тестовый осознанный пропуск',
           );
         }
-        await restoredApplication.preparation.continueToShutdown(currentDate);
+        await restoredApplication.preparation.continueToRelaxation(currentDate);
+        await restoredApplication.relaxation.getOrInitialize(currentDate);
+        await restoredApplication.sleepCheck.setBeforeRatings(currentDate, 2, 3);
+        await restoredApplication.relaxation.completeDrink(currentDate);
+        await restoredApplication.relaxation.completeHygiene(currentDate);
+        await restoredApplication.relaxation.completePractice(currentDate);
+        await restoredApplication.relaxation.skipScreenFree(currentDate);
+        await restoredApplication.relaxation.complete(currentDate);
+        await restoredApplication.sleepCheck.setAfterRatings(currentDate, 4, 4);
+        await restoredApplication.sleepCheck.answerQuestion(
+          currentDate,
+          SLEEP_CHECK_QUESTION.calmMind,
+          SLEEP_CHECK_ANSWER.yes,
+        );
+        await restoredApplication.sleepCheck.answerQuestion(
+          currentDate,
+          SLEEP_CHECK_QUESTION.holdingThought,
+          SLEEP_CHECK_ANSWER.no,
+        );
+        await restoredApplication.sleepCheck.answerQuestion(
+          currentDate,
+          SLEEP_CHECK_QUESTION.readyForSleep,
+          SLEEP_CHECK_ANSWER.yes,
+        );
+        await restoredApplication.sleepCheck.complete(currentDate);
         const completion = unwrap(
           await restoredApplication.completeCurrentDay.execute({
             summary: `Итог полного цикла ${cycleIndex + 1}`,

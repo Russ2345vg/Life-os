@@ -15,6 +15,7 @@ import {
   ReflectionEngine,
   ReflectionQuestion,
   ReflectionResult,
+  RELAXATION_PRACTICE,
   type ReflectionContext,
   type ReflectionContextItem,
   type EveningCycleMode,
@@ -27,7 +28,7 @@ const DATE = DayDate.create('2026-08-14');
 const NOW = new Date('2026-08-15T00:08:00.000+09:00');
 
 describe('ReflectionApplicationService', () => {
-  it('фиксирует устойчивый набор, создаёт Signal и переводит цикл в PLANNING_TOMORROW', async () => {
+  it('фиксирует Signal и атомарно вставляет follow-up до перехода в PLANNING_TOMORROW', async () => {
     const repository = new MemoryEveningCycleRepository();
     const cycle = reflectingCycle();
     await repository.createIfAbsent(cycle);
@@ -41,15 +42,17 @@ describe('ReflectionApplicationService', () => {
     );
     expect(first.currentQuestion?.kind).toBe(REFLECTION_QUESTION_KIND.mainDecisionFailureReason);
 
-    const completed = await service.answer({
+    const afterReason = await service.answer({
       cycleId: cycle.id,
       questionId: first.currentQuestion!.id,
       answer: 'TOO_LARGE',
     });
 
-    expect(completed.complete).toBe(true);
-    expect(completed.cycle.state).toBe(EVENING_CYCLE_STATE.planningTomorrow);
-    expect(completed.cycle.reflectionSignals[0]?.type).toBe(REFLECTION_SIGNAL_TYPE.scopeTooLarge);
+    expect(afterReason.complete).toBe(false);
+    expect(afterReason.cycle.state).toBe(EVENING_CYCLE_STATE.reflecting);
+    expect(afterReason.currentQuestion?.id).toBe(`${first.currentQuestion!.id}:FOLLOW_UP`);
+    expect(afterReason.currentQuestion?.type).toBe(REFLECTION_QUESTION_TYPE.shortCapture);
+    expect(afterReason.cycle.reflectionSignals[0]?.type).toBe(REFLECTION_SIGNAL_TYPE.scopeTooLarge);
 
     const idempotent = await service.answer({
       cycleId: cycle.id,
@@ -57,6 +60,16 @@ describe('ReflectionApplicationService', () => {
       answer: 'TOO_LARGE',
     });
     expect(idempotent.cycle.reflectionResults).toHaveLength(1);
+    expect(idempotent.questions).toHaveLength(2);
+
+    const completed = await service.answer({
+      cycleId: cycle.id,
+      questionId: afterReason.currentQuestion!.id,
+      answer: 'Делить объём до начала рабочей сессии',
+    });
+
+    expect(completed.complete).toBe(true);
+    expect(completed.cycle.state).toBe(EVENING_CYCLE_STATE.planningTomorrow);
 
     const correction = await service.createCorrection({
       cycleId: cycle.id,
@@ -85,25 +98,44 @@ describe('ReflectionApplicationService', () => {
 
     const restored = await createService(repository, context).getSession(cycle.id);
     expect(restored.processed).toBe(1);
-    expect(restored.currentQuestion?.id).not.toBe(firstQuestion.id);
-    expect(restored.questions).toHaveLength(initial.questions.length);
+    expect(restored.currentQuestion?.id).toBe(`${firstQuestion.id}:FOLLOW_UP`);
+    expect(restored.questions).toHaveLength(initial.questions.length + 1);
   });
 
-  it('позволяет осознанно пропустить необязательный общий вопрос', async () => {
+  it('завершает no-op Осмысление ответом Нет без искусственного второго вопроса', async () => {
     const repository = new MemoryEveningCycleRepository();
     const cycle = reflectingCycle();
     await repository.createIfAbsent(cycle);
     const service = createService(repository, emptyContext(cycle));
     const session = await service.getSession(cycle.id);
 
-    expect(session.currentQuestion?.required).toBe(false);
-    const completed = await service.skip({
+    expect(session.currentQuestion?.type).toBe(REFLECTION_QUESTION_TYPE.yesNo);
+    const completed = await service.answer({
       cycleId: cycle.id,
       questionId: session.currentQuestion!.id,
+      answer: false,
     });
 
     expect(completed.complete).toBe(true);
     expect(completed.cycle.state).toBe(EVENING_CYCLE_STATE.planningTomorrow);
+  });
+
+  it('добавляет no-op capture только после ответа Да', async () => {
+    const repository = new MemoryEveningCycleRepository();
+    const cycle = reflectingCycle();
+    await repository.createIfAbsent(cycle);
+    const service = createService(repository, emptyContext(cycle));
+    const session = await service.getSession(cycle.id);
+
+    const continued = await service.answer({
+      cycleId: cycle.id,
+      questionId: session.currentQuestion!.id,
+      answer: true,
+    });
+
+    expect(continued.complete).toBe(false);
+    expect(continued.questions).toHaveLength(2);
+    expect(continued.currentQuestion?.type).toBe(REFLECTION_QUESTION_TYPE.shortCapture);
   });
   it('QUICK без значимого сигнала сознательно пропускает REFLECTING', async () => {
     const repository = new MemoryEveningCycleRepository();
@@ -201,6 +233,59 @@ describe('ReflectionApplicationService', () => {
     expect(contextRequests).toBe(0);
     expect((await repository.findById(cycle.id))?.state).toBe(EVENING_CYCLE_STATE.completed);
   });
+
+  it.each([EVENING_CYCLE_STATE.relaxing, EVENING_CYCLE_STATE.sleepCheck] as const)(
+    'восстанавливает завершённое Осмысление на промежуточном этапе %s',
+    async (stage) => {
+      const repository = new MemoryEveningCycleRepository();
+      const question = ReflectionQuestion.create({
+        id: 'relaxing-saved-question',
+        kind: REFLECTION_QUESTION_KIND.generalLearning,
+        signal: REFLECTION_DAY_SIGNAL.learning,
+        type: REFLECTION_QUESTION_TYPE.shortText,
+        prompt: 'Что важно сохранить?',
+        context: 'Сохранённый контекст дня',
+        required: true,
+        sourceEntityIds: [],
+      });
+      const cycle = EveningCycle.rehydrate({
+        id: id('relaxing-reflection-cycle'),
+        dayId: id('relaxing-reflection-day'),
+        dateKey: DATE,
+        state: EVENING_CYCLE_STATE.relaxing,
+        mode: EVENING_CYCLE_MODE.normal,
+        startedAt: NOW,
+        updatedAt: NOW,
+        completedAt: null,
+        reflectionQuestions: [question],
+        reflectionResults: [
+          ReflectionResult.answer(
+            id('relaxing-reflection-cycle'),
+            question,
+            'Сохранённый ответ',
+            NOW,
+          ),
+        ],
+        version: 11,
+      });
+      if (stage === EVENING_CYCLE_STATE.sleepCheck) {
+        cycle.initializeRelaxation(RELAXATION_PRACTICE.reading, 15, 25, NOW);
+        cycle.setBeforeRelaxationRatings(2, 3, NOW);
+        cycle.completeRelaxationDrink(NOW);
+        cycle.completeRelaxationHygiene(NOW);
+        cycle.completeRelaxationPractice(NOW);
+        cycle.skipRelaxationScreenFree(NOW);
+        cycle.completeRelaxation(NOW);
+      }
+      await repository.createIfAbsent(cycle);
+
+      const session = await createService(repository, emptyContext(cycle)).getSession(cycle.id);
+
+      expect(session.cycle.state).toBe(stage);
+      expect(session.currentQuestion).toBeNull();
+      expect(session.complete).toBe(true);
+    },
+  );
 });
 
 function createService(

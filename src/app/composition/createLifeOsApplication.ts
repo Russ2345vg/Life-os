@@ -139,13 +139,22 @@ import {
   GetGoalById,
   GetGoals,
   ApplyDirectionStrategicReview,
+  GetMorningCenterOverview,
+  GetMorningCompletionOverview,
+  GetMorningHistory,
+  GetMorningMainActionOverview,
+  GetMorningPhysicalActivationOverview,
+  GetMorningPhysicalExecutionOverview,
   GetMorningOverview,
   MorningCycleApplicationService,
+  MorningExerciseCatalogService,
   EveningCycleApplicationService,
   GetReflectionContext,
   ReflectionApplicationService,
   TomorrowPlanService,
   PreparationService,
+  RelaxationApplicationService,
+  SleepCheckApplicationService,
 } from '../../application';
 import { ReflectionEngine } from '../../domain';
 import { SystemClock } from '../../infrastructure/clock/SystemClock';
@@ -173,6 +182,7 @@ import { IndexedDbOpenDayConflictReader } from '../../infrastructure/persistence
 import { IndexedDbOpenDayRecoveryUnitOfWork } from '../../infrastructure/persistence/IndexedDbOpenDayRecoveryUnitOfWork';
 import { IndexedDbEveningCycleRepository } from '../../infrastructure/persistence/IndexedDbEveningCycleRepository';
 import { IndexedDbMorningCycleRepository } from '../../infrastructure/persistence/IndexedDbMorningCycleRepository';
+import { IndexedDbExerciseDefinitionRepository } from '../../infrastructure/persistence/IndexedDbExerciseDefinitionRepository';
 import { IndexedDbEveningHistoryReader } from '../../infrastructure/persistence/IndexedDbEveningHistoryReader';
 import { IndexedDbOpenLoopResolutionUnitOfWork } from '../../infrastructure/persistence/IndexedDbOpenLoopResolutionUnitOfWork';
 import { IndexedDbTomorrowPlanRepository } from '../../infrastructure/persistence/IndexedDbTomorrowPlanRepository';
@@ -184,6 +194,7 @@ import { IndexedDbRecommendationApplicationRepository } from '../../infrastructu
 import { LifeOsIndexedDb } from '../../infrastructure/persistence/indexed-db/LifeOsIndexedDb';
 import { LifeOsApplication } from './LifeOsApplication';
 import { LifeOsApplicationInitializationError } from './LifeOsApplicationInitializationError';
+import { BrowserLocalSettingsStore } from '../settings/BrowserLocalSettingsStore';
 
 export interface CreateLifeOsApplicationDependencies {
   readonly database?: LifeOsIndexedDb;
@@ -205,6 +216,7 @@ export async function createLifeOsApplication(
     const lifeActionRepository = new IndexedDbLifeActionRepository(database);
     const actionSessionRepository = new IndexedDbActionSessionRepository(database);
     const morningCycleRepository = new IndexedDbMorningCycleRepository(database);
+    const exerciseDefinitionRepository = new IndexedDbExerciseDefinitionRepository(database);
     const eveningCycleRepository = new IndexedDbEveningCycleRepository(database);
     const tomorrowPlanRepository = new IndexedDbTomorrowPlanRepository(database);
     const preparationPlanRepository = new IndexedDbPreparationPlanRepository(database);
@@ -234,10 +246,9 @@ export async function createLifeOsApplication(
     const currentDateProvider =
       dependencies.currentDateProvider ?? new SystemCurrentDateProvider(clock);
     const idGenerator = dependencies.idGenerator ?? new CryptoIdGenerator();
-    const morningCycle = new MorningCycleApplicationService(
-      morningCycleRepository,
-      dayRepository,
-      currentDateProvider,
+    const localSettings = new BrowserLocalSettingsStore();
+    const morningExerciseCatalog = new MorningExerciseCatalogService(
+      exerciseDefinitionRepository,
       clock,
       idGenerator,
     );
@@ -283,7 +294,14 @@ export async function createLifeOsApplication(
       clock,
       idGenerator,
       new IndexedDbPreparationUnitOfWork(database),
+      localSettings,
     );
+    const relaxation = new RelaxationApplicationService(
+      eveningCycleRepository,
+      clock,
+      localSettings,
+    );
+    const sleepCheck = new SleepCheckApplicationService(eveningCycleRepository, clock);
     const getOpenLoopsForDay = new GetOpenLoopsForDay(
       dayRepository,
       decisionRepository,
@@ -332,7 +350,7 @@ export async function createLifeOsApplication(
       eveningCycle,
       ensureCurrentDay,
     );
-    const getEveningReview = new GetEveningReview(getEveningCycleReview);
+    const getEveningReview = new GetEveningReview(getEveningCycleReview, localSettings);
     const getEveningHistory = new GetEveningHistory(new IndexedDbEveningHistoryReader(database));
     const getEveningHistorySummary = new GetEveningHistorySummary(getEveningHistory);
     const detectEveningPatterns = new DetectEveningPatterns(getEveningHistory);
@@ -363,6 +381,7 @@ export async function createLifeOsApplication(
       idGenerator,
       tomorrowPlanRepository,
       preparationPlanRepository,
+      localSettings,
     );
     const completeCurrentDay = new CompleteCurrentDay(completeEveningCycle);
     const updateDayResultSphere = new UpdateDayResultSphere(dayRepository);
@@ -575,6 +594,45 @@ export async function createLifeOsApplication(
       getRoutineBlocksForDate,
       currentDateProvider,
     );
+    const getMorningMainActionOverview = new GetMorningMainActionOverview(
+      tomorrowPlanRepository,
+      decisionRepository,
+      lifeActionRepository,
+      getRoutineBlocksForDate,
+    );
+    const morningCycle = new MorningCycleApplicationService(
+      morningCycleRepository,
+      dayRepository,
+      currentDateProvider,
+      clock,
+      idGenerator,
+      exerciseDefinitionRepository,
+      getMorningMainActionOverview,
+    );
+    const getMorningCenterOverview = new GetMorningCenterOverview(
+      morningCycleRepository,
+      currentDateProvider,
+      getMorningMainActionOverview,
+    );
+    const getMorningCompletionOverview = new GetMorningCompletionOverview(
+      morningCycleRepository,
+      getMorningMainActionOverview,
+    );
+    const getMorningHistory = new GetMorningHistory(
+      morningCycleRepository,
+      getMorningMainActionOverview,
+    );
+    const getMorningPhysicalActivationOverview = new GetMorningPhysicalActivationOverview(
+      morningCycleRepository,
+      exerciseDefinitionRepository,
+      currentDateProvider,
+    );
+    const getMorningPhysicalExecutionOverview = new GetMorningPhysicalExecutionOverview(
+      morningCycleRepository,
+      exerciseDefinitionRepository,
+      currentDateProvider,
+      clock,
+    );
     const getRoutinePlanFactForDate = new GetRoutinePlanFactForDate(
       getRoutineBlocksForDate,
       routineOccurrenceExecutionRepository,
@@ -774,6 +832,7 @@ export async function createLifeOsApplication(
       lifeActionRepository,
       actionSessionRepository,
       morningCycleRepository,
+      exerciseDefinitionRepository,
       eveningCycleRepository,
       tomorrowPlanRepository,
       preparationPlanRepository,
@@ -814,11 +873,14 @@ export async function createLifeOsApplication(
       getOpenLoopsForDay,
       resolveOpenLoop,
       morningCycle,
+      morningExerciseCatalog,
       eveningCycle,
       getReflectionContext,
       reflection,
       tomorrowPlan,
       preparation,
+      relaxation,
+      sleepCheck,
       completeEveningCycle,
       completeCurrentDay,
       updateDayResultSphere,
@@ -860,6 +922,11 @@ export async function createLifeOsApplication(
       updateRoutineBlock,
       deleteRoutineBlock,
       getRoutineBlocksForDate,
+      getMorningCenterOverview,
+      getMorningCompletionOverview,
+      getMorningHistory,
+      getMorningPhysicalActivationOverview,
+      getMorningPhysicalExecutionOverview,
       getMorningOverview,
       getRoutineActionOptions,
       getRoutineActionDetails,

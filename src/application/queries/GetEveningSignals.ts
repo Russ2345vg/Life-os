@@ -22,6 +22,7 @@ export interface EveningSignalEvidence {
   readonly occurrences: number;
   readonly range: EveningPatternRange;
   readonly occurrenceRate: number | null;
+  readonly metrics: Readonly<Record<string, number>>;
 }
 
 export interface EveningSignal {
@@ -99,6 +100,14 @@ const COPY_BY_TYPE: Readonly<Record<EveningPatternType, SignalCopy>> = Object.fr
     title: 'Подготовка к завтра регулярно остаётся неполной',
     evidencePhrase: 'подготовка к завтра оставалась неполной',
   },
+  [EVENING_PATTERN_TYPE.repeatedEnvironmentItemSkip]: {
+    title: 'Один пункт подготовки часто пропускается',
+    evidencePhrase: 'пункт был осознанно пропущен',
+  },
+  [EVENING_PATTERN_TYPE.relaxationPracticeCalmImprovement]: {
+    title: 'После выбранной практики средняя оценка спокойствия была выше',
+    evidencePhrase: 'наблюдалась более высокая оценка спокойствия',
+  },
 });
 
 const STRUCTURAL_TYPES: ReadonlySet<EveningPatternType> = new Set([
@@ -120,6 +129,8 @@ const TYPE_ORDER: Readonly<Record<EveningPatternType, number>> = Object.freeze({
   [EVENING_PATTERN_TYPE.skippedReflection]: 7,
   [EVENING_PATTERN_TYPE.frequentLateCompletion]: 8,
   [EVENING_PATTERN_TYPE.frequentQuickMode]: 9,
+  [EVENING_PATTERN_TYPE.repeatedEnvironmentItemSkip]: 10,
+  [EVENING_PATTERN_TYPE.relaxationPracticeCalmImprovement]: 11,
 });
 
 export class GetEveningSignals {
@@ -158,7 +169,13 @@ function groupPatterns(patterns: readonly EveningPattern[]): readonly PatternGro
 }
 
 function deduplicationKey(pattern: EveningPattern): string {
-  if (pattern.type !== EVENING_PATTERN_TYPE.repeatedCarryForward) return pattern.type;
+  if (
+    pattern.type !== EVENING_PATTERN_TYPE.repeatedCarryForward &&
+    pattern.type !== EVENING_PATTERN_TYPE.repeatedEnvironmentItemSkip &&
+    pattern.type !== EVENING_PATTERN_TYPE.relaxationPracticeCalmImprovement
+  ) {
+    return pattern.type;
+  }
   const sources =
     pattern.sourceEntities.length > 0
       ? pattern.sourceEntities.map((source) => `${source.entityType}:${source.entityId}`).sort()
@@ -180,14 +197,29 @@ function toSignal(group: PatternGroup): EveningSignal {
   const severity = signalSeverity(patterns);
   const occurrenceRate = maximumOccurrenceRate(patterns);
   const copy = COPY_BY_TYPE[type];
+  const metrics = Object.freeze({ ...patterns.at(-1)!.metrics });
+  const sourceLabel =
+    patterns.find((pattern) => pattern.sourceLabel !== null)?.sourceLabel ??
+    sourceEntityIds[0] ??
+    '';
+  const title =
+    type === EVENING_PATTERN_TYPE.repeatedEnvironmentItemSkip
+      ? `Пункт «${sourceLabel}» часто пропускается`
+      : type === EVENING_PATTERN_TYPE.relaxationPracticeCalmImprovement
+        ? `После практики «${sourceLabel}» средняя оценка спокойствия была выше`
+        : copy.title;
+  const summary =
+    type === EVENING_PATTERN_TYPE.relaxationPracticeCalmImprovement
+      ? `В ${occurrences} парных наблюдениях средняя оценка спокойствия после практики была выше на ${metrics.averageCalmDelta}.`
+      : `За ${range.dayCount} ${dayWord(range.dayCount)} ${copy.evidencePhrase} ${occurrences} ${timeWord(occurrences)}.`;
 
   return Object.freeze({
     id: `evening-signal-${stableHash(group.key)}`,
     type,
     severity,
-    title: copy.title,
-    summary: `За ${range.dayCount} ${dayWord(range.dayCount)} ${copy.evidencePhrase} ${occurrences} ${timeWord(occurrences)}.`,
-    evidence: Object.freeze({ occurrences, range, occurrenceRate }),
+    title,
+    summary,
+    evidence: Object.freeze({ occurrences, range, occurrenceRate, metrics }),
     sourcePatternIds: Object.freeze(sourcePatternIds),
     sourceEntityIds: Object.freeze(sourceEntityIds),
     supportingDayIds: Object.freeze(supportingDayIds),

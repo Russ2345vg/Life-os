@@ -5,6 +5,8 @@ export const EVENING_CYCLE_STATE = {
   reflecting: 'REFLECTING',
   planningTomorrow: 'PLANNING_TOMORROW',
   preparing: 'PREPARING',
+  relaxing: 'RELAXING',
+  sleepCheck: 'SLEEP_CHECK',
   shutdown: 'SHUTDOWN',
   completed: 'COMPLETED',
 } as const;

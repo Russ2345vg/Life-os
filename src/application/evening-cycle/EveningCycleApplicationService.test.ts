@@ -99,6 +99,7 @@ describe('EveningCycleApplicationService', () => {
     expect(completedDay.status).toBe(DAY_STATUS.completed);
     expect(recovered.state).toBe(EVENING_CYCLE_STATE.completed);
     expect(recovered.completedAt).toEqual(AFTER_MIDNIGHT);
+    expect(recovered.relaxation).toBeNull();
     expect((await service.start(DATE)).id.equals(recovered.id)).toBe(true);
   });
   it.each([EVENING_CYCLE_MODE.quick, EVENING_CYCLE_MODE.emergency] as const)(
@@ -138,6 +139,28 @@ describe('EveningCycleApplicationService', () => {
 
     expect((await secondUi.get(DATE))?.mode).toBe(EVENING_CYCLE_MODE.quick);
     expect((await secondUi.start(DATE)).mode).toBe(EVENING_CYCLE_MODE.quick);
+  });
+
+  it('сохраняет выбранный поздний SHORT и восстанавливает его после refresh', async () => {
+    const context = await createContext();
+
+    const started = await context.service.startShort(DATE);
+    const restoredService = new EveningCycleApplicationService(
+      context.cycles,
+      context.days,
+      context.clock,
+      new FakeIdGenerator('short-refresh'),
+    );
+    const restored = await restoredService.get(DATE);
+
+    expect(started.state).toBe(EVENING_CYCLE_STATE.preparing);
+    expect(restored?.mode).toBe(EVENING_CYCLE_MODE.quick);
+    expect(restored?.modeReason).toBe(EVENING_MODE_REASON.lateNight);
+    expect(restored?.skippedStages.map(({ stage }) => stage)).toEqual([
+      EVENING_CYCLE_STATE.resolving,
+      EVENING_CYCLE_STATE.reflecting,
+      EVENING_CYCLE_STATE.planningTomorrow,
+    ]);
   });
 });
 

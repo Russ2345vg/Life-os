@@ -9,6 +9,7 @@ import {
 } from 'react';
 import type {
   CompleteCurrentDay,
+  CompleteCurrentDayInput,
   CompleteCurrentDayResult,
   EveningReviewSnapshot,
   GetEveningReview,
@@ -19,6 +20,8 @@ import type {
   SpheresSnapshot,
   TomorrowPlanService,
   PreparationService,
+  RelaxationApplicationService,
+  SleepCheckApplicationService,
   EveningCycleApplicationService,
   TomorrowPlanSnapshot,
 } from '../../application';
@@ -27,11 +30,13 @@ import {
   DECISION_KIND,
   type DayDate,
   type DecisionKind,
+  type EveningCycle,
   type LifeAction,
   type OpenLoopEntityType,
   type OpenLoopResolutionKind,
   EVENING_CYCLE_STATE,
   EVENING_CYCLE_MODE,
+  EVENING_CYCLE_COMPLETION,
   EVENING_MODE_REASON,
   type EveningCycleMode,
   REFLECTION_QUESTION_TYPE,
@@ -62,6 +67,8 @@ import { useSpheres } from '../components/sphereReferenceModel';
 import { EveningVisualIcon } from '../components/EveningVisualIcon';
 import { TomorrowComposer } from './TomorrowComposer';
 import { PreparationPanel } from './PreparationPanel';
+import { EveningRelaxationScene } from './EveningRelaxationScene';
+import { EveningSleepCheckScene } from './EveningSleepCheckScene';
 import { EveningCommandCenter } from './EveningCommandCenter';
 import {
   buildEveningKpis,
@@ -81,6 +88,12 @@ import {
 } from './EveningResolvingPresentation';
 import { EveningReflectionScene } from './EveningReflectionScene';
 import {
+  EMPTY_REFLECTION_ANSWER_DRAFT,
+  reflectionAnswerFromDraft,
+  type ReflectionAnswerDraft,
+} from './ReflectionAnswerDraft';
+import { submitReflectionDraft } from './ReflectionSubmission';
+import {
   EMPTY_EVENING_TOMORROW_PREVIEW,
   buildEveningRecoverySceneModel,
   buildEveningShutdownSceneModel,
@@ -97,14 +110,14 @@ import {
   EveningReflectionHistoryScene,
   EveningTodayHistoryScene,
 } from './EveningCompletedHistoryScenes';
-import { tryBeginEveningStart } from './EveningStartupPresentation';
+import { buildLateEveningOffer, tryBeginEveningStart } from './EveningStartupPresentation';
 
 interface EveningReviewPanelProps {
   readonly getEveningReview: Pick<GetEveningReview, 'execute'>;
   readonly completeCurrentDay: Pick<CompleteCurrentDay, 'execute'>;
   readonly eveningCycle?: Pick<
     EveningCycleApplicationService,
-    'start' | 'selectMode' | 'skipPreparation'
+    'start' | 'startShort' | 'selectMode' | 'skipPreparation'
   >;
   readonly resolveOpenLoop?: Pick<ResolveOpenLoop, 'execute'>;
   readonly reflection?: Pick<
@@ -129,8 +142,24 @@ interface EveningReviewPanelProps {
   >;
   readonly preparation?: Pick<
     PreparationService,
-    'getOrGenerate' | 'completeItem' | 'skipItem' | 'continueToShutdown'
+    'getOrGenerate' | 'configureRequiredCore' | 'completeItem' | 'skipItem' | 'continueToRelaxation'
   >;
+  readonly relaxation?: Pick<
+    RelaxationApplicationService,
+    | 'getOrInitialize'
+    | 'getStored'
+    | 'choosePractice'
+    | 'setPracticeDuration'
+    | 'completeDrink'
+    | 'completeHygiene'
+    | 'startPracticeTimer'
+    | 'completePractice'
+    | 'startScreenFree'
+    | 'shortenScreenFree'
+    | 'skipScreenFree'
+    | 'complete'
+  >;
+  readonly sleepCheck?: SleepCheckApplicationService;
   readonly reviewDate?: DayDate;
   readonly onClose: () => void;
   readonly onCompleted: (result: CompleteCurrentDayResult) => void;
@@ -151,6 +180,8 @@ export function EveningReviewPanel({
   getSpheres,
   tomorrowPlan,
   preparation,
+  relaxation,
+  sleepCheck,
   reviewDate,
   onClose,
   onCompleted,
@@ -178,11 +209,15 @@ export function EveningReviewPanel({
   );
   const [preferredOpenLoopKey, setPreferredOpenLoopKey] = useState<string | null>(null);
   const [reflectionSession, setReflectionSession] = useState<ReflectionSession | null>(null);
-  const [reflectionText, setReflectionText] = useState('');
-  const [reflectionChoices, setReflectionChoices] = useState<readonly string[]>([]);
+  const [reflectionDraft, setReflectionDraft] = useState<ReflectionAnswerDraft>(
+    EMPTY_REFLECTION_ANSWER_DRAFT,
+  );
   const [lastAnsweredQuestionId, setLastAnsweredQuestionId] = useState<string | null>(null);
   const [correctionAction, setCorrectionAction] = useState('');
   const [selectedEveningView, setSelectedEveningView] = useState<SelectedEveningView | null>(null);
+  const [tomorrowPrepared, setTomorrowPrepared] = useState(false);
+  const [skipDialogOpen, setSkipDialogOpen] = useState(false);
+  const [skipReason, setSkipReason] = useState('');
   const nextTomorrowFormId = useRef(2);
   const completionRequestRef = useRef(false);
   const startRequestRef = useRef(false);
@@ -193,6 +228,8 @@ export function EveningReviewPanel({
     readonly resolution: OpenLoopResolutionKind;
   } | null>(null);
   const previousPresentedCycleState = useRef<string | null>(null);
+
+  const handleTomorrowSaved = useCallback(() => setTomorrowPrepared(true), []);
 
   const presentedCycleState =
     loadState.status === 'ready'
@@ -265,8 +302,7 @@ export function EveningReviewPanel({
 
   const applyReflectionSession = useCallback((session: ReflectionSession | null): void => {
     setReflectionSession(session);
-    setReflectionText('');
-    setReflectionChoices([]);
+    setReflectionDraft(EMPTY_REFLECTION_ANSWER_DRAFT);
     if (session?.complete === true) setSummary(buildReflectionSummary(session));
   }, []);
 
@@ -349,13 +385,8 @@ export function EveningReviewPanel({
     setIsSubmitting(true);
     setSubmitError(null);
     try {
-      const answer =
-        question.type === REFLECTION_QUESTION_TYPE.multiChoice ? reflectionChoices : reflectionText;
-      const session = await reflection.answer({
-        cycleId: sessionState.cycle.id,
-        questionId: question.id,
-        answer,
-      });
+      const session = await submitReflectionDraft(reflection, sessionState, reflectionDraft);
+      if (session === null) return;
       setLastAnsweredQuestionId(question.id);
       applyReflectionSession(session);
     } catch (error: unknown) {
@@ -555,7 +586,7 @@ export function EveningReviewPanel({
     }
   }
 
-  async function handleStartEvening(): Promise<void> {
+  async function handleStartEvening(choice: EveningStartChoice): Promise<void> {
     if (
       eveningCycle === undefined ||
       loadState.status !== 'ready' ||
@@ -567,7 +598,7 @@ export function EveningReviewPanel({
     setIsSubmitting(true);
     setSubmitError(null);
     try {
-      await eveningCycle.start(loadState.snapshot.currentDate);
+      await executeEveningStartChoice(eveningCycle, loadState.snapshot.currentDate, choice);
       await load();
     } catch (error: unknown) {
       setSubmitError(error instanceof Error ? error.message : 'Не удалось начать вечер.');
@@ -577,13 +608,43 @@ export function EveningReviewPanel({
     }
   }
 
+  async function handleSkipEvening(): Promise<void> {
+    const input = buildEveningSkipCompletionInput('CONFIRM', skipReason);
+    if (
+      input === null ||
+      loadState.status !== 'ready' ||
+      isSubmitting ||
+      completionRequestRef.current
+    ) {
+      return;
+    }
+    completionRequestRef.current = true;
+    setIsSubmitting(true);
+    setSubmitError(null);
+    try {
+      const result = await completeCurrentDay.execute(input, loadState.snapshot.cycle.dateKey);
+      if (!result.ok) {
+        setSubmitError(result.error.message);
+        return;
+      }
+      setSkipDialogOpen(false);
+      setSkipReason('');
+      onCompleted(result.value);
+      await load(true);
+    } catch {
+      setSubmitError('Не удалось пропустить вечер. Данные не были изменены.');
+    } finally {
+      completionRequestRef.current = false;
+      setIsSubmitting(false);
+    }
+  }
+
   async function handleEmergencyPreparationSkip(): Promise<void> {
     if (eveningCycle === undefined || loadState.status !== 'ready' || isSubmitting) return;
     setIsSubmitting(true);
     setSubmitError(null);
     try {
-      await eveningCycle.skipPreparation(loadState.snapshot.cycle.dateKey);
-      await load();
+      await skipEmergencyPreparation(eveningCycle, loadState.snapshot.cycle.dateKey, load);
     } catch (error: unknown) {
       setSubmitError(error instanceof Error ? error.message : 'Не удалось продолжить завершение.');
     } finally {
@@ -702,6 +763,13 @@ export function EveningReviewPanel({
   const activeTomorrowPreview = isTomorrowPreviewLoaded
     ? tomorrowPreview
     : EMPTY_EVENING_TOMORROW_PREVIEW;
+  const lateOfferTarget =
+    loadState.snapshot.eveningRitualSettings?.notificationEnabled === false
+      ? null
+      : (loadState.snapshot.routineSummary?.targetSleepTime ?? null);
+  const lateOffer = loadState.snapshot.isRecoveryReview
+    ? null
+    : buildLateEveningOffer(new Date(), lateOfferTarget);
   const renderScene = (scene: ReactNode) => (
     <EveningCommandCenter
       cycle={activeCycle}
@@ -711,7 +779,7 @@ export function EveningReviewPanel({
         eveningCycle === undefined ||
         activeCycleState === EVENING_CYCLE_STATE.completed
       }
-      kpis={buildEveningKpis(loadState.snapshot, reflectionSession)}
+      kpis={buildEveningKpis(loadState.snapshot, reflectionSession, tomorrowPrepared)}
       onModeChange={(mode) => void handleModeChange(mode)}
       selectedView={activeSelectedView}
       onSelectView={(requested) =>
@@ -754,7 +822,7 @@ export function EveningReviewPanel({
     if (activeSelectedView === 'preparation') {
       return renderScene(
         preparation === undefined ? (
-          <EveningUnavailableHistoryScene title="Подготовка" />
+          <EveningUnavailableHistoryScene title="Среда" />
         ) : (
           <PreparationPanel
             cycleDate={loadState.snapshot.cycle.dateKey}
@@ -767,6 +835,35 @@ export function EveningReviewPanel({
             mode={activeCycle.mode}
             completedReview
             embedded
+          />
+        ),
+      );
+    }
+    if (activeSelectedView === 'relaxation') {
+      return renderScene(
+        relaxation === undefined ? (
+          <EveningUnavailableHistoryScene title="Расслабление" />
+        ) : (
+          <EveningRelaxationScene
+            cycleDate={loadState.snapshot.cycle.dateKey}
+            service={relaxation}
+            {...(sleepCheck === undefined ? {} : { sleepCheck })}
+            onContinued={() => setSelectedEveningView(activeDomainView)}
+            readOnly
+          />
+        ),
+      );
+    }
+    if (activeSelectedView === 'sleep') {
+      return renderScene(
+        sleepCheck === undefined ? (
+          <EveningUnavailableHistoryScene title="Сон" />
+        ) : (
+          <EveningSleepCheckScene
+            cycleDate={loadState.snapshot.cycle.dateKey}
+            service={sleepCheck}
+            onContinued={() => setSelectedEveningView(activeDomainView)}
+            readOnly
           />
         ),
       );
@@ -796,12 +893,36 @@ export function EveningReviewPanel({
         busy={isSubmitting}
         error={submitError}
         startDisabled={eveningCycle === undefined}
-        onStart={() => void handleStartEvening()}
+        lateOfferMinutes={lateOffer?.minutesRemaining ?? null}
+        allowConsciousSkip={loadState.snapshot.eveningRitualSettings?.allowConsciousSkip ?? true}
+        onStart={() => void handleStartEvening('NORMAL')}
+        onStartShort={() => void handleStartEvening('SHORT')}
+        onOpenSkip={() => {
+          setSubmitError(null);
+          setSkipDialogOpen(true);
+        }}
+        skipDialog={
+          skipDialogOpen ? (
+            <EveningSkipDialog
+              reason={skipReason}
+              busy={isSubmitting}
+              onReasonChange={setSkipReason}
+              onConfirm={() => void handleSkipEvening()}
+              onCancel={() => {
+                setSkipDialogOpen(false);
+                setSkipReason('');
+              }}
+            />
+          ) : null
+        }
       />,
     );
   }
 
   if (activeCycleState === EVENING_CYCLE_STATE.completed) {
+    if (activeCycle.completion === EVENING_CYCLE_COMPLETION.skipped) {
+      return renderScene(<EveningSkippedScene cycle={activeCycle} onClose={onClose} />);
+    }
     return renderScene(
       <EveningRecoveryScene
         model={buildEveningRecoverySceneModel(loadState.snapshot, activeTomorrowPreview)}
@@ -826,6 +947,35 @@ export function EveningReviewPanel({
     );
   }
 
+  if (activeCycleState === EVENING_CYCLE_STATE.relaxing) {
+    return renderScene(
+      relaxation === undefined ? (
+        <EveningUnavailableHistoryScene title="Расслабление" />
+      ) : (
+        <EveningRelaxationScene
+          cycleDate={loadState.snapshot.cycle.dateKey}
+          service={relaxation}
+          {...(sleepCheck === undefined ? {} : { sleepCheck })}
+          onContinued={() => void load(true)}
+        />
+      ),
+    );
+  }
+
+  if (activeCycleState === EVENING_CYCLE_STATE.sleepCheck) {
+    return renderScene(
+      sleepCheck === undefined ? (
+        <EveningUnavailableHistoryScene title="Сон" />
+      ) : (
+        <EveningSleepCheckScene
+          cycleDate={loadState.snapshot.cycle.dateKey}
+          service={sleepCheck}
+          onContinued={() => void load(true)}
+        />
+      ),
+    );
+  }
+
   if (activeCycleState === EVENING_CYCLE_STATE.planningTomorrow && tomorrowPlan !== undefined) {
     if (activeCycle.mode === EVENING_CYCLE_MODE.emergency) {
       return renderScene(
@@ -843,6 +993,7 @@ export function EveningReviewPanel({
         cycleDate={loadState.snapshot.cycle.dateKey}
         service={tomorrowPlan}
         onPrepared={() => void load()}
+        onSaved={handleTomorrowSaved}
         onClose={onClose}
         mode={activeCycle.mode}
         completedActionLabel="Перейти к подготовке →"
@@ -852,24 +1003,15 @@ export function EveningReviewPanel({
   }
 
   if (activeCycleState === EVENING_CYCLE_STATE.preparing && preparation !== undefined) {
-    if (activeCycle.mode === EVENING_CYCLE_MODE.emergency) {
-      return renderScene(
-        <EmergencyPreparationSkipPanel
-          busy={isSubmitting}
-          error={submitError}
-          onContinue={() => void handleEmergencyPreparationSkip()}
-          onClose={onClose}
-          embedded
-        />,
-      );
-    }
     return renderScene(
-      <PreparationPanel
-        cycleDate={loadState.snapshot.cycle.dateKey}
-        service={preparation}
-        onContinued={() => void load()}
+      <EveningPreparationScene
+        cycle={activeCycle}
+        preparation={preparation}
+        isSubmitting={isSubmitting}
+        submitError={submitError}
+        onEmergencyContinue={() => void handleEmergencyPreparationSkip()}
+        onPreparationContinued={() => void load()}
         onClose={onClose}
-        mode={activeCycle.mode}
         embedded
       />,
     );
@@ -893,12 +1035,10 @@ export function EveningReviewPanel({
       }}
       reflectionSession={reflectionSession}
       adaptiveReflectionEnabled={reflection !== undefined}
-      reflectionText={reflectionText}
-      reflectionChoices={reflectionChoices}
+      reflectionDraft={reflectionDraft}
       correctionAction={correctionAction}
       lastAnsweredQuestionId={lastAnsweredQuestionId}
-      onReflectionTextChange={setReflectionText}
-      onReflectionChoicesChange={setReflectionChoices}
+      onReflectionDraftChange={setReflectionDraft}
       onReflectionAnswer={() => void handleReflectionAnswer()}
       onReflectionSkip={() => void handleReflectionSkip()}
       onCorrectionActionChange={setCorrectionAction}
@@ -938,7 +1078,12 @@ interface EveningNotStartedSceneProps {
   readonly busy: boolean;
   readonly error: string | null;
   readonly startDisabled: boolean;
+  readonly lateOfferMinutes: number | null;
+  readonly allowConsciousSkip?: boolean;
   readonly onStart: () => void;
+  readonly onStartShort: () => void;
+  readonly onOpenSkip: () => void;
+  readonly skipDialog?: ReactNode;
 }
 
 export function EveningNotStartedScene({
@@ -946,18 +1091,21 @@ export function EveningNotStartedScene({
   busy,
   error,
   startDisabled,
+  lateOfferMinutes,
+  allowConsciousSkip = true,
   onStart,
+  onStartShort,
+  onOpenSkip,
+  skipDialog,
 }: EveningNotStartedSceneProps) {
   const model = buildEveningNotStartedSceneModel(snapshot);
 
   return (
     <section className="evening-e9-scene evening-not-started" aria-labelledby="evening-start-title">
       <article className="evening-not-started-card">
-        <p className="evening-not-started-kicker">{model.eyebrow}</p>
-
         <div className="evening-not-started-hero">
-          <span className="evening-not-started-hero-icon" aria-hidden="true">
-            <EveningVisualIcon name="sun" size={38} />
+          <span className="evening-not-started-moon" aria-hidden="true">
+            <EveningVisualIcon name="moon" size={34} />
           </span>
           <div className="evening-not-started-hero-copy">
             <h3 id="evening-start-title">{model.title}</h3>
@@ -965,39 +1113,168 @@ export function EveningNotStartedScene({
           </div>
         </div>
 
-        <ul className="evening-not-started-summary" aria-label="Ключевой контекст вечера">
-          {model.facts.map((fact) => (
-            <li data-tone={fact.tone} key={fact.label}>
-              <span className="evening-not-started-fact-icon" aria-hidden="true">
-                <EveningVisualIcon name={fact.icon} size={18} />
-              </span>
-              <span className="evening-not-started-fact-copy">
-                <span>{fact.label}</span>
-                <strong>{fact.value}</strong>
-                <small>{fact.meta}</small>
-              </span>
-            </li>
-          ))}
-        </ul>
+        <footer className="evening-not-started-cta-zone">
+          {error === null ? null : (
+            <p className="form-error evening-not-started-error" role="alert">
+              {error}
+            </p>
+          )}
+          {lateOfferMinutes === null ? (
+            <button
+              className="primary-button evening-not-started-primary"
+              type="button"
+              aria-busy={busy}
+              disabled={busy || startDisabled}
+              onClick={onStart}
+            >
+              <span>{busy ? 'Начинаем…' : 'Начать вечер'}</span>
+              {busy ? (
+                <span className="evening-not-started-loading-indicator" aria-hidden="true" />
+              ) : (
+                <EveningVisualIcon name="arrow-right" size={20} />
+              )}
+            </button>
+          ) : (
+            <aside className="evening-r7-short-offer" aria-label="Выбор режима вечера">
+              <p>До сна осталось {lateOfferMinutes} минут. Перейти в короткий режим?</p>
+              <div className="evening-r7-short-actions">
+                <button
+                  className="primary-button"
+                  type="button"
+                  disabled={busy || startDisabled}
+                  onClick={onStartShort}
+                >
+                  Короткий
+                </button>
+                <button
+                  className="secondary-button"
+                  type="button"
+                  disabled={busy || startDisabled}
+                  onClick={onStart}
+                >
+                  Обычный
+                </button>
+              </div>
+            </aside>
+          )}
+          <p className="evening-not-started-duration">
+            <EveningVisualIcon name="clock" size={16} />
+            <span>≈ 10–15 минут</span>
+          </p>
+          {allowConsciousSkip ? (
+            <button
+              className="text-button evening-r7-skip-trigger"
+              type="button"
+              disabled={busy}
+              onClick={onOpenSkip}
+            >
+              Пропустить вечерний ритуал
+            </button>
+          ) : null}
+        </footer>
+      </article>
+      {skipDialog}
+    </section>
+  );
+}
 
-        {error === null ? null : (
-          <p className="form-error evening-not-started-error" role="alert">
-            {error}
+export type EveningStartChoice = 'SHORT' | 'NORMAL';
+
+export async function executeEveningStartChoice(
+  service: Pick<EveningCycleApplicationService, 'start' | 'startShort'>,
+  dateKey: DayDate,
+  choice: EveningStartChoice,
+): Promise<void> {
+  if (choice === 'SHORT') {
+    await service.startShort(dateKey);
+    return;
+  }
+  await service.start(dateKey);
+}
+
+export type EveningSkipDecision = 'CONFIRM' | 'CANCEL';
+
+export function buildEveningSkipCompletionInput(
+  decision: EveningSkipDecision,
+  reason: string,
+): CompleteCurrentDayInput | null {
+  if (decision === 'CANCEL') return null;
+  return {
+    skipEvening: true,
+    summary: reason.trim(),
+    actionResolutions: [],
+    tomorrowDecisions: [],
+  };
+}
+
+export function EveningSkipDialog({
+  reason,
+  busy,
+  onReasonChange,
+  onConfirm,
+  onCancel,
+}: {
+  readonly reason: string;
+  readonly busy: boolean;
+  readonly onReasonChange: (reason: string) => void;
+  readonly onConfirm: () => void;
+  readonly onCancel: () => void;
+}) {
+  return (
+    <div className="evening-r7-dialog-backdrop">
+      <section
+        className="evening-r7-skip-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="evening-r7-skip-title"
+      >
+        <p className="section-kicker gold">Осознанный выбор</p>
+        <h3 id="evening-r7-skip-title">Пропустить вечерний ритуал сегодня?</h3>
+        <p>Пропуск сохранится в истории без ошибки и штрафа.</p>
+        <label>
+          <span>Причина (необязательно)</span>
+          <textarea
+            value={reason}
+            maxLength={500}
+            rows={3}
+            disabled={busy}
+            onChange={(event) => onReasonChange(event.target.value)}
+          />
+        </label>
+        <div className="evening-r7-dialog-actions">
+          <button className="secondary-button" type="button" disabled={busy} onClick={onConfirm}>
+            {busy ? 'Сохраняем…' : 'Пропустить'}
+          </button>
+          <button className="text-button" type="button" disabled={busy} onClick={onCancel}>
+            Отмена
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+export function EveningSkippedScene({
+  cycle,
+  onClose,
+}: {
+  readonly cycle: EveningCycle;
+  readonly onClose: () => void;
+}) {
+  return (
+    <section className="evening-e9-scene evening-r7-skipped-scene" data-completion="skipped">
+      <article className="evening-e9-card evening-r7-skipped-card">
+        <p className="section-kicker">Сегодня</p>
+        <h3>Вечерний ритуал пропущен</h3>
+        <p>Это осознанный пропуск, а не ошибка. LifeOS сохранила его в истории без штрафа.</p>
+        {cycle.skipReason === null ? null : (
+          <p className="evening-r7-skip-reason">
+            <span>Причина</span>
+            <strong>{cycle.skipReason}</strong>
           </p>
         )}
-        <button
-          className="primary-button evening-not-started-primary"
-          type="button"
-          aria-busy={busy}
-          disabled={busy || startDisabled}
-          onClick={onStart}
-        >
-          <span>{busy ? 'Начинаем…' : 'Начать вечер'}</span>
-          {busy ? (
-            <span className="evening-not-started-loading-indicator" aria-hidden="true" />
-          ) : (
-            <EveningVisualIcon name="arrow-right" size={20} />
-          )}
+        <button className="secondary-button" type="button" onClick={onClose}>
+          Закрыть
         </button>
       </article>
     </section>
@@ -1126,7 +1403,61 @@ function EmergencyTomorrowPanel({
   );
 }
 
-function EmergencyPreparationSkipPanel({
+export async function skipEmergencyPreparation(
+  eveningCycle: Pick<EveningCycleApplicationService, 'skipPreparation'>,
+  cycleDate: DayDate,
+  reload: () => Promise<unknown>,
+): Promise<void> {
+  await eveningCycle.skipPreparation(cycleDate);
+  await reload();
+}
+
+export function EveningPreparationScene({
+  cycle,
+  preparation,
+  isSubmitting,
+  submitError,
+  onEmergencyContinue,
+  onPreparationContinued,
+  onClose,
+  embedded,
+}: {
+  readonly cycle: EveningCycle;
+  readonly preparation: Pick<
+    PreparationService,
+    'getOrGenerate' | 'completeItem' | 'skipItem' | 'continueToRelaxation' | 'configureRequiredCore'
+  >;
+  readonly isSubmitting: boolean;
+  readonly submitError: string | null;
+  readonly onEmergencyContinue: () => void;
+  readonly onPreparationContinued: () => void;
+  readonly onClose: () => void;
+  readonly embedded: boolean;
+}) {
+  if (cycle.mode === EVENING_CYCLE_MODE.emergency) {
+    return (
+      <EmergencyPreparationSkipPanel
+        busy={isSubmitting}
+        error={submitError}
+        onContinue={onEmergencyContinue}
+        onClose={onClose}
+        embedded={embedded}
+      />
+    );
+  }
+  return (
+    <PreparationPanel
+      cycleDate={cycle.dateKey}
+      service={preparation}
+      onContinued={onPreparationContinued}
+      onClose={onClose}
+      mode={cycle.mode}
+      embedded={embedded}
+    />
+  );
+}
+
+export function EmergencyPreparationSkipPanel({
   busy,
   error,
   onContinue,
@@ -1142,7 +1473,7 @@ function EmergencyPreparationSkipPanel({
   return (
     <EveningReviewFrame title="Позднее завершение" onClose={onClose} embedded={embedded}>
       <section className="evening-e9-card shutdown-panel emergency-preparation-scene">
-        <p className="section-kicker gold">Позднее завершение · Подготовка</p>
+        <p className="section-kicker gold">Позднее завершение · Среда</p>
         <h3>Сохраним спокойный минимум.</h3>
         <p>Подготовка среды не будет придумана автоматически. Её можно уточнить утром.</p>
         {error === null ? null : (
@@ -1151,7 +1482,7 @@ function EmergencyPreparationSkipPanel({
           </p>
         )}
         <button className="primary-button" type="button" disabled={busy} onClick={onContinue}>
-          {busy ? 'Сохраняем…' : 'Перейти к завершению'}
+          {busy ? 'Сохраняем…' : 'Перейти к расслаблению'}
         </button>
       </section>
     </EveningReviewFrame>
@@ -1172,12 +1503,10 @@ interface EveningReviewPanelViewProps {
   readonly onSummaryChange: (value: string) => void;
   readonly reflectionSession?: ReflectionSession | null;
   readonly adaptiveReflectionEnabled?: boolean;
-  readonly reflectionText?: string;
-  readonly reflectionChoices?: readonly string[];
+  readonly reflectionDraft?: ReflectionAnswerDraft;
   readonly correctionAction?: string;
   readonly lastAnsweredQuestionId?: string | null;
-  readonly onReflectionTextChange?: (value: string) => void;
-  readonly onReflectionChoicesChange?: (values: readonly string[]) => void;
+  readonly onReflectionDraftChange?: (draft: ReflectionAnswerDraft) => void;
   readonly onReflectionAnswer?: () => void;
   readonly onReflectionSkip?: () => void;
   readonly onCorrectionActionChange?: (value: string) => void;
@@ -1223,12 +1552,10 @@ export function EveningReviewPanelView({
   onSummaryChange,
   reflectionSession,
   adaptiveReflectionEnabled = false,
-  reflectionText = '',
-  reflectionChoices = [],
+  reflectionDraft = EMPTY_REFLECTION_ANSWER_DRAFT,
   correctionAction = '',
   lastAnsweredQuestionId = null,
-  onReflectionTextChange,
-  onReflectionChoicesChange,
+  onReflectionDraftChange,
   onReflectionAnswer,
   onReflectionSkip,
   onCorrectionActionChange,
@@ -1297,14 +1624,12 @@ export function EveningReviewPanelView({
     return (
       <EveningReflectionScene
         session={reflectionSession}
-        text={reflectionText}
-        choices={reflectionChoices}
+        draft={reflectionDraft}
         correctionAction={correctionAction}
         lastAnsweredQuestionId={lastAnsweredQuestionId}
         disabled={isSubmitting}
         error={error}
-        onTextChange={(value) => onReflectionTextChange?.(value)}
-        onChoicesChange={(values) => onReflectionChoicesChange?.(values)}
+        onDraftChange={(draft) => onReflectionDraftChange?.(draft)}
         onAnswer={() => onReflectionAnswer?.()}
         onSkip={() => onReflectionSkip?.()}
         onCorrectionActionChange={(value) => onCorrectionActionChange?.(value)}
@@ -1565,13 +1890,11 @@ export function EveningReviewPanelView({
           ) : (
             <AdaptiveReflectionSection
               session={reflectionSession}
-              text={reflectionText}
-              choices={reflectionChoices}
+              draft={reflectionDraft}
               correctionAction={correctionAction}
               lastAnsweredQuestionId={lastAnsweredQuestionId}
               disabled={isSubmitting}
-              onTextChange={onReflectionTextChange}
-              onChoicesChange={onReflectionChoicesChange}
+              onDraftChange={onReflectionDraftChange}
               onAnswer={onReflectionAnswer}
               onSkip={onReflectionSkip}
               onCorrectionActionChange={onCorrectionActionChange}
@@ -1676,13 +1999,11 @@ export function EveningReviewPanelView({
 
 interface AdaptiveReflectionSectionProps {
   readonly session: ReflectionSession;
-  readonly text: string;
-  readonly choices: readonly string[];
+  readonly draft: ReflectionAnswerDraft;
   readonly correctionAction: string;
   readonly lastAnsweredQuestionId: string | null;
   readonly disabled: boolean;
-  readonly onTextChange?: ((value: string) => void) | undefined;
-  readonly onChoicesChange?: ((values: readonly string[]) => void) | undefined;
+  readonly onDraftChange?: ((draft: ReflectionAnswerDraft) => void) | undefined;
   readonly onAnswer?: (() => void) | undefined;
   readonly onSkip?: (() => void) | undefined;
   readonly onCorrectionActionChange?: ((value: string) => void) | undefined;
@@ -1691,13 +2012,11 @@ interface AdaptiveReflectionSectionProps {
 
 function AdaptiveReflectionSection({
   session,
-  text,
-  choices,
+  draft,
   correctionAction,
   lastAnsweredQuestionId,
   disabled,
-  onTextChange,
-  onChoicesChange,
+  onDraftChange,
   onAnswer,
   onSkip,
   onCorrectionActionChange,
@@ -1727,11 +2046,9 @@ function AdaptiveReflectionSection({
       ) : (
         <ReflectionQuestionForm
           question={question}
-          text={text}
-          choices={choices}
+          draft={draft}
           disabled={disabled}
-          onTextChange={onTextChange}
-          onChoicesChange={onChoicesChange}
+          onDraftChange={onDraftChange}
           onAnswer={onAnswer}
           onSkip={onSkip}
         />
@@ -1765,28 +2082,21 @@ function AdaptiveReflectionSection({
 
 function ReflectionQuestionForm({
   question,
-  text,
-  choices,
+  draft,
   disabled,
-  onTextChange,
-  onChoicesChange,
+  onDraftChange,
   onAnswer,
   onSkip,
 }: {
   readonly question: ReflectionQuestion;
-  readonly text: string;
-  readonly choices: readonly string[];
+  readonly draft: ReflectionAnswerDraft;
   readonly disabled: boolean;
-  readonly onTextChange?: ((value: string) => void) | undefined;
-  readonly onChoicesChange?: ((values: readonly string[]) => void) | undefined;
+  readonly onDraftChange?: ((draft: ReflectionAnswerDraft) => void) | undefined;
   readonly onAnswer?: (() => void) | undefined;
   readonly onSkip?: (() => void) | undefined;
 }) {
-  const singleChoice = question.type === REFLECTION_QUESTION_TYPE.singleChoice ? text : '';
-  const canAnswer =
-    question.type === REFLECTION_QUESTION_TYPE.multiChoice
-      ? choices.length > 0
-      : text.trim().length > 0;
+  const singleChoice = question.type === REFLECTION_QUESTION_TYPE.singleChoice ? draft.text : '';
+  const canAnswer = reflectionAnswerFromDraft(question, draft) !== null;
   return (
     <div className="evening-action-card">
       <p>{question.context}</p>
@@ -1798,7 +2108,7 @@ function ReflectionQuestionForm({
             const checked =
               question.type === REFLECTION_QUESTION_TYPE.singleChoice
                 ? singleChoice === option.value
-                : choices.includes(option.value);
+                : draft.choices.includes(option.value);
             return (
               <label key={option.value} className="evening-review-check">
                 <input
@@ -1810,13 +2120,14 @@ function ReflectionQuestionForm({
                   disabled={disabled}
                   onChange={() => {
                     if (question.type === REFLECTION_QUESTION_TYPE.singleChoice) {
-                      onTextChange?.(option.value);
+                      onDraftChange?.({ ...draft, text: option.value });
                     } else {
-                      onChoicesChange?.(
-                        checked
-                          ? choices.filter((value) => value !== option.value)
-                          : [...choices, option.value],
-                      );
+                      onDraftChange?.({
+                        ...draft,
+                        choices: checked
+                          ? draft.choices.filter((value) => value !== option.value)
+                          : [...draft.choices, option.value],
+                      });
                     }
                   }}
                 />
@@ -1825,15 +2136,30 @@ function ReflectionQuestionForm({
             );
           })}
         </div>
+      ) : question.type === REFLECTION_QUESTION_TYPE.yesNo ? (
+        <div className="evening-action-choice-grid" role="group" aria-label="Ответ">
+          {([true, false] as const).map((value) => (
+            <button
+              className="secondary-button"
+              type="button"
+              aria-pressed={draft.yesNo === value}
+              disabled={disabled}
+              key={String(value)}
+              onClick={() => onDraftChange?.({ ...draft, yesNo: value })}
+            >
+              {value ? 'Да' : 'Нет'}
+            </button>
+          ))}
+        </div>
       ) : (
         <label className="evening-review-field">
           <span>{question.required ? 'Ответ *' : 'Ответ (необязательно)'}</span>
           <textarea
             rows={3}
             maxLength={2000}
-            value={text}
+            value={draft.text}
             disabled={disabled}
-            onChange={(event) => onTextChange?.(event.target.value)}
+            onChange={(event) => onDraftChange?.({ ...draft, text: event.target.value })}
           />
         </label>
       )}
@@ -1861,7 +2187,13 @@ function buildReflectionSummary(session: ReflectionSession): string {
   const lines = session.cycle.reflectionResults.flatMap((result) => {
     if (result.answer === null) return [];
     const question = questions.get(result.questionId);
-    const answer = typeof result.answer === 'string' ? result.answer : result.answer.join(', ');
+    const answer = Array.isArray(result.answer)
+      ? result.answer.join(', ')
+      : typeof result.answer === 'boolean'
+        ? result.answer
+          ? 'Да'
+          : 'Нет'
+        : String(result.answer);
     return [`${question?.prompt ?? 'Осмысление'}: ${answer}`];
   });
   return (lines.length === 0 ? 'Осмысление дня завершено.' : lines.join('\n')).slice(0, 4_000);

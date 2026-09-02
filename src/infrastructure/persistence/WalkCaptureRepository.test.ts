@@ -109,7 +109,7 @@ it('WalkCapture CAS resolves competing tab-like connections without losing the w
 it('WalkCapture schema upgrades a live v17 connection and preserves every existing store record', async () => {
   const factory = new IDBFactory();
   const legacyStores = Object.values(infrastructure.LIFE_OS_STORE).filter(
-    (name) => name !== 'walkCaptures',
+    (name) => name !== 'walkCaptures' && name !== 'exerciseDefinitions',
   );
   const legacy = await new Promise<IDBDatabase>((resolve, reject) => {
     const request = factory.open('lifeos', 17);
@@ -141,7 +141,8 @@ it('WalkCapture schema upgrades a live v17 connection and preserves every existi
   const upgraded = await database.open();
   expect(notified).toBe(true);
   expect([...upgraded.objectStoreNames]).toContain('walkCaptures');
-  expect(upgraded.version).toBe(18);
+  expect([...upgraded.objectStoreNames]).toContain('exerciseDefinitions');
+  expect(upgraded.version).toBe(infrastructure.LIFE_OS_DATABASE_VERSION);
   const captures = upgraded.transaction('walkCaptures').objectStore('walkCaptures');
   expect(captures.keyPath).toBe('id');
   expect([...captures.indexNames]).toEqual(['byStatus', 'byWalkId']);
@@ -161,4 +162,9 @@ it('WalkCapture schema upgrades a live v17 connection and preserves every existi
   expect(
     await executeIndexedDbRequest(upgraded, 'walkCaptures', 'readonly', (store) => store.getAll()),
   ).toEqual([]);
+  expect(
+    await executeIndexedDbRequest<unknown[]>(upgraded, 'exerciseDefinitions', 'readonly', (store) =>
+      store.getAll(),
+    ),
+  ).toHaveLength(5);
 });

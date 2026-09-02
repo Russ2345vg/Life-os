@@ -1,0 +1,1 @@
+export { MorningExerciseCatalogService } from './MorningExerciseCatalogService';

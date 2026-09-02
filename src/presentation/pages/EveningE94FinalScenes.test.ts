@@ -314,6 +314,12 @@ describe('E9.4 controller and responsive contract', () => {
     );
   });
 
+  it('сохраняет видимый focus ring у icon-only закрытия Evening Center', () => {
+    expect(globalCss).toMatch(
+      /\.evening-command-center-page \.evening-command-center-close:focus-visible\s*{[^}]*outline:\s*2px solid var\(--color-accent-gold\)[^}]*outline-offset:\s*2px/,
+    );
+  });
+
   it('оставляет V3 readiness последним применимым правилом scoped-каскада', () => {
     const readinessRule = lastCssRule(
       finalScenesCss,

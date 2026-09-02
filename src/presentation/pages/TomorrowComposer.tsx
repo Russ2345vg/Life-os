@@ -18,9 +18,13 @@ import {
   type EveningCycleMode,
 } from '../../domain';
 import { EveningVisualIcon } from '../components/EveningVisualIcon';
+import '../styles/evening-tomorrow-saved.css';
+import '../styles/evening-tomorrow-form-v3.css';
 import {
+  buildTomorrowWorkingFormPresentation,
   getTomorrowSceneEditorValues,
   getTomorrowSceneVisualState,
+  type TomorrowOutcomeLevel,
 } from './TomorrowScenePresentation';
 
 interface TomorrowComposerProps {
@@ -39,6 +43,7 @@ interface TomorrowComposerProps {
     | 'complete'
   >;
   readonly onPrepared: () => void;
+  readonly onSaved?: () => void;
   readonly onClose: () => void;
   readonly embedded?: boolean;
   readonly mode?: EveningCycleMode;
@@ -53,6 +58,7 @@ export function TomorrowComposer({
   cycleDate,
   service,
   onPrepared,
+  onSaved,
   onClose,
   embedded = false,
   mode = EVENING_CYCLE_MODE.normal,
@@ -70,6 +76,9 @@ export function TomorrowComposer({
   const [minimum, setMinimum] = useState('');
   const [target, setTarget] = useState('');
   const [stretch, setStretch] = useState('');
+  const [selectedOutcomeLevel, setSelectedOutcomeLevel] = useState<TomorrowOutcomeLevel>(
+    mode === EVENING_CYCLE_MODE.quick ? 'minimum' : 'target',
+  );
   const [firstActionId, setFirstActionId] = useState('');
   const [newActionTitle, setNewActionTitle] = useState('');
   const [newActionResult, setNewActionResult] = useState('');
@@ -114,6 +123,7 @@ export function TomorrowComposer({
       .then((loaded) => {
         if (cancelled) return;
         applySnapshotToEditor(loaded);
+        if (loaded.plan.status === TOMORROW_PLAN_STATUS.completed) onSaved?.();
       })
       .catch((cause: unknown) => {
         if (!cancelled) setError(messageOf(cause));
@@ -121,7 +131,7 @@ export function TomorrowComposer({
     return () => {
       cancelled = true;
     };
-  }, [applySnapshotToEditor, cycleDate, service]);
+  }, [applySnapshotToEditor, cycleDate, onSaved, service]);
 
   useEffect(() => {
     if (snapshot === null || initialEditingBlock !== 'first-action') return;
@@ -157,7 +167,6 @@ export function TomorrowComposer({
     [newSupportingTitle1, newSupportingTitle2].filter((title) => title.trim().length > 0).length;
   const isQuick = mode === EVENING_CYCLE_MODE.quick;
   const isCompleted = snapshot?.plan.status === TOMORROW_PLAN_STATUS.completed;
-  const tomorrowSceneLabel = isQuick ? 'Быстро подготовить завтра' : 'Завтра';
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -204,6 +213,7 @@ export function TomorrowComposer({
       }
       current = await service.complete(cycleDate, continueOverloaded || isCompleted);
       applySnapshotToEditor(current);
+      onSaved?.();
       setEditingBlock(null);
     } catch (cause: unknown) {
       setError(messageOf(cause));
@@ -266,6 +276,27 @@ export function TomorrowComposer({
     minimumOutcome: minimum,
     firstActionReady: actionReady,
   });
+  const workingForm = buildTomorrowWorkingFormPresentation({
+    selectedOutcomeLevel,
+    minimum,
+    target,
+    stretch,
+    primaryReady,
+    firstActionReady: actionReady,
+    overloaded: snapshot.overloaded,
+    overloadAccepted: continueOverloaded,
+  });
+  const outcomeLevels: readonly TomorrowOutcomeLevel[] = isQuick
+    ? ['minimum']
+    : ['minimum', 'target', 'stretch'];
+  const selectedPrimaryMetadata = uniqueNonEmpty([
+    selectedPrimary?.projectReference,
+    vector.trim().length > 0 ? vector : null,
+  ]);
+  const hasOpenSupportingDraft = creatingSupportingSlots.some((isCreating, index) => {
+    if (!isCreating) return false;
+    return (index === 0 ? newSupportingTitle1 : newSupportingTitle2).trim().length === 0;
+  });
   const showBlock = (block: EditableBlock): boolean =>
     !isCompleted ||
     editingBlock === 'all' ||
@@ -282,63 +313,28 @@ export function TomorrowComposer({
         data-overloaded={snapshot.overloaded ? 'true' : 'false'}
         onSubmit={(event) => void handleSubmit(event)}
       >
-        <header className="evening-tomorrow-heading" aria-label={tomorrowSceneLabel}>
-          <span className="tomorrow-scene-context-icon" aria-hidden="true">
-            <EveningVisualIcon name="spark" size={24} />
-          </span>
-          <div className="tomorrow-scene-context-copy">
-            <p className="tomorrow-scene-eyebrow">
-              <span>{tomorrowSceneLabel}</span>
-              <span aria-hidden="true">·</span>
-              <span>{formatTomorrowDate(snapshot.plan.targetDateKey)}</span>
-            </p>
-            {!isQuick && !isCompleted ? (
-              <label className="tomorrow-vector-line">
-                <span>Вектор дня</span>
-                <input
-                  value={vector}
-                  disabled={saving}
-                  onChange={(event) => setVector(event.target.value)}
-                  placeholder="Добавить вектор дня"
-                />
-              </label>
-            ) : vector.trim().length > 0 ? (
-              <p className="tomorrow-vector-summary">
-                <span>Вектор дня</span>
-                <strong>{vector}</strong>
-              </p>
-            ) : (
-              <p className="tomorrow-vector-summary is-empty">Вектор дня не задан</p>
-            )}
-          </div>
-          {isCompleted ? (
-            <button
-              className="text-button tomorrow-edit-cancel"
-              type="button"
-              onClick={() => setEditingBlock(null)}
-            >
-              Отмена
-            </button>
-          ) : null}
-        </header>
-
-        <div className="tomorrow-dashboard">
-          {showBlock('primary') ? (
-            <section
-              className={`tomorrow-primary-card ${
-                selectedPrimary === undefined && !isCreatingPrimary ? 'is-empty' : 'is-selected'
-              }`}
-              aria-labelledby="tomorrow-primary-title"
-              ref={primarySectionRef}
-            >
-              {selectedPrimary === undefined && !isCreatingPrimary ? (
-                <div className="tomorrow-primary-empty">
-                  <span className="tomorrow-primary-symbol" aria-hidden="true">
-                    <EveningVisualIcon name="target" size={30} />
+        <div className="tomorrow-working-form-scroll">
+          <p className="tomorrow-working-date">
+            Завтра <span aria-hidden="true">·</span>{' '}
+            {formatTomorrowDate(snapshot.plan.targetDateKey)}
+          </p>
+          <div className="tomorrow-dashboard">
+            {showBlock('primary') ? (
+              <section
+                className={`tomorrow-primary-card ${
+                  selectedPrimary === undefined && !isCreatingPrimary ? 'is-empty' : 'is-selected'
+                }`}
+                aria-label="Главное решение"
+                ref={primarySectionRef}
+              >
+                <div className="tomorrow-working-section-heading">
+                  <span className="tomorrow-working-section-index" aria-hidden="true">
+                    1
                   </span>
-                  <div className="tomorrow-primary-empty-copy">
-                    <p className="section-kicker gold">Главное Решение</p>
-                    <h3 id="tomorrow-primary-title">Что действительно должно продвинуть день?</h3>
+                  <p>Главное решение</p>
+                </div>
+                {selectedPrimary === undefined && !isCreatingPrimary ? (
+                  <div className="tomorrow-primary-empty">
                     <button
                       className="tomorrow-primary-empty-cta"
                       type="button"
@@ -346,321 +342,317 @@ export function TomorrowComposer({
                       disabled={saving}
                       onClick={() => setPrimaryChooserOpen(!primaryChooserOpen)}
                     >
-                      <EveningVisualIcon name="choice" size={16} />
-                      <span>Выбрать или создать Решение</span>
+                      <span>Выбрать или создать решение</span>
+                      <EveningVisualIcon name="arrow-right" size={16} />
                     </button>
                   </div>
-                </div>
-              ) : (
-                <div className="tomorrow-primary-layout">
-                  <span className="tomorrow-primary-symbol" aria-hidden="true">
-                    <EveningVisualIcon name="target" size={30} />
-                  </span>
-                  <div className="tomorrow-primary-copy">
-                    <p className="section-kicker gold">Главное Решение</p>
-                    <h3 id="tomorrow-primary-title">
-                      {isCreatingPrimary
-                        ? newPrimaryTitle || 'Новое Решение'
-                        : (selectedPrimary?.title.toString() ?? 'Новое Решение')}
-                    </h3>
-                    <div className="tomorrow-primary-meta">
-                      {isCreatingPrimary ? (
-                        <span>Будет добавлено в план завтра</span>
-                      ) : selectedPrimary?.projectReference === null ? null : (
-                        <span>{selectedPrimary?.projectReference}</span>
+                ) : (
+                  <div className="tomorrow-primary-layout">
+                    <div className="tomorrow-primary-copy">
+                      <h3 id="tomorrow-primary-title">
+                        {isCreatingPrimary
+                          ? newPrimaryTitle || 'Новое решение'
+                          : (selectedPrimary?.title.toString() ?? 'Новое решение')}
+                      </h3>
+                      <div className="tomorrow-primary-meta">
+                        {isCreatingPrimary ? (
+                          <span>Будет добавлено на завтра</span>
+                        ) : selectedPrimaryMetadata.length === 0 ? null : (
+                          selectedPrimaryMetadata.map((item) => <span key={item}>{item}</span>)
+                        )}
+                        {selectedPrimaryIsCarried ? (
+                          <span className="is-carried">
+                            <EveningVisualIcon name="carry" size={13} />
+                            Перенесено с сегодня
+                          </span>
+                        ) : null}
+                      </div>
+                      {selectedPrimary === undefined ||
+                      selectedPrimary.expectedResult === null ||
+                      isCreatingPrimary ? null : (
+                        <p className="tomorrow-primary-context">
+                          <span>Ожидаемый результат</span>
+                          {selectedPrimary.expectedResult.toString()}
+                        </p>
                       )}
-                      {selectedPrimaryIsCarried ? (
-                        <span className="is-carried">
-                          <EveningVisualIcon name="carry" size={13} />
-                          Перенесено с сегодня
-                        </span>
-                      ) : null}
                     </div>
-                    {selectedPrimary === undefined ||
-                    selectedPrimary.expectedResult === null ||
-                    isCreatingPrimary ? null : (
-                      <p className="tomorrow-primary-context">
-                        <span>Ожидаемый результат</span>
-                        {selectedPrimary.expectedResult.toString()}
-                      </p>
-                    )}
+                    <button
+                      className="text-button tomorrow-primary-change"
+                      type="button"
+                      disabled={saving}
+                      onClick={() => setPrimaryChooserOpen(!primaryChooserOpen)}
+                    >
+                      Изменить
+                    </button>
                   </div>
-                  <button
-                    className="secondary-button tomorrow-primary-change"
-                    type="button"
-                    disabled={saving}
-                    onClick={() => setPrimaryChooserOpen(!primaryChooserOpen)}
-                  >
-                    <EveningVisualIcon name="pencil" size={15} />
-                    Изменить
-                  </button>
-                </div>
-              )}
-              {primaryChooserOpen || isCreatingPrimary ? (
-                <div className="tomorrow-primary-controls">
-                  {primaryCandidates.length > 0 ? (
-                    <label className="tomorrow-compact-select">
-                      <span>Выбрать существующее</span>
-                      <select
-                        value={isCreatingPrimary ? '' : primaryId}
-                        disabled={saving}
-                        onChange={(event) => {
-                          const nextPrimaryId = event.target.value;
-                          if (primaryId !== nextPrimaryId) setFirstActionId('');
-                          setPrimaryId(nextPrimaryId);
-                          setIsCreatingPrimary(false);
-                          if (nextPrimaryId.length > 0) setPrimaryChooserOpen(false);
-                        }}
-                      >
-                        <option value="">Выберите Решение</option>
-                        {primaryCandidates.map((decision) => {
-                          const carried =
-                            snapshot.carriedDecisionCandidate?.id.equals(decision.id) === true;
-                          return (
-                            <option key={decision.id.toString()} value={decision.id.toString()}>
-                              {decision.title.toString()}
-                              {carried ? ' · перенесено с сегодня' : ''}
-                            </option>
-                          );
-                        })}
-                      </select>
-                    </label>
-                  ) : null}
-                  <button
-                    className="tomorrow-create-decision"
-                    type="button"
-                    aria-pressed={isCreatingPrimary}
-                    disabled={saving}
-                    onClick={() => {
-                      setPrimaryId('');
-                      setFirstActionId('');
-                      setIsCreatingPrimary(true);
-                      setPrimaryChooserOpen(true);
-                    }}
-                  >
-                    <span aria-hidden="true">+</span> Новое Решение
-                  </button>
-                </div>
-              ) : null}
-              {isCreatingPrimary ? (
-                <div className="tomorrow-inline-editor">
-                  <label>
-                    <span>Решение</span>
-                    <input
-                      value={newPrimaryTitle}
+                )}
+                {primaryChooserOpen || isCreatingPrimary ? (
+                  <div className="tomorrow-primary-controls">
+                    {primaryCandidates.length > 0 ? (
+                      <label className="tomorrow-compact-select">
+                        <span>Выбрать существующее</span>
+                        <select
+                          value={isCreatingPrimary ? '' : primaryId}
+                          disabled={saving}
+                          onChange={(event) => {
+                            const nextPrimaryId = event.target.value;
+                            if (primaryId !== nextPrimaryId) setFirstActionId('');
+                            setPrimaryId(nextPrimaryId);
+                            setIsCreatingPrimary(false);
+                            if (nextPrimaryId.length > 0) setPrimaryChooserOpen(false);
+                          }}
+                        >
+                          <option value="">Выберите Решение</option>
+                          {primaryCandidates.map((decision) => {
+                            const carried =
+                              snapshot.carriedDecisionCandidate?.id.equals(decision.id) === true;
+                            return (
+                              <option key={decision.id.toString()} value={decision.id.toString()}>
+                                {decision.title.toString()}
+                                {carried ? ' · перенесено с сегодня' : ''}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </label>
+                    ) : null}
+                    <button
+                      className="tomorrow-create-decision"
+                      type="button"
+                      aria-pressed={isCreatingPrimary}
                       disabled={saving}
-                      onChange={(event) => setNewPrimaryTitle(event.target.value)}
-                      placeholder="Что важно завершить?"
-                    />
-                  </label>
-                  <label>
-                    <span>Ожидаемый результат</span>
-                    <textarea
-                      rows={2}
-                      value={newPrimaryResult}
-                      disabled={saving}
-                      onChange={(event) => setNewPrimaryResult(event.target.value)}
-                    />
-                  </label>
-                </div>
-              ) : null}
-            </section>
-          ) : null}
-
-          {showBlock('outcomes') ? (
-            <section className="tomorrow-outcomes" aria-labelledby="tomorrow-outcomes-title">
-              <div className="tomorrow-scene-section-heading">
-                <span className="tomorrow-section-symbol" aria-hidden="true">
-                  <EveningVisualIcon name="choice" size={19} />
-                </span>
-                <div>
-                  <p className="section-kicker">Границы результата</p>
-                  <h4 id="tomorrow-outcomes-title">Что будет означать хороший день</h4>
-                </div>
-              </div>
-              <div className={`tomorrow-outcome-boundaries ${isQuick ? 'is-quick' : ''}`}>
-                {!isQuick ? (
-                  <label className="tomorrow-outcome-segment is-target">
-                    <span className="tomorrow-outcome-label">
-                      <EveningVisualIcon name="target" size={16} />
-                      Норма
-                    </span>
-                    <textarea
-                      rows={1}
-                      value={target}
-                      disabled={saving}
-                      onChange={(event) => setTarget(event.target.value)}
-                      placeholder="Полностью готовый результат"
-                    />
-                  </label>
+                      onClick={() => {
+                        setPrimaryId('');
+                        setFirstActionId('');
+                        setIsCreatingPrimary(true);
+                        setPrimaryChooserOpen(true);
+                      }}
+                    >
+                      <span aria-hidden="true">+</span> Новое решение
+                    </button>
+                  </div>
                 ) : null}
-                <label className="tomorrow-outcome-segment is-minimum">
-                  <span className="tomorrow-outcome-label">
-                    <EveningVisualIcon name="list" size={16} />
-                    {isQuick ? 'Минимальный результат' : 'Минимум'}
+                {isCreatingPrimary ? (
+                  <div className="tomorrow-inline-editor">
+                    <label>
+                      <span>Решение</span>
+                      <input
+                        value={newPrimaryTitle}
+                        disabled={saving}
+                        onChange={(event) => setNewPrimaryTitle(event.target.value)}
+                        placeholder="Что важно завершить?"
+                      />
+                    </label>
+                    <label>
+                      <span>Ожидаемый результат</span>
+                      <textarea
+                        rows={2}
+                        value={newPrimaryResult}
+                        disabled={saving}
+                        onChange={(event) => setNewPrimaryResult(event.target.value)}
+                      />
+                    </label>
+                  </div>
+                ) : null}
+              </section>
+            ) : null}
+
+            {showBlock('outcomes') ? (
+              <section
+                className="tomorrow-outcomes"
+                aria-label="Граница результата"
+                data-disabled={workingForm.followingBlocksDisabled ? 'true' : 'false'}
+              >
+                <div className="tomorrow-working-section-heading">
+                  <span className="tomorrow-working-section-index" aria-hidden="true">
+                    2
+                  </span>
+                  <p>Граница результата</p>
+                </div>
+                <div
+                  className="tomorrow-outcome-levels"
+                  role="radiogroup"
+                  aria-label="Граница результата"
+                >
+                  {outcomeLevels.map((level) => (
+                    <button
+                      className={level === selectedOutcomeLevel ? 'is-selected' : undefined}
+                      type="button"
+                      role="radio"
+                      aria-checked={level === selectedOutcomeLevel}
+                      disabled={saving || workingForm.followingBlocksDisabled}
+                      key={level}
+                      onClick={() => setSelectedOutcomeLevel(level)}
+                    >
+                      <span aria-hidden="true" />
+                      {outcomeLevelLabel(level, isQuick)}
+                    </button>
+                  ))}
+                </div>
+                <label className="tomorrow-active-outcome-field">
+                  <span className="sr-only">
+                    Граница результата — {workingForm.activeOutcome.label}
                   </span>
                   <textarea
                     rows={1}
-                    value={minimum}
-                    disabled={saving}
-                    onChange={(event) => setMinimum(event.target.value)}
-                    placeholder="Рабочий сценарий"
+                    aria-label={`Граница результата — ${workingForm.activeOutcome.label}`}
+                    value={workingForm.activeOutcome.value}
+                    disabled={saving || workingForm.followingBlocksDisabled}
+                    onChange={(event) => {
+                      if (selectedOutcomeLevel === 'minimum') setMinimum(event.target.value);
+                      else if (selectedOutcomeLevel === 'target') setTarget(event.target.value);
+                      else setStretch(event.target.value);
+                    }}
+                    placeholder={outcomeLevelPlaceholder(selectedOutcomeLevel)}
                   />
                 </label>
-                {!isQuick ? (
-                  <label className="tomorrow-outcome-segment is-stretch">
-                    <span className="tomorrow-outcome-label">
-                      <span>
-                        <EveningVisualIcon name="spark" size={16} />
-                        Максимум
-                      </span>
-                      <small>Если останется ресурс</small>
-                    </span>
-                    <textarea
-                      rows={1}
-                      value={stretch}
-                      disabled={saving}
-                      onChange={(event) => setStretch(event.target.value)}
-                      placeholder="Если останется ресурс"
-                    />
+              </section>
+            ) : null}
+
+            {showBlock('first-action') ? (
+              <section
+                ref={firstActionSectionRef}
+                className="tomorrow-first-action-card"
+                aria-label="Первый шаг"
+                data-disabled={workingForm.followingBlocksDisabled ? 'true' : 'false'}
+              >
+                <div className="tomorrow-working-section-heading">
+                  <span className="tomorrow-working-section-index" aria-hidden="true">
+                    3
+                  </span>
+                  <p>Первый шаг</p>
+                </div>
+                {actionCandidates.length > 0 ? (
+                  <label className="tomorrow-compact-select">
+                    <span>Существующее Действие</span>
+                    <select
+                      value={firstActionId}
+                      disabled={saving || primaryId.length === 0}
+                      onChange={(event) => setFirstActionId(event.target.value)}
+                    >
+                      <option value="">Создать новый первый шаг</option>
+                      {actionCandidates.map((action) => (
+                        <option key={action.id.toString()} value={action.id.toString()}>
+                          {action.title.toString()}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                 ) : null}
-              </div>
-            </section>
-          ) : null}
+                {firstActionId.length === 0 ? (
+                  <div className="tomorrow-inline-editor tomorrow-action-editor">
+                    <label className="tomorrow-action-main-field">
+                      <span>Конкретное первое действие</span>
+                      <input
+                        value={newActionTitle}
+                        disabled={saving || !primaryReady}
+                        onChange={(event) => setNewActionTitle(event.target.value)}
+                        placeholder="Конкретное действие для старта завтра"
+                      />
+                    </label>
+                    <label className="tomorrow-action-result-field">
+                      <span>Ожидаемый результат</span>
+                      <textarea
+                        rows={1}
+                        value={newActionResult}
+                        disabled={saving || !primaryReady}
+                        onChange={(event) => setNewActionResult(event.target.value)}
+                        placeholder="Что должно измениться после первого шага?"
+                      />
+                    </label>
+                  </div>
+                ) : (
+                  <div className="tomorrow-first-action-selected">
+                    <strong>{selectedFirstAction?.title.toString()}</strong>
+                    {selectedFirstAction?.expectedResult === null ||
+                    selectedFirstAction?.expectedResult === undefined ? null : (
+                      <span>{selectedFirstAction.expectedResult.toString()}</span>
+                    )}
+                  </div>
+                )}
+              </section>
+            ) : null}
 
-          {showBlock('first-action') ? (
-            <section
-              ref={firstActionSectionRef}
-              className="tomorrow-first-action-card"
-              aria-labelledby="tomorrow-first-title"
-            >
-              <div className="tomorrow-scene-section-heading">
-                <span className="tomorrow-section-symbol is-first" aria-hidden="true">
-                  <EveningVisualIcon name="arrow-right" size={19} />
-                </span>
-                <div>
-                  <p className="section-kicker">Первый шаг</p>
-                  <h4 id="tomorrow-first-title">Конкретное действие</h4>
+            {!isQuick && showBlock('supporting') ? (
+              <section
+                className="tomorrow-supporting"
+                aria-label="Дополнительные решения"
+                data-disabled={workingForm.followingBlocksDisabled ? 'true' : 'false'}
+              >
+                <div className="tomorrow-working-section-heading">
+                  <span className="tomorrow-working-section-index" aria-hidden="true">
+                    4
+                  </span>
+                  <p>Дополнительные решения</p>
                 </div>
-              </div>
-              {actionCandidates.length > 0 ? (
-                <label className="tomorrow-compact-select">
-                  <span>Существующее Действие</span>
-                  <select
-                    value={firstActionId}
-                    disabled={saving || primaryId.length === 0}
-                    onChange={(event) => setFirstActionId(event.target.value)}
-                  >
-                    <option value="">Создать новый первый шаг</option>
-                    {actionCandidates.map((action) => (
-                      <option key={action.id.toString()} value={action.id.toString()}>
-                        {action.title.toString()}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
-              {firstActionId.length === 0 ? (
-                <div className="tomorrow-inline-editor tomorrow-action-editor">
-                  <label className="tomorrow-action-main-field">
-                    <span>Конкретное первое действие</span>
-                    <input
-                      value={newActionTitle}
-                      disabled={saving || !primaryReady}
-                      onChange={(event) => setNewActionTitle(event.target.value)}
-                      placeholder="Открыть проект и продолжить работу"
-                    />
-                  </label>
-                  <label className="tomorrow-action-result-field">
-                    <span>Ожидаемый результат</span>
-                    <textarea
-                      rows={1}
-                      value={newActionResult}
-                      disabled={saving || !primaryReady}
-                      onChange={(event) => setNewActionResult(event.target.value)}
-                      placeholder="Что должно измениться после шага?"
-                    />
-                  </label>
-                </div>
-              ) : (
-                <div className="tomorrow-first-action-selected">
-                  <strong>{selectedFirstAction?.title.toString()}</strong>
-                  {selectedFirstAction?.expectedResult === null ||
-                  selectedFirstAction?.expectedResult === undefined ? null : (
-                    <span>{selectedFirstAction.expectedResult.toString()}</span>
-                  )}
-                </div>
-              )}
-            </section>
-          ) : null}
-
-          {!isQuick && showBlock('supporting') ? (
-            <section className="tomorrow-supporting" aria-labelledby="tomorrow-supporting-title">
-              <div className="tomorrow-scene-section-heading">
-                <span className="tomorrow-section-symbol" aria-hidden="true">
-                  <EveningVisualIcon name="list" size={19} />
-                </span>
-                <div>
-                  <p className="section-kicker">Дополнительно</p>
-                  <h4 id="tomorrow-supporting-title">Дополнительные Решения</h4>
-                  <span className="tomorrow-supporting-limit">Не более двух</span>
-                </div>
-              </div>
-              <div className="tomorrow-supporting-list">
-                {supportingIds.slice(0, 2).map((id) => {
-                  const decision = decisions.find((candidate) => candidate.id.toString() === id);
-                  return decision === undefined ? null : (
-                    <div className="tomorrow-supporting-row" key={id}>
-                      <strong>{decision.title.toString()}</strong>
-                      <button
-                        className="text-button"
-                        type="button"
-                        disabled={saving}
-                        onClick={() => {
-                          setSupportingIds(supportingIds.filter((item) => item !== id));
-                          setCreatingSupportingSlots([false, false]);
-                        }}
-                      >
-                        Убрать
-                      </button>
-                    </div>
-                  );
-                })}
-                {Array.from({ length: Math.max(0, 2 - supportingIds.length) }, (_, index) => {
-                  const title = index === 0 ? newSupportingTitle1 : newSupportingTitle2;
-                  const setTitle = index === 0 ? setNewSupportingTitle1 : setNewSupportingTitle2;
-                  const isCreating = creatingSupportingSlots[index] === true;
-                  return (
-                    <div className="tomorrow-supporting-row is-empty" key={`empty-${index}`}>
-                      {isCreating ? (
-                        <input
-                          aria-label={
-                            index === 0
-                              ? 'Новое дополнительное Решение'
-                              : 'Второе дополнительное Решение'
-                          }
-                          value={title}
+                <div className="tomorrow-supporting-list">
+                  {supportingIds.slice(0, 2).map((id) => {
+                    const decision = decisions.find((candidate) => candidate.id.toString() === id);
+                    return decision === undefined ? null : (
+                      <div className="tomorrow-supporting-row" key={id}>
+                        <strong>{decision.title.toString()}</strong>
+                        <button
+                          className="text-button"
+                          type="button"
                           disabled={saving}
-                          onChange={(event) => setTitle(event.target.value)}
-                          placeholder="Название Решения"
-                        />
-                      ) : (
-                        <select
-                          aria-label="Добавить существующее Решение"
-                          value=""
-                          disabled={
-                            saving ||
-                            availableSupportingDecisions.length === 0 ||
-                            supportingCapacityUsed >= 2
-                          }
-                          onChange={(event) => {
-                            if (event.target.value.length === 0) return;
-                            setSupportingIds([...supportingIds, event.target.value]);
+                          onClick={() => {
+                            setSupportingIds(supportingIds.filter((item) => item !== id));
                             setCreatingSupportingSlots([false, false]);
                           }}
                         >
-                          <option value="">+ Добавить Решение</option>
+                          Убрать
+                        </button>
+                      </div>
+                    );
+                  })}
+                  {[0, 1].map((index) => {
+                    const title = index === 0 ? newSupportingTitle1 : newSupportingTitle2;
+                    const setTitle = index === 0 ? setNewSupportingTitle1 : setNewSupportingTitle2;
+                    const isCreating = creatingSupportingSlots[index] === true;
+                    return isCreating ? (
+                      <div className="tomorrow-supporting-row is-empty" key={`draft-${index}`}>
+                        <input
+                          aria-label={
+                            index === 0
+                              ? 'Новое дополнительное решение'
+                              : 'Второе дополнительное решение'
+                          }
+                          value={title}
+                          disabled={saving || workingForm.followingBlocksDisabled}
+                          onChange={(event) => setTitle(event.target.value)}
+                          placeholder="Название решения"
+                        />
+                        <button
+                          className="text-button"
+                          type="button"
+                          disabled={saving}
+                          onClick={() => {
+                            setTitle('');
+                            setCreatingSupportingSlots(
+                              index === 0
+                                ? [false, creatingSupportingSlots[1]]
+                                : [creatingSupportingSlots[0], false],
+                            );
+                          }}
+                        >
+                          Убрать
+                        </button>
+                      </div>
+                    ) : null;
+                  })}
+                  {supportingCapacityUsed >= 2 || hasOpenSupportingDraft ? null : (
+                    <div className="tomorrow-supporting-add">
+                      {availableSupportingDecisions.length === 0 ? null : (
+                        <select
+                          aria-label="Добавить существующее решение"
+                          value=""
+                          disabled={saving || workingForm.followingBlocksDisabled}
+                          onChange={(event) => {
+                            if (event.target.value.length === 0) return;
+                            setSupportingIds([...supportingIds, event.target.value]);
+                          }}
+                        >
+                          <option value="">Выбрать существующее</option>
                           {availableSupportingDecisions.map((decision) => (
                             <option key={decision.id.toString()} value={decision.id.toString()}>
                               {decision.title.toString()}
@@ -669,106 +661,100 @@ export function TomorrowComposer({
                         </select>
                       )}
                       <button
-                        className="text-button"
+                        className="text-button tomorrow-supporting-add-button"
                         type="button"
-                        disabled={saving || (!isCreating && supportingCapacityUsed >= 2)}
+                        disabled={saving || workingForm.followingBlocksDisabled}
                         onClick={() => {
-                          setTitle('');
                           setCreatingSupportingSlots(
-                            index === 0
-                              ? [!creatingSupportingSlots[0], creatingSupportingSlots[1]]
-                              : [creatingSupportingSlots[0], !creatingSupportingSlots[1]],
+                            !creatingSupportingSlots[0]
+                              ? [true, creatingSupportingSlots[1]]
+                              : [creatingSupportingSlots[0], true],
                           );
                         }}
                       >
-                        {isCreating ? 'Выбрать' : 'Создать новое'}
+                        <span aria-hidden="true">+</span> Добавить решение
                       </button>
                     </div>
-                  );
-                })}
-              </div>
-            </section>
-          ) : null}
+                  )}
+                </div>
+              </section>
+            ) : null}
 
-          {snapshot.scopeTooLargeWarning && !isCompleted ? (
-            <aside className="tomorrow-guidance" aria-label="Вывод на завтра">
-              <span className="tomorrow-context-symbol" aria-hidden="true">
-                <EveningVisualIcon name="lightbulb" size={20} />
-              </span>
-              <div>
-                <p className="section-kicker">Контекстный вывод</p>
-                <strong>Сегодня объём главного Решения оказался слишком большим.</strong>
-                <span>Значения сохранены без автоматических изменений.</span>
-              </div>
-            </aside>
-          ) : null}
+            {snapshot.scopeTooLargeWarning && !isCompleted ? (
+              <aside className="tomorrow-guidance" aria-label="Вывод на завтра">
+                <span className="tomorrow-context-symbol" aria-hidden="true">
+                  <EveningVisualIcon name="lightbulb" size={20} />
+                </span>
+                <div>
+                  <p className="section-kicker">Контекстный вывод</p>
+                  <strong>Сегодня объём главного Решения оказался слишком большим.</strong>
+                  <span>Значения сохранены без автоматических изменений.</span>
+                </div>
+              </aside>
+            ) : null}
 
-          {snapshot.overloaded && !isCompleted ? (
-            <aside className="tomorrow-overload-note" role="status">
-              <span className="tomorrow-context-symbol" aria-hidden="true">
-                <EveningVisualIcon name="carry" size={20} />
-              </span>
-              <div className="tomorrow-overload-copy">
-                <p className="section-kicker gold">Завтра уже насыщенно</p>
-                <strong>
-                  {snapshot.targetDecisionCount} Решений · {snapshot.targetLifeActionCount} Действий
-                </strong>
-                <span>Проверьте объём прежде, чем добавлять новое.</span>
-              </div>
-              <div className="tomorrow-overload-actions">
-                <button
-                  className="secondary-button"
-                  type="button"
-                  onClick={() => {
-                    setContinueOverloaded(false);
-                    primarySectionRef.current?.scrollIntoView({
-                      behavior: 'smooth',
-                      block: 'start',
-                    });
-                  }}
-                >
-                  Пересмотреть
-                </button>
-                <button
-                  className="text-button"
-                  type="button"
-                  aria-pressed={continueOverloaded}
-                  onClick={() => setContinueOverloaded(true)}
-                >
-                  Оставить как есть
-                </button>
-              </div>
-            </aside>
-          ) : null}
+            {snapshot.overloaded && !isCompleted ? (
+              <aside className="tomorrow-overload-note" role="status">
+                <span className="tomorrow-context-symbol" aria-hidden="true">
+                  <EveningVisualIcon name="carry" size={20} />
+                </span>
+                <div className="tomorrow-overload-copy">
+                  <p className="section-kicker gold">Завтра уже насыщенно</p>
+                  <strong>
+                    {snapshot.targetDecisionCount} Решений · {snapshot.targetLifeActionCount}{' '}
+                    Действий
+                  </strong>
+                  <span>Проверьте объём прежде, чем добавлять новое.</span>
+                </div>
+                <div className="tomorrow-overload-actions">
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={() => {
+                      setContinueOverloaded(false);
+                      primarySectionRef.current?.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start',
+                      });
+                    }}
+                  >
+                    Пересмотреть
+                  </button>
+                  <button
+                    className="text-button"
+                    type="button"
+                    aria-pressed={continueOverloaded}
+                    onClick={() => setContinueOverloaded(true)}
+                  >
+                    Оставить как есть
+                  </button>
+                </div>
+              </aside>
+            ) : null}
 
-          {error === null ? null : (
-            <p className="form-error" role="alert">
-              {error}
-            </p>
-          )}
-          <footer className="tomorrow-scene-footer">
-            <button
-              className="primary-button"
-              type="submit"
-              disabled={
-                saving ||
-                !primaryReady ||
-                minimum.trim().length === 0 ||
-                !actionReady ||
-                (snapshot.overloaded && !continueOverloaded)
-              }
-            >
-              {saving ? null : <EveningVisualIcon name="check" size={18} />}
-              <span>
-                {saving
-                  ? 'Сохраняем…'
-                  : isCompleted
-                    ? 'Сохранить изменения'
-                    : 'Подготовить завтра →'}
-              </span>
-            </button>
-          </footer>
+            {error === null ? null : (
+              <p className="form-error" role="alert">
+                {error}
+              </p>
+            )}
+          </div>
         </div>
+        <footer className="tomorrow-scene-footer">
+          {isCompleted ? (
+            <button className="text-button" type="button" onClick={() => setEditingBlock(null)}>
+              Отмена
+            </button>
+          ) : null}
+          <button
+            className="primary-button"
+            type="submit"
+            disabled={saving || !workingForm.continueReady}
+          >
+            <span>
+              {saving ? 'Сохраняем…' : isCompleted ? 'Сохранить изменения' : 'Продолжить →'}
+            </span>
+          </button>
+        </footer>
       </form>
     </ComposerFrame>
   );
@@ -789,6 +775,105 @@ export function TomorrowCompleteSummary({
   readonly actionLabel: string;
   readonly historyView?: boolean;
 }) {
+  if (!historyView) {
+    const selectedOutcome = savedOutcome(snapshot, isQuick);
+    const primaryMetadata = uniqueNonEmpty([
+      snapshot.primaryDecision?.projectReference,
+      snapshot.plan.vector,
+    ]).join(' · ');
+
+    return (
+      <section
+        className="tomorrow-complete-summary tomorrow-saved-summary is-current"
+        aria-labelledby="tomorrow-complete-title"
+        data-plan-state="completed"
+      >
+        <header className="tomorrow-saved-heading">
+          <span className="tomorrow-saved-status-icon" aria-hidden="true">
+            <EveningVisualIcon name="check" size={24} />
+          </span>
+          <div>
+            <h3 id="tomorrow-complete-title">Завтра подготовлено</h3>
+            <p>У вас есть главное, граница результата и конкретный первый шаг.</p>
+          </div>
+        </header>
+
+        <div className="tomorrow-saved-content">
+          <section className="tomorrow-saved-row" aria-labelledby="tomorrow-summary-primary">
+            <span className="tomorrow-saved-row-icon" aria-hidden="true">
+              <EveningVisualIcon name="target" size={20} />
+            </span>
+            <div>
+              <p className="tomorrow-saved-label" id="tomorrow-summary-primary">
+                Главное решение
+              </p>
+              <strong>
+                {snapshot.primaryDecision?.title.toString() ?? 'Главное решение не определено'}
+              </strong>
+              {primaryMetadata.length === 0 ? null : (
+                <p className="tomorrow-saved-meta">{primaryMetadata}</p>
+              )}
+            </div>
+          </section>
+
+          <section className="tomorrow-saved-row" aria-labelledby="tomorrow-summary-outcome">
+            <span className="tomorrow-saved-row-icon" aria-hidden="true">
+              <EveningVisualIcon name="choice" size={20} />
+            </span>
+            <div>
+              <p className="tomorrow-saved-label" id="tomorrow-summary-outcome">
+                Граница результата
+              </p>
+              <p className="tomorrow-saved-outcome-level">
+                <span aria-hidden="true" />
+                <strong>{selectedOutcome.label}</strong>
+              </p>
+              <p className="tomorrow-saved-outcome-value">{selectedOutcome.value}</p>
+            </div>
+          </section>
+
+          <section className="tomorrow-saved-row" aria-labelledby="tomorrow-summary-first-step">
+            <span className="tomorrow-saved-row-icon" aria-hidden="true">
+              <EveningVisualIcon name="arrow-right" size={20} />
+            </span>
+            <div>
+              <p className="tomorrow-saved-label" id="tomorrow-summary-first-step">
+                Первый шаг
+              </p>
+              <strong>{snapshot.firstAction?.title.toString() ?? 'Первый шаг не определён'}</strong>
+            </div>
+          </section>
+
+          {isQuick || snapshot.supportingDecisions.length === 0 ? null : (
+            <section
+              className="tomorrow-saved-additional"
+              aria-labelledby="tomorrow-summary-supporting"
+            >
+              <p className="tomorrow-saved-label" id="tomorrow-summary-supporting">
+                Дополнительно
+              </p>
+              <ul>
+                {snapshot.supportingDecisions.slice(0, 2).map((decision) => (
+                  <li key={decision.id.toString()}>{decision.title.toString()}</li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </div>
+
+        <footer className="tomorrow-saved-actions">
+          <button className="secondary-button" type="button" onClick={() => onEdit('all')}>
+            <EveningVisualIcon name="pencil" size={15} />
+            Изменить план
+          </button>
+          <button className="primary-button" type="button" onClick={onContinue}>
+            {actionLabel}
+          </button>
+        </footer>
+      </section>
+    );
+  }
+
   const primaryIsCarried =
     snapshot.primaryDecision !== null &&
     snapshot.carriedDecisionCandidate?.id.equals(snapshot.primaryDecision.id) === true;
@@ -976,6 +1061,35 @@ export function TomorrowCompleteSummary({
       </div>
     </section>
   );
+}
+
+function savedOutcome(
+  snapshot: TomorrowPlanSnapshot,
+  isQuick: boolean,
+): { readonly label: string; readonly value: string } {
+  if (!isQuick && snapshot.plan.targetOutcome?.trim()) {
+    return { label: 'Норма', value: snapshot.plan.targetOutcome };
+  }
+  return {
+    label: isQuick ? 'Минимальный результат' : 'Минимум',
+    value: snapshot.plan.minimumOutcome ?? 'Граница результата не определена',
+  };
+}
+
+function uniqueNonEmpty(values: readonly (string | null | undefined)[]): readonly string[] {
+  return [...new Set(values.flatMap((value) => (value?.trim() ? [value.trim()] : [])))];
+}
+
+function outcomeLevelLabel(level: TomorrowOutcomeLevel, isQuick: boolean): string {
+  if (level === 'minimum') return isQuick ? 'Минимальный результат' : 'Минимум';
+  if (level === 'target') return 'Норма';
+  return 'Максимум';
+}
+
+function outcomeLevelPlaceholder(level: TomorrowOutcomeLevel): string {
+  if (level === 'minimum') return 'Какой результат уже будет достаточным?';
+  if (level === 'target') return 'Как выглядит нормальный результат?';
+  return 'Что возможно, если останется ресурс?';
 }
 
 function ReadonlyOutcomeSegment({

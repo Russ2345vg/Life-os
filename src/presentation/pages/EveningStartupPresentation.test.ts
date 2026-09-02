@@ -2,10 +2,38 @@ import { describe, expect, it } from 'vitest';
 import { APPLICATION_MODE } from '../../application';
 import { DayDate } from '../../domain';
 import {
+  LATE_EVENING_THRESHOLD_MINUTES,
+  buildLateEveningOffer,
   eveningStartupDate,
   loadEveningStartup,
   tryBeginEveningStart,
 } from './EveningStartupPresentation';
+
+describe('buildLateEveningOffer', () => {
+  it('предлагает короткий режим на границе late threshold', () => {
+    expect(buildLateEveningOffer(new Date(2026, 7, 31, 22, 30), '23:00')).toEqual({
+      minutesRemaining: LATE_EVENING_THRESHOLD_MINUTES,
+    });
+  });
+
+  it('не предлагает короткий режим раньше threshold или без targetSleepTime', () => {
+    expect(buildLateEveningOffer(new Date(2026, 7, 31, 22, 29), '23:00')).toBeNull();
+    expect(buildLateEveningOffer(new Date(2026, 7, 31, 22, 45), null)).toBeNull();
+  });
+
+  it('показывает ноль минут после наступления targetSleepTime', () => {
+    expect(buildLateEveningOffer(new Date(2026, 7, 31, 23, 10), '23:00')).toEqual({
+      minutesRemaining: 0,
+    });
+  });
+
+  it('считает ближайший targetSleepTime через полночь', () => {
+    expect(buildLateEveningOffer(new Date(2026, 7, 31, 23, 50), '00:20')).toEqual({
+      minutesRemaining: 30,
+    });
+    expect(buildLateEveningOffer(new Date(2026, 7, 31, 23, 49), '00:20')).toBeNull();
+  });
+});
 
 describe('eveningStartupDate', () => {
   it.each([APPLICATION_MODE.evening, APPLICATION_MODE.recovery] as const)(

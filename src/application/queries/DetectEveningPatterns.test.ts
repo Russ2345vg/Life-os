@@ -7,6 +7,9 @@ import {
   EVENING_MODE_REASON,
   EVENING_STAGE_SKIP_REASON,
   PREPARATION_PLAN_STATUS,
+  PREPARATION_ITEM_STATUS,
+  RELAXATION_PRACTICE,
+  SCREEN_FREE_STATE,
   REFLECTION_SIGNAL_TYPE,
   TOMORROW_PLANNING_QUALITY,
   TOMORROW_PLAN_STATUS,
@@ -90,6 +93,22 @@ describe('E10.2 DetectEveningPatterns', () => {
     expect(patternsOf(result, EVENING_PATTERN_TYPE.frequentLateCompletion)).toHaveLength(1);
   });
 
+  it('не превращает сознательные SKIPPED в штрафные QUICK/late patterns', () => {
+    const skipped = {
+      completion: EVENING_CYCLE_COMPLETION.skipped,
+      mode: EVENING_CYCLE_MODE.quick,
+      modeReason: EVENING_MODE_REASON.lateNight,
+      skipReason: 'Нужен сон',
+      startedAt: null,
+      durationMs: null,
+    } as const;
+
+    const result = detect([item(1, skipped), item(2, skipped), item(3, skipped)]);
+
+    expect(patternsOf(result, EVENING_PATTERN_TYPE.frequentQuickMode)).toHaveLength(0);
+    expect(patternsOf(result, EVENING_PATTERN_TYPE.frequentLateCompletion)).toHaveLength(0);
+  });
+
   it('находит завершённые TomorrowPlan без firstAction', () => {
     const missingAction = {
       mode: EVENING_CYCLE_MODE.emergency,
@@ -154,6 +173,63 @@ describe('E10.2 DetectEveningPatterns', () => {
       expect.objectContaining({
         occurrences: 2,
         metrics: expect.objectContaining({ requiredSkippedCount: 1, minimalPreparationCount: 1 }),
+      }),
+    ]);
+  });
+
+  it('не считает единичный пропуск environment-item закономерностью', () => {
+    const result = detect([item(1, environmentSkip('ENVIRONMENT:SLEEP:PHONE_AWAY'))]);
+
+    expect(patternsOf(result, EVENING_PATTERN_TYPE.repeatedEnvironmentItemSkip)).toHaveLength(0);
+  });
+
+  it('находит повторный осознанный пропуск конкретного environment-item', () => {
+    const result = detect([
+      item(1, environmentSkip('ENVIRONMENT:SLEEP:PHONE_AWAY')),
+      item(2, environmentSkip('ENVIRONMENT:SLEEP:PHONE_AWAY')),
+      item(3),
+    ]);
+
+    expect(patternsOf(result, EVENING_PATTERN_TYPE.repeatedEnvironmentItemSkip)).toEqual([
+      expect.objectContaining({
+        occurrences: 2,
+        sourceLabel: 'Убрать телефон',
+        sourceEntityIds: ['ENVIRONMENT:SLEEP:PHONE_AWAY'],
+        metrics: expect.objectContaining({
+          sampleSize: 3,
+          occurrenceRate: 0.667,
+          minimumOccurrences: 2,
+        }),
+      }),
+    ]);
+  });
+
+  it('требует три парных наблюдения перед pattern об изменении спокойствия', () => {
+    const insufficient = detect([
+      item(1, relaxationObservation(2, 3)),
+      item(2, relaxationObservation(3, 4)),
+    ]);
+    const sufficient = detect([
+      item(1, relaxationObservation(2, 3)),
+      item(2, relaxationObservation(3, 4)),
+      item(3, relaxationObservation(2, 4)),
+    ]);
+
+    expect(
+      patternsOf(insufficient, EVENING_PATTERN_TYPE.relaxationPracticeCalmImprovement),
+    ).toEqual([]);
+    expect(patternsOf(sufficient, EVENING_PATTERN_TYPE.relaxationPracticeCalmImprovement)).toEqual([
+      expect.objectContaining({
+        occurrences: 3,
+        sourceLabel: 'Дыхание',
+        sourceEntityIds: [RELAXATION_PRACTICE.breathing],
+        metrics: expect.objectContaining({
+          pairedObservationCount: 3,
+          averageCalmBefore: 2.333,
+          averageCalmAfter: 3.667,
+          averageCalmDelta: 1.333,
+          minimumOccurrences: 3,
+        }),
       }),
     ]);
   });
@@ -269,6 +345,7 @@ function item(day: number, patch: Partial<EveningHistoryItem> = {}): EveningHist
     completion: EVENING_CYCLE_COMPLETION.completed,
     mode: EVENING_CYCLE_MODE.normal,
     modeReason: null,
+    skipReason: null,
     startedAt: `${dateKey}T21:00:00.000Z`,
     completedAt: `${dateKey}T21:20:00.000Z`,
     durationMs: 1_200_000,
@@ -286,9 +363,74 @@ function item(day: number, patch: Partial<EveningHistoryItem> = {}): EveningHist
     firstActionId: `action-${dayText}`,
     preparationState: PREPARATION_PLAN_STATUS.completed,
     preparationItems: preparationItems({ total: 2, completed: 2, required: 1 }),
+    environmentItems: [],
+    relaxation: null,
+    sleepCheck: null,
     skippedStages: [],
   };
   return Object.freeze({ ...base, ...patch });
+}
+
+function environmentSkip(key: string): Partial<EveningHistoryItem> {
+  return {
+    environmentItems: [
+      {
+        id: `item-${key}`,
+        key,
+        title: 'Убрать телефон',
+        area: 'SLEEP_ENVIRONMENT',
+        category: 'DIGITAL',
+        required: false,
+        recommendedDurationMinutes: 2,
+        status: PREPARATION_ITEM_STATUS.skipped,
+        completedAt: null,
+        skippedAt: '2026-08-01T21:00:00.000Z',
+        skipReason: 'Сегодня не требуется',
+      },
+    ],
+  };
+}
+
+function relaxationObservation(
+  calmBefore: 1 | 2 | 3 | 4 | 5,
+  calmAfter: 1 | 2 | 3 | 4 | 5,
+): Partial<EveningHistoryItem> {
+  return {
+    relaxation: {
+      defaultPractice: RELAXATION_PRACTICE.reading,
+      selectedPractice: RELAXATION_PRACTICE.breathing,
+      plannedPracticeDurationMinutes: 10,
+      actualPracticeDurationMs: 10 * 60 * 1_000,
+      drinkCompletedAt: null,
+      hygieneCompletedAt: null,
+      practiceStartedAt: '2026-08-01T21:00:00.000Z',
+      practiceCompletedAt: '2026-08-01T21:10:00.000Z',
+      screenFreePlannedDurationMinutes: 25,
+      screenFreeOutcome: SCREEN_FREE_STATE.completed,
+      screenFreeActualDurationMs: 25 * 60 * 1_000,
+      screenFreeStartedAt: '2026-08-01T21:10:00.000Z',
+      screenFreeSkippedAt: null,
+      screenFreeCompletedAt: '2026-08-01T21:35:00.000Z',
+      createdAt: '2026-08-01T20:59:00.000Z',
+      updatedAt: '2026-08-01T21:35:00.000Z',
+    },
+    sleepCheck: {
+      calmBefore,
+      calmAfter,
+      calmDelta: calmAfter - calmBefore,
+      sleepReadinessBefore: 3,
+      sleepReadinessAfter: 4,
+      sleepReadinessDelta: 1,
+      beforeRatedAt: '2026-08-01T20:59:00.000Z',
+      afterRatedAt: '2026-08-01T21:36:00.000Z',
+      answers: [],
+      correctiveAction: null,
+      startedAt: '2026-08-01T21:35:00.000Z',
+      completedAt: '2026-08-01T21:40:00.000Z',
+      createdAt: '2026-08-01T20:59:00.000Z',
+      updatedAt: '2026-08-01T21:40:00.000Z',
+    },
+  };
 }
 
 function carryItem(day: number, entityId: string): EveningHistoryItem {

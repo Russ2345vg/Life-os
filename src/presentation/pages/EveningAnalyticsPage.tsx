@@ -349,6 +349,7 @@ export function EveningAnalyticsView({
                   </span>
                   <span className="evening-cycle-history-facts">
                     <span>{completionLabel(item.completion)}</span>
+                    {item.skipReason === null ? null : <span>Причина: {item.skipReason}</span>}
                     <span>{formatDuration(item.durationMs)}</span>
                     <span>
                       {item.reflectionAnswerCount === 0
@@ -775,7 +776,7 @@ function modeLabel(mode: EveningCycleMode): string {
 }
 
 function completionLabel(completion: EveningCycleCompletion | null): string {
-  if (completion === EVENING_CYCLE_COMPLETION.skipped) return 'Завершено сокращённо';
+  if (completion === EVENING_CYCLE_COMPLETION.skipped) return 'Ритуал пропущен';
   return 'Вечер завершён';
 }
 

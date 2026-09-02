@@ -93,6 +93,30 @@ export class EveningCycleApplicationService {
     return this.mutate(dateKey, (current, occurredAt) => current.start(occurredAt));
   }
 
+  public async startShort(dateKey: DayDate): Promise<EveningCycle> {
+    const day = await this.ensureOpenDay(dateKey);
+    let cycle = await this.#cycles.findByDayId(day.id);
+    if (cycle === null) {
+      const occurredAt = this.#clock.now();
+      const candidate = EveningCycle.create({
+        id: this.#idGenerator.generate(),
+        dayId: day.id,
+        dateKey: day.date,
+        occurredAt,
+      });
+      candidate.startShort(occurredAt);
+      cycle = await this.#cycles.createIfAbsent(candidate);
+    }
+    if (!cycle.dayId.equals(day.id) || !cycle.dateKey.equals(day.date)) {
+      throw new DomainError(
+        'evening_cycle.identity_conflict',
+        'Вечерний цикл связан с другим жизненным днём.',
+      );
+    }
+    if (cycle.state !== EVENING_CYCLE_STATE.notStarted) return cycle;
+    return this.mutate(dateKey, (current, occurredAt) => current.startShort(occurredAt));
+  }
+
   private async ensureOpenDay(dateKey: DayDate): Promise<Day> {
     let day = await this.#days.findByDate(dateKey);
     if (day === null) {
@@ -234,6 +258,7 @@ export function cloneEveningCycle(cycle: EveningCycle): EveningCycle {
     mode: cycle.mode,
     modeReason: cycle.modeReason,
     completion: cycle.completion,
+    skipReason: cycle.skipReason,
     skippedStages: cycle.skippedStages,
     startedAt: cycle.startedAt,
     updatedAt: cycle.updatedAt,
@@ -246,6 +271,8 @@ export function cloneEveningCycle(cycle: EveningCycle): EveningCycle {
     reflectionResults: cycle.reflectionResults,
     reflectionSignals: cycle.reflectionSignals,
     reflectionCorrections: cycle.reflectionCorrections,
+    relaxation: cycle.relaxation,
+    sleepCheck: cycle.sleepCheck,
     version: cycle.version,
   });
 }
@@ -277,6 +304,7 @@ function recoverCompletedCycle(cycle: EveningCycle, occurredAt: Date): void {
   cycle.completeReflection(occurredAt);
   cycle.completeTomorrowPlanning(occurredAt);
   cycle.completePreparation(occurredAt);
+  cycle.recoverLegacyRelaxation(occurredAt);
   cycle.complete(occurredAt);
 }
 

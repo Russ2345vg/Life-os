@@ -6,6 +6,12 @@ export const MORNING_STAGE_STATUS = {
   notApplicable: 'NOT_APPLICABLE',
 } as const;
 
+export const MORNING_STAGE_ID = {
+  coldShower: 'quick_start.cold_shower',
+  mirror: 'mirror.attention',
+  mainAction: 'main_action.selection',
+} as const;
+
 export type MorningStageStatus = (typeof MORNING_STAGE_STATUS)[keyof typeof MORNING_STAGE_STATUS];
 
 export interface MorningStageState {

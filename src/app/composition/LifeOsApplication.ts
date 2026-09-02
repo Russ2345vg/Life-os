@@ -150,9 +150,16 @@ import type {
   GetGoalById,
   GetGoals,
   ApplyDirectionStrategicReview,
+  GetMorningCenterOverview,
+  GetMorningCompletionOverview,
+  GetMorningHistory,
   GetMorningOverview,
   MorningCycleApplicationService,
   MorningCycleRepository,
+  ExerciseDefinitionRepository,
+  GetMorningPhysicalActivationOverview,
+  GetMorningPhysicalExecutionOverview,
+  MorningExerciseCatalogService,
   EveningCycleApplicationService,
   EveningCycleRepository,
   GetReflectionContext,
@@ -161,6 +168,8 @@ import type {
   TomorrowPlanService,
   PreparationPlanRepository,
   PreparationService,
+  RelaxationApplicationService,
+  SleepCheckApplicationService,
 } from '../../application';
 import { EnsureCurrentDay } from '../../application';
 import type { Day, DayDate } from '../../domain';
@@ -171,6 +180,7 @@ interface LifeOsApplicationServices {
   readonly lifeActionRepository: LifeActionRepository;
   readonly actionSessionRepository: ActionSessionRepository;
   readonly morningCycleRepository: MorningCycleRepository;
+  readonly exerciseDefinitionRepository: ExerciseDefinitionRepository;
   readonly eveningCycleRepository: EveningCycleRepository;
   readonly tomorrowPlanRepository: TomorrowPlanRepository;
   readonly preparationPlanRepository: PreparationPlanRepository;
@@ -211,11 +221,14 @@ interface LifeOsApplicationServices {
   readonly getOpenLoopsForDay: GetOpenLoopsForDay;
   readonly resolveOpenLoop: ResolveOpenLoop;
   readonly morningCycle: MorningCycleApplicationService;
+  readonly morningExerciseCatalog: MorningExerciseCatalogService;
   readonly eveningCycle: EveningCycleApplicationService;
   readonly getReflectionContext: GetReflectionContext;
   readonly reflection: ReflectionApplicationService;
   readonly tomorrowPlan: TomorrowPlanService;
   readonly preparation: PreparationService;
+  readonly relaxation: RelaxationApplicationService;
+  readonly sleepCheck: SleepCheckApplicationService;
   readonly completeEveningCycle: CompleteEveningCycle;
   readonly completeCurrentDay: CompleteCurrentDay;
   readonly updateDayResultSphere: UpdateDayResultSphere;
@@ -257,6 +270,11 @@ interface LifeOsApplicationServices {
   readonly updateRoutineBlock: UpdateRoutineBlock;
   readonly deleteRoutineBlock: DeleteRoutineBlock;
   readonly getRoutineBlocksForDate: GetRoutineBlocksForDate;
+  readonly getMorningCenterOverview: GetMorningCenterOverview;
+  readonly getMorningCompletionOverview: GetMorningCompletionOverview;
+  readonly getMorningHistory: GetMorningHistory;
+  readonly getMorningPhysicalActivationOverview: GetMorningPhysicalActivationOverview;
+  readonly getMorningPhysicalExecutionOverview: GetMorningPhysicalExecutionOverview;
   readonly getMorningOverview: GetMorningOverview;
   readonly getRoutineActionOptions: GetRoutineActionOptions;
   readonly getRoutineActionDetails: GetRoutineActionDetails;
@@ -340,6 +358,7 @@ export class LifeOsApplication {
   public readonly lifeActionRepository: LifeActionRepository;
   public readonly actionSessionRepository: ActionSessionRepository;
   public readonly morningCycleRepository: MorningCycleRepository;
+  public readonly exerciseDefinitionRepository: ExerciseDefinitionRepository;
   public readonly eveningCycleRepository: EveningCycleRepository;
   public readonly tomorrowPlanRepository: TomorrowPlanRepository;
   public readonly preparationPlanRepository: PreparationPlanRepository;
@@ -380,11 +399,14 @@ export class LifeOsApplication {
   public readonly getOpenLoopsForDay: GetOpenLoopsForDay;
   public readonly resolveOpenLoop: ResolveOpenLoop;
   public readonly morningCycle: MorningCycleApplicationService;
+  public readonly morningExerciseCatalog: MorningExerciseCatalogService;
   public readonly eveningCycle: EveningCycleApplicationService;
   public readonly getReflectionContext: GetReflectionContext;
   public readonly reflection: ReflectionApplicationService;
   public readonly tomorrowPlan: TomorrowPlanService;
   public readonly preparation: PreparationService;
+  public readonly relaxation: RelaxationApplicationService;
+  public readonly sleepCheck: SleepCheckApplicationService;
   public readonly completeEveningCycle: CompleteEveningCycle;
   public readonly completeCurrentDay: CompleteCurrentDay;
   public readonly updateDayResultSphere: UpdateDayResultSphere;
@@ -426,6 +448,11 @@ export class LifeOsApplication {
   public readonly updateRoutineBlock: UpdateRoutineBlock;
   public readonly deleteRoutineBlock: DeleteRoutineBlock;
   public readonly getRoutineBlocksForDate: GetRoutineBlocksForDate;
+  public readonly getMorningCenterOverview: GetMorningCenterOverview;
+  public readonly getMorningCompletionOverview: GetMorningCompletionOverview;
+  public readonly getMorningHistory: GetMorningHistory;
+  public readonly getMorningPhysicalActivationOverview: GetMorningPhysicalActivationOverview;
+  public readonly getMorningPhysicalExecutionOverview: GetMorningPhysicalExecutionOverview;
   public readonly getMorningOverview: GetMorningOverview;
   public readonly getRoutineActionOptions: GetRoutineActionOptions;
   public readonly getRoutineActionDetails: GetRoutineActionDetails;
@@ -509,6 +536,7 @@ export class LifeOsApplication {
     this.lifeActionRepository = services.lifeActionRepository;
     this.actionSessionRepository = services.actionSessionRepository;
     this.morningCycleRepository = services.morningCycleRepository;
+    this.exerciseDefinitionRepository = services.exerciseDefinitionRepository;
     this.eveningCycleRepository = services.eveningCycleRepository;
     this.tomorrowPlanRepository = services.tomorrowPlanRepository;
     this.preparationPlanRepository = services.preparationPlanRepository;
@@ -549,11 +577,14 @@ export class LifeOsApplication {
     this.getOpenLoopsForDay = services.getOpenLoopsForDay;
     this.resolveOpenLoop = services.resolveOpenLoop;
     this.morningCycle = services.morningCycle;
+    this.morningExerciseCatalog = services.morningExerciseCatalog;
     this.eveningCycle = services.eveningCycle;
     this.getReflectionContext = services.getReflectionContext;
     this.reflection = services.reflection;
     this.tomorrowPlan = services.tomorrowPlan;
     this.preparation = services.preparation;
+    this.relaxation = services.relaxation;
+    this.sleepCheck = services.sleepCheck;
     this.completeEveningCycle = services.completeEveningCycle;
     this.completeCurrentDay = services.completeCurrentDay;
     this.updateDayResultSphere = services.updateDayResultSphere;
@@ -595,6 +626,11 @@ export class LifeOsApplication {
     this.updateRoutineBlock = services.updateRoutineBlock;
     this.deleteRoutineBlock = services.deleteRoutineBlock;
     this.getRoutineBlocksForDate = services.getRoutineBlocksForDate;
+    this.getMorningCenterOverview = services.getMorningCenterOverview;
+    this.getMorningCompletionOverview = services.getMorningCompletionOverview;
+    this.getMorningHistory = services.getMorningHistory;
+    this.getMorningPhysicalActivationOverview = services.getMorningPhysicalActivationOverview;
+    this.getMorningPhysicalExecutionOverview = services.getMorningPhysicalExecutionOverview;
     this.getMorningOverview = services.getMorningOverview;
     this.getRoutineActionOptions = services.getRoutineActionOptions;
     this.getRoutineActionDetails = services.getRoutineActionDetails;

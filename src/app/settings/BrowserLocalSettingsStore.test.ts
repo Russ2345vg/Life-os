@@ -46,9 +46,99 @@ const CUSTOM_SETTINGS: LocalSettings = {
   interfaceDensity: INTERFACE_DENSITY.compact,
   reduceMotion: true,
   showMobileWeekday: false,
+  eveningRitual: DEFAULT_LOCAL_SETTINGS.eveningRitual,
 };
 
 describe('BrowserLocalSettingsStore', () => {
+  it('восстанавливает сохранённые настройки Evening Ritual вместе с интерфейсными', () => {
+    const storage = new MemoryStorage();
+    storage.setItem(
+      LOCAL_SETTINGS_STORAGE_KEY,
+      JSON.stringify({
+        ...CUSTOM_SETTINGS,
+        eveningRitual: {
+          targetSleepTime: '22:45',
+          requiredCoreItems: [
+            'ENVIRONMENT:SLEEP:DIM_LIGHTS',
+            'ENVIRONMENT:SLEEP:PHONE_AWAY',
+            'ENVIRONMENT:TOMORROW:ALARM',
+          ],
+          defaultRelaxationPractice: 'BREATHING',
+          defaultScreenFreeDuration: 30,
+          adaptiveRelaxationEnabled: false,
+          notificationEnabled: true,
+          allowConsciousSkip: false,
+          items: [
+            {
+              key: 'ENVIRONMENT:SLEEP:DIM_LIGHTS',
+              recommendedDurationMinutes: 4,
+            },
+          ],
+        },
+      }),
+    );
+
+    const loaded = new BrowserLocalSettingsStore(storage).load().settings as LocalSettings & {
+      readonly eveningRitual?: {
+        readonly targetSleepTime: string;
+        readonly defaultScreenFreeDuration: number;
+      };
+    };
+
+    expect(loaded.eveningRitual?.targetSleepTime).toBe('22:45');
+    expect(loaded.eveningRitual?.defaultScreenFreeDuration).toBe(30);
+  });
+
+  it('удаляет ссылки на исчезнувшие ritual items и восстанавливает безопасное ядро', () => {
+    const storage = new MemoryStorage();
+    storage.setItem(
+      LOCAL_SETTINGS_STORAGE_KEY,
+      JSON.stringify({
+        ...CUSTOM_SETTINGS,
+        eveningRitual: {
+          ...DEFAULT_LOCAL_SETTINGS.eveningRitual,
+          requiredCoreItems: [
+            'ENVIRONMENT:SLEEP:DIM_LIGHTS',
+            'ENVIRONMENT:SLEEP:PHONE_AWAY',
+            'ENVIRONMENT:REMOVED',
+          ],
+          items: [
+            ...DEFAULT_LOCAL_SETTINGS.eveningRitual.items,
+            { key: 'ENVIRONMENT:REMOVED', recommendedDurationMinutes: 5 },
+          ],
+        },
+      }),
+    );
+
+    const result = new BrowserLocalSettingsStore(storage).load();
+
+    expect(result.recoveredFromInvalidValue).toBe(true);
+    expect(result.settings.eveningRitual.requiredCoreItems).toEqual(
+      DEFAULT_LOCAL_SETTINGS.eveningRitual.requiredCoreItems,
+    );
+    expect(result.settings.eveningRitual.items.some((item) => item.key.includes('REMOVED'))).toBe(
+      false,
+    );
+  });
+
+  it('дополняет старый settings document безопасными Evening defaults без ошибки восстановления', () => {
+    const storage = new MemoryStorage();
+    storage.setItem(
+      LOCAL_SETTINGS_STORAGE_KEY,
+      JSON.stringify(CUSTOM_SETTINGS, [
+        'defaultSection',
+        'interfaceDensity',
+        'reduceMotion',
+        'showMobileWeekday',
+      ]),
+    );
+
+    const result = new BrowserLocalSettingsStore(storage).load();
+
+    expect(result.recoveredFromInvalidValue).toBe(false);
+    expect(result.settings.eveningRitual).toEqual(DEFAULT_LOCAL_SETTINGS.eveningRitual);
+  });
+
   it('возвращает безопасные значения по умолчанию при первом запуске', () => {
     const result = new BrowserLocalSettingsStore(new MemoryStorage()).load();
 

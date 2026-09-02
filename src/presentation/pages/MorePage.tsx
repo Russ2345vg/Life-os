@@ -14,6 +14,12 @@ import {
   INTERFACE_DENSITY,
   type LocalSettings,
 } from '../settings/localSettings';
+import {
+  EVENING_RITUAL_ITEM_CATALOG,
+  isEveningRitualSettings,
+  type EveningRitualSettings,
+} from '../../application/evening-settings';
+import { RELAXATION_PRACTICE, type RelaxationPractice } from '../../domain';
 
 interface MorePageProps {
   readonly settings: LocalSettings;
@@ -156,6 +162,11 @@ export function LocalSettingsPage({
   );
 
   function save(): void {
+    if (!isEveningRitualSettings(draft.eveningRitual)) {
+      setMessageKind('error');
+      setMessage('Проверьте время, длительности и выберите от трёх до шести обязательных пунктов.');
+      return;
+    }
     if (!onSaveSettings(draft)) {
       setMessageKind('error');
       setMessage('Не удалось сохранить настройки в этом браузере.');
@@ -176,6 +187,30 @@ export function LocalSettingsPage({
     setDraft(copyLocalSettings(DEFAULT_LOCAL_SETTINGS));
     setMessageKind('success');
     setMessage('Настройки возвращены к исходным значениям.');
+  }
+
+  function updateEveningRitual(patch: Partial<EveningRitualSettings>): void {
+    setDraft((current) => ({
+      ...current,
+      eveningRitual: { ...current.eveningRitual, ...patch },
+    }));
+  }
+
+  function toggleRequiredItem(key: string, required: boolean): void {
+    const selected = new Set(draft.eveningRitual.requiredCoreItems);
+    if (required) selected.add(key);
+    else selected.delete(key);
+    updateEveningRitual({ requiredCoreItems: [...selected] });
+  }
+
+  function moveItem(index: number, offset: -1 | 1): void {
+    const nextIndex = index + offset;
+    if (nextIndex < 0 || nextIndex >= draft.eveningRitual.items.length) return;
+    const items = [...draft.eveningRitual.items];
+    const current = items[index]!;
+    items[index] = items[nextIndex]!;
+    items[nextIndex] = current;
+    updateEveningRitual({ items });
   }
 
   return (
@@ -313,6 +348,181 @@ export function LocalSettingsPage({
             Сбросить настройки
           </button>
         </div>
+      </section>
+
+      <section
+        className="settings-panel evening-ritual-settings"
+        aria-labelledby="evening-settings-heading"
+      >
+        <div className="settings-panel-heading">
+          <div>
+            <p className="section-page-eyebrow">Распорядок</p>
+            <h2 id="evening-settings-heading">Вечерний ритуал</h2>
+          </div>
+          <span>Одна базовая настройка на каждый день</span>
+        </div>
+
+        <div className="settings-form evening-ritual-basics">
+          <label className="settings-field" htmlFor="settings-target-sleep-time">
+            <span>Базовое время сна</span>
+            <input
+              id="settings-target-sleep-time"
+              type="time"
+              value={draft.eveningRitual.targetSleepTime}
+              onChange={(event) => updateEveningRitual({ targetSleepTime: event.target.value })}
+            />
+          </label>
+
+          <label className="settings-field" htmlFor="settings-relaxation-practice">
+            <span>Практика расслабления по умолчанию</span>
+            <select
+              id="settings-relaxation-practice"
+              value={draft.eveningRitual.defaultRelaxationPractice}
+              onChange={(event) =>
+                updateEveningRitual({
+                  defaultRelaxationPractice: event.target.value as RelaxationPractice,
+                })
+              }
+            >
+              <option value={RELAXATION_PRACTICE.reading}>Чтение</option>
+              <option value={RELAXATION_PRACTICE.breathing}>Дыхание</option>
+              <option value={RELAXATION_PRACTICE.stretching}>Растяжка</option>
+              <option value={RELAXATION_PRACTICE.meditation}>Медитация</option>
+              <option value={RELAXATION_PRACTICE.calmMusic}>Спокойная музыка</option>
+            </select>
+          </label>
+
+          <label className="settings-field" htmlFor="settings-screen-free-duration">
+            <span>Без экранов по умолчанию</span>
+            <input
+              id="settings-screen-free-duration"
+              type="number"
+              min="20"
+              max="30"
+              step="1"
+              value={draft.eveningRitual.defaultScreenFreeDuration}
+              onChange={(event) =>
+                updateEveningRitual({ defaultScreenFreeDuration: Number(event.target.value) })
+              }
+            />
+            <small>От 20 до 30 минут.</small>
+          </label>
+
+          <label className="settings-toggle">
+            <input
+              type="checkbox"
+              checked={draft.eveningRitual.adaptiveRelaxationEnabled}
+              onChange={(event) =>
+                updateEveningRitual({ adaptiveRelaxationEnabled: event.target.checked })
+              }
+            />
+            <span>
+              <strong>Адаптивное расслабление</strong>
+              <small>Использовать только явно сохранённую практику прошлого вечера.</small>
+            </span>
+          </label>
+          <label className="settings-toggle">
+            <input
+              type="checkbox"
+              checked={draft.eveningRitual.notificationEnabled}
+              onChange={(event) =>
+                updateEveningRitual({ notificationEnabled: event.target.checked })
+              }
+            />
+            <span>
+              <strong>Одно вечернее напоминание</strong>
+              <small>Показать встроенное напоминание за 30 минут до сна.</small>
+            </span>
+          </label>
+          <label className="settings-toggle">
+            <input
+              type="checkbox"
+              checked={draft.eveningRitual.allowConsciousSkip}
+              onChange={(event) =>
+                updateEveningRitual({ allowConsciousSkip: event.target.checked })
+              }
+            />
+            <span>
+              <strong>Разрешить осознанный пропуск</strong>
+              <small>Показывать нейтральный вариант пропуска всего ритуала.</small>
+            </span>
+          </label>
+        </div>
+
+        <fieldset className="settings-fieldset ritual-items-fieldset">
+          <legend>Обязательные пункты: {draft.eveningRitual.requiredCoreItems.length} из 6</legend>
+          <p className="settings-field-hint">
+            Выберите от трёх до шести пунктов. Порядок задаёт приоритет.
+          </p>
+          <div className="ritual-settings-list">
+            {draft.eveningRitual.items.map((item, index) => {
+              const catalogItem = EVENING_RITUAL_ITEM_CATALOG.find(
+                (entry) => entry.key === item.key,
+              );
+              if (catalogItem === undefined) return null;
+              return (
+                <div className="ritual-settings-item" key={item.key}>
+                  <label className="ritual-required-toggle">
+                    <input
+                      type="checkbox"
+                      checked={draft.eveningRitual.requiredCoreItems.includes(item.key)}
+                      onChange={(event) => toggleRequiredItem(item.key, event.target.checked)}
+                    />
+                    <span>
+                      <strong>{catalogItem.title}</strong>
+                      <small>
+                        {draft.eveningRitual.requiredCoreItems.includes(item.key)
+                          ? 'Обязательный'
+                          : 'Необязательный'}
+                      </small>
+                    </span>
+                  </label>
+                  <label className="ritual-duration-field">
+                    <span>Рекомендуемая длительность</span>
+                    <input
+                      type="number"
+                      min="1"
+                      max="60"
+                      step="1"
+                      value={item.recommendedDurationMinutes}
+                      onChange={(event) => {
+                        const items = draft.eveningRitual.items.map((current) =>
+                          current.key === item.key
+                            ? { ...current, recommendedDurationMinutes: Number(event.target.value) }
+                            : current,
+                        );
+                        updateEveningRitual({ items });
+                      }}
+                    />
+                  </label>
+                  <div
+                    className="ritual-order-actions"
+                    aria-label={`Порядок: ${catalogItem.title}`}
+                  >
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={index === 0}
+                      onClick={() => moveItem(index, -1)}
+                      aria-label={`Переместить выше: ${catalogItem.title}`}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={index === draft.eveningRitual.items.length - 1}
+                      onClick={() => moveItem(index, 1)}
+                      aria-label={`Переместить ниже: ${catalogItem.title}`}
+                    >
+                      ↓
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </fieldset>
       </section>
 
       <section className="settings-data-card">

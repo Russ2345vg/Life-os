@@ -37,6 +37,7 @@ import {
   TestLifeActionRepository,
 } from '../../test/helpers/TestRepositories';
 import { PreparationService } from './PreparationService';
+import { DEFAULT_EVENING_RITUAL_SETTINGS } from '../evening-settings';
 
 const CYCLE_DATE = DayDate.create('2026-08-14');
 const TARGET_DATE = DayDate.create('2026-08-15');
@@ -44,6 +45,32 @@ const NOW = new Date('2026-08-14T14:00:00.000Z');
 const AFTER_MIDNIGHT = new Date('2026-08-15T00:10:00.000Z');
 
 describe('PreparationService', () => {
+  it('инициализирует required core и порядок нового плана из Evening settings', async () => {
+    const orderedItems = [...DEFAULT_EVENING_RITUAL_SETTINGS.items]
+      .reverse()
+      .map((item, index) => (index === 0 ? { ...item, recommendedDurationMinutes: 17 } : item));
+    const requiredCoreItems = orderedItems.slice(0, 3).map((item) => item.key);
+    const context = await createContext(NOW, EVENING_CYCLE_STATE.preparing, {
+      loadEveningRitualSettings: () => ({
+        ...DEFAULT_EVENING_RITUAL_SETTINGS,
+        requiredCoreItems,
+        items: orderedItems,
+      }),
+    });
+
+    const generated = await context.service.getOrGenerate(CYCLE_DATE);
+
+    expect(generated.plan.requiredCoreKeys).toEqual(requiredCoreItems);
+    expect(
+      generated.plan.activeItems
+        .filter((item) => item.key.startsWith('ENVIRONMENT:'))
+        .map((item) => item.key),
+    ).toEqual(orderedItems.map((item) => item.key));
+    expect(
+      generated.plan.activeItems.find((item) => item.key === orderedItems[0]!.key),
+    ).toMatchObject({ recommendedDurationMinutes: 17 });
+  });
+
   it('создаёт один план для двух UI-входов и повторно генерирует его без дублей', async () => {
     const context = await createContext();
     await context.service.createRule({
@@ -82,7 +109,7 @@ describe('PreparationService', () => {
     const generated = await context.service.getOrGenerate(CYCLE_DATE);
 
     expect(generated.plan.coreConfigured).toBe(false);
-    await expect(context.service.continueToShutdown(CYCLE_DATE)).rejects.toMatchObject({
+    await expect(context.service.continueToRelaxation(CYCLE_DATE)).rejects.toMatchObject({
       code: 'preparation.required_core_not_configured',
     });
 
@@ -131,7 +158,9 @@ describe('PreparationService', () => {
     expect(await context.tomorrowPlans.saveIfVersionMatches(changed, expectedVersion)).toBe(true);
 
     const recalculated = await context.service.getOrGenerate(CYCLE_DATE);
-    const historicalWorkspace = recalculated.plan.items.find((item) => item.id.equals(workspace.id));
+    const historicalWorkspace = recalculated.plan.items.find((item) =>
+      item.id.equals(workspace.id),
+    );
 
     expect(historicalWorkspace).toMatchObject({
       active: false,
@@ -143,33 +172,33 @@ describe('PreparationService', () => {
     expect(recalculated.plan.sourceVersion).toBe(changed.version);
   });
 
-  it('работает после полуночи по dateKey/dayId цикла и запрещает SHUTDOWN при PENDING REQUIRED', async () => {
+  it('работает после полуночи и не входит в RELAXING при PENDING REQUIRED', async () => {
     const context = await createContext(AFTER_MIDNIGHT);
     const generated = await context.service.getOrGenerate(CYCLE_DATE);
     expect(generated.plan.cycleId.equals(context.cycle.id)).toBe(true);
     expect(generated.plan.targetDayId.equals(id('target-day'))).toBe(true);
 
-    await expect(context.service.continueToShutdown(CYCLE_DATE)).rejects.toMatchObject({
+    await expect(context.service.continueToRelaxation(CYCLE_DATE)).rejects.toMatchObject({
       code: 'preparation.required_core_not_configured',
     });
     const configured = await context.service.configureRequiredCore(
       CYCLE_DATE,
       generated.recommendedCoreKeys,
     );
-    await expect(context.service.continueToShutdown(CYCLE_DATE)).rejects.toMatchObject({
+    await expect(context.service.continueToRelaxation(CYCLE_DATE)).rejects.toMatchObject({
       code: 'preparation.required_items_pending',
     });
     for (const item of configured.plan.activeItems.filter((candidate) => candidate.required)) {
       await context.service.skipItem(CYCLE_DATE, item.id, 'Осознанно');
     }
-    const completed = await context.service.continueToShutdown(CYCLE_DATE);
+    const completed = await context.service.continueToRelaxation(CYCLE_DATE);
 
     expect(completed.plan.completedAt).toEqual(AFTER_MIDNIGHT);
     expect((await context.cycles.findByDayId(id('source-day')))?.state).toBe(
-      EVENING_CYCLE_STATE.shutdown,
+      EVENING_CYCLE_STATE.relaxing,
     );
 
-    const repeated = await context.secondService.continueToShutdown(CYCLE_DATE);
+    const repeated = await context.secondService.continueToRelaxation(CYCLE_DATE);
     expect(repeated.plan.id.equals(completed.plan.id)).toBe(true);
     expect(repeated.plan.version).toBe(completed.plan.version);
   });
@@ -198,7 +227,7 @@ describe('PreparationService', () => {
     )) {
       await context.service.completeItem(CYCLE_DATE, item.id);
     }
-    const saved = await context.service.continueToShutdown(CYCLE_DATE);
+    const saved = await context.service.continueToRelaxation(CYCLE_DATE);
     const refreshed = await context.secondService.getOrGenerate(CYCLE_DATE);
 
     expect(saved.plan.completedAt).not.toBeNull();
@@ -219,7 +248,7 @@ describe('PreparationService', () => {
     for (const item of configured.plan.activeItems.filter((candidate) => candidate.required)) {
       await context.service.skipItem(CYCLE_DATE, item.id, 'История сохранена');
     }
-    const completed = await context.service.continueToShutdown(CYCLE_DATE);
+    const completed = await context.service.continueToRelaxation(CYCLE_DATE);
 
     await context.service.createRule({
       condition: PREPARATION_RULE_CONDITION.firstActionContains,
@@ -233,9 +262,9 @@ describe('PreparationService', () => {
     const replacement = createAction('replacement', 'Встреча в офисе', context.decision.id);
     await context.actions.save(replacement);
     changedTomorrow.assignFirstAction(replacement.id, NOW);
-    expect(await context.tomorrowPlans.saveIfVersionMatches(changedTomorrow, tomorrow.version)).toBe(
-      true,
-    );
+    expect(
+      await context.tomorrowPlans.saveIfVersionMatches(changedTomorrow, tomorrow.version),
+    ).toBe(true);
     const save = vi.spyOn(context.preparationPlans, 'saveIfVersionMatches');
 
     const recovered = await context.secondService.getOrGenerate(CYCLE_DATE);
@@ -251,6 +280,9 @@ async function createContext(
   cycleState:
     | typeof EVENING_CYCLE_STATE.preparing
     | typeof EVENING_CYCLE_STATE.completed = EVENING_CYCLE_STATE.preparing,
+  settings?: {
+    loadEveningRitualSettings: () => typeof DEFAULT_EVENING_RITUAL_SETTINGS;
+  },
 ) {
   const cycles = new InMemoryEveningCycleRepository();
   const tomorrowPlans = new InMemoryTomorrowPlanRepository();
@@ -283,6 +315,7 @@ async function createContext(
       clock,
       new FakeIdGenerator(prefix),
       unitOfWork,
+      settings,
     );
   return {
     cycles,

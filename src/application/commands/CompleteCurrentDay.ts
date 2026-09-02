@@ -42,6 +42,7 @@ import {
   createLifeActionJournalEntries,
 } from '../journal/createJournalEntries';
 import { cloneEveningCycle } from '../evening-cycle';
+import type { EveningRitualSettingsReader } from '../ports/EveningRitualSettingsReader';
 
 export type EveningLifeActionResolution =
   | Readonly<{
@@ -91,6 +92,7 @@ export class CompleteEveningCycle {
   readonly #idGenerator: IdGenerator;
   readonly #tomorrowPlans: TomorrowPlanRepository | null;
   readonly #preparationPlans: PreparationPlanRepository | null;
+  readonly #settings: EveningRitualSettingsReader | null;
 
   public constructor(
     getEveningReview: Pick<GetEveningCycleReview, 'execute'>,
@@ -99,6 +101,7 @@ export class CompleteEveningCycle {
     idGenerator: IdGenerator,
     tomorrowPlans?: TomorrowPlanRepository,
     preparationPlans?: PreparationPlanRepository,
+    settings?: EveningRitualSettingsReader,
   ) {
     this.#getEveningReview = getEveningReview;
     this.#unitOfWork = unitOfWork;
@@ -106,6 +109,7 @@ export class CompleteEveningCycle {
     this.#idGenerator = idGenerator;
     this.#tomorrowPlans = tomorrowPlans ?? null;
     this.#preparationPlans = preparationPlans ?? null;
+    this.#settings = settings ?? null;
   }
 
   public async execute(
@@ -123,6 +127,12 @@ export class CompleteEveningCycle {
       validateDayCanBeCompleted(snapshot);
       const occurredAt = this.#clock.now();
       if (input.skipEvening === true) {
+        if (this.#settings?.loadEveningRitualSettings().allowConsciousSkip === false) {
+          throw new DomainError(
+            'evening_cycle.conscious_skip_disabled',
+            'Осознанный пропуск отключён в настройках вечернего ритуала.',
+          );
+        }
         return await this.skipCycle(snapshot, input, occurredAt);
       }
       const mode = input.mode ?? snapshot.cycle.mode;
@@ -336,7 +346,7 @@ export class CompleteEveningCycle {
     );
     const completedCycle = cloneEveningCycle(snapshot.cycle);
     const expectedEveningCycleVersion = completedCycle.version;
-    completedCycle.skip(occurredAt);
+    completedCycle.skip(occurredAt, input.summary);
     await this.#unitOfWork.commit({
       eveningCycle: completedCycle,
       expectedEveningCycleVersion,

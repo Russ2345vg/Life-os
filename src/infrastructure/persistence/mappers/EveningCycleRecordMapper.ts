@@ -6,6 +6,8 @@ import {
   ReflectionQuestion,
   ReflectionResult,
   ReflectionSignal,
+  RelaxationSnapshot,
+  SleepCheckSnapshot,
   EVENING_CYCLE_COMPLETION,
   EVENING_CYCLE_MODE,
   isEveningCycleMode,
@@ -21,6 +23,13 @@ import {
   isReflectionQuestionType,
   isReflectionResultStatus,
   isReflectionSignalType,
+  isRelaxationPractice,
+  isScreenFreeDurationMinutes,
+  isScreenFreeState,
+  isCorrectiveActionKind,
+  isSleepCheckAnswerValue,
+  isSleepCheckQuestionId,
+  isSubjectiveRating,
 } from '../../../domain';
 import {
   assertRecordAndSchemaVersion,
@@ -32,6 +41,8 @@ import {
   readNullableIsoDate,
   readNumber,
   readNullableNumber,
+  readNullableString,
+  readRecordArray,
   readOptionalNullableString,
   readString,
   readStringArray,
@@ -48,9 +59,13 @@ export class EveningCycleRecordMapper {
       dayId: cycle.dayId.toString(),
       dateKey: cycle.dateKey.toString(),
       state: cycle.state,
-      mode: cycle.mode,
+      mode:
+        cycle.completion === EVENING_CYCLE_COMPLETION.skipped
+          ? EVENING_CYCLE_COMPLETION.skipped
+          : cycle.mode,
       modeReason: cycle.modeReason,
       completion: cycle.completion,
+      skipReason: cycle.skipReason,
       skippedStages: cycle.skippedStages.map((item) => ({
         stage: item.stage,
         reason: item.reason,
@@ -109,6 +124,65 @@ export class EveningCycleRecordMapper {
         action: correction.action,
         createdAt: correction.createdAt.toISOString(),
       })),
+      ...(cycle.relaxation === null
+        ? {}
+        : {
+            relaxation: {
+              defaultPractice: cycle.relaxation.defaultPractice,
+              selectedPractice: cycle.relaxation.selectedPractice,
+              defaultChangedForFuture: cycle.relaxation.defaultChangedForFuture,
+              practiceDurationMinutes: cycle.relaxation.practiceDurationMinutes,
+              drinkCompletedAt: cycle.relaxation.drinkCompletedAt?.toISOString() ?? null,
+              hygieneCompletedAt: cycle.relaxation.hygieneCompletedAt?.toISOString() ?? null,
+              practiceTimerStartedAt:
+                cycle.relaxation.practiceTimerStartedAt?.toISOString() ?? null,
+              practiceCompletedAt: cycle.relaxation.practiceCompletedAt?.toISOString() ?? null,
+              screenFreeDurationMinutes: cycle.relaxation.screenFreeDurationMinutes,
+              screenFreeState: cycle.relaxation.screenFreeState,
+              screenFreeStartedAt: cycle.relaxation.screenFreeStartedAt?.toISOString() ?? null,
+              screenFreeSkippedAt: cycle.relaxation.screenFreeSkippedAt?.toISOString() ?? null,
+              screenFreeCompletedAt: cycle.relaxation.screenFreeCompletedAt?.toISOString() ?? null,
+              createdAt: cycle.relaxation.createdAt.toISOString(),
+              updatedAt: cycle.relaxation.updatedAt.toISOString(),
+            },
+          }),
+      ...(cycle.sleepCheck === null
+        ? {}
+        : {
+            sleepCheck: {
+              calmBefore: cycle.sleepCheck.calmBefore,
+              sleepReadinessBefore: cycle.sleepCheck.sleepReadinessBefore,
+              beforeRatedAt: cycle.sleepCheck.beforeRatedAt.toISOString(),
+              calmAfter: cycle.sleepCheck.calmAfter,
+              sleepReadinessAfter: cycle.sleepCheck.sleepReadinessAfter,
+              afterRatedAt: cycle.sleepCheck.afterRatedAt?.toISOString() ?? null,
+              initialAnswers: cycle.sleepCheck.initialAnswers.map((answer) => ({
+                questionId: answer.questionId,
+                value: answer.value,
+                answeredAt: answer.answeredAt.toISOString(),
+              })),
+              retriedAnswers: cycle.sleepCheck.retriedAnswers.map((answer) => ({
+                questionId: answer.questionId,
+                value: answer.value,
+                answeredAt: answer.answeredAt.toISOString(),
+              })),
+              correctiveAction:
+                cycle.sleepCheck.correctiveAction === null
+                  ? null
+                  : {
+                      questionId: cycle.sleepCheck.correctiveAction.questionId,
+                      action: cycle.sleepCheck.correctiveAction.action,
+                      selectedAt: cycle.sleepCheck.correctiveAction.selectedAt.toISOString(),
+                      completedAt:
+                        cycle.sleepCheck.correctiveAction.completedAt?.toISOString() ?? null,
+                      capturedThought: cycle.sleepCheck.correctiveAction.capturedThought,
+                    },
+              startedAt: cycle.sleepCheck.startedAt?.toISOString() ?? null,
+              completedAt: cycle.sleepCheck.completedAt?.toISOString() ?? null,
+              createdAt: cycle.sleepCheck.createdAt.toISOString(),
+              updatedAt: cycle.sleepCheck.updatedAt.toISOString(),
+            },
+          }),
       version: cycle.version,
     };
   }
@@ -146,6 +220,7 @@ export class EveningCycleRecordMapper {
       mode,
       modeReason: rawModeReason,
       completion: rawCompletion,
+      skipReason: readOptionalNullableString(record, 'skipReason'),
       skippedStages: readSkippedStages(record.skippedStages),
       startedAt: readNullableIsoDate(record, 'startedAt'),
       updatedAt: readIsoDate(record, 'updatedAt'),
@@ -158,9 +233,119 @@ export class EveningCycleRecordMapper {
       reflectionResults: readReflectionResults(record.reflectionResults),
       reflectionSignals: readReflectionSignals(record.reflectionSignals),
       reflectionCorrections: readReflectionCorrections(record.reflectionCorrections),
+      relaxation: readRelaxation(record.relaxation),
+      sleepCheck: readSleepCheck(record.sleepCheck),
       version: readNumber(record, 'version'),
     });
   }
+}
+
+function readSleepCheck(value: unknown): SleepCheckSnapshot | null {
+  if (value === undefined) return null;
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw invalidRecord('Поле sleepCheck должно быть объектом.');
+  }
+  const record = value as UnknownRecord;
+  const calmBefore = readNumber(record, 'calmBefore');
+  const sleepReadinessBefore = readNumber(record, 'sleepReadinessBefore');
+  const calmAfter = readNullableNumber(record, 'calmAfter');
+  const sleepReadinessAfter = readNullableNumber(record, 'sleepReadinessAfter');
+  if (
+    !isSubjectiveRating(calmBefore) ||
+    !isSubjectiveRating(sleepReadinessBefore) ||
+    (calmAfter !== null && !isSubjectiveRating(calmAfter)) ||
+    (sleepReadinessAfter !== null && !isSubjectiveRating(sleepReadinessAfter))
+  ) {
+    throw invalidRecord('Sleep Check содержит rating вне диапазона 1–5.');
+  }
+  const initialAnswers = readRecordArray(record, 'initialAnswers').map(readSleepCheckAnswer);
+  const retriedAnswers = readRecordArray(record, 'retriedAnswers').map(readSleepCheckAnswer);
+  return SleepCheckSnapshot.rehydrate({
+    calmBefore,
+    sleepReadinessBefore,
+    beforeRatedAt: readIsoDate(record, 'beforeRatedAt'),
+    calmAfter,
+    sleepReadinessAfter,
+    afterRatedAt: readNullableIsoDate(record, 'afterRatedAt'),
+    initialAnswers,
+    retriedAnswers,
+    correctiveAction: readSleepCheckCorrectiveAction(record.correctiveAction),
+    startedAt: readNullableIsoDate(record, 'startedAt'),
+    completedAt: readNullableIsoDate(record, 'completedAt'),
+    createdAt: readIsoDate(record, 'createdAt'),
+    updatedAt: readIsoDate(record, 'updatedAt'),
+  });
+}
+
+function readSleepCheckAnswer(record: UnknownRecord) {
+  const questionId = readString(record, 'questionId');
+  const value = readString(record, 'value');
+  if (!isSleepCheckQuestionId(questionId) || !isSleepCheckAnswerValue(value)) {
+    throw invalidRecord('Sleep Check содержит неизвестный вопрос или ответ.');
+  }
+  return Object.freeze({
+    questionId,
+    value,
+    answeredAt: readIsoDate(record, 'answeredAt'),
+  });
+}
+
+function readSleepCheckCorrectiveAction(value: unknown) {
+  if (value === null) return null;
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    throw invalidRecord('Corrective action Sleep Check должно быть объектом или null.');
+  }
+  const record = value as UnknownRecord;
+  const questionId = readString(record, 'questionId');
+  const action = readString(record, 'action');
+  if (!isSleepCheckQuestionId(questionId) || !isCorrectiveActionKind(action)) {
+    throw invalidRecord('Sleep Check содержит неизвестное corrective action.');
+  }
+  return Object.freeze({
+    questionId,
+    action,
+    selectedAt: readIsoDate(record, 'selectedAt'),
+    completedAt: readNullableIsoDate(record, 'completedAt'),
+    capturedThought: readNullableString(record, 'capturedThought'),
+  });
+}
+
+function readRelaxation(value: unknown): RelaxationSnapshot | null {
+  if (value === undefined) return null;
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw invalidRecord('Поле relaxation должно быть объектом.');
+  }
+  const record = value as UnknownRecord;
+  const defaultPractice = readString(record, 'defaultPractice');
+  const selectedPractice = readString(record, 'selectedPractice');
+  const screenFreeDurationMinutes = readNumber(record, 'screenFreeDurationMinutes');
+  const screenFreeState = readString(record, 'screenFreeState');
+  if (!isRelaxationPractice(defaultPractice) || !isRelaxationPractice(selectedPractice)) {
+    throw invalidRecord('Relaxation содержит неизвестную практику.');
+  }
+  if (!isScreenFreeDurationMinutes(screenFreeDurationMinutes)) {
+    throw invalidRecord('Relaxation содержит неизвестную длительность без экранов.');
+  }
+  if (!isScreenFreeState(screenFreeState)) {
+    throw invalidRecord('Relaxation содержит неизвестное состояние без экранов.');
+  }
+  return RelaxationSnapshot.rehydrate({
+    defaultPractice,
+    selectedPractice,
+    defaultChangedForFuture: readBoolean(record, 'defaultChangedForFuture'),
+    practiceDurationMinutes: readNumber(record, 'practiceDurationMinutes'),
+    drinkCompletedAt: readNullableIsoDate(record, 'drinkCompletedAt'),
+    hygieneCompletedAt: readNullableIsoDate(record, 'hygieneCompletedAt'),
+    practiceTimerStartedAt: readNullableIsoDate(record, 'practiceTimerStartedAt'),
+    practiceCompletedAt: readNullableIsoDate(record, 'practiceCompletedAt'),
+    screenFreeDurationMinutes,
+    screenFreeState,
+    screenFreeStartedAt: readNullableIsoDate(record, 'screenFreeStartedAt'),
+    screenFreeSkippedAt: readNullableIsoDate(record, 'screenFreeSkippedAt'),
+    screenFreeCompletedAt: readNullableIsoDate(record, 'screenFreeCompletedAt'),
+    createdAt: readIsoDate(record, 'createdAt'),
+    updatedAt: readIsoDate(record, 'updatedAt'),
+  });
 }
 
 function readSkippedStages(value: unknown) {
@@ -317,8 +502,13 @@ function optionalRecordArray(value: unknown, field: string): readonly UnknownRec
   });
 }
 
-function readReflectionAnswer(value: unknown): string | readonly string[] | null {
-  if (value === null || typeof value === 'string') return value;
+function readReflectionAnswer(
+  value: unknown,
+): string | readonly string[] | boolean | 1 | 2 | 3 | 4 | 5 | null {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') {
+    return value;
+  }
+  if (value === 1 || value === 2 || value === 3 || value === 4 || value === 5) return value;
   if (Array.isArray(value) && value.every((item) => typeof item === 'string')) {
     return value;
   }

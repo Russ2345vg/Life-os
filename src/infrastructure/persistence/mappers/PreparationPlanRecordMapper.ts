@@ -84,6 +84,7 @@ function toItemRecord(item: PreparationItem): PreparationItemRecord {
     sourceType: item.sourceType,
     sourceId: item.sourceId?.toString() ?? null,
     required: item.required,
+    recommendedDurationMinutes: item.recommendedDurationMinutes,
     status: item.status,
     active: item.active,
     completedAt: item.completedAt?.toISOString() ?? null,
@@ -113,6 +114,11 @@ function fromItemRecord(record: UnknownRecord): PreparationItem {
     sourceType,
     sourceId: readNullableEntityId(record, 'sourceId'),
     required: readBoolean(record, 'required'),
+    recommendedDurationMinutes:
+      Object.hasOwn(record, 'recommendedDurationMinutes') &&
+      record.recommendedDurationMinutes !== null
+        ? readNumber(record, 'recommendedDurationMinutes')
+        : null,
     status,
     active: readBoolean(record, 'active'),
     completedAt: readNullableIsoDate(record, 'completedAt'),

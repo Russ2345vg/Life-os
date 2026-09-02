@@ -6,9 +6,18 @@ import {
   DECISION_KIND,
   EntityId,
   EveningCycle,
+  ROUTINE_BLOCK_CATEGORY,
+  ROUTINE_BLOCK_RECURRENCE,
+  RoutineBlock,
+  RoutineBlockRecurrence,
   type Decision,
   type LifeAction,
 } from '../../domain';
+import {
+  InMemoryRoutineBlockRepository,
+  InMemoryRoutineOccurrenceExecutionRepository,
+  InMemoryRoutineOccurrenceOverrideRepository,
+} from '../../infrastructure';
 import type {
   ActionSessionRepository,
   DayRepository,
@@ -21,12 +30,76 @@ import { EveningCycleApplicationService } from '../evening-cycle';
 import { EnsureCurrentDay } from '../commands/EnsureCurrentDay';
 import { createPlannedDecision } from '../../test/helpers/DecisionTestFactory';
 import { createReadyLifeAction } from '../../test/helpers/LifeActionTestFactory';
-import { GetEveningCycleReview } from './GetEveningReview';
+import { GetEveningCycleReview, GetEveningReview } from './GetEveningReview';
+import { DEFAULT_EVENING_RITUAL_SETTINGS } from '../evening-settings';
 
 const TODAY = DayDate.create('2026-08-05');
 const TOMORROW = DayDate.create('2026-08-06');
 
 describe('GetEveningCycleReview', () => {
+  it('проецирует targetSleepTime из последнего непропущенного блока сна', async () => {
+    const days = new MemoryDayRepository();
+    await days.save(createOpenDay(TODAY));
+    const blocks = new InMemoryRoutineBlockRepository();
+    for (const [idValue, startTime, endTime] of [
+      ['nap', '14:00', '14:30'],
+      ['night-sleep', '23:00', '23:59'],
+    ] as const) {
+      await blocks.save(
+        RoutineBlock.create({
+          id: id(idValue),
+          anchorDate: TODAY,
+          title: idValue,
+          startTime,
+          endTime,
+          category: ROUTINE_BLOCK_CATEGORY.sleep,
+          recurrence: RoutineBlockRecurrence.create(ROUTINE_BLOCK_RECURRENCE.daily),
+          required: true,
+          now: new Date('2026-08-05T08:00:00.000+09:00'),
+        }),
+      );
+    }
+    const clock = new FakeClock(new Date('2026-08-05T22:30:00.000+09:00'));
+    const cycles = new MemoryEveningCycleRepository();
+    const query = new GetEveningCycleReview(
+      days,
+      new MemoryDecisionRepository(),
+      new MemoryLifeActionRepository(),
+      new MemoryActionSessionRepository(),
+      new FakeCurrentDateProvider(TODAY),
+      blocks,
+      new InMemoryRoutineOccurrenceOverrideRepository(),
+      new InMemoryRoutineOccurrenceExecutionRepository(),
+      new EveningCycleApplicationService(
+        cycles,
+        days,
+        clock,
+        new FakeIdGenerator('target-sleep-cycle'),
+      ),
+      new EnsureCurrentDay(
+        days,
+        new FakeCurrentDateProvider(TODAY),
+        clock,
+        new FakeIdGenerator('target-sleep-day'),
+      ),
+    );
+
+    const snapshot = await query.execute(TODAY);
+
+    expect(snapshot.routineSummary?.targetSleepTime).toBe('23:00');
+
+    const configured = await new GetEveningReview(query, {
+      loadEveningRitualSettings: () => ({
+        ...DEFAULT_EVENING_RITUAL_SETTINGS,
+        targetSleepTime: '22:45',
+        notificationEnabled: true,
+      }),
+    }).execute(TODAY);
+
+    expect(configured.routineSummary?.targetSleepTime).toBe('22:45');
+    expect(configured.eveningRitualSettings?.notificationEnabled).toBe(true);
+  });
+
   it('собирает день, решения, действия, их сессии и подготовку на завтра из единого источника', async () => {
     const dayRepository = new MemoryDayRepository();
     const decisionRepository = new MemoryDecisionRepository();

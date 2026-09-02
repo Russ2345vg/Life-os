@@ -237,23 +237,38 @@ export class TomorrowPlanService {
     recommendationApplication?: RecommendationApplicationCommit,
   ): Promise<TomorrowPlanSnapshot> {
     const plan = await this.requirePlan(cycleDate);
-    const action = await this.lifeActions.findById(actionId);
-    if (
-      action === null ||
-      action.decisionId === null ||
-      plan.primaryDecisionId === null ||
-      !action.decisionId.equals(plan.primaryDecisionId) ||
-      action.plannedDate?.equals(plan.targetDateKey) !== true
-    ) {
-      throw new DomainError(
-        'tomorrow_plan.first_action_mismatch',
-        'Первый шаг должен относиться к главному Решению и целевому дню.',
-      );
-    }
+    await this.requireAssignableFirstAction(plan, actionId);
     return this.mutate(
       cycleDate,
       (current, now) => current.assignFirstAction(actionId, now),
       recommendationApplication,
+    );
+  }
+
+  public async assignFirstActionForTargetDate(
+    targetDate: DayDate,
+    actionId: EntityId,
+  ): Promise<TomorrowPlanSnapshot> {
+    if (targetDate.isBefore(this.currentDate.getCurrentDate())) {
+      throw new DomainError(
+        'tomorrow_plan.historical_read_only',
+        'Первый шаг можно изменить только для текущего дня.',
+      );
+    }
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const stored = await this.plans.findByTargetDate(targetDate);
+      if (stored === null) {
+        throw new DomainError('tomorrow_plan.not_found', 'План на текущий день не найден.');
+      }
+      await this.requireAssignableFirstAction(stored, actionId);
+      const plan = cloneTomorrowPlan(stored);
+      const expectedVersion = plan.version;
+      if (!plan.assignFirstAction(actionId, this.clock.now())) return this.snapshot(plan);
+      if (await this.plans.saveIfVersionMatches(plan, expectedVersion)) return this.snapshot(plan);
+    }
+    throw new DomainError(
+      'tomorrow_plan.concurrent_change',
+      'План завтра изменился в другом окне. Повторите операцию.',
     );
   }
 
@@ -455,6 +470,26 @@ export class TomorrowPlanService {
       );
     }
     return decision;
+  }
+
+  private async requireAssignableFirstAction(
+    plan: TomorrowPlan,
+    actionId: EntityId,
+  ): Promise<LifeAction> {
+    const action = await this.lifeActions.findById(actionId);
+    if (
+      action === null ||
+      action.decisionId === null ||
+      plan.primaryDecisionId === null ||
+      !action.decisionId.equals(plan.primaryDecisionId) ||
+      action.plannedDate?.equals(plan.targetDateKey) !== true
+    ) {
+      throw new DomainError(
+        'tomorrow_plan.first_action_mismatch',
+        'Первый шаг должен относиться к главному Решению и целевому дню.',
+      );
+    }
+    return action;
   }
 
   private async findCarriedDecisionId(

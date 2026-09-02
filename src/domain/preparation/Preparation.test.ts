@@ -49,11 +49,35 @@ describe('PreparationPlan', () => {
     ).toBe(PREPARATION_AREA.tomorrowStart);
   });
 
+  it('сохраняет рекомендуемую длительность и отклоняет значение вне 1–60 минут', () => {
+    const base = requirements()[0]!;
+    const item = PreparationItem.create({
+      ...base,
+      id: EntityId.create('duration-item'),
+      planId: EntityId.create('duration-plan'),
+      recommendedDurationMinutes: 12,
+    });
+
+    expect(item.recommendedDurationMinutes).toBe(12);
+    expect(item.toData().recommendedDurationMinutes).toBe(12);
+    expect(() =>
+      PreparationItem.create({
+        ...base,
+        id: EntityId.create('invalid-duration-item'),
+        planId: EntityId.create('duration-plan'),
+        recommendedDurationMinutes: 61,
+      }),
+    ).toThrow(expect.objectContaining({ code: 'preparation.invalid_recommended_duration' }));
+  });
+
   it('завершает и сознательно пропускает пункты, блокируя переход только на PENDING REQUIRED', () => {
     const plan = createPlan();
     plan.synchronize(requirements(), 1, 'source:1', NOW, sequence());
     const [physical, requiredDigital, cognitive] = plan.activeItems;
-    plan.configureRequiredCore(plan.activeItems.map((item) => item.key), NOW);
+    plan.configureRequiredCore(
+      plan.activeItems.map((item) => item.key),
+      NOW,
+    );
 
     plan.completeItem(physical!.id, NOW);
     expect(() => plan.complete(NOW)).toThrowError(
@@ -107,10 +131,12 @@ describe('PreparationPlan', () => {
     const source = synchronizedPlan(3);
 
     expect(() =>
-      rehydratePlan(source, source.items, source.activeItems.slice(0, 2).map((item) => item.key)),
-    ).toThrow(
-      expect.objectContaining({ code: 'preparation.invalid_required_core_size' }),
-    );
+      rehydratePlan(
+        source,
+        source.items,
+        source.activeItems.slice(0, 2).map((item) => item.key),
+      ),
+    ).toThrow(expect.objectContaining({ code: 'preparation.invalid_required_core_size' }));
   });
 
   it('отклоняет восстановленное обязательное ядро с повторяющимися пунктами', () => {
@@ -119,9 +145,7 @@ describe('PreparationPlan', () => {
 
     expect(() =>
       rehydratePlan(source, source.items, [first!.key, first!.key, second!.key]),
-    ).toThrow(
-      expect.objectContaining({ code: 'preparation.duplicate_required_core_item' }),
-    );
+    ).toThrow(expect.objectContaining({ code: 'preparation.duplicate_required_core_item' }));
   });
 
   it('отклоняет восстановленное обязательное ядро с неактивным пунктом', () => {
@@ -150,7 +174,10 @@ describe('PreparationPlan', () => {
 
   it('keeps a completed legacy plan with a null restored core idempotent', () => {
     const source = synchronizedPlan(3);
-    source.configureRequiredCore(source.activeItems.map((item) => item.key), NOW);
+    source.configureRequiredCore(
+      source.activeItems.map((item) => item.key),
+      NOW,
+    );
     for (const item of source.activeItems) source.skipItem(item.id, NOW);
     source.complete(NOW);
     const legacy = rehydratePlan(source, source.items, null);
@@ -298,8 +325,7 @@ function requirements(): readonly PreparationRequirement[] {
 function environmentRequirements(count: number): readonly PreparationRequirement[] {
   return Array.from({ length: count }, (_, index) => ({
     key: `environment:${index + 1}`,
-    area:
-      index === 0 ? PREPARATION_AREA.sleepEnvironment : PREPARATION_AREA.tomorrowStart,
+    area: index === 0 ? PREPARATION_AREA.sleepEnvironment : PREPARATION_AREA.tomorrowStart,
     category: PREPARATION_CATEGORY.physical,
     title: `Пункт среды ${index + 1}`,
     sourceType: PREPARATION_SOURCE_TYPE.rule,
@@ -310,13 +336,7 @@ function environmentRequirements(count: number): readonly PreparationRequirement
 
 function synchronizedPlan(count: number): PreparationPlan {
   const plan = createPlan();
-  plan.synchronize(
-    environmentRequirements(count),
-    1,
-    `source:rehydrate:${count}`,
-    NOW,
-    sequence(),
-  );
+  plan.synchronize(environmentRequirements(count), 1, `source:rehydrate:${count}`, NOW, sequence());
   return plan;
 }
 

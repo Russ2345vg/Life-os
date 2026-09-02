@@ -15,8 +15,11 @@ export type ReflectionDaySignal =
   (typeof REFLECTION_DAY_SIGNAL)[keyof typeof REFLECTION_DAY_SIGNAL];
 
 export const REFLECTION_QUESTION_TYPE = {
+  yesNo: 'YES_NO',
   singleChoice: 'SINGLE_CHOICE',
   multiChoice: 'MULTI_CHOICE',
+  rating1To5: 'RATING_1_5',
+  shortCapture: 'SHORT_CAPTURE',
   shortText: 'SHORT_TEXT',
   optionalText: 'OPTIONAL_TEXT',
 } as const;
@@ -46,6 +49,7 @@ export const REFLECTION_FAILURE_REASON = {
   scopeTooLarge: 'TOO_LARGE',
   priorityLost: 'PRIORITY_LOST',
   energyLow: 'ENERGY_LOW',
+  distractions: 'DISTRACTIONS',
   externalCause: 'EXTERNAL_CAUSE',
   purposeLost: 'PURPOSE_LOST',
   other: 'OTHER',
@@ -116,7 +120,22 @@ export class ReflectionQuestion {
   }
 }
 
-export type ReflectionAnswer = string | readonly string[];
+export type ReflectionRatingAnswer = 1 | 2 | 3 | 4 | 5;
+
+export interface ReflectionAnswerByQuestionType {
+  readonly YES_NO: boolean;
+  readonly SINGLE_CHOICE: string;
+  readonly MULTI_CHOICE: readonly string[];
+  readonly RATING_1_5: ReflectionRatingAnswer;
+  readonly SHORT_CAPTURE: string;
+  readonly SHORT_TEXT: string;
+  readonly OPTIONAL_TEXT: string;
+}
+
+export type ReflectionAnswerFor<T extends ReflectionQuestionType> =
+  ReflectionAnswerByQuestionType[T];
+
+export type ReflectionAnswer = ReflectionAnswerFor<ReflectionQuestionType>;
 
 export const REFLECTION_RESULT_STATUS = {
   answered: 'ANSWERED',
@@ -154,7 +173,7 @@ export class ReflectionResult {
     this.sourceEntityIds = uniqueEntityIds(data.sourceEntityIds);
     this.status = data.status;
     this.answer = copyAnswer(data.answer);
-    assertResultAnswer(this.status, this.answer);
+    assertResultAnswer(this.questionType, this.status, this.answer);
     assertDate(data.answeredAt, 'reflection.invalid_answered_at');
     this.#answeredAt = copyDate(data.answeredAt);
     Object.freeze(this);
@@ -167,13 +186,14 @@ export class ReflectionResult {
     answeredAt: Date,
   ): ReflectionResult {
     validateAnswer(question, answer);
+    const normalizedAnswer = normalizeAnswer(question.type, answer);
     return new ReflectionResult({
       cycleId,
       questionId: question.id,
       questionType: question.type,
       sourceEntityIds: question.sourceEntityIds,
       status: REFLECTION_RESULT_STATUS.answered,
-      answer,
+      answer: normalizedAnswer,
       answeredAt,
     });
   }
@@ -351,7 +371,7 @@ function normalizeOptions(
   if (!needsOptions && normalized.length > 0) {
     throw new DomainError(
       'reflection.invalid_options',
-      'Текстовый вопрос не должен содержать варианты ответа.',
+      'Этот тип вопроса не должен содержать варианты ответа.',
     );
   }
   if (new Set(normalized.map((option) => option.value)).size !== normalized.length) {
@@ -361,6 +381,7 @@ function normalizeOptions(
 }
 
 function validateAnswer(question: ReflectionQuestion, answer: ReflectionAnswer): void {
+  assertAnswerShape(question.type, answer);
   if (
     question.type === REFLECTION_QUESTION_TYPE.singleChoice &&
     (typeof answer !== 'string' || !question.options.some((option) => option.value === answer))
@@ -368,27 +389,26 @@ function validateAnswer(question: ReflectionQuestion, answer: ReflectionAnswer):
     throw new DomainError('reflection.invalid_answer', 'Выберите один из предложенных вариантов.');
   }
   if (question.type === REFLECTION_QUESTION_TYPE.multiChoice) {
-    if (
-      typeof answer === 'string' ||
-      answer.length === 0 ||
-      answer.some((value) => !question.options.some((option) => option.value === value))
-    ) {
+    if (!Array.isArray(answer)) {
+      throw new DomainError(
+        'reflection.invalid_answer',
+        'Выберите один или несколько предложенных вариантов.',
+      );
+    }
+    if (answer.some((value) => !question.options.some((option) => option.value === value))) {
       throw new DomainError(
         'reflection.invalid_answer',
         'Выберите один или несколько предложенных вариантов.',
       );
     }
   }
-  if (
-    (question.type === REFLECTION_QUESTION_TYPE.shortText ||
-      question.type === REFLECTION_QUESTION_TYPE.optionalText) &&
-    (typeof answer !== 'string' || answer.trim().length === 0 || answer.trim().length > 2_000)
-  ) {
-    throw new DomainError('reflection.invalid_answer', 'Введите короткий ответ.');
-  }
 }
 
-function assertResultAnswer(status: ReflectionResultStatus, answer: ReflectionAnswer | null): void {
+function assertResultAnswer(
+  questionType: ReflectionQuestionType,
+  status: ReflectionResultStatus,
+  answer: ReflectionAnswer | null,
+): void {
   if (!isReflectionResultStatus(status)) {
     throw new DomainError('reflection.invalid_result_status', 'Статус ответа неизвестен.');
   }
@@ -398,6 +418,55 @@ function assertResultAnswer(status: ReflectionResultStatus, answer: ReflectionAn
   if (status === REFLECTION_RESULT_STATUS.answered && answer === null) {
     throw new DomainError('reflection.invalid_answer', 'Сохранённый ответ не может быть пустым.');
   }
+  if (status === REFLECTION_RESULT_STATUS.answered && answer !== null) {
+    assertAnswerShape(questionType, answer);
+  }
+}
+
+function assertAnswerShape(type: ReflectionQuestionType, answer: ReflectionAnswer): void {
+  if (type === REFLECTION_QUESTION_TYPE.yesNo && typeof answer !== 'boolean') {
+    throw new DomainError('reflection.invalid_answer', 'Ответьте да или нет.');
+  }
+  if (type === REFLECTION_QUESTION_TYPE.singleChoice && typeof answer !== 'string') {
+    throw new DomainError('reflection.invalid_answer', 'Выберите один из предложенных вариантов.');
+  }
+  if (type === REFLECTION_QUESTION_TYPE.multiChoice) {
+    if (
+      !Array.isArray(answer) ||
+      answer.length === 0 ||
+      !answer.every((value) => typeof value === 'string') ||
+      new Set(answer).size !== answer.length
+    ) {
+      throw new DomainError(
+        'reflection.invalid_answer',
+        'Выберите один или несколько предложенных вариантов.',
+      );
+    }
+  }
+  if (
+    type === REFLECTION_QUESTION_TYPE.rating1To5 &&
+    (typeof answer !== 'number' || !Number.isInteger(answer) || answer < 1 || answer > 5)
+  ) {
+    throw new DomainError(
+      'reflection.invalid_answer',
+      'Оценка должна быть целым числом от 1 до 5.',
+    );
+  }
+  if (
+    (type === REFLECTION_QUESTION_TYPE.shortCapture ||
+      type === REFLECTION_QUESTION_TYPE.shortText ||
+      type === REFLECTION_QUESTION_TYPE.optionalText) &&
+    (typeof answer !== 'string' || answer.trim().length === 0 || answer.trim().length > 2_000)
+  ) {
+    throw new DomainError('reflection.invalid_answer', 'Введите короткий ответ.');
+  }
+}
+
+function normalizeAnswer(type: ReflectionQuestionType, answer: ReflectionAnswer): ReflectionAnswer {
+  if (type === REFLECTION_QUESTION_TYPE.shortCapture && typeof answer === 'string') {
+    return answer.trim();
+  }
+  return copyAnswer(answer)!;
 }
 
 function copyAnswer(answer: ReflectionAnswer | null): ReflectionAnswer | null {

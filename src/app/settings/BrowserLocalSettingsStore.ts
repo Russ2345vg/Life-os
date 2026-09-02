@@ -5,6 +5,13 @@ import {
   isInterfaceDensity,
   type LocalSettings,
 } from '../../presentation/settings/localSettings';
+import {
+  copyEveningRitualSettings,
+  isEveningRitualSettings,
+  parseEveningRitualSettings,
+  type EveningRitualSettings,
+} from '../../application/evening-settings';
+import type { EveningRitualSettingsReader } from '../../application/ports/EveningRitualSettingsReader';
 
 export const LOCAL_SETTINGS_STORAGE_KEY = 'lifeos.local-settings.v1';
 
@@ -20,7 +27,7 @@ export interface LocalSettingsLoadResult {
   readonly storageAvailable: boolean;
 }
 
-export class BrowserLocalSettingsStore {
+export class BrowserLocalSettingsStore implements EveningRitualSettingsReader {
   readonly #storage: KeyValueStorage | null;
 
   public constructor(storage: KeyValueStorage | null = resolveBrowserStorage()) {
@@ -47,8 +54,8 @@ export class BrowserLocalSettingsStore {
       }
 
       const parsed: unknown = JSON.parse(storedValue);
-      const settings = parseLocalSettings(parsed);
-      if (settings === null) {
+      const parsedSettings = parseLocalSettings(parsed);
+      if (parsedSettings === null) {
         return {
           settings: copyLocalSettings(DEFAULT_LOCAL_SETTINGS),
           recoveredFromInvalidValue: true,
@@ -57,8 +64,8 @@ export class BrowserLocalSettingsStore {
       }
 
       return {
-        settings,
-        recoveredFromInvalidValue: false,
+        settings: parsedSettings.settings,
+        recoveredFromInvalidValue: parsedSettings.recoveredFromInvalidValue,
         storageAvailable: true,
       };
     } catch {
@@ -70,10 +77,16 @@ export class BrowserLocalSettingsStore {
     }
   }
 
+  public loadEveningRitualSettings(): EveningRitualSettings {
+    return copyEveningRitualSettings(this.load().settings.eveningRitual);
+  }
+
   public save(settings: LocalSettings): boolean {
     if (this.#storage === null) {
       return false;
     }
+
+    if (!isEveningRitualSettings(settings.eveningRitual)) return false;
 
     try {
       this.#storage.setItem(LOCAL_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
@@ -97,7 +110,9 @@ export class BrowserLocalSettingsStore {
   }
 }
 
-function parseLocalSettings(value: unknown): LocalSettings | null {
+function parseLocalSettings(
+  value: unknown,
+): Readonly<{ settings: LocalSettings; recoveredFromInvalidValue: boolean }> | null {
   if (!isRecord(value)) {
     return null;
   }
@@ -112,11 +127,16 @@ function parseLocalSettings(value: unknown): LocalSettings | null {
     return null;
   }
 
+  const eveningRitual = parseEveningRitualSettings(value.eveningRitual);
   return {
-    defaultSection,
-    interfaceDensity,
-    reduceMotion,
-    showMobileWeekday,
+    settings: {
+      defaultSection,
+      interfaceDensity,
+      reduceMotion,
+      showMobileWeekday,
+      eveningRitual: eveningRitual.settings,
+    },
+    recoveredFromInvalidValue: eveningRitual.recoveredFromInvalidValue,
   };
 }
 
