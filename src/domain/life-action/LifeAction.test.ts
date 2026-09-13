@@ -334,38 +334,91 @@ describe('LifeAction', () => {
       if (!(event instanceof LifeActionCompleted)) {
         throw new Error('Ожидалось событие LifeActionCompleted.');
       }
-      expect(event.actualResult.equals(result)).toBe(true);
+      expect(event.actualResult?.equals(result)).toBe(true);
     });
 
-    it('не завершает без ActionActualResult', () => {
+    it('отклоняет некорректный тип заметки результата', () => {
       expect(() =>
         createInProgress().complete(
-          null as unknown as ActionActualResult,
+          'invalid' as unknown as ActionActualResult,
           CHANGED_AT,
           id('completed-event'),
         ),
       ).toThrowError(expect.objectContaining({ code: 'life_action.actual_result_required' }));
     });
 
-    it('запрещает завершение draft, ready и cancelled', () => {
+    it.each([
+      ['draft', createDraft],
+      ['ready', createReady],
+      ['in_progress', createInProgress],
+    ] as const)('завершает %s без обязательной заметки', (_status, create) => {
+      const action = create();
+      const startedAt = action.startedAt;
+      action.clearUncommittedEvents();
+      action.complete(null, CHANGED_AT, id('simple-completion'));
+      expect(action.status).toBe(LIFE_ACTION_STATUS.completed);
+      expect(action.actualResult).toBeNull();
+      expect(action.completedAt).toEqual(CHANGED_AT);
+      expect(action.startedAt).toEqual(startedAt);
+      expect(action.getUncommittedEvents()).toHaveLength(1);
+    });
+
+    it('запрещает завершение cancelled', () => {
       const cancelled = createInProgress();
       cancelled.cancel(CHANGED_AT, id('cancelled-event'), cancelReason());
 
-      for (const action of [createDraft(), createReady(), cancelled]) {
+      for (const action of [cancelled]) {
         expect(() =>
           action.complete(actualResult(), CHANGED_AT, id('completed-event')),
-        ).toThrowError(
-          expect.objectContaining({ code: 'life_action.complete_requires_in_progress' }),
-        );
+        ).toThrowError(expect.objectContaining({ code: 'life_action.complete_requires_open' }));
       }
     });
 
-    it('запрещает повторное завершение', () => {
-      expect(() =>
-        createCompleted().complete(actualResult(), CHANGED_AT, id('second-completed-event')),
-      ).toThrowError(
-        expect.objectContaining({ code: 'life_action.complete_requires_in_progress' }),
+    it('повторное завершение сохраняет дату, заметку, версию и единственное событие', () => {
+      const action = createCompleted();
+      const events = action.getUncommittedEvents();
+      const version = action.version;
+      const result = action.actualResult;
+      action.complete(null, new Date('2026-09-13T12:00:00Z'), id('second-completed-event'));
+      expect(action.completedAt).toEqual(CHANGED_AT);
+      expect(action.actualResult).toBe(result);
+      expect(action.version).toBe(version);
+      expect(action.getUncommittedEvents()).toEqual(events);
+    });
+  });
+
+  describe('поздняя связь с целью', () => {
+    it('меняет goalId того же completed-действия без изменения факта выполнения', () => {
+      const action = createCompleted();
+      const before = {
+        id: action.id,
+        status: action.status,
+        completedAt: action.completedAt,
+        events: action.getUncommittedEvents(),
+      };
+      const version = action.version;
+      expect(action.setGoal(id('goal-1'))).toBe(true);
+      expect(action.goalId?.toString()).toBe('goal-1');
+      expect(action.setGoal(id('goal-1'))).toBe(false);
+      expect(action.version).toBe(version + 1);
+      expect(action.setGoal(null)).toBe(true);
+      expect(action.goalId).toBeNull();
+      expect(action.version).toBe(version + 2);
+      expect({
+        id: action.id,
+        status: action.status,
+        completedAt: action.completedAt,
+        events: action.getUncommittedEvents(),
+      }).toEqual(before);
+    });
+
+    it('сохраняет запрет изменения архивированного действия', () => {
+      const action = createCompleted();
+      action.archive(CHANGED_AT, id('archived'));
+      expect(() => action.setGoal(id('goal-1'))).toThrowError(
+        expect.objectContaining({ code: 'life_action.archived_is_immutable' }),
       );
+      expect(action.goalId).toBeNull();
     });
   });
 

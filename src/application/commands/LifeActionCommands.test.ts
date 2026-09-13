@@ -29,6 +29,25 @@ const DATE = DayDate.create('2026-08-01');
 const NOW = new Date('2026-08-01T10:00:00.000+09:00');
 
 describe('CreateLifeActionDraft', () => {
+  it('создаёт полноценное standalone-действие только по title', async () => {
+    const repository = new InMemoryLifeActionRepository();
+    const command = new CreateLifeActionDraft(
+      repository,
+      new InMemoryDecisionRepository(),
+      new FakeClock(NOW),
+      new FakeIdGenerator('standalone'),
+    );
+    const action = unwrap(await command.execute({ title: LifeActionTitle.create('Прогуляться') }));
+
+    expect(action.status).toBe(LIFE_ACTION_STATUS.draft);
+    expect(action.goalId).toBeNull();
+    expect(action.decisionId).toBeNull();
+    expect(action.plannedDate).toBeNull();
+    expect(action.expectedResult).toBeNull();
+    expect(action.startedAt).toBeNull();
+    await expect(repository.findAll()).resolves.toEqual([action]);
+  });
+
   it('создаёт и сохраняет независимый черновик с Clock и двумя id', async () => {
     const lifeActionRepository = new InMemoryLifeActionRepository();
     const idGenerator = new FakeIdGenerator('action');

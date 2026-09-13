@@ -45,11 +45,7 @@ export class CreateGoal {
   public async execute(input: CreateGoalInput): Promise<Result<Goal, DomainError>> {
     const directionId = input.directionId ?? null;
     const status = input.status ?? GOAL_STATUS.future;
-    const directionFailure = await validateGoalDirection(
-      this.directionRepository,
-      directionId,
-      status,
-    );
+    const directionFailure = await validateGoalDirection(this.directionRepository, directionId);
     if (directionFailure !== null) return directionFailure;
     try {
       const goal = Goal.create({

@@ -83,19 +83,11 @@ export class UpdateGoal {
         );
       }
     }
-    const preservesUnassigned =
-      stored.status === GOAL_STATUS.active &&
-      stored.directionId === null &&
-      directionId === null &&
-      status === GOAL_STATUS.active;
-    const directionFailure = preservesUnassigned
-      ? null
-      : await validateGoalDirection(
-          this.directionRepository,
-          directionId,
-          status,
-          directionUnchanged && !activatesGoal,
-        );
+    const directionFailure = await validateGoalDirection(
+      this.directionRepository,
+      directionId,
+      directionUnchanged && !activatesGoal,
+    );
     if (directionFailure !== null) return directionFailure;
     try {
       const updated = stored.update(

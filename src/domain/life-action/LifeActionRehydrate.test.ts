@@ -96,10 +96,21 @@ describe('LifeAction.rehydrate', () => {
     ).toThrowError(expect.objectContaining({ code: 'life_action.started_at_required' }));
   });
 
-  it('отклоняет completed без фактического результата или времени завершения', () => {
-    expect(() => LifeAction.rehydrate({ ...completedData(), actualResult: null })).toThrowError(
-      expect.objectContaining({ code: 'life_action.completed_fields_required' }),
-    );
+  it('восстанавливает completed без подготовки, запуска и заметки результата', () => {
+    const action = LifeAction.rehydrate({
+      ...completedData(),
+      expectedResult: null,
+      plannedDate: null,
+      readyAt: null,
+      startedAt: null,
+      actualResult: null,
+    });
+    expect(action.status).toBe(LIFE_ACTION_STATUS.completed);
+    expect(action.completedAt).toEqual(completedData().completedAt);
+    expect(action.getUncommittedEvents()).toEqual([]);
+  });
+
+  it('отклоняет completed без времени завершения', () => {
     expect(() => LifeAction.rehydrate({ ...completedData(), completedAt: null })).toThrowError(
       expect.objectContaining({ code: 'life_action.completed_fields_required' }),
     );

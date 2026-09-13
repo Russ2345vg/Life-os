@@ -37,7 +37,7 @@ function setup() {
 }
 
 describe('Goal commands and queries', () => {
-  it('requires an existing Direction when creating an active goal', async () => {
+  it('creates active Goals with or without a Direction', async () => {
     const app = setup();
 
     await expect(
@@ -45,7 +45,10 @@ describe('Goal commands and queries', () => {
         title: 'Активная цель без направления',
         status: GOAL_STATUS.active,
       }),
-    ).resolves.toMatchObject({ ok: false, error: { code: 'goal.direction_required' } });
+    ).resolves.toMatchObject({
+      ok: true,
+      value: { status: GOAL_STATUS.active, directionId: null },
+    });
 
     const direction = Direction.create({
       id: EntityId.create('direction-goal'),
@@ -171,7 +174,7 @@ describe('Goal commands and queries', () => {
     ).resolves.toMatchObject({ ok: false, error: { code: 'goal.version_conflict' } });
   });
 
-  it('requires a Direction when an update makes a Goal active', async () => {
+  it('activates a Goal without a Direction', async () => {
     const app = setup();
     const created = await app.createGoal.execute({ title: 'Будущая цель' });
     if (!created.ok) throw created.error;
@@ -183,7 +186,66 @@ describe('Goal commands and queries', () => {
         title: created.value.title,
         status: GOAL_STATUS.active,
       }),
-    ).resolves.toMatchObject({ ok: false, error: { code: 'goal.direction_required' } });
+    ).resolves.toMatchObject({
+      ok: true,
+      value: { id: created.value.id, status: GOAL_STATUS.active, directionId: null },
+    });
+  });
+
+  it('edits an unassigned active Goal and later assigns and clears Direction on the same Goal', async () => {
+    const app = setup();
+    const created = await app.createGoal.execute({
+      title: 'Пробежать марафон',
+      status: GOAL_STATUS.active,
+      directionId: null,
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) throw created.error;
+    const edited = await app.updateGoal.execute({
+      id: created.value.id,
+      expectedVersion: 1,
+      title: 'Пробежать первый марафон',
+    });
+    expect(edited).toMatchObject({
+      ok: true,
+      value: { directionId: null, status: GOAL_STATUS.active, version: 2 },
+    });
+    if (!edited.ok) throw edited.error;
+    const direction = Direction.create({
+      id: EntityId.create('late-direction'),
+      name: 'Здоровье',
+      now: CREATED_AT,
+    });
+    await app.directionRepository.create(direction);
+    const linked = await app.updateGoal.execute({
+      id: edited.value.id,
+      expectedVersion: 2,
+      title: edited.value.title,
+      directionId: direction.id,
+    });
+    expect(linked).toMatchObject({
+      ok: true,
+      value: {
+        id: created.value.id,
+        createdAt: created.value.createdAt,
+        directionId: direction.id,
+        status: GOAL_STATUS.active,
+      },
+    });
+    if (!linked.ok) throw linked.error;
+    const unlinked = await app.updateGoal.execute({
+      id: linked.value.id,
+      expectedVersion: linked.value.version,
+      title: linked.value.title,
+      directionId: null,
+    });
+    expect(unlinked).toMatchObject({
+      ok: true,
+      value: { id: created.value.id, directionId: null, status: GOAL_STATUS.active },
+    });
+    const all = await app.listGoals.execute();
+    expect(all).toHaveLength(1);
+    expect(all[0]?.id).toEqual(created.value.id);
   });
 
   it('rejects changing a Goal to an unknown Direction', async () => {

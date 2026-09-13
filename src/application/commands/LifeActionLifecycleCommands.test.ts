@@ -298,7 +298,7 @@ describe('CompleteLifeAction', () => {
     }
     expect(event.eventId.toString()).toBe('completed-event-1');
     expect(event.occurredAt).toEqual(NOW);
-    expect(event.actualResult.equals(actualResult)).toBe(true);
+    expect(event.actualResult?.equals(actualResult)).toBe(true);
   });
 
   it('возвращает action.not_found без использования зависимостей', async () => {
@@ -319,13 +319,8 @@ describe('CompleteLifeAction', () => {
     expect(save).not.toHaveBeenCalled();
   });
 
-  it('не завершает draft, ready, completed и cancelled', async () => {
-    const forbidden = [
-      createLifeActionDraft('complete-draft'),
-      createReadyLifeAction('complete-ready', DATE),
-      completeLifeAction(markLifeActionInProgress(createReadyLifeAction('complete-done', DATE))),
-      cancelLifeAction(createReadyLifeAction('complete-cancelled', DATE)),
-    ];
+  it('не завершает cancelled', async () => {
+    const forbidden = [cancelLifeAction(createReadyLifeAction('complete-cancelled', DATE))];
 
     for (const lifeAction of forbidden) {
       const repository = await repositoryWith(lifeAction);
@@ -342,7 +337,7 @@ describe('CompleteLifeAction', () => {
         actualResult: ActionActualResult.create('Недопустимый результат'),
       });
 
-      expectFailureCode(result, 'life_action.complete_requires_in_progress');
+      expectFailureCode(result, 'life_action.complete_requires_open');
       expect(lifeAction.version).toBe(version);
       expect(lifeAction.getUncommittedEvents()).toEqual([]);
       expect(save).not.toHaveBeenCalled();
@@ -362,7 +357,7 @@ describe('CompleteLifeAction', () => {
       new FakeIdGenerator('invalid-complete'),
     ).execute({
       lifeActionId: lifeAction.id,
-      actualResult: null as unknown as ActionActualResult,
+      actualResult: 'invalid' as unknown as ActionActualResult,
     });
 
     expectFailureCode(result, 'life_action.actual_result_required');

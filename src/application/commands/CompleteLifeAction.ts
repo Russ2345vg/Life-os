@@ -10,7 +10,7 @@ import { lifeActionDomainFailure, lifeActionNotFound } from './lifeActionCommand
 
 export interface CompleteLifeActionInput {
   readonly lifeActionId: EntityId;
-  readonly actualResult: ActionActualResult;
+  readonly actualResult?: ActionActualResult | null;
 }
 
 export class CompleteLifeAction {
@@ -40,7 +40,12 @@ export class CompleteLifeAction {
 
     try {
       const expectedVersion = lifeAction.version;
-      lifeAction.complete(input.actualResult, this.#clock.now(), this.#idGenerator.generate());
+      lifeAction.complete(
+        input.actualResult ?? null,
+        this.#clock.now(),
+        this.#idGenerator.generate(),
+      );
+      if (lifeAction.version === expectedVersion) return success(lifeAction);
       if (this.#journalUnitOfWork === null) {
         await this.#repository.save(lifeAction);
       } else {

@@ -75,7 +75,7 @@ export class LifeAction extends Entity {
   #description: string | null;
   readonly #decisionId: EntityId | null;
   #sphereId: EntityId | null;
-  readonly #goalId: EntityId | null;
+  #goalId: EntityId | null;
   readonly #isNext: boolean;
   readonly #createdAt: Date;
   readonly #domainEvents: DomainEvent[];
@@ -239,6 +239,14 @@ export class LifeAction extends Entity {
     return this.#version;
   }
 
+  public setGoal(goalId: EntityId | null): boolean {
+    this.assertNotArchived();
+    if (sameOptionalEntityId(this.#goalId, goalId)) return false;
+    this.#goalId = goalId;
+    this.#version += 1;
+    return true;
+  }
+
   public makeReady(input: LifeActionReadyInput): void {
     this.assertNotArchived();
 
@@ -369,17 +377,23 @@ export class LifeAction extends Entity {
     );
   }
 
-  public complete(actualResult: ActionActualResult, occurredAt: Date, eventId: EntityId): void {
+  public complete(
+    actualResult: ActionActualResult | null,
+    occurredAt: Date,
+    eventId: EntityId,
+  ): void {
     this.assertNotArchived();
 
-    if (this.#status !== LIFE_ACTION_STATUS.inProgress) {
+    if (this.#status === LIFE_ACTION_STATUS.completed) return;
+
+    if (this.#status === LIFE_ACTION_STATUS.cancelled) {
       throw new DomainError(
-        'life_action.complete_requires_in_progress',
-        'Завершить можно только выполняемое действие.',
+        'life_action.complete_requires_open',
+        'Завершить можно только открытое действие.',
       );
     }
 
-    assertActualResult(actualResult);
+    if (actualResult !== null) assertActualResult(actualResult);
     assertValidDate(occurredAt, 'Время завершения действия');
     this.#status = LIFE_ACTION_STATUS.completed;
     this.#actualResult = actualResult;
@@ -543,35 +557,26 @@ function assertRehydrationInvariants(data: LifeActionRehydrationData): void {
   }
 
   if (
-    (data.status === LIFE_ACTION_STATUS.ready ||
-      data.status === LIFE_ACTION_STATUS.inProgress ||
-      data.status === LIFE_ACTION_STATUS.completed) &&
+    (data.status === LIFE_ACTION_STATUS.ready || data.status === LIFE_ACTION_STATUS.inProgress) &&
     !hasAllReadyFields
   ) {
     throw new DomainError(
       'life_action.ready_fields_required',
-      'Готовое, выполняемое или завершённое действие должно иметь данные подготовки.',
+      'Готовое или выполняемое действие должно иметь данные подготовки.',
     );
   }
 
-  if (
-    (data.status === LIFE_ACTION_STATUS.inProgress ||
-      data.status === LIFE_ACTION_STATUS.completed) &&
-    data.startedAt === null
-  ) {
+  if (data.status === LIFE_ACTION_STATUS.inProgress && data.startedAt === null) {
     throw new DomainError(
       'life_action.started_at_required',
-      'Выполняемое или завершённое действие должно иметь время начала.',
+      'Выполняемое действие должно иметь время начала.',
     );
   }
 
-  if (
-    data.status === LIFE_ACTION_STATUS.completed &&
-    (data.actualResult === null || data.completedAt === null)
-  ) {
+  if (data.status === LIFE_ACTION_STATUS.completed && data.completedAt === null) {
     throw new DomainError(
       'life_action.completed_fields_required',
-      'Завершённое действие должно иметь фактический результат и время завершения.',
+      'Завершённое действие должно иметь время завершения.',
     );
   }
 

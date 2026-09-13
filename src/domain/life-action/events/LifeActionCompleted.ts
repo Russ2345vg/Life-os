@@ -4,12 +4,12 @@ import { LifeActionEvent } from './LifeActionEvent';
 
 export class LifeActionCompleted extends LifeActionEvent<'action.completed'> {
   public readonly eventType = 'action.completed';
-  public readonly actualResult: ActionActualResult;
+  public readonly actualResult: ActionActualResult | null;
 
   public constructor(
     eventId: EntityId,
     lifeActionId: EntityId,
-    actualResult: ActionActualResult,
+    actualResult: ActionActualResult | null,
     occurredAt: Date,
   ) {
     super(eventId, lifeActionId, occurredAt);

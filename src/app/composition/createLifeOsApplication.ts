@@ -7,6 +7,8 @@ import {
   CreateLifeActionForDecision,
   CompleteActionSession,
   CompleteLifeAction,
+  SetLifeActionGoal,
+  CreateLifeActionDraft,
   VerifyLifeActionResult,
   CancelDecisionSafely,
   DeleteDecisionSafely,
@@ -516,6 +518,17 @@ export async function createLifeOsApplication(
       lifeActionRepository,
       journalUnitOfWork,
     );
+    const createLifeActionDraft = new CreateLifeActionDraft(
+      lifeActionRepository,
+      decisionRepository,
+      clock,
+      idGenerator,
+    );
+    const setLifeActionGoal = new SetLifeActionGoal(
+      lifeActionRepository,
+      goalRepository,
+      journalUnitOfWork,
+    );
     const completeLifeAction = new CompleteLifeAction(
       lifeActionRepository,
       clock,
@@ -949,6 +962,8 @@ export async function createLifeOsApplication(
       pauseActionSession,
       resumeActionSession,
       completeActionSession,
+      createLifeActionDraft,
+      setLifeActionGoal,
       completeLifeAction,
       verifyLifeActionResult,
       confirmDecisionFromActions,

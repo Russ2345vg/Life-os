@@ -99,6 +99,7 @@ export {
   type CompleteActionSessionInput,
 } from './commands/CompleteActionSession';
 export { CompleteLifeAction, type CompleteLifeActionInput } from './commands/CompleteLifeAction';
+export { SetLifeActionGoal, type SetLifeActionGoalInput } from './commands/SetLifeActionGoal';
 export {
   VerifyLifeActionResult,
   type VerifyLifeActionResultInput,

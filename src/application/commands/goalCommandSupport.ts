@@ -1,10 +1,4 @@
-import {
-  DIRECTION_STATUS,
-  GOAL_STATUS,
-  type EntityId,
-  type Goal,
-  type GoalStatus,
-} from '../../domain';
+import { DIRECTION_STATUS, type EntityId, type Goal } from '../../domain';
 import { DomainError } from '../../shared/errors/DomainError';
 import { failure, success, type Failure, type Result } from '../../shared/result/Result';
 import type { Clock } from '../ports/Clock';
@@ -29,14 +23,8 @@ export function validateGoalExpectedVersion(expectedVersion: number): Failure<Do
 export async function validateGoalDirection(
   directionRepository: DirectionRepository,
   directionId: EntityId | null,
-  status: GoalStatus,
   allowArchivedDirection = false,
 ): Promise<Failure<DomainError> | null> {
-  if (status === GOAL_STATUS.active && directionId === null) {
-    return failure(
-      new DomainError('goal.direction_required', 'Активной цели необходимо направление.'),
-    );
-  }
   if (directionId === null) return null;
   const direction = await directionRepository.findById(directionId);
   if (direction === null) {

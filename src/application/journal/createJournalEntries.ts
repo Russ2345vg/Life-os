@@ -137,7 +137,9 @@ export function createLifeActionJournalEntries(lifeAction: LifeAction): readonly
       return [
         entry(event, JOURNAL_ENTRY_TYPE.actionCompleted, JOURNAL_SUBJECT_TYPE.lifeAction, {
           ...common,
-          metadata: { actualResult: event.actualResult.toString() },
+          ...(event.actualResult === null
+            ? {}
+            : { metadata: { actualResult: event.actualResult.toString() } }),
         }),
       ];
     }
