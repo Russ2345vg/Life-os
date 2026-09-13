@@ -126,12 +126,14 @@ export function filterPlannerActions(
 export function goalActions(goal: Goal, actions: readonly LifeAction[]): LifeAction[] {
   return actions
     .filter((a) => a.goalId?.equals(goal.id) && isOpenAction(a))
-    .sort(
-      (a, b) =>
-        Number(b.isNext) - Number(a.isNext) ||
-        (a.plannedDate?.toString() ?? '9999').localeCompare(b.plannedDate?.toString() ?? '9999') ||
-        a.createdAt.getTime() - b.createdAt.getTime(),
-    );
+    .sort(comparePlannerGoalActions);
+}
+export function comparePlannerGoalActions(a: LifeAction, b: LifeAction): number {
+  return (
+    Number(b.isNext) - Number(a.isNext) ||
+    (a.plannedDate?.toString() ?? '9999').localeCompare(b.plannedDate?.toString() ?? '9999') ||
+    a.createdAt.getTime() - b.createdAt.getTime()
+  );
 }
 export function measuredGoalProgress(goal: Goal): { label: string; percent: number } | null {
   const p = goal.progress;

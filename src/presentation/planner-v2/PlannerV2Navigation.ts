@@ -4,12 +4,19 @@ export type PlannerV2Route =
   | { readonly view: 'focus' }
   | { readonly view: 'actions' }
   | { readonly view: 'inbox' }
+  | { readonly view: 'kanban' | 'calendar' | 'tree'; readonly section: 'goals' | 'actions' }
   | { readonly view: 'action'; readonly id: string }
   | { readonly view: 'new-goal' }
   | { readonly view: 'new-action'; readonly goalId: string | null; readonly title: string | null };
 
 export function parsePlannerV2Route(hash: string): PlannerV2Route | null {
   const [path, query = ''] = hash.split('?');
+  const view = new URLSearchParams(query).get('view');
+  if (
+    (path === '#/v2/goals' || path === '#/v2/actions') &&
+    (view === 'kanban' || view === 'calendar' || view === 'tree')
+  )
+    return { view, section: path === '#/v2/goals' ? 'goals' : 'actions' };
   if (path === '#/v2/today') return { view: 'today' };
   if (path === '#/v2/goals') return { view: 'goals' };
   if (path === '#/v2/goals/focus') return { view: 'focus' };
@@ -34,6 +41,7 @@ export function parsePlannerV2Route(hash: string): PlannerV2Route | null {
 }
 
 export function buildPlannerV2Route(route: PlannerV2Route): string {
+  if ('section' in route) return `#/v2/${route.section}?view=${route.view}`;
   if (route.view === 'today') return '#/v2/today';
   if (route.view === 'new-goal') return '#/v2/goals/new';
   if (route.view === 'goals') return '#/v2/goals';

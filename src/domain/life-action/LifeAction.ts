@@ -258,13 +258,19 @@ export class LifeAction extends Entity {
 
   public setPlan(plannedDate: DayDate | null, isNext: boolean): boolean {
     this.assertNotArchived();
-    if (
-      this.#status === LIFE_ACTION_STATUS.completed ||
-      this.#status === LIFE_ACTION_STATUS.cancelled
-    ) {
+    if (this.#status === LIFE_ACTION_STATUS.cancelled) {
       throw new DomainError(
         'life_action.plan_requires_open',
         'Планировать можно только открытое действие.',
+      );
+    }
+    if (
+      plannedDate === null &&
+      (this.#expectedResult !== null || this.#readyAt !== null || this.#startedAt !== null)
+    ) {
+      throw new DomainError(
+        'life_action.legacy_date_required',
+        'У подготовленного действия можно изменить дату, но нельзя убрать её.',
       );
     }
     if (plannedDate !== null) assertDayDate(plannedDate);
@@ -275,7 +281,11 @@ export class LifeAction extends Entity {
       this.#plannedDate === null
         ? plannedDate === null
         : plannedDate !== null && this.#plannedDate.equals(plannedDate);
-    if (this.#status !== LIFE_ACTION_STATUS.draft && !sameDate) {
+    if (
+      this.#status !== LIFE_ACTION_STATUS.draft &&
+      this.#status !== LIFE_ACTION_STATUS.completed &&
+      !sameDate
+    ) {
       throw new DomainError(
         'life_action.plan_requires_reschedule',
         'Измените дату подготовленного действия через перенос.',

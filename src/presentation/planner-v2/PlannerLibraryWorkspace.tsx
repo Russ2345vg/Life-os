@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { EntityId, type Direction, type Goal, type LifeAction, type Sphere } from '../../domain';
 import type {
   GetGoals,
@@ -7,6 +7,7 @@ import type {
   CompleteLifeAction,
   SetLifeActionGoal,
   SetLifeActionPlan,
+  UpdateGoal,
 } from '../../application';
 import type { PlannerInbox as InboxService } from '../../application/planner/PlannerInbox';
 import type { PlannerFocus as FocusService } from '../../application/planner/PlannerFocus';
@@ -22,6 +23,14 @@ import { completePlannerAction, planPlannerAction } from './plannerTodayCommands
 import type { PlannerV2Route } from './PlannerV2Navigation';
 import { useSyncContentChanged } from '../sync/SyncStatusContext';
 import './planner-library.css';
+import './planner-views.css';
+import { buildPlannerViews } from './plannerViewsModel';
+import { PlannerKanban } from './PlannerKanban';
+import { PlannerCalendar } from './PlannerCalendar';
+import { PlannerTree } from './PlannerTree';
+import { PlannerViewSwitcher } from './PlannerViewSwitcher';
+import { changePlannerGoalStatus, linkPlannerGoalDirection } from './plannerGoalCommands';
+import type { PlannerViewOperations } from './PlannerViewParts';
 
 export interface PlannerLibraryServices {
   readonly plannerInbox: Pick<InboxService, 'list' | 'capture' | 'convert' | 'archive'>;
@@ -33,6 +42,7 @@ export interface PlannerLibraryServices {
   readonly completeLifeAction: Pick<CompleteLifeAction, 'execute'>;
   readonly setLifeActionPlan: Pick<SetLifeActionPlan, 'execute'>;
   readonly setLifeActionGoal: Pick<SetLifeActionGoal, 'execute'>;
+  readonly updateGoal: Pick<UpdateGoal, 'execute'>;
 }
 interface LibraryData {
   goals: readonly Goal[];
@@ -115,6 +125,9 @@ export function PlannerLibraryWorkspace({
       await work();
       setNotice(message);
       await load().catch(report);
+    } catch (reason: unknown) {
+      report(reason);
+      throw reason;
     } finally {
       working.current = false;
       setBusy(false);
@@ -125,6 +138,35 @@ export function PlannerLibraryWorkspace({
   };
   const complete = (id: string) =>
     perform(() => completePlannerAction(services.completeLifeAction, id), 'Действие выполнено');
+  const views = useMemo(() => (data ? buildPlannerViews(data) : null), [data]);
+  const operations: PlannerViewOperations = {
+    busy,
+    onComplete: complete,
+    onPlan: async (id, date) => {
+      await run(() => planPlannerAction(services.setLifeActionPlan, id, date), 'Дата сохранена');
+    },
+    onLink: async (id, goalId) => {
+      await run(async () => {
+        const result = await services.setLifeActionGoal.execute({
+          lifeActionId: EntityId.create(id),
+          goalId: goalId ? EntityId.create(goalId) : null,
+        });
+        if (!result.ok) throw result.error;
+      }, 'Связь с целью сохранена');
+    },
+    onGoalStatus: async (goal, status) => {
+      await run(
+        () => changePlannerGoalStatus(services.updateGoal, goal, status),
+        'Состояние цели сохранено',
+      );
+    },
+    onGoalDirection: async (goal, directionId) => {
+      await run(
+        () => linkPlannerGoalDirection(services.updateGoal, goal, directionId),
+        'Направление сохранено',
+      );
+    },
+  };
   return (
     <>
       {notice && (
@@ -149,6 +191,39 @@ export function PlannerLibraryWorkspace({
             Загружаем…
           </div>
         )
+      ) : 'section' in route && views ? (
+        <section>
+          <header className="planner-page-heading">
+            <h1>{route.section === 'goals' ? 'Цели' : 'Действия'}</h1>
+            <button
+              className="planner-add-icon"
+              aria-label={route.section === 'goals' ? 'Новая цель' : 'Новое действие'}
+              type="button"
+              onClick={() =>
+                onNavigate(
+                  route.section === 'goals'
+                    ? { view: 'new-goal' }
+                    : { view: 'new-action', goalId: null, title: null },
+                )
+              }
+            >
+              +
+            </button>
+          </header>
+          <PlannerViewSwitcher route={route} onNavigate={onNavigate} />
+          {route.view === 'kanban' ? (
+            <PlannerKanban
+              data={views}
+              kind={route.section}
+              focusIds={activeFocusIds(data.goals, data.focus)}
+              {...operations}
+            />
+          ) : route.view === 'calendar' ? (
+            <PlannerCalendar data={views} today={today} {...operations} />
+          ) : (
+            <PlannerTree data={views} {...operations} />
+          )}
+        </section>
       ) : route.view === 'inbox' ? (
         <PlannerInbox
           ideas={data.ideas}
@@ -176,6 +251,11 @@ export function PlannerLibraryWorkspace({
           busy={busy}
           selectedId={route.view === 'action' ? route.id : null}
           onNew={() => onNavigate({ view: 'new-action', goalId: null, title: null })}
+          viewSwitcher={
+            route.view === 'actions' ? (
+              <PlannerViewSwitcher route={route} onNavigate={onNavigate} />
+            ) : null
+          }
           onComplete={complete}
           onPlan={async (id, date) => {
             await run(
@@ -206,14 +286,7 @@ export function PlannerLibraryWorkspace({
               +
             </button>
           </header>
-          <nav className="planner-view-tabs" aria-label="Представление целей">
-            <a href="#/v2/goals" aria-current={route.view === 'goals' ? 'page' : undefined}>
-              Список
-            </a>
-            <a href="#/v2/goals/focus" aria-current={route.view === 'focus' ? 'page' : undefined}>
-              Фокус
-            </a>
-          </nav>
+          <PlannerViewSwitcher route={route} onNavigate={onNavigate} />
           {route.view === 'focus' ? (
             <PlannerFocus
               goals={data.goals}

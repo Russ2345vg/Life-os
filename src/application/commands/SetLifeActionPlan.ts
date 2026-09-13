@@ -28,9 +28,11 @@ export class SetLifeActionPlan {
     if (action === null) return lifeActionNotFound();
     try {
       const expectedVersion = action.version;
+      const completed = action.status === LIFE_ACTION_STATUS.completed;
       const isNext = input.isNext ?? (input.plannedDate === null ? false : action.isNext);
       if (
         action.status !== LIFE_ACTION_STATUS.draft &&
+        !completed &&
         action.plannedDate?.toString() !== input.plannedDate?.toString()
       ) {
         if (action.status === LIFE_ACTION_STATUS.inProgress)
@@ -47,12 +49,14 @@ export class SetLifeActionPlan {
       }
       action.setPlan(input.plannedDate, isNext);
       const previous =
-        isNext && input.plannedDate !== null
+        !completed && isNext && input.plannedDate !== null
           ? await clearPreviousMainActions(this.repository, input.plannedDate, action)
           : [];
       if (action.version === expectedVersion && previous.length === 0) return success(action);
       await this.unitOfWork.commit({
-        ...(isNext && input.plannedDate !== null ? { mainActionDate: input.plannedDate } : {}),
+        ...(!completed && isNext && input.plannedDate !== null
+          ? { mainActionDate: input.plannedDate }
+          : {}),
         lifeActions: [...previous, { lifeAction: action, expectedVersion }],
         journalEntries: createLifeActionJournalEntries(action),
       });

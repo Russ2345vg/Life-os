@@ -12,6 +12,12 @@ describe('V2 preview routes', () => {
     for (const route of [
       { view: 'goals' },
       { view: 'focus' },
+      { view: 'kanban', section: 'goals' },
+      { view: 'kanban', section: 'actions' },
+      { view: 'calendar', section: 'goals' },
+      { view: 'calendar', section: 'actions' },
+      { view: 'tree', section: 'goals' },
+      { view: 'tree', section: 'actions' },
       { view: 'actions' },
       { view: 'inbox' },
       { view: 'action', id: 'inbox-result:русский / id' },

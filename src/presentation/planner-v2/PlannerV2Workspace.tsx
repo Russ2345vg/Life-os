@@ -144,6 +144,7 @@ export function PlannerV2Workspace({
       href={buildPlannerV2Route(target)}
       aria-current={
         route.view === target.view ||
+        ('section' in route && route.section === target.view) ||
         (target.view === 'goals' && ['focus', 'new-goal'].includes(route.view)) ||
         (target.view === 'actions' && ['action', 'new-action'].includes(route.view))
           ? 'page'
@@ -193,7 +194,12 @@ export function PlannerV2Workspace({
           Старая версия
         </button>
       </aside>
-      <main ref={mainContent} id="planner-main-content" className="planner-content" tabIndex={-1}>
+      <main
+        ref={mainContent}
+        id="planner-main-content"
+        className={`planner-content${'section' in route ? ' planner-content--views' : ''}`}
+        tabIndex={-1}
+      >
         {notice ? (
           <p className="planner-notice" role="status">
             {notice}
@@ -212,9 +218,11 @@ export function PlannerV2Workspace({
             </button>
           </div>
         ) : null}
-        {['goals', 'focus', 'actions', 'action', 'inbox'].includes(route.view) ? (
+        {['goals', 'focus', 'actions', 'action', 'inbox', 'kanban', 'calendar', 'tree'].includes(
+          route.view,
+        ) ? (
           <PlannerLibraryWorkspace
-            key={route.view === 'action' ? `action:${route.id}` : route.view}
+            key={buildPlannerV2Route(route)}
             services={services}
             route={route}
             today={currentDate.toString()}

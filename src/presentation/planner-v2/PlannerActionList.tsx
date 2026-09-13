@@ -1,5 +1,5 @@
 import { editPlannerField, plannerFieldState, type PlannerFieldDraft } from './plannerActionDraft';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { Goal, LifeAction } from '../../domain';
 import { VoiceField } from '../voice-input/VoiceField';
 import { VoiceTextInput } from '../voice-input/VoiceTextInput';
@@ -22,6 +22,7 @@ export function PlannerActionList({
   today,
   onNew,
   selectedId,
+  viewSwitcher,
   ...operations
 }: PlannerActionOperations & {
   readonly actions: readonly LifeAction[];
@@ -29,6 +30,7 @@ export function PlannerActionList({
   readonly today: string;
   readonly onNew: () => void;
   readonly selectedId: string | null;
+  readonly viewSwitcher?: ReactNode;
 }) {
   const [view, setView] = useState<ActionView>('open');
   const [search, setSearch] = useState('');
@@ -63,6 +65,7 @@ export function PlannerActionList({
           +
         </button>
       </header>
+      {viewSwitcher}
       <div className="planner-toolbar">
         <VoiceField>
           <span>Поиск действий</span>
@@ -122,11 +125,14 @@ export function PlannerActionRow({
   onPlan,
   onLink,
   expanded = false,
+  lazyDetails = false,
 }: PlannerActionOperations & {
   readonly action: LifeAction;
   readonly goals: readonly Goal[];
   readonly expanded?: boolean;
+  readonly lazyDetails?: boolean;
 }) {
+  const [detailsOpen, setDetailsOpen] = useState(expanded);
   const [dateDraft, setDateDraft] = useState<PlannerFieldDraft | null>(null);
   const [goalDraft, setGoalDraft] = useState<PlannerFieldDraft | null>(null);
   const savedDate = action.plannedDate?.toString() ?? '';
@@ -172,116 +178,130 @@ export function PlannerActionRow({
           >
             {action.title.toString()}
           </a>
-          {goal && <span className="planner-muted">{goal.title}</span>}
           <span className="planner-muted">
-            {action.plannedDate?.toString()}
+            {goal?.title ?? (action.goalId ? 'Связанная цель недоступна' : 'Без цели')}
+          </span>
+          <span className="planner-muted">
+            {action.plannedDate?.toString() ?? 'Без даты'}
             {action.isNext ? ' · Главное' : ''}
             {action.status === 'completed' ? ' · Выполнено' : ''}
+            {action.status === 'cancelled' ? ' · Отменено' : ''}
           </span>
         </div>
       </div>
-      <details className="planner-row-details" open={expanded || undefined}>
+      <details
+        className="planner-row-details"
+        open={expanded || undefined}
+        onToggle={(event) => setDetailsOpen(event.currentTarget.open)}
+      >
         <summary>Открыть и изменить</summary>
-        {conflict && (
-          <div className="planner-error" role="alert">
-            <p>
-              Действие изменилось на другом экране или устройстве. Обновите поля перед сохранением.
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                setDateDraft(null);
-                setGoalDraft(null);
-                setError(null);
-              }}
-            >
-              Загрузить актуальные поля
-            </button>
-          </div>
-        )}
-        {action.description && <p className="planner-action-note">{action.description}</p>}
-        {action.completedAt && (
-          <p className="planner-muted">Выполнено: {action.completedAt.toLocaleString('ru')}</p>
-        )}
-        <div className="planner-form-columns">
-          {isOpenAction(action) && (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                void run(
-                  () => onPlan(action.id.toString(), date),
-                  () => setDateDraft(null),
-                );
-              }}
-            >
-              <label>
-                <span>Дата</span>
-                <input
-                  type="date"
-                  value={date}
-                  onChange={(e) =>
-                    setDateDraft((d) => editPlannerField(d, savedDate, e.target.value))
-                  }
-                  disabled={busy || pending || conflict}
-                />
-              </label>
-              <div className="planner-inline-actions">
-                <button disabled={busy || pending || conflict} type="submit">
-                  Сохранить дату
-                </button>
+        {(!lazyDetails || detailsOpen) && (
+          <>
+            {conflict && (
+              <div className="planner-error" role="alert">
+                <p>
+                  Действие изменилось на другом экране или устройстве. Обновите поля перед
+                  сохранением.
+                </p>
                 <button
-                  disabled={busy || pending || conflict}
                   type="button"
                   onClick={() => {
+                    setDateDraft(null);
+                    setGoalDraft(null);
+                    setError(null);
+                  }}
+                >
+                  Загрузить актуальные поля
+                </button>
+              </div>
+            )}
+            {action.description && <p className="planner-action-note">{action.description}</p>}
+            {action.completedAt && (
+              <p className="planner-muted">Выполнено: {action.completedAt.toLocaleString('ru')}</p>
+            )}
+            <div className="planner-form-columns">
+              {(isOpenAction(action) || action.status === 'completed') && (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
                     void run(
-                      () => onPlan(action.id.toString(), ''),
+                      () => onPlan(action.id.toString(), date),
                       () => setDateDraft(null),
                     );
                   }}
                 >
-                  Без даты
-                </button>
-              </div>
-            </form>
-          )}
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void run(
-                () => onLink(action.id.toString(), goalId),
-                () => setGoalDraft(null),
-              );
-            }}
-          >
-            <label>
-              <span>Цель</span>
-              <select
-                value={goalId}
-                onChange={(e) =>
-                  setGoalDraft((d) => editPlannerField(d, savedGoal, e.target.value))
-                }
-                disabled={busy || pending || conflict}
+                  <label>
+                    <span>Дата</span>
+                    <input
+                      type="date"
+                      aria-label={`Плановая дата: ${action.title.toString()}`}
+                      value={date}
+                      onChange={(e) =>
+                        setDateDraft((d) => editPlannerField(d, savedDate, e.target.value))
+                      }
+                      disabled={busy || pending || conflict}
+                    />
+                  </label>
+                  <div className="planner-inline-actions">
+                    <button disabled={busy || pending || conflict} type="submit">
+                      Сохранить дату
+                    </button>
+                    <button
+                      disabled={busy || pending || conflict}
+                      type="button"
+                      onClick={() => {
+                        void run(
+                          () => onPlan(action.id.toString(), ''),
+                          () => setDateDraft(null),
+                        );
+                      }}
+                    >
+                      Без даты
+                    </button>
+                  </div>
+                </form>
+              )}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void run(
+                    () => onLink(action.id.toString(), goalId),
+                    () => setGoalDraft(null),
+                  );
+                }}
               >
-                <option value="">Без цели</option>
-                {goalId && !goals.some((g) => g.id.toString() === goalId) && (
-                  <option value={goalId}>Связанная цель недоступна</option>
-                )}
-                {goals.map((g) => (
-                  <option key={g.id.toString()} value={g.id.toString()}>
-                    {g.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button disabled={busy || pending || conflict} type="submit">
-              Сохранить связь
-            </button>
-          </form>
-        </div>
-        {error && (
-          <p role="alert" className="planner-error">
-            {error}
-          </p>
+                <label>
+                  <span>Цель</span>
+                  <select
+                    aria-label={`Цель действия: ${action.title.toString()}`}
+                    value={goalId}
+                    onChange={(e) =>
+                      setGoalDraft((d) => editPlannerField(d, savedGoal, e.target.value))
+                    }
+                    disabled={busy || pending || conflict}
+                  >
+                    <option value="">Без цели</option>
+                    {goalId && !goals.some((g) => g.id.toString() === goalId) && (
+                      <option value={goalId}>Связанная цель недоступна</option>
+                    )}
+                    {goals.map((g) => (
+                      <option key={g.id.toString()} value={g.id.toString()}>
+                        {g.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button disabled={busy || pending || conflict} type="submit">
+                  Сохранить связь
+                </button>
+              </form>
+            </div>
+            {error && (
+              <p role="alert" className="planner-error">
+                {error}
+              </p>
+            )}
+          </>
         )}
       </details>
     </div>
