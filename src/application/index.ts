@@ -100,6 +100,8 @@ export {
 } from './commands/CompleteActionSession';
 export { CompleteLifeAction, type CompleteLifeActionInput } from './commands/CompleteLifeAction';
 export { SetLifeActionGoal, type SetLifeActionGoalInput } from './commands/SetLifeActionGoal';
+export { SetLifeActionPlan, type SetLifeActionPlanInput } from './commands/SetLifeActionPlan';
+export { GetPlannerToday, type PlannerTodayOverview } from './queries/GetPlannerToday';
 export {
   VerifyLifeActionResult,
   type VerifyLifeActionResultInput,

@@ -1,0 +1,171 @@
+import { useRef, useState } from 'react';
+import type { PlannerTodayOverview } from '../../application';
+import type { DayDate, LifeAction } from '../../domain';
+import { VoiceTextInput } from '../voice-input/VoiceTextInput';
+import type { PlannerOption } from './PlannerActionForm';
+
+export function PlannerToday({
+  date,
+  overview,
+  goals,
+  busy,
+  onComplete,
+  onPlan,
+  onQuickAdd,
+  onNewAction,
+}: {
+  readonly date: DayDate;
+  readonly overview: PlannerTodayOverview;
+  readonly goals: readonly PlannerOption[];
+  readonly busy: boolean;
+  readonly onComplete: (id: string) => void;
+  readonly onPlan: (id: string, main: boolean) => void;
+  readonly onQuickAdd: (title: string) => Promise<void>;
+  readonly onNewAction: () => void;
+}) {
+  const [title, setTitle] = useState('');
+  const adding = useRef(false);
+  const [error, setError] = useState<string | null>(null);
+  const dateLabel = new Intl.DateTimeFormat('ru-RU', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  }).format(new Date(`${date.toString()}T12:00:00`));
+  const row = (action: LifeAction, mode: 'main' | 'today' | 'unscheduled' | 'completed') => {
+    const id = action.id.toString();
+    const goal = goals.find((item) => item.id === action.goalId?.toString());
+    return (
+      <li key={id} className={`planner-action-row planner-action-row--${mode}`}>
+        <input
+          className="planner-check"
+          type="checkbox"
+          aria-label={`Выполнить: ${action.title.toString()}`}
+          checked={mode === 'completed'}
+          disabled={busy || mode === 'completed'}
+          onChange={() => onComplete(id)}
+        />
+        <div className="planner-action-copy">
+          <span className="planner-action-title">{action.title.toString()}</span>
+          {goal ? <span className="planner-muted">{goal.title}</span> : null}
+          {action.description ? <p className="planner-action-note">{action.description}</p> : null}
+          {action.actualResult ? (
+            <p className="planner-action-note">{action.actualResult.toString()}</p>
+          ) : null}
+        </div>
+        {mode === 'unscheduled' ? (
+          <button type="button" disabled={busy} onClick={() => onPlan(id, false)}>
+            На сегодня
+          </button>
+        ) : null}
+        {mode === 'today' || mode === 'main' ? (
+          <button
+            type="button"
+            className="planner-main-toggle"
+            aria-label={
+              mode === 'main'
+                ? `Убрать главный приоритет: ${action.title.toString()}`
+                : `Сделать главным: ${action.title.toString()}`
+            }
+            aria-pressed={mode === 'main'}
+            disabled={busy}
+            onClick={() => onPlan(id, mode !== 'main')}
+          >
+            {mode === 'main' ? '★' : '☆'}
+          </button>
+        ) : null}
+      </li>
+    );
+  };
+  return (
+    <div className="planner-today">
+      <header className="planner-page-heading">
+        <div>
+          <p className="planner-eyebrow">{dateLabel}</p>
+          <h1>Сегодня</h1>
+        </div>
+        <button
+          type="button"
+          className="planner-add-icon"
+          onClick={onNewAction}
+          aria-label="Открыть форму нового действия"
+        >
+          +
+        </button>
+      </header>
+      <form
+        className="planner-quick-add"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (adding.current || busy || !title.trim()) return;
+          adding.current = true;
+          setError(null);
+          void onQuickAdd(title)
+            .then(() => setTitle(''))
+            .catch((reason: unknown) =>
+              setError(reason instanceof Error ? reason.message : 'Не удалось добавить действие.'),
+            )
+            .finally(() => {
+              adding.current = false;
+            });
+        }}
+      >
+        <VoiceTextInput
+          id="planner-quick-title"
+          aria-label="Новое действие на сегодня"
+          placeholder="Добавить действие на сегодня"
+          value={title}
+          onValueChange={setTitle}
+          readOnly={busy}
+          required
+          maxLength={200}
+        />
+        <button className="planner-primary" type="submit" disabled={busy || !title.trim()}>
+          Добавить
+        </button>
+      </form>
+      {error ? (
+        <p role="alert" className="planner-error">
+          {error}
+        </p>
+      ) : null}
+      {overview.main ? (
+        <section className="planner-main">
+          <h2>Главное действие</h2>
+          <ul>{row(overview.main, 'main')}</ul>
+        </section>
+      ) : null}
+      <section className="planner-today-list">
+        <h2>
+          {overview.main ? 'Ещё на сегодня' : 'На сегодня'} <span>{overview.actions.length}</span>
+        </h2>
+        {overview.actions.length === 0 ? (
+          <p className="planner-empty">
+            {overview.main
+              ? 'Остальное можно добавить позже.'
+              : 'На сегодня пока ничего не запланировано.'}
+          </p>
+        ) : (
+          <ul>{overview.actions.map((action) => row(action, 'today'))}</ul>
+        )}
+      </section>
+      <details className="planner-details planner-completed">
+        <summary>
+          Выполнено <span>{overview.completed.length}</span>
+        </summary>
+        {overview.completed.length ? (
+          <ul>{overview.completed.map((action) => row(action, 'completed'))}</ul>
+        ) : (
+          <p className="planner-empty">Здесь появятся выполненные сегодня действия.</p>
+        )}
+      </details>
+      {overview.unscheduled.length ? (
+        <details className="planner-details">
+          <summary>
+            Без даты <span>{overview.unscheduled.length}</span>
+          </summary>
+          <ul>{overview.unscheduled.map((action) => row(action, 'unscheduled'))}</ul>
+        </details>
+      ) : null}
+    </div>
+  );
+}

@@ -5,6 +5,14 @@ import { APP_SECTION } from './AppSection';
 import { parseApplicationRoute, resolveInitialApplicationSection } from './ApplicationRoute';
 
 describe('application routes', () => {
+  it.each([
+    ['#/v2/today', { view: 'today' }],
+    ['#/v2/goals/new', { view: 'new-goal' }],
+    ['#/v2/actions/new?goalId=goal%2F1', { view: 'new-action', goalId: 'goal/1', title: null }],
+  ])('opens the isolated planner route %s without changing legacy default', (hash, route) => {
+    expect(parseApplicationRoute(hash as string)).toEqual({ section: APP_SECTION.today, route });
+    expect(resolveInitialApplicationSection(null, APP_SECTION.today)).toBe(APP_SECTION.today);
+  });
   it('resolves Goal Album routes through Management', () => {
     expect(parseApplicationRoute('#/goals/goal-1/edit')).toEqual({
       section: APP_SECTION.management,

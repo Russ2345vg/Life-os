@@ -6,6 +6,17 @@ import { loadApplicationStartup } from './ApplicationStartup';
 const DATE = DayDate.create('2026-08-25');
 
 describe('loadApplicationStartup', () => {
+  it('preserves the explicit V2 preview even when a legacy walk is active', async () => {
+    const getActiveWalk = { execute: vi.fn().mockResolvedValue({ date: DATE }) };
+    const result = await loadApplicationStartup({
+      getActiveWalk,
+      getApplicationMode: { execute: vi.fn() },
+      hasInitialRoutineRoute: true,
+      hasInitialPlannerRoute: true,
+    });
+    expect(result).toEqual({ status: 'idle' });
+    expect(getActiveWalk.execute).not.toHaveBeenCalled();
+  });
   it('restores an active walk before an initial Routine deep link', async () => {
     const getApplicationMode = { execute: vi.fn() };
 

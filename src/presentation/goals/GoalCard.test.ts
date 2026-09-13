@@ -32,11 +32,19 @@ const MODEL: GoalCardViewModel = {
 };
 
 describe('GoalCard sharing', () => {
-  it('keeps the A1 default variant as one whole-card route link', () => {
+  it('does not offer new actions for an archived Goal', () => {
+    const markup = renderToStaticMarkup(
+      createElement(GoalCard, { goal: { ...MODEL, status: 'archived' }, onOpen: vi.fn() }),
+    );
+    expect(markup).not.toContain('#/v2/actions/new');
+  });
+  it('keeps the whole-card Goal route and adds a separate action link with its goalId', () => {
     const markup = renderToStaticMarkup(createElement(GoalCard, { goal: MODEL, onOpen: vi.fn() }));
 
     expect(markup).toContain('href="#/goals/goal-home"');
-    expect(markup.match(/<a /gu)).toHaveLength(1);
+    expect(markup.match(/<a /gu)).toHaveLength(2);
+    expect(markup).toContain('href="#/v2/actions/new?goalId=goal-home"');
+    expect(markup).toContain('Добавить действие');
     expect(markup).toContain('Собственный дом');
     expect(markup).toContain('25 из 100 %');
     expect(markup).toContain('data:image/png;base64,YQ==');

@@ -2,8 +2,10 @@ import { parseGoalAlbumRoute, type GoalAlbumRoute } from '../goals/GoalAlbumNavi
 import { MANAGEMENT_SECTION } from '../management/ManagementSection';
 import { parseRoutineRoute, type RoutineRoute } from '../routine/RoutineNavigation';
 import { APP_SECTION, resolveMenuEntrySection, type AppSection } from './AppSection';
+import { parsePlannerV2Route, type PlannerV2Route } from '../planner-v2/PlannerV2Navigation';
 
 export type RoutedApplicationSection =
+  | { readonly section: typeof APP_SECTION.today; readonly route: PlannerV2Route }
   | {
       readonly section: typeof APP_SECTION.management;
       readonly managementSection: typeof MANAGEMENT_SECTION.goals;
@@ -15,6 +17,8 @@ export type RoutedApplicationSection =
     };
 
 export function parseApplicationRoute(hash: string): RoutedApplicationSection | null {
+  const plannerRoute = parsePlannerV2Route(hash);
+  if (plannerRoute !== null) return { section: APP_SECTION.today, route: plannerRoute };
   const goalRoute = parseGoalAlbumRoute(hash);
   if (goalRoute !== null) {
     return {

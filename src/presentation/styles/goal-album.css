@@ -1544,3 +1544,17 @@
     transform: none;
   }
 }
+
+.goal-album-card-add-action {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  margin: 0 20px 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-decoration: none;
+}
+.goal-album-card-add-action:focus-visible {
+  outline: 2px solid var(--gold-soft);
+  outline-offset: 2px;
+}

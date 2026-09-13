@@ -13,6 +13,7 @@ import { DirectionRecordMapper } from './mappers/DirectionRecordMapper';
 import { ProjectGoalCompatibility as ProjectRecordMapper } from './mappers/ProjectGoalCompatibility';
 import type { GoalRecord } from './records/GoalRecord';
 import type { DecisionRecord } from './records/DecisionRecord';
+import type { LifeActionRecord } from './records/LifeActionRecord';
 import {
   IndexedDbPilotMutationRecorder,
   PILOT_MUTATION_STORES,
@@ -120,6 +121,10 @@ async function validateExpectedState(
   input: CommitJournalStateInput,
 ): Promise<void> {
   const checks: Promise<void>[] = [];
+  if (input.mainActionDate !== undefined)
+    checks.push(
+      validateMainActionSelection(transaction.objectStore(LIFE_OS_STORE.lifeActions), input),
+    );
   for (const change of input.days ?? []) {
     checks.push(
       validateVersion(
@@ -173,6 +178,33 @@ async function validateExpectedState(
   await Promise.all(checks);
 }
 
+async function validateMainActionSelection(
+  store: IDBObjectStore,
+  input: CommitJournalStateInput,
+): Promise<void> {
+  const date = input.mainActionDate?.toString();
+  if (date === undefined) return;
+  const stored = await observeRequest<LifeActionRecord[]>(
+    store.index('byPlannedDate').getAll(date),
+  );
+  const final = new Map(stored.map((record) => [record.id, record]));
+  for (const change of input.lifeActions ?? [])
+    final.set(change.lifeAction.id.toString(), LifeActionRecordMapper.toRecord(change.lifeAction));
+  const mains = [...final.values()].filter(
+    (record) =>
+      record.plannedDate === date &&
+      record.isNext &&
+      record.archivedAt === null &&
+      record.status !== 'completed' &&
+      record.status !== 'cancelled',
+  );
+  if (mains.length > 1)
+    throw new DomainError(
+      'life_action.main_conflict',
+      'Главное действие уже изменилось. Обновите список и повторите выбор.',
+    );
+}
+
 async function validateVersion(
   store: IDBObjectStore,
   id: string,
@@ -224,6 +256,7 @@ function collectStores(input: CommitJournalStateInput): string[] {
   if ((input.days?.length ?? 0) > 0) stores.add(LIFE_OS_STORE.days);
   if ((input.decisions?.length ?? 0) > 0) stores.add(LIFE_OS_STORE.decisions);
   if ((input.lifeActions?.length ?? 0) > 0) stores.add(LIFE_OS_STORE.lifeActions);
+  if (input.mainActionDate !== undefined) stores.add(LIFE_OS_STORE.lifeActions);
   if ((input.workSessions?.length ?? 0) > 0) stores.add(LIFE_OS_STORE.actionSessions);
   if ((input.directions?.length ?? 0) > 0) stores.add(LIFE_OS_STORE.directions);
   if ((input.projects?.length ?? 0) > 0) stores.add(LIFE_OS_STORE.goals);

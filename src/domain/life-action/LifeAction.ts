@@ -26,6 +26,9 @@ export interface LifeActionDraftInput {
   readonly description?: string;
   readonly decisionId?: EntityId;
   readonly sphereId?: EntityId | null;
+  readonly goalId?: EntityId | null;
+  readonly plannedDate?: DayDate | null;
+  readonly isNext?: boolean;
   readonly createdAt: Date;
   readonly eventId: EntityId;
 }
@@ -76,7 +79,7 @@ export class LifeAction extends Entity {
   readonly #decisionId: EntityId | null;
   #sphereId: EntityId | null;
   #goalId: EntityId | null;
-  readonly #isNext: boolean;
+  #isNext: boolean;
   readonly #createdAt: Date;
   readonly #domainEvents: DomainEvent[];
   #expectedResult: ActionExpectedResult | null;
@@ -120,6 +123,10 @@ export class LifeAction extends Entity {
     assertLifeActionTitle(input.title);
     assertValidDate(input.createdAt, 'Время создания действия');
     assertOptionalDecisionId(input.decisionId ?? null);
+    if (input.plannedDate != null) assertDayDate(input.plannedDate);
+    if (input.isNext && input.plannedDate == null) {
+      throw new DomainError('life_action.main_requires_date', 'Выберите дату главного действия.');
+    }
 
     const lifeAction = new LifeAction(
       {
@@ -131,7 +138,9 @@ export class LifeAction extends Entity {
         status: LIFE_ACTION_STATUS.draft,
         decisionId: input.decisionId ?? null,
         sphereId: input.sphereId ?? null,
-        plannedDate: null,
+        goalId: input.goalId ?? null,
+        isNext: input.isNext ?? false,
+        plannedDate: input.plannedDate ?? null,
         createdAt: input.createdAt,
         readyAt: null,
         startedAt: null,
@@ -243,6 +252,38 @@ export class LifeAction extends Entity {
     this.assertNotArchived();
     if (sameOptionalEntityId(this.#goalId, goalId)) return false;
     this.#goalId = goalId;
+    this.#version += 1;
+    return true;
+  }
+
+  public setPlan(plannedDate: DayDate | null, isNext: boolean): boolean {
+    this.assertNotArchived();
+    if (
+      this.#status === LIFE_ACTION_STATUS.completed ||
+      this.#status === LIFE_ACTION_STATUS.cancelled
+    ) {
+      throw new DomainError(
+        'life_action.plan_requires_open',
+        'Планировать можно только открытое действие.',
+      );
+    }
+    if (plannedDate !== null) assertDayDate(plannedDate);
+    if (isNext && plannedDate === null) {
+      throw new DomainError('life_action.main_requires_date', 'Выберите дату главного действия.');
+    }
+    const sameDate =
+      this.#plannedDate === null
+        ? plannedDate === null
+        : plannedDate !== null && this.#plannedDate.equals(plannedDate);
+    if (this.#status !== LIFE_ACTION_STATUS.draft && !sameDate) {
+      throw new DomainError(
+        'life_action.plan_requires_reschedule',
+        'Измените дату подготовленного действия через перенос.',
+      );
+    }
+    if (sameDate && this.#isNext === isNext) return false;
+    this.#plannedDate = plannedDate;
+    this.#isNext = isNext;
     this.#version += 1;
     return true;
   }
@@ -544,8 +585,7 @@ function assertRehydrationInvariants(data: LifeActionRehydrationData): void {
 
   assertOptionalValueTypes(data);
 
-  const hasAnyReadyField =
-    data.expectedResult !== null || data.plannedDate !== null || data.readyAt !== null;
+  const hasAnyReadyField = data.expectedResult !== null || data.readyAt !== null;
   const hasAllReadyFields =
     data.expectedResult !== null && data.plannedDate !== null && data.readyAt !== null;
 

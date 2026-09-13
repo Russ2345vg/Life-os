@@ -1,6 +1,7 @@
 import type {
   ActionSession,
   Day,
+  DayDate,
   Decision,
   Direction,
   JournalEntry,
@@ -39,6 +40,8 @@ export interface JournalProjectChange {
 }
 
 export interface CommitJournalStateInput {
+  /** Validate the final main-action selection inside the same write transaction. */
+  readonly mainActionDate?: DayDate;
   readonly days?: readonly JournalDayChange[];
   readonly decisions?: readonly JournalDecisionChange[];
   readonly lifeActions?: readonly JournalLifeActionChange[];

@@ -8,6 +8,8 @@ import type {
   CompleteActionSession,
   CompleteLifeAction,
   SetLifeActionGoal,
+  SetLifeActionPlan,
+  GetPlannerToday,
   CreateLifeActionDraft,
   VerifyLifeActionResult,
   CancelDecisionSafely,
@@ -260,6 +262,8 @@ interface LifeOsApplicationServices {
   readonly completeActionSession: CompleteActionSession;
   readonly createLifeActionDraft: CreateLifeActionDraft;
   readonly setLifeActionGoal: SetLifeActionGoal;
+  readonly setLifeActionPlan: SetLifeActionPlan;
+  readonly getPlannerToday: GetPlannerToday;
   readonly completeLifeAction: CompleteLifeAction;
   readonly verifyLifeActionResult: VerifyLifeActionResult;
   readonly confirmDecisionFromActions: ConfirmDecisionFromActions;
@@ -443,6 +447,8 @@ export class LifeOsApplication {
   public readonly completeActionSession: CompleteActionSession;
   public readonly createLifeActionDraft: CreateLifeActionDraft;
   public readonly setLifeActionGoal: SetLifeActionGoal;
+  public readonly setLifeActionPlan: SetLifeActionPlan;
+  public readonly getPlannerToday: GetPlannerToday;
   public readonly completeLifeAction: CompleteLifeAction;
   public readonly verifyLifeActionResult: VerifyLifeActionResult;
   public readonly confirmDecisionFromActions: ConfirmDecisionFromActions;
@@ -626,6 +632,8 @@ export class LifeOsApplication {
     this.completeActionSession = services.completeActionSession;
     this.createLifeActionDraft = services.createLifeActionDraft;
     this.setLifeActionGoal = services.setLifeActionGoal;
+    this.setLifeActionPlan = services.setLifeActionPlan;
+    this.getPlannerToday = services.getPlannerToday;
     this.completeLifeAction = services.completeLifeAction;
     this.verifyLifeActionResult = services.verifyLifeActionResult;
     this.confirmDecisionFromActions = services.confirmDecisionFromActions;

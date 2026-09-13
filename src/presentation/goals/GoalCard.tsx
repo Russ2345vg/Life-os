@@ -3,6 +3,7 @@ import { AppIcon } from '../components/AppIcon';
 import { buildGoalAlbumRoute } from './GoalAlbumNavigation';
 import type { GoalCardViewModel } from './goalAlbumPresentation';
 import { AttachmentSyncStatus } from '../sync/AttachmentSyncStatus';
+import { buildPlannerV2Route } from '../planner-v2/PlannerV2Navigation';
 
 export interface GoalCardProps {
   readonly goal: GoalCardViewModel;
@@ -30,6 +31,14 @@ export function GoalCard({ goal, onOpen, variant = 'default' }: GoalCardProps): 
       <a className="goal-album-card-link" href={route} onClick={openGoal}>
         <GoalCardContent goal={goal} />
       </a>
+      {goal.status !== 'archived' ? (
+        <a
+          className="goal-album-card-add-action"
+          href={buildPlannerV2Route({ view: 'new-action', goalId: goal.id, title: null })}
+        >
+          Добавить действие
+        </a>
+      ) : null}
       <AttachmentSyncStatus
         entityType="goal"
         objectId={goal.id}

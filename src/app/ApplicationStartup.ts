@@ -8,6 +8,7 @@ interface ApplicationStartupInput {
   };
   readonly getApplicationMode: Pick<GetApplicationMode, 'execute'>;
   readonly hasInitialRoutineRoute: boolean;
+  readonly hasInitialPlannerRoute?: boolean;
 }
 
 export type ApplicationStartupResult =
@@ -20,6 +21,7 @@ export type ApplicationStartupResult =
 export async function loadApplicationStartup(
   input: ApplicationStartupInput,
 ): Promise<ApplicationStartupResult> {
+  if (input.hasInitialPlannerRoute) return { status: 'idle' };
   const activeWalk = await input.getActiveWalk.execute();
   if (activeWalk !== null) return { status: 'active-walk', date: activeWalk.date };
   if (input.hasInitialRoutineRoute) return { status: 'routine-route' };

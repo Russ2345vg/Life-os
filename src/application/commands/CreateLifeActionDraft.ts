@@ -1,6 +1,15 @@
-import { DECISION_STATUS, LifeAction, type EntityId, type LifeActionTitle } from '../../domain';
-import type { DomainError } from '../../shared/errors/DomainError';
-import { success, type Result } from '../../shared/result/Result';
+import {
+  DECISION_STATUS,
+  LifeAction,
+  type DayDate,
+  type EntityId,
+  type LifeActionTitle,
+} from '../../domain';
+import { DomainError } from '../../shared/errors/DomainError';
+import { failure, success, type Result } from '../../shared/result/Result';
+import type { GoalRepository } from '../ports/GoalRepository';
+import type { JournalUnitOfWork } from '../ports/JournalUnitOfWork';
+import { clearPreviousMainActions } from './lifeActionPlanning';
 import type { Clock } from '../ports/Clock';
 import type { DecisionRepository } from '../ports/DecisionRepository';
 import type { IdGenerator } from '../ports/IdGenerator';
@@ -16,6 +25,9 @@ export interface CreateLifeActionDraftInput {
   readonly description?: string;
   readonly decisionId?: EntityId;
   readonly sphereId?: EntityId | null;
+  readonly goalId?: EntityId | null;
+  readonly plannedDate?: DayDate | null;
+  readonly isNext?: boolean;
 }
 
 export class CreateLifeActionDraft {
@@ -29,6 +41,10 @@ export class CreateLifeActionDraft {
     decisionRepository: DecisionRepository,
     clock: Clock,
     idGenerator: IdGenerator,
+    readonly planning?: {
+      readonly goalRepository: GoalRepository;
+      readonly unitOfWork: JournalUnitOfWork;
+    },
   ) {
     this.#lifeActionRepository = lifeActionRepository;
     this.#decisionRepository = decisionRepository;
@@ -39,6 +55,17 @@ export class CreateLifeActionDraft {
   public async execute(
     input: CreateLifeActionDraftInput,
   ): Promise<Result<LifeAction, DomainError>> {
+    if (input.isNext && this.planning === undefined)
+      return failure(
+        new DomainError('life_action.planning_unavailable', 'Выбор главного действия недоступен.'),
+      );
+    if (
+      input.goalId != null &&
+      (this.planning === undefined ||
+        (await this.planning.goalRepository.findById(input.goalId)) === null)
+    ) {
+      return failure(new DomainError('goal.not_found', 'Цель не найдена.'));
+    }
     let inheritedSphereId: EntityId | null = null;
     if (input.decisionId !== undefined) {
       const decision = await this.#decisionRepository.findById(input.decisionId);
@@ -65,11 +92,32 @@ export class CreateLifeActionDraft {
         ...(input.description === undefined ? {} : { description: input.description }),
         ...(input.decisionId === undefined ? {} : { decisionId: input.decisionId }),
         sphereId: input.sphereId === undefined ? inheritedSphereId : input.sphereId,
+        goalId: input.goalId ?? null,
+        plannedDate: input.plannedDate ?? null,
+        isNext: input.isNext ?? false,
         createdAt: this.#clock.now(),
         eventId: this.#idGenerator.generate(),
       });
 
-      await this.#lifeActionRepository.save(lifeAction);
+      if (this.planning === undefined) {
+        await this.#lifeActionRepository.save(lifeAction);
+      } else {
+        const previous =
+          lifeAction.isNext && lifeAction.plannedDate !== null
+            ? await clearPreviousMainActions(
+                this.#lifeActionRepository,
+                lifeAction.plannedDate,
+                lifeAction,
+              )
+            : [];
+        await this.planning.unitOfWork.commit({
+          ...(lifeAction.isNext && lifeAction.plannedDate !== null
+            ? { mainActionDate: lifeAction.plannedDate }
+            : {}),
+          lifeActions: [...previous, { lifeAction, expectedVersion: null }],
+          journalEntries: [],
+        });
+      }
       return success(lifeAction);
     } catch (error: unknown) {
       return lifeActionDomainFailure(error);
