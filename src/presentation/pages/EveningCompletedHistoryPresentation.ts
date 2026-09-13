@@ -119,7 +119,7 @@ function historyContext(snapshot: EveningReviewSnapshot, item: OpenLoopItem): st
     return compactContext([
       decision?.projectReference === null || decision?.projectReference === undefined
         ? null
-        : `Связано с Проектом «${decision.projectReference}»`,
+        : `Связано с Целью «${decision.projectReference}»`,
       (decision?.rescheduleCount ?? 0) > 0
         ? `Переносилось · ${decision?.rescheduleCount ?? 0}`
         : null,

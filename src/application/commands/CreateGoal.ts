@@ -18,6 +18,7 @@ import type { IdGenerator } from '../ports/IdGenerator';
 import { goalFailure, validateGoalDirection } from './goalCommandSupport';
 
 export interface CreateGoalInput {
+  readonly sphereId?: EntityId | null;
   readonly directionId?: EntityId | null;
   readonly title: string;
   readonly description?: string | null;
@@ -54,6 +55,10 @@ export class CreateGoal {
       const goal = Goal.create({
         id: this.idGenerator.generate(),
         directionId,
+        sphereId:
+          directionId === null
+            ? (input.sphereId ?? null)
+            : ((await this.directionRepository.findById(directionId))?.sphereId ?? null),
         title: input.title,
         ...(input.description === undefined ? {} : { description: input.description }),
         ...(input.whyImportant === undefined ? {} : { whyImportant: input.whyImportant }),

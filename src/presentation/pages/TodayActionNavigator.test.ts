@@ -79,7 +79,7 @@ describe('TodayActionNavigator', () => {
   it('показывает Project-контекст связанного следующего действия', () => {
     const project = Project.create({
       id: EntityId.create('navigator-project'),
-      title: 'Контекст проекта',
+      title: 'Контекст цели',
       now: new Date('2026-08-05T08:00:00.000+09:00'),
     });
     const decision = createPlannedDecision(
@@ -107,7 +107,7 @@ describe('TodayActionNavigator', () => {
       }),
     );
 
-    expect(markup).toContain('Контекст проекта');
+    expect(markup).toContain('Контекст цели');
     expect(markup).toContain('today-action-project-link');
     expect(markup).toContain('aria-label="Выбрать действие');
   });

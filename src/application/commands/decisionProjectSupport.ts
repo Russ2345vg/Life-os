@@ -17,13 +17,13 @@ export async function resolveDecisionProject(
   if (repository === null) {
     throw new DomainError(
       'decision.project_validation_unavailable',
-      'Не удалось проверить выбранный проект.',
+      'Не удалось проверить выбранную цель.',
     );
   }
 
   const project = await repository.findById(projectId);
   if (project === null) {
-    throw new DomainError('decision.project_not_found', 'Выбранный проект не найден.');
+    throw new DomainError('decision.project_not_found', 'Выбранная цель не найдена.');
   }
   if (
     !allowUnavailableProject &&
@@ -31,7 +31,7 @@ export async function resolveDecisionProject(
   ) {
     throw new DomainError(
       'decision.project_unavailable',
-      'Завершённый или архивный проект нельзя выбрать для нового решения.',
+      'Завершённую или архивную цель нельзя выбрать для нового решения.',
     );
   }
 
@@ -40,7 +40,7 @@ export async function resolveDecisionProject(
   if (!project.sphereId.equals(sphereId)) {
     throw new DomainError(
       'decision.project_sphere_mismatch',
-      'Сфера решения должна совпадать со сферой выбранного проекта.',
+      'Сфера решения должна совпадать со сферой выбранной цели.',
     );
   }
   return { projectId, sphereId };

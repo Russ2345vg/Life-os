@@ -1,14 +1,53 @@
+import {
+  GOAL_MIGRATION_BACKUP,
+  GOAL_MIGRATION_BINDINGS,
+  upgradeLegacyProjects,
+  withLegacyGoalIngress,
+} from './LegacyProjectGoalMigration';
 import { DomainError } from '../../../shared/errors/DomainError';
 import {
   EXERCISE_DEFINITION_SOURCE,
   SYSTEM_EXERCISE_DEFINITION_SEEDS,
   normalizeExerciseDefinitionName,
 } from '../../../domain';
+import type {
+  SyncEntityType,
+  SyncEntityRegistration,
+} from '../../../application/sync/SyncRegistry';
+
+interface IndexedDbSyncMutationRecorder {
+  recordUpsert<TRecord extends object>(
+    transaction: IDBTransaction,
+    entityType: SyncEntityType,
+    record: Readonly<TRecord>,
+  ): Promise<boolean>;
+  recordTombstone(
+    transaction: IDBTransaction,
+    entityType: SyncEntityType,
+    objectId: string,
+    previous?: Readonly<Record<string, unknown>>,
+  ): Promise<boolean>;
+  notifyCommitted(recorded: boolean): void;
+}
+
+export const SINGLETON_SYNC_STORES = [
+  'days',
+  'morningCycles',
+  'eveningCycles',
+  'tomorrowPlans',
+  'preparationPlans',
+] as const;
+
+interface MutationCaptureConfiguration {
+  readonly recorder: IndexedDbSyncMutationRecorder;
+  readonly entityTypeByStore: ReadonlyMap<string, SyncEntityType>;
+  readonly manuallyCapturedTypes: ReadonlySet<SyncEntityType>;
+}
 
 export const LIFE_OS_DATABASE_NAME = 'lifeos';
-export const LIFE_OS_DATABASE_VERSION = 19;
+export const LIFE_OS_DATABASE_VERSION = 22;
 
-export const LIFE_OS_STORE = {
+export const LIFE_OS_DOMAIN_STORE = {
   days: 'days',
   decisions: 'decisions',
   lifeActions: 'lifeActions',
@@ -32,31 +71,72 @@ export const LIFE_OS_STORE = {
   goals: 'goals',
 } as const;
 
+export const LIFE_OS_STORE = LIFE_OS_DOMAIN_STORE;
+
+export const LIFE_OS_SYNC_STORE = {
+  outbox: 'sync_outbox',
+  objectMeta: 'sync_object_meta',
+  cursor: 'sync_cursor',
+  conflicts: 'sync_conflicts',
+  deviceCache: 'sync_device_cache',
+  attachmentQueue: 'sync_attachment_queue',
+  snapshotMeta: 'sync_snapshot_meta',
+  settings: 'sync_settings',
+  quarantine: 'sync_quarantine',
+  appliedEvents: 'sync_applied_events',
+} as const;
+
 export class LifeOsIndexedDb {
   readonly #indexedDb: IDBFactory | undefined;
   #database: IDBDatabase | null = null;
+  #exposedDatabase: IDBDatabase | null = null;
   #opening: Promise<IDBDatabase> | null = null;
+  #mutationCapture: MutationCaptureConfiguration | null = null;
+  #captureSuppressionDepth = 0;
+  readonly #commitListeners = new Set<(stores: readonly string[]) => void>();
+
+  public subscribeCommits(listener: (stores: readonly string[]) => void): () => void {
+    this.#commitListeners.add(listener);
+    return () => {
+      this.#commitListeners.delete(listener);
+    };
+  }
 
   public constructor(indexedDb: IDBFactory | null | undefined = globalThis.indexedDB) {
     this.#indexedDb = indexedDb ?? undefined;
   }
 
   public async open(): Promise<IDBDatabase> {
-    if (this.#database !== null) {
-      return this.#database;
+    if (this.#exposedDatabase !== null) {
+      return this.#exposedDatabase;
     }
 
     if (this.#opening !== null) {
       return this.#opening;
     }
 
-    const opening = this.openDatabase();
+    const opening = this.openDatabase().then((database) => {
+      this.#database = database;
+      this.#exposedDatabase = createMutationCapturingDatabase(
+        database,
+        () => this.#mutationCapture,
+        () => this.#captureSuppressionDepth > 0,
+        (stores) => {
+          for (const listener of this.#commitListeners) {
+            try {
+              listener(stores);
+            } catch {
+              /* Observers cannot invalidate an already committed save. */
+            }
+          }
+        },
+      );
+      return this.#exposedDatabase;
+    });
     this.#opening = opening;
 
     try {
-      const database = await opening;
-      this.#database = database;
-      return database;
+      return await opening;
     } finally {
       this.#opening = null;
     }
@@ -65,6 +145,36 @@ export class LifeOsIndexedDb {
   public close(): void {
     this.#database?.close();
     this.#database = null;
+    this.#exposedDatabase = null;
+  }
+
+  public configureSyncMutationCapture(
+    recorder: IndexedDbSyncMutationRecorder,
+    registrations: readonly SyncEntityRegistration[],
+    manuallyCapturedTypes: readonly SyncEntityType[] = [],
+  ): void {
+    this.#mutationCapture = {
+      recorder,
+      entityTypeByStore: new Map(
+        registrations
+          .filter(
+            ({ storageKind, readiness }) =>
+              storageKind === 'indexed_db' && readiness === 'sync_ready',
+          )
+          .filter(({ entityType }) => entityType !== 'project')
+          .map(({ storeName, entityType }) => [storeName, entityType]),
+      ),
+      manuallyCapturedTypes: new Set(manuallyCapturedTypes),
+    };
+  }
+
+  public withMutationCaptureSuppressed<T>(operation: () => Promise<T>): Promise<T> {
+    this.#captureSuppressionDepth += 1;
+    try {
+      return operation();
+    } finally {
+      this.#captureSuppressionDepth -= 1;
+    }
   }
 
   private openDatabase(): Promise<IDBDatabase> {
@@ -108,6 +218,10 @@ export class LifeOsIndexedDb {
           if (oldVersion < 17) createVersionSeventeenSchema(request.transaction);
           if (oldVersion < 18) createVersionEighteenSchema(request.result);
           if (oldVersion < 19) createVersionNineteenSchema(request.result);
+          if (oldVersion < 20) createVersionTwentySchema(request.result);
+          if (oldVersion < 21) createVersionTwentyOneSchema(request.transaction);
+          if (oldVersion < 22 && request.transaction)
+            upgradeLegacyProjects(request.result, request.transaction);
         } catch (error: unknown) {
           upgradeError = error;
           request.transaction?.abort();
@@ -126,6 +240,7 @@ export class LifeOsIndexedDb {
           database.close();
           if (this.#database === database) {
             this.#database = null;
+            this.#exposedDatabase = null;
           }
         });
         resolve(database);
@@ -148,6 +263,306 @@ export class LifeOsIndexedDb {
       });
     });
   }
+}
+
+function createMutationCapturingDatabase(
+  database: IDBDatabase,
+  configuration: () => MutationCaptureConfiguration | null,
+  isSuppressed: () => boolean,
+  onCommitted: (stores: readonly string[]) => void,
+): IDBDatabase {
+  return new Proxy(database, {
+    get(target, property) {
+      if (property === 'transaction') {
+        return (
+          storeNames: string | string[],
+          mode?: IDBTransactionMode,
+          options?: IDBTransactionOptions,
+        ): IDBTransaction => {
+          const resolvedMode = mode ?? 'readonly';
+          const configured = configuration();
+          const requested = typeof storeNames === 'string' ? [storeNames] : [...storeNames];
+          if (resolvedMode === 'readwrite' && requested.includes('projects')) {
+            for (const name of [
+              'goals',
+              GOAL_MIGRATION_BACKUP,
+              GOAL_MIGRATION_BINDINGS,
+              ...SINGLETON_SYNC_STORES,
+              LIFE_OS_SYNC_STORE.settings,
+              LIFE_OS_SYNC_STORE.objectMeta,
+              LIFE_OS_SYNC_STORE.outbox,
+              LIFE_OS_SYNC_STORE.attachmentQueue,
+            ]) {
+              if (!requested.includes(name)) requested.push(name);
+            }
+          }
+          const observe = (transaction: IDBTransaction): IDBTransaction => {
+            return resolvedMode === 'readwrite'
+              ? withLegacyGoalIngress(
+                  observeCommittedWrites(transaction, (stores) =>
+                    onCommitted(
+                      stores.includes('projects') ? [...new Set([...stores, 'goals'])] : stores,
+                    ),
+                  ),
+                  (goal) => {
+                    if (!configured) return;
+                    let recorded = false;
+                    transaction.addEventListener('complete', () =>
+                      configured.recorder.notifyCommitted(recorded),
+                    );
+                    void configured.recorder
+                      .recordUpsert(transaction, 'goal', goal)
+                      .then((value) => {
+                        recorded = value;
+                      })
+                      .catch(() => {
+                        try {
+                          transaction.abort();
+                        } catch {
+                          /* Already aborted. */
+                        }
+                      });
+                  },
+                )
+              : transaction;
+          };
+          const captured =
+            resolvedMode === 'readwrite' && configured !== null && !isSuppressed()
+              ? requested
+                  .map((storeName) => configured.entityTypeByStore.get(storeName))
+                  .filter(
+                    (entityType): entityType is SyncEntityType =>
+                      entityType !== undefined && !configured.manuallyCapturedTypes.has(entityType),
+                  )
+              : [];
+          if (captured.length === 0 || configured === null) {
+            return observe(openTransaction(target, requested, mode, options));
+          }
+          const scope = new Set(requested);
+          for (const storeName of SINGLETON_SYNC_STORES) scope.add(storeName);
+          for (const storeName of Object.values(LIFE_OS_SYNC_STORE)) {
+            if (
+              storeName === LIFE_OS_SYNC_STORE.settings ||
+              storeName === LIFE_OS_SYNC_STORE.objectMeta ||
+              storeName === LIFE_OS_SYNC_STORE.outbox ||
+              storeName === LIFE_OS_SYNC_STORE.attachmentQueue
+            ) {
+              scope.add(storeName);
+            }
+          }
+          const transaction = openTransaction(target, [...scope], resolvedMode, options);
+          return createMutationCapturingTransaction(observe(transaction), configured);
+        };
+      }
+      const value: unknown = Reflect.get(target, property, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+}
+
+function openTransaction(
+  database: IDBDatabase,
+  storeNames: string | string[],
+  mode?: IDBTransactionMode,
+  options?: IDBTransactionOptions,
+): IDBTransaction {
+  if (options !== undefined) return database.transaction(storeNames, mode, options);
+  if (mode !== undefined) return database.transaction(storeNames, mode);
+  return database.transaction(storeNames);
+}
+
+function observeCommittedWrites(
+  transaction: IDBTransaction,
+  notify: (stores: readonly string[]) => void,
+): IDBTransaction {
+  const changed = new Set<string>();
+  transaction.addEventListener('complete', () => {
+    if (changed.size) notify([...changed]);
+  });
+  return new Proxy(transaction, {
+    get(target, property) {
+      if (property === 'objectStore')
+        return (name: string) =>
+          new Proxy(target.objectStore(name), {
+            get(store, method) {
+              const value: unknown = Reflect.get(store, method, store);
+              if (typeof value !== 'function') return value;
+              if (['put', 'add', 'delete', 'clear'].includes(String(method)))
+                return (...args: unknown[]) => {
+                  const request = Reflect.apply(value, store, args) as IDBRequest;
+                  request.addEventListener('success', () => changed.add(name));
+                  return request;
+                };
+              return value.bind(store);
+            },
+          });
+      const value: unknown = Reflect.get(target, property, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+    set(target, property, value) {
+      return Reflect.set(target, property, value, target);
+    },
+  });
+}
+
+function createMutationCapturingTransaction(
+  transaction: IDBTransaction,
+  configuration: MutationCaptureConfiguration,
+): IDBTransaction {
+  let captureChain = Promise.resolve();
+  let recorded = false;
+  const capture = (operation: () => Promise<boolean>): void => {
+    captureChain = captureChain
+      .then(operation)
+      .then((didRecord) => {
+        recorded ||= didRecord;
+      })
+      .catch(() => {
+        try {
+          transaction.abort();
+        } catch {
+          // The transaction has already failed or completed.
+        }
+      });
+  };
+  transaction.addEventListener('complete', () => {
+    void captureChain.then(() => configuration.recorder.notifyCommitted(recorded));
+  });
+  return new Proxy(transaction, {
+    get(target, property) {
+      if (property === 'objectStore') {
+        return (storeName: string): IDBObjectStore => {
+          const store = target.objectStore(storeName);
+          const entityType = configuration.entityTypeByStore.get(storeName);
+          if (entityType === undefined || configuration.manuallyCapturedTypes.has(entityType)) {
+            return store;
+          }
+          return createMutationCapturingObjectStore(
+            store,
+            target,
+            entityType,
+            configuration,
+            capture,
+          );
+        };
+      }
+      const value: unknown = Reflect.get(target, property, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+    set(target, property, value) {
+      return Reflect.set(target, property, value, target);
+    },
+  });
+}
+
+function createMutationCapturingObjectStore(
+  store: IDBObjectStore,
+  transaction: IDBTransaction,
+  entityType: SyncEntityType,
+  configuration: MutationCaptureConfiguration,
+  capture: (operation: () => Promise<boolean>) => void,
+): IDBObjectStore {
+  return new Proxy(store, {
+    get(target, property) {
+      if (property === 'add' || property === 'put') {
+        return (value: object, key?: IDBValidKey): IDBRequest<IDBValidKey> => {
+          const request =
+            key === undefined ? target[property](value) : target[property](value, key);
+          capture(() => configuration.recorder.recordUpsert(transaction, entityType, value));
+          return request;
+        };
+      }
+      if (property === 'delete') {
+        return (key: IDBValidKey | IDBKeyRange): IDBRequest<undefined> => {
+          const before =
+            typeof key === 'string'
+              ? (target.get(key) as IDBRequest<Readonly<Record<string, unknown>> | undefined>)
+              : null;
+          const previous =
+            before === null
+              ? Promise.resolve(undefined)
+              : new Promise<Readonly<Record<string, unknown>> | undefined>((resolve, reject) => {
+                  before.onsuccess = () => resolve(before.result);
+                  before.onerror = () => reject(before.error);
+                });
+          const request = target.delete(key);
+          if (typeof key === 'string') {
+            capture(async () =>
+              configuration.recorder.recordTombstone(transaction, entityType, key, await previous),
+            );
+          }
+          return request;
+        };
+      }
+      const value: unknown = Reflect.get(target, property, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+}
+
+function createVersionTwentyOneSchema(transaction: IDBTransaction | null): void {
+  if (transaction === null) throw new Error('Транзакция обновления IndexedDB недоступна.');
+  const outbox = transaction.objectStore(LIFE_OS_SYNC_STORE.outbox);
+  outbox.createIndex('byNextAttemptAt', 'nextAttemptAt', { unique: false });
+  outbox.createIndex('byLeaseUntil', 'leaseUntil', { unique: false });
+  outbox.createIndex('byCreatedAt', 'createdAt', { unique: false });
+  transaction
+    .objectStore(LIFE_OS_SYNC_STORE.appliedEvents)
+    .createIndex('bySequence', 'sequence', { unique: false });
+  transaction
+    .objectStore(LIFE_OS_SYNC_STORE.quarantine)
+    .createIndex('byState', 'state', { unique: false });
+}
+
+function createVersionTwentySchema(database: IDBDatabase): void {
+  const outbox = database.createObjectStore(LIFE_OS_SYNC_STORE.outbox, { keyPath: 'eventId' });
+  outbox.createIndex('byState', 'state', { unique: false });
+  outbox.createIndex('byObjectId', 'objectId', { unique: false });
+
+  const objectMeta = database.createObjectStore(LIFE_OS_SYNC_STORE.objectMeta, {
+    keyPath: 'objectId',
+  });
+  objectMeta.createIndex('byEntityType', 'entityType', { unique: false });
+  objectMeta.createIndex('bySyncStatus', 'syncStatus', { unique: false });
+
+  database.createObjectStore(LIFE_OS_SYNC_STORE.cursor, { keyPath: 'spaceId' });
+
+  const conflicts = database.createObjectStore(LIFE_OS_SYNC_STORE.conflicts, {
+    keyPath: 'conflictId',
+  });
+  conflicts.createIndex('byObjectId', 'objectId', { unique: false });
+  conflicts.createIndex('byResolvedAt', 'resolvedAt', { unique: false });
+
+  const devices = database.createObjectStore(LIFE_OS_SYNC_STORE.deviceCache, {
+    keyPath: 'deviceId',
+  });
+  devices.createIndex('bySpaceId', 'spaceId', { unique: false });
+  devices.createIndex('byStatus', 'status', { unique: false });
+
+  const attachments = database.createObjectStore(LIFE_OS_SYNC_STORE.attachmentQueue, {
+    keyPath: 'attachmentId',
+  });
+  attachments.createIndex('byState', 'state', { unique: false });
+  attachments.createIndex('byParentObjectId', 'parentObjectId', { unique: false });
+
+  const snapshots = database.createObjectStore(LIFE_OS_SYNC_STORE.snapshotMeta, {
+    keyPath: 'snapshotId',
+  });
+  snapshots.createIndex('byKind', 'kind', { unique: false });
+  snapshots.createIndex('byCreatedAt', 'createdAt', { unique: false });
+
+  database.createObjectStore(LIFE_OS_SYNC_STORE.settings, { keyPath: 'id' });
+
+  const quarantine = database.createObjectStore(LIFE_OS_SYNC_STORE.quarantine, {
+    keyPath: 'quarantineId',
+  });
+  quarantine.createIndex('byEntityType', 'entityType', { unique: false });
+  quarantine.createIndex('byCreatedAt', 'createdAt', { unique: false });
+
+  const appliedEvents = database.createObjectStore(LIFE_OS_SYNC_STORE.appliedEvents, {
+    keyPath: 'eventId',
+  });
+  appliedEvents.createIndex('byAppliedAt', 'appliedAt', { unique: false });
 }
 
 function createVersionNineteenSchema(database: IDBDatabase): void {

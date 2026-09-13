@@ -1,3 +1,6 @@
+import { VoiceField } from '../voice-input/VoiceField';
+import { VoiceTextArea } from '../voice-input/VoiceTextArea';
+import { VoiceTextInput } from '../voice-input/VoiceTextInput';
 import {
   useCallback,
   useEffect,
@@ -1231,16 +1234,16 @@ export function EveningSkipDialog({
         <p className="section-kicker gold">Осознанный выбор</p>
         <h3 id="evening-r7-skip-title">Пропустить вечерний ритуал сегодня?</h3>
         <p>Пропуск сохранится в истории без ошибки и штрафа.</p>
-        <label>
+        <VoiceField>
           <span>Причина (необязательно)</span>
-          <textarea
+          <VoiceTextArea
             value={reason}
             maxLength={500}
             rows={3}
             disabled={busy}
-            onChange={(event) => onReasonChange(event.target.value)}
+            onValueChange={(value) => onReasonChange(value)}
           />
-        </label>
+        </VoiceField>
         <div className="evening-r7-dialog-actions">
           <button className="secondary-button" type="button" disabled={busy} onClick={onConfirm}>
             {busy ? 'Сохраняем…' : 'Пропустить'}
@@ -1376,16 +1379,18 @@ function EmergencyTomorrowPanel({
                 <strong>{load.snapshot.primaryDecision.title.toString()}</strong>
               </div>
             )}
-            <label>
-              {load.snapshot.primaryDecision === null
-                ? 'Главное на завтра'
-                : 'Первый объект внимания — при необходимости'}
-              <input
+            <VoiceField>
+              <span>
+                {load.snapshot.primaryDecision === null
+                  ? 'Главное на завтра'
+                  : 'Первый объект внимания — при необходимости'}
+              </span>
+              <VoiceTextInput
                 value={attention}
-                onChange={(event) => setAttention(event.target.value)}
+                onValueChange={(value) => setAttention(value)}
                 placeholder="Например, продолжить LifeOS"
               />
-            </label>
+            </VoiceField>
             <button
               className="primary-button"
               type="button"
@@ -1689,14 +1694,14 @@ export function EveningReviewPanelView({
                       </div>
                       {item.requirement === 'INFORMATIONAL' || item.resolution !== null ? null : (
                         <>
-                          <label className="evening-review-field">
+                          <VoiceField className="evening-review-field">
                             <span>Итог или причина</span>
-                            <input
+                            <VoiceTextInput
                               value={openLoopNotes[key] ?? ''}
                               disabled={isSubmitting}
-                              onChange={(event) => onOpenLoopNoteChange?.(key, event.target.value)}
+                              onValueChange={(value) => onOpenLoopNoteChange?.(key, value)}
                             />
-                          </label>
+                          </VoiceField>
                           <div className="evening-action-choice-grid">
                             {item.allowedResolutions.map((resolution) => (
                               <button
@@ -1865,18 +1870,16 @@ export function EveningReviewPanelView({
                   <h3 id="evening-summary-title">Что стало результатом дня?</h3>
                 </div>
               </div>
-              <label className="evening-review-field">
+              <VoiceField className="evening-review-field">
                 <span>Итог дня *</span>
-                <textarea
+                <VoiceTextArea
                   value={summary}
                   rows={4}
                   maxLength={4000}
                   disabled={isSubmitting}
-                  onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
-                    onSummaryChange(event.target.value)
-                  }
+                  onValueChange={(value) => onSummaryChange(value)}
                 />
-              </label>
+              </VoiceField>
               <label className="evening-review-field">
                 <span>Сфера результата дня</span>
                 <SphereSelect
@@ -2056,16 +2059,16 @@ function AdaptiveReflectionSection({
 
       {lastAnsweredQuestionId === null ? null : (
         <div className="evening-action-card">
-          <label className="evening-review-field">
+          <VoiceField className="evening-review-field">
             <span>Корректировка по последнему ответу</span>
-            <textarea
+            <VoiceTextArea
               rows={2}
               value={correctionAction}
               disabled={disabled}
               placeholder="Например: перед рабочей сессией убирать телефон со стола"
-              onChange={(event) => onCorrectionActionChange?.(event.target.value)}
+              onValueChange={(value) => onCorrectionActionChange?.(value)}
             />
-          </label>
+          </VoiceField>
           <button
             className="secondary-button"
             type="button"
@@ -2152,16 +2155,16 @@ function ReflectionQuestionForm({
           ))}
         </div>
       ) : (
-        <label className="evening-review-field">
+        <VoiceField className="evening-review-field">
           <span>{question.required ? 'Ответ *' : 'Ответ (необязательно)'}</span>
-          <textarea
+          <VoiceTextArea
             rows={3}
             maxLength={2000}
             value={draft.text}
             disabled={disabled}
-            onChange={(event) => onDraftChange?.({ ...draft, text: event.target.value })}
+            onValueChange={(value) => onDraftChange?.({ ...draft, text: value })}
           />
-        </label>
+        </VoiceField>
       )}
       <div className="evening-action-choice-grid">
         {!question.required ? (
@@ -2379,17 +2382,15 @@ function EveningActionResolutionCard({
         </p>
       ) : null}
       {resolvedForm.kind === 'complete' ? (
-        <label className="evening-review-field">
+        <VoiceField className="evening-review-field">
           <span>Фактический результат *</span>
-          <textarea
+          <VoiceTextArea
             value={resolvedForm.actualResult}
             rows={3}
             disabled={disabled}
-            onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
-              onActualResultChange(actionId, event.target.value)
-            }
+            onValueChange={(value) => onActualResultChange(actionId, value)}
           />
-        </label>
+        </VoiceField>
       ) : null}
       {resolvedForm.kind === 'reschedule' ? (
         <label className="evening-review-field">
@@ -2406,18 +2407,16 @@ function EveningActionResolutionCard({
         </label>
       ) : null}
       {resolvedForm.kind === 'cancel' ? (
-        <label className="evening-review-field">
+        <VoiceField className="evening-review-field">
           <span>Причина отмены</span>
-          <textarea
+          <VoiceTextArea
             value={resolvedForm.reason}
             rows={2}
             disabled={disabled}
             placeholder="Например: потеряло актуальность"
-            onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
-              onReasonChange(actionId, event.target.value)
-            }
+            onValueChange={(value) => onReasonChange(actionId, value)}
           />
-        </label>
+        </VoiceField>
       ) : null}
     </article>
   );
@@ -2462,29 +2461,25 @@ function TomorrowDecisionFormCard({
           <option value={DECISION_KIND.additional}>Дополнительное</option>
         </select>
       </label>
-      <label className="evening-review-field">
+      <VoiceField className="evening-review-field">
         <span>Название *</span>
-        <input
+        <VoiceTextInput
           value={form.title}
           maxLength={200}
           disabled={disabled}
-          onChange={(event: ChangeEvent<HTMLInputElement>) =>
-            onUpdate(form.formId, { title: event.target.value })
-          }
+          onValueChange={(value) => onUpdate(form.formId, { title: value })}
         />
-      </label>
-      <label className="evening-review-field">
+      </VoiceField>
+      <VoiceField className="evening-review-field">
         <span>Ожидаемый результат{form.kind === DECISION_KIND.main ? ' *' : ''}</span>
-        <textarea
+        <VoiceTextArea
           value={form.expectedResult}
           rows={2}
           maxLength={1000}
           disabled={disabled}
-          onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
-            onUpdate(form.formId, { expectedResult: event.target.value })
-          }
+          onValueChange={(value) => onUpdate(form.formId, { expectedResult: value })}
         />
-      </label>
+      </VoiceField>
     </article>
   );
 }

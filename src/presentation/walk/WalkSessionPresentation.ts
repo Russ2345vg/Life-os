@@ -80,7 +80,7 @@ const WALK_RETURN_PRESENTATION: Readonly<Record<WalkReturnOrigin, WalkReturnPres
     destination: APP_SECTION.management,
   },
   [WALK_RETURN_ORIGIN.project]: {
-    label: 'Вернуться к проекту',
+    label: 'Вернуться к цели',
     destination: APP_SECTION.management,
   },
   [WALK_RETURN_ORIGIN.lifeAction]: {

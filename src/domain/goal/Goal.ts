@@ -14,7 +14,7 @@ import {
 import { GOAL_STAGE, isGoalStage, type GoalStage } from './GoalStage';
 import { GOAL_STATUS, isGoalStatus, type GoalStatus } from './GoalStatus';
 
-export const MAX_GOAL_TITLE_LENGTH = 80;
+export const MAX_GOAL_TITLE_LENGTH = 200;
 export const MAX_GOAL_DESCRIPTION_LENGTH = 4_000;
 export const MAX_GOAL_WHY_LENGTH = 2_000;
 export const MAX_GOAL_ACHIEVEMENT_CRITERIA_LENGTH = 2_000;
@@ -24,6 +24,7 @@ export type GoalCreationStatus = typeof GOAL_STATUS.active | typeof GOAL_STATUS.
 export type GoalEditableStatus = Exclude<GoalStatus, typeof GOAL_STATUS.archived>;
 
 export interface GoalCreationData {
+  readonly sphereId?: EntityId | null;
   readonly id: EntityId;
   readonly directionId?: EntityId | null;
   readonly title: string;
@@ -42,6 +43,7 @@ export interface GoalCreationData {
 }
 
 export interface GoalDetails {
+  readonly sphereId?: EntityId | null;
   readonly directionId?: EntityId | null;
   readonly title: string;
   readonly description?: string | null;
@@ -58,6 +60,9 @@ export interface GoalDetails {
 }
 
 export interface GoalRehydrationData {
+  readonly sphereId?: EntityId | null;
+  readonly isMain?: boolean;
+  readonly legacyProjectId?: string | null;
   readonly id: EntityId;
   readonly directionId: EntityId | null;
   readonly title: string;
@@ -79,6 +84,9 @@ export interface GoalRehydrationData {
 }
 
 export class Goal extends Entity {
+  public readonly sphereId: EntityId | null;
+  public readonly isMain: boolean;
+  public readonly legacyProjectId: string | null;
   public readonly directionId: EntityId | null;
   public readonly title: string;
   public readonly description: string | null;
@@ -100,8 +108,14 @@ export class Goal extends Entity {
 
   private constructor(data: GoalRehydrationData) {
     super(data.id);
+    this.sphereId = data.sphereId ?? null;
+    this.isMain = data.isMain ?? false;
+    this.legacyProjectId = data.legacyProjectId ?? null;
+    if (typeof this.isMain !== 'boolean' || (this.isMain && data.status !== GOAL_STATUS.active)) {
+      throw new DomainError('goal.invalid_main', 'Главной может быть только активная цель.');
+    }
     this.directionId = data.directionId;
-    this.title = normalizeRequiredTitle(data.title);
+    this.title = normalizeGoalTitle(data.title);
     this.description = normalizeOptionalText(
       data.description,
       MAX_GOAL_DESCRIPTION_LENGTH,
@@ -150,6 +164,7 @@ export class Goal extends Entity {
     assertStage(stage);
     return new Goal({
       id: data.id,
+      sphereId: data.sphereId ?? null,
       directionId: data.directionId ?? null,
       title: data.title,
       description: data.description === undefined ? null : data.description,
@@ -180,7 +195,14 @@ export class Goal extends Entity {
     }
     return new Goal({
       ...this.toRehydrationData(),
+      sphereId: details.sphereId === undefined ? this.sphereId : details.sphereId,
       directionId: details.directionId === undefined ? this.directionId : details.directionId,
+      isMain:
+        (details.status === undefined || details.status === GOAL_STATUS.active) &&
+        (details.directionId === undefined ||
+          details.directionId?.toString() === this.directionId?.toString())
+          ? this.isMain
+          : false,
       title: details.title,
       description: details.description === undefined ? this.description : details.description,
       whyImportant: details.whyImportant === undefined ? this.whyImportant : details.whyImportant,
@@ -207,6 +229,7 @@ export class Goal extends Entity {
     return new Goal({
       ...this.toRehydrationData(),
       status: GOAL_STATUS.archived,
+      isMain: false,
       updatedAt: archivedAt,
       archivedAt,
       version: this.version + 1,
@@ -227,6 +250,9 @@ export class Goal extends Entity {
 
   private toRehydrationData(): GoalRehydrationData {
     return {
+      sphereId: this.sphereId,
+      isMain: this.isMain,
+      legacyProjectId: this.legacyProjectId,
       id: this.id,
       directionId: this.directionId,
       title: this.title,
@@ -249,7 +275,7 @@ export class Goal extends Entity {
   }
 }
 
-function normalizeRequiredTitle(value: unknown): string {
+export function normalizeGoalTitle(value: unknown): string {
   if (typeof value !== 'string') {
     throw new DomainError('goal.invalid_title', 'Название цели указано неверно.');
   }

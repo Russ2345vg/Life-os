@@ -1,0 +1,73 @@
+#[cfg(target_os = "android")]
+mod android_updater;
+mod secure_key_store;
+mod sync_commands;
+mod sync_crypto;
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    #[cfg(target_os = "windows")]
+    let builder = tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .invoke_handler(tauri::generate_handler![
+            sync_commands::sync_auth_session_write,
+            sync_commands::sync_auth_session_read,
+            sync_commands::sync_auth_session_delete,
+            sync_commands::sync_prepare_device_identity,
+            sync_commands::sync_prepare_first_space,
+            sync_commands::sync_wrap_key_ring,
+            sync_commands::sync_unwrap_and_store_key_ring,
+            sync_commands::sync_prepare_recovery_authorization,
+            sync_commands::sync_export_recovery_material,
+            sync_commands::sync_require_recovery_material,
+            sync_commands::sync_recover_and_store_key_ring,
+            sync_commands::sync_encrypt_device_name,
+            sync_commands::sync_decrypt_device_name,
+            sync_commands::sync_encrypt_binary,
+            sync_commands::sync_decrypt_binary,
+            sync_commands::sync_encrypt_pilot_payload,
+            sync_commands::sync_decrypt_pilot_payload,
+            sync_commands::sync_encrypt_local_snapshot,
+            sync_commands::sync_decrypt_local_snapshot,
+            sync_commands::sync_prepare_rotation,
+            sync_commands::sync_hash_pairing_secret,
+            sync_commands::sync_render_pairing_qr,
+            sync_commands::sync_platform
+        ]);
+
+    #[cfg(target_os = "android")]
+    let builder = tauri::Builder::default()
+        .plugin(android_updater::init())
+        .plugin(secure_key_store::android::init())
+        .invoke_handler(tauri::generate_handler![
+            android_updater::android_check_update,
+            android_updater::android_download_and_install,
+            sync_commands::sync_auth_session_write,
+            sync_commands::sync_auth_session_read,
+            sync_commands::sync_auth_session_delete,
+            sync_commands::sync_prepare_device_identity,
+            sync_commands::sync_prepare_first_space,
+            sync_commands::sync_wrap_key_ring,
+            sync_commands::sync_unwrap_and_store_key_ring,
+            sync_commands::sync_prepare_recovery_authorization,
+            sync_commands::sync_export_recovery_material,
+            sync_commands::sync_require_recovery_material,
+            sync_commands::sync_recover_and_store_key_ring,
+            sync_commands::sync_encrypt_device_name,
+            sync_commands::sync_decrypt_device_name,
+            sync_commands::sync_encrypt_binary,
+            sync_commands::sync_decrypt_binary,
+            sync_commands::sync_encrypt_pilot_payload,
+            sync_commands::sync_decrypt_pilot_payload,
+            sync_commands::sync_encrypt_local_snapshot,
+            sync_commands::sync_decrypt_local_snapshot,
+            sync_commands::sync_prepare_rotation,
+            sync_commands::sync_hash_pairing_secret,
+            sync_commands::sync_render_pairing_qr,
+            sync_commands::sync_platform
+        ]);
+
+    builder
+        .run(tauri::generate_context!())
+        .expect("failed to run LifeOS application");
+}

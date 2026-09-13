@@ -1,3 +1,5 @@
+import { VoiceField } from '../voice-input/VoiceField';
+import { VoiceTextInput } from '../voice-input/VoiceTextInput';
 import {
   OPEN_LOOP_RESOLUTION,
   type OpenLoopEntityType,
@@ -170,16 +172,16 @@ export function EveningResolvingScene({
                 <p className="evening-resolving-lead">{remainingMessage(view.remaining)}</p>
               </header>
 
-              <label className="evening-resolving-note evening-today-result-field">
+              <VoiceField className="evening-resolving-note evening-today-result-field">
                 <span>Короткий итог или причина</span>
-                <input
+                <VoiceTextInput
                   value={note}
                   disabled={disabled}
                   required
                   placeholder="Несколько слов о результате"
-                  onChange={(event) => onNoteChange(current.key, event.target.value)}
+                  onValueChange={(value) => onNoteChange(current.key, value)}
                 />
-              </label>
+              </VoiceField>
               <ResolutionFeedback
                 feedback={feedback}
                 fallbackError={error}

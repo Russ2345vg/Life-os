@@ -1,3 +1,6 @@
+import { VoiceField } from '../voice-input/VoiceField';
+import { VoiceTextInput } from '../voice-input/VoiceTextInput';
+import { VoiceTextArea } from '../voice-input/VoiceTextArea';
 import { useEffect, useState, type FormEvent } from 'react';
 import type { Clock, SpheresSnapshot } from '../../application';
 import {
@@ -324,7 +327,7 @@ export function ActionProjectReference(props: {
   if (project === null) return null;
   return (
     <div>
-      <dt>Проект</dt>
+      <dt>Цель</dt>
       <dd>
         <button
           className="action-project-link"
@@ -516,36 +519,36 @@ function LifeActionManagement({
       {isEditFormOpen ? (
         <form className="life-action-edit-form" onSubmit={onEditSubmit} noValidate>
           <h3>Редактирование действия</h3>
-          <label>
+          <VoiceField>
             <span>Название действия *</span>
-            <input
+            <VoiceTextInput
               value={editForm.title}
               maxLength={200}
               disabled={isEditing}
               aria-required="true"
-              onChange={(event) => onEditTitleChange(event.target.value)}
+              onValueChange={(value) => onEditTitleChange(value)}
             />
-          </label>
-          <label>
+          </VoiceField>
+          <VoiceField>
             <span>Описание</span>
-            <textarea
+            <VoiceTextArea
               value={editForm.description}
               rows={3}
               disabled={isEditing}
-              onChange={(event) => onEditDescriptionChange(event.target.value)}
+              onValueChange={(value) => onEditDescriptionChange(value)}
             />
-          </label>
-          <label>
+          </VoiceField>
+          <VoiceField>
             <span>Ожидаемый результат *</span>
-            <textarea
+            <VoiceTextArea
               value={editForm.expectedResult}
               rows={3}
               maxLength={1000}
               disabled={isEditing}
               aria-required="true"
-              onChange={(event) => onEditExpectedResultChange(event.target.value)}
+              onValueChange={(value) => onEditExpectedResultChange(value)}
             />
-          </label>
+          </VoiceField>
           <label>
             <span>Сфера</span>
             <SphereSelect
@@ -870,16 +873,16 @@ function SessionCompletionForm({
     <form className="session-completion-form" onSubmit={handleSubmit} noValidate>
       <h4>Завершение работы</h4>
 
-      <label>
+      <VoiceField>
         <span>Что сделано за эту сессию</span>
-        <textarea
+        <VoiceTextArea
           value={form.resultNote}
           rows={3}
           maxLength={1000}
           disabled={isSaving}
-          onChange={(event) => onResultNoteChange(event.target.value)}
+          onValueChange={(value) => onResultNoteChange(value)}
         />
-      </label>
+      </VoiceField>
 
       <fieldset>
         <legend>Характер завершения</legend>
@@ -936,17 +939,17 @@ function SessionCompletionForm({
             <strong>Сравните фактический результат с ожидаемым</strong>
             <p>{expectedResult}</p>
           </div>
-          <label>
+          <VoiceField>
             <span>Фактический результат действия *</span>
-            <textarea
+            <VoiceTextArea
               value={form.actualResult}
               rows={4}
               maxLength={2000}
               aria-required="true"
               disabled={isSaving}
-              onChange={(event) => onActualResultChange(event.target.value)}
+              onValueChange={(value) => onActualResultChange(value)}
             />
-          </label>
+          </VoiceField>
           <p className="action-result-verification-help">
             Подтверждение завершит действие. Связанное решение подтверждается отдельно только после
             проверки всех его действий.

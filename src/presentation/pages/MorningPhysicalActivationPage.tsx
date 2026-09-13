@@ -1,3 +1,5 @@
+import { VoiceField } from '../voice-input/VoiceField';
+import { VoiceTextInput } from '../voice-input/VoiceTextInput';
 import { useEffect, useState, type FormEvent } from 'react';
 import type {
   GetMorningPhysicalActivationOverview,
@@ -266,9 +268,9 @@ export function MorningPhysicalActivationView(props: MorningPhysicalActivationVi
                 props.onCreateCustom();
               }}
             >
-              <label className="morning-physical-custom-name" htmlFor="custom-exercise-name">
+              <VoiceField className="morning-physical-custom-name" htmlFor="custom-exercise-name">
                 <span>Название упражнения</span>
-                <input
+                <VoiceTextInput
                   id="custom-exercise-name"
                   name="custom-exercise-name"
                   type="text"
@@ -277,9 +279,9 @@ export function MorningPhysicalActivationView(props: MorningPhysicalActivationVi
                   placeholder="Например, вис на перекладине"
                   required
                   disabled={busy}
-                  onChange={(event) => props.onCustomNameChange(event.currentTarget.value)}
+                  onValueChange={(value) => props.onCustomNameChange(value)}
                 />
-              </label>
+              </VoiceField>
               <fieldset className="morning-physical-segmented">
                 <legend>Как измерять</legend>
                 <div>

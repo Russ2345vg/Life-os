@@ -10,8 +10,13 @@ import { DecisionRecordMapper } from './mappers/DecisionRecordMapper';
 import { JournalEntryRecordMapper } from './mappers/JournalEntryRecordMapper';
 import { LifeActionRecordMapper } from './mappers/LifeActionRecordMapper';
 import { DirectionRecordMapper } from './mappers/DirectionRecordMapper';
-import { ProjectRecordMapper } from './mappers/ProjectRecordMapper';
+import { ProjectGoalCompatibility as ProjectRecordMapper } from './mappers/ProjectGoalCompatibility';
+import type { GoalRecord } from './records/GoalRecord';
 import type { DecisionRecord } from './records/DecisionRecord';
+import {
+  IndexedDbPilotMutationRecorder,
+  PILOT_MUTATION_STORES,
+} from '../sync/pilot/IndexedDbPilotMutationRecorder';
 
 interface VersionedRecord {
   readonly version: number;
@@ -19,9 +24,14 @@ interface VersionedRecord {
 
 export class IndexedDbJournalUnitOfWork implements JournalUnitOfWork {
   readonly #indexedDb: LifeOsIndexedDb;
+  readonly #mutationRecorder: IndexedDbPilotMutationRecorder;
 
-  public constructor(indexedDb: LifeOsIndexedDb = new LifeOsIndexedDb()) {
+  public constructor(
+    indexedDb: LifeOsIndexedDb = new LifeOsIndexedDb(),
+    mutationRecorder: IndexedDbPilotMutationRecorder = new IndexedDbPilotMutationRecorder(),
+  ) {
     this.#indexedDb = indexedDb;
+    this.#mutationRecorder = mutationRecorder;
   }
 
   public async commit(input: CommitJournalStateInput): Promise<void> {
@@ -72,23 +82,23 @@ export class IndexedDbJournalUnitOfWork implements JournalUnitOfWork {
           ),
         );
       }
+      let pilotMutationRecorded = false;
       for (const change of input.directions ?? []) {
-        writes.push(
-          observeRequest(
-            transaction
-              .objectStore(LIFE_OS_STORE.directions)
-              .put(DirectionRecordMapper.toRecord(change.direction)),
-          ),
-        );
+        const record = DirectionRecordMapper.toRecord(change.direction);
+        writes.push(observeRequest(transaction.objectStore(LIFE_OS_STORE.directions).put(record)));
+        pilotMutationRecorded =
+          (await this.#mutationRecorder.recordUpsert(transaction, 'direction', record)) ||
+          pilotMutationRecorded;
       }
       for (const change of input.projects ?? []) {
-        writes.push(
-          observeRequest(
-            transaction
-              .objectStore(LIFE_OS_STORE.projects)
-              .put(ProjectRecordMapper.toRecord(change.project)),
-          ),
+        const previous = await observeRequest<GoalRecord | undefined>(
+          transaction.objectStore(LIFE_OS_STORE.goals).get(change.project.id.toString()),
         );
+        const record = ProjectRecordMapper.toRecord(change.project, previous);
+        writes.push(observeRequest(transaction.objectStore(LIFE_OS_STORE.goals).put(record)));
+        pilotMutationRecorded =
+          (await this.#mutationRecorder.recordUpsert(transaction, 'goal', record)) ||
+          pilotMutationRecorded;
       }
       const journalStore = transaction.objectStore(LIFE_OS_STORE.journal);
       for (const entry of input.journalEntries) {
@@ -96,6 +106,7 @@ export class IndexedDbJournalUnitOfWork implements JournalUnitOfWork {
       }
       await Promise.all(writes);
       await completion;
+      this.#mutationRecorder.notifyCommitted(pilotMutationRecorded);
     } catch (error: unknown) {
       abortQuietly(transaction);
       await settleTransaction(completion);
@@ -153,7 +164,7 @@ async function validateExpectedState(
   for (const change of input.projects ?? []) {
     checks.push(
       validateVersion(
-        transaction.objectStore(LIFE_OS_STORE.projects),
+        transaction.objectStore(LIFE_OS_STORE.goals),
         change.project.id.toString(),
         change.expectedVersion,
       ),
@@ -215,7 +226,10 @@ function collectStores(input: CommitJournalStateInput): string[] {
   if ((input.lifeActions?.length ?? 0) > 0) stores.add(LIFE_OS_STORE.lifeActions);
   if ((input.workSessions?.length ?? 0) > 0) stores.add(LIFE_OS_STORE.actionSessions);
   if ((input.directions?.length ?? 0) > 0) stores.add(LIFE_OS_STORE.directions);
-  if ((input.projects?.length ?? 0) > 0) stores.add(LIFE_OS_STORE.projects);
+  if ((input.projects?.length ?? 0) > 0) stores.add(LIFE_OS_STORE.goals);
+  if ((input.directions?.length ?? 0) > 0 || (input.projects?.length ?? 0) > 0) {
+    for (const store of PILOT_MUTATION_STORES) stores.add(store);
+  }
   return [...stores];
 }
 

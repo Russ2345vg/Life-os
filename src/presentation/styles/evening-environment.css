@@ -2,7 +2,7 @@
   min-width: 0;
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-medium);
-  background: var(--surface-1);
+  background: var(--surface-glass);
 }
 
 .evening-command-center-page .evening-preparation-scene[data-core-configuring='true'] {
@@ -10,17 +10,7 @@
   isolation: isolate;
   padding: var(--space-4);
   border-radius: var(--radius-large);
-  background:
-    radial-gradient(
-      circle at 72% 0%,
-      color-mix(in srgb, var(--evening-v1-border-strong) 34%, transparent),
-      transparent 24rem
-    ),
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--evening-v1-border-strong) 18%, var(--evening-v1-bg)),
-      var(--evening-v1-bg)
-    );
+  background: var(--surface-glass);
 }
 
 .evening-command-center-page .evening-preparation-scene[data-core-configuring='true']::before {
@@ -65,11 +55,7 @@
   min-width: 0;
   padding: var(--space-4);
   border-radius: var(--radius-medium);
-  background: linear-gradient(
-    145deg,
-    color-mix(in srgb, var(--evening-v1-border-strong) 22%, var(--surface-1)),
-    var(--surface-1) 62%
-  );
+  background: var(--surface-glass);
   box-shadow: var(--shadow-soft);
 }
 
@@ -83,7 +69,7 @@
   margin: 0;
   padding: var(--space-2) var(--space-4);
   border-bottom: 1px solid var(--border-soft);
-  background: color-mix(in srgb, var(--evening-v1-border-strong) 18%, var(--surface-1));
+  background: var(--surface-glass);
   color: var(--text-secondary);
   font-size: 0.8125rem;
   overflow-wrap: anywhere;
@@ -143,7 +129,7 @@
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-small);
-  background: var(--surface-2);
+  background: var(--surface-field);
   color: var(--text-secondary);
   text-align: left;
   overflow-wrap: anywhere;
@@ -154,7 +140,7 @@
 
 .evening-command-center-page .preparation-core-option[aria-pressed='true'] {
   border-color: var(--gold-main);
-  background: color-mix(in srgb, var(--gold-main) 12%, var(--surface-2));
+  background: var(--surface-selected);
   color: var(--text-primary);
 }
 
@@ -164,7 +150,7 @@
 
 .evening-command-center-page .preparation-core-option:not([aria-pressed='true']):hover {
   border-color: var(--border-soft);
-  background: var(--surface-3);
+  background: var(--surface-selected);
 }
 
 .evening-command-center-page .preparation-core-selected-indicator {

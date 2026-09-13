@@ -1,0 +1,144 @@
+export type PilotSyncState = 'idle' | 'syncing' | 'offline' | 'attention' | 'error';
+
+export interface PilotSyncStatus {
+  readonly state: PilotSyncState;
+  readonly pendingCount: number;
+  readonly conflictCount: number;
+  readonly lastSuccessfulSyncAt: string | null;
+}
+
+export interface PilotSyncCoordinatorDependencies {
+  readonly isOnline?: () => boolean;
+  readonly afterStructured?: () => void;
+  readonly bootstrap: { run(): Promise<unknown> };
+  readonly push: { run(): Promise<{ readonly failed: number }> };
+  readonly pull: { run(): Promise<{ readonly quarantined: number }> };
+  readonly metrics: {
+    counts(): Promise<{
+      readonly pending: number;
+      readonly conflicts: number;
+      readonly quarantined: number;
+    }>;
+  };
+  readonly hints?: {
+    ensure(onHint: () => void): Promise<void>;
+    close(): Promise<void>;
+  };
+  readonly now?: () => Date;
+  readonly setTimer?: typeof globalThis.setTimeout;
+  readonly clearTimer?: typeof globalThis.clearTimeout;
+}
+
+export class PilotSyncCoordinator {
+  readonly #listeners = new Set<(status: PilotSyncStatus) => void>();
+  readonly #now: () => Date;
+  readonly #setTimer: typeof globalThis.setTimeout;
+  readonly #clearTimer: typeof globalThis.clearTimeout;
+  #status: PilotSyncStatus = {
+    state: 'idle',
+    pendingCount: 0,
+    conflictCount: 0,
+    lastSuccessfulSyncAt: null,
+  };
+  #inFlight: Promise<void> | null = null;
+  #debounceTimer: ReturnType<typeof globalThis.setTimeout> | null = null;
+  #closed = false;
+  #rerun = false;
+
+  public constructor(private readonly dependencies: PilotSyncCoordinatorDependencies) {
+    this.#now = dependencies.now ?? (() => new Date());
+    this.#setTimer = (dependencies.setTimer ?? globalThis.setTimeout).bind(globalThis);
+    this.#clearTimer = (dependencies.clearTimer ?? globalThis.clearTimeout).bind(globalThis);
+  }
+
+  public status(): PilotSyncStatus {
+    return this.#status;
+  }
+
+  public subscribe(listener: (status: PilotSyncStatus) => void): () => void {
+    this.#listeners.add(listener);
+    listener(this.#status);
+    return () => this.#listeners.delete(listener);
+  }
+
+  public trigger(): void {
+    if (this.#closed) return;
+    if (this.#debounceTimer !== null) this.#clearTimer(this.#debounceTimer);
+    this.#debounceTimer = this.#setTimer(() => {
+      this.#debounceTimer = null;
+      void this.run();
+    }, 1_500);
+  }
+
+  public async run(): Promise<void> {
+    if (this.#closed) return;
+    if (this.#inFlight !== null) {
+      this.#rerun = true;
+      return this.#inFlight;
+    }
+    this.#inFlight = this.execute();
+    try {
+      await this.#inFlight;
+    } finally {
+      this.#inFlight = null;
+      if (this.#rerun && !this.#closed) {
+        this.#rerun = false;
+        await this.run();
+      }
+    }
+  }
+
+  public async close(): Promise<void> {
+    this.#closed = true;
+    if (this.#debounceTimer !== null) this.#clearTimer(this.#debounceTimer);
+    await this.#inFlight;
+    await this.dependencies.hints?.close();
+    this.#listeners.clear();
+  }
+
+  private async execute(): Promise<void> {
+    this.update({ ...this.#status, state: 'syncing' });
+    try {
+      await this.dependencies.bootstrap.run();
+      await this.dependencies.hints?.ensure(() => this.trigger());
+      const push = await this.dependencies.push.run();
+      const pull = await this.dependencies.pull.run();
+      const counts = await this.dependencies.metrics.counts();
+      this.update({
+        state:
+          pull.quarantined > 0 || counts.conflicts > 0 || counts.quarantined > 0
+            ? 'attention'
+            : push.failed > 0
+              ? this.dependencies.isOnline?.()
+                ? 'error'
+                : 'offline'
+              : 'idle',
+        pendingCount: counts.pending,
+        conflictCount: counts.conflicts,
+        lastSuccessfulSyncAt:
+          push.failed === 0 && pull.quarantined === 0
+            ? this.#now().toISOString()
+            : this.#status.lastSuccessfulSyncAt,
+      });
+    } catch {
+      const counts = await this.dependencies.metrics.counts().catch(() => ({
+        pending: 0,
+        conflicts: 0,
+        quarantined: 0,
+      }));
+      this.update({
+        ...this.#status,
+        state: this.dependencies.isOnline?.() ? 'error' : 'offline',
+        pendingCount: counts.pending,
+        conflictCount: counts.conflicts,
+      });
+    } finally {
+      if (!this.#closed) this.dependencies.afterStructured?.();
+    }
+  }
+
+  private update(status: PilotSyncStatus): void {
+    this.#status = status;
+    for (const listener of this.#listeners) listener(status);
+  }
+}

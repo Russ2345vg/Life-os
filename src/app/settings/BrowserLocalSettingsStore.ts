@@ -29,9 +29,15 @@ export interface LocalSettingsLoadResult {
 
 export class BrowserLocalSettingsStore implements EveningRitualSettingsReader {
   readonly #storage: KeyValueStorage | null;
+  readonly #onMeaningfulChange: () => void;
+  readonly #listeners = new Set<() => void>();
 
-  public constructor(storage: KeyValueStorage | null = resolveBrowserStorage()) {
+  public constructor(
+    storage: KeyValueStorage | null = resolveBrowserStorage(),
+    onMeaningfulChange: () => void = () => undefined,
+  ) {
     this.#storage = storage;
+    this.#onMeaningfulChange = onMeaningfulChange;
   }
 
   public load(): LocalSettingsLoadResult {
@@ -82,6 +88,38 @@ export class BrowserLocalSettingsStore implements EveningRitualSettingsReader {
   }
 
   public save(settings: LocalSettings): boolean {
+    const saved = this.saveWithoutNotification(settings);
+    if (saved) {
+      this.#onMeaningfulChange();
+      this.notifyListeners();
+    }
+    return saved;
+  }
+
+  public subscribe(listener: () => void): () => void {
+    this.#listeners.add(listener);
+    return () => this.#listeners.delete(listener);
+  }
+
+  public readEveningRitualForSync(): EveningRitualSettings | null {
+    const loaded = this.load();
+    if (!loaded.storageAvailable || loaded.recoveredFromInvalidValue) return null;
+    return copyEveningRitualSettings(loaded.settings.eveningRitual);
+  }
+
+  public applyEveningRitualFromSync(settings: EveningRitualSettings): boolean {
+    if (!isEveningRitualSettings(settings)) return false;
+    const loaded = this.load();
+    if (!loaded.storageAvailable || loaded.recoveredFromInvalidValue) return false;
+    const saved = this.saveWithoutNotification({
+      ...loaded.settings,
+      eveningRitual: copyEveningRitualSettings(settings),
+    });
+    if (saved) this.notifyListeners();
+    return saved;
+  }
+
+  private saveWithoutNotification(settings: LocalSettings): boolean {
     if (this.#storage === null) {
       return false;
     }
@@ -103,10 +141,16 @@ export class BrowserLocalSettingsStore implements EveningRitualSettingsReader {
 
     try {
       this.#storage.removeItem(LOCAL_SETTINGS_STORAGE_KEY);
+      this.#onMeaningfulChange();
+      this.notifyListeners();
       return true;
     } catch {
       return false;
     }
+  }
+
+  private notifyListeners(): void {
+    for (const listener of this.#listeners) listener();
   }
 }
 

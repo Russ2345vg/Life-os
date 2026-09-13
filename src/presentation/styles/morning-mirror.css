@@ -23,11 +23,11 @@
   pointer-events: none;
   opacity: 0.32;
   background:
-    radial-gradient(circle at 50% 44%, rgb(200 138 66 / 13%), transparent 34%),
+    radial-gradient(circle at 50% 44%, rgb(237 188 140 / 13%), transparent 34%),
     repeating-radial-gradient(
       ellipse at 50% 50%,
       transparent 0 2.9rem,
-      rgb(200 138 66 / 5%) 3rem 3.05rem
+      rgb(237 188 140 / 5%) 3rem 3.05rem
     );
   mask-image: linear-gradient(to bottom, transparent, #000 24%, #000 72%, transparent);
 }
@@ -161,10 +161,10 @@
 }
 
 .morning-mirror-path-step.is-current .morning-mirror-path-marker {
-  border-color: rgb(200 138 66 / 66%);
+  border-color: rgb(237 188 140 / 66%);
   color: var(--gold-soft);
-  background: rgb(200 138 66 / 12%);
-  box-shadow: 0 0 1.2rem rgb(200 138 66 / 10%);
+  background: rgb(237 188 140 / 12%);
+  box-shadow: 0 0 1.2rem rgb(237 188 140 / 10%);
 }
 
 .morning-mirror-focus-surface {
@@ -173,12 +173,12 @@
   min-width: 0;
   justify-self: center;
   overflow: hidden;
-  border: 1px solid rgb(200 138 66 / 36%);
+  border: 1px solid rgb(237 188 140 / 36%);
   border-radius: var(--radius-xlarge);
-  background: linear-gradient(145deg, rgb(26 32 37 / 96%), rgb(13 16 18 / 98%)), var(--surface-2);
+  background: var(--surface-glass-raised);
   box-shadow:
     var(--shadow-deep),
-    0 0 2.6rem rgb(200 138 66 / 7%);
+    0 0 2.6rem rgb(237 188 140 / 7%);
 }
 
 .morning-mirror-focus-surface::before {
@@ -186,8 +186,8 @@
   inset: 0;
   pointer-events: none;
   background:
-    linear-gradient(90deg, transparent, rgb(200 138 66 / 4%) 50%, transparent),
-    radial-gradient(circle at 50% 0%, rgb(200 138 66 / 9%), transparent 30%);
+    linear-gradient(90deg, transparent, rgb(237 188 140 / 4%) 50%, transparent),
+    radial-gradient(circle at 50% 0%, rgb(237 188 140 / 9%), transparent 30%);
   content: '';
 }
 
@@ -208,10 +208,10 @@
   height: 3.2rem;
   place-items: center;
   margin-bottom: var(--space-6);
-  border: 1px solid rgb(200 138 66 / 44%);
+  border: 1px solid rgb(237 188 140 / 44%);
   border-radius: var(--radius-large);
   color: var(--gold-soft);
-  background: rgb(200 138 66 / 10%);
+  background: rgb(237 188 140 / 10%);
 }
 
 .morning-mirror-focus-icon svg,
@@ -284,16 +284,16 @@
   width: 100%;
   min-height: 48px;
   border-color: rgb(224 194 122 / 45%);
-  background: linear-gradient(135deg, #d19a55, var(--section-accent));
-  color: #14100b;
-  box-shadow: 0 0.75rem 1.8rem rgb(200 138 66 / 14%);
+  background: var(--surface-primary);
+  color: var(--text-on-primary);
+  box-shadow: 0 0.75rem 1.8rem rgb(237 188 140 / 14%);
   font-weight: 750;
 }
 
 .morning-mirror-action .primary-button:hover:not(:disabled),
 .morning-mirror-error .primary-button:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 0.9rem 2rem rgb(200 138 66 / 18%);
+  box-shadow: 0 0.9rem 2rem rgb(237 188 140 / 18%);
 }
 
 .morning-mirror-action .primary-button:active:not(:disabled),
@@ -334,7 +334,7 @@
 }
 
 .morning-mirror-error strong {
-  color: #e39898;
+  color: var(--danger);
 }
 
 .morning-mirror-error span {

@@ -54,7 +54,7 @@ describe('E11.3G-A TomorrowScene V2A', () => {
   it('не подменяет отсутствующие данные демонстрационными значениями или выводом из формы', () => {
     expect(activeSource).not.toContain('placeholder="LifeOS"');
     expect(activeSource).not.toContain('vector || tomorrowSceneLabel');
-    expect(activeSource).not.toContain("?? 'Без проекта'");
+    expect(activeSource).not.toContain("?? 'Без цели'");
     expect(activeSource).not.toContain("?? 'Первый шаг выбран'");
     expect(activeSource).not.toContain('Главное Решение и первый шаг определены.');
     expect(activeSource).not.toContain('Выберите центр завтрашнего дня.');

@@ -31,6 +31,9 @@ export class GoalRecordMapper {
   public static toRecord(goal: Goal): GoalRecord {
     return {
       schemaVersion: 1,
+      sphereId: goal.sphereId?.toString() ?? null,
+      isMain: goal.isMain,
+      legacyProjectId: goal.legacyProjectId,
       id: goal.id.toString(),
       directionId: goal.directionId?.toString() ?? null,
       title: goal.title,
@@ -65,6 +68,10 @@ export class GoalRecordMapper {
     const progressType = readOptionalProgressType(record);
 
     return Goal.rehydrate({
+      sphereId: readOptionalNullableEntityId(record, 'sphereId'),
+      isMain: readOptionalMain(record),
+      legacyProjectId:
+        record.legacyProjectId === undefined ? null : readNullableString(record, 'legacyProjectId'),
       id: readEntityId(record, 'id'),
       directionId: readOptionalNullableEntityId(record, 'directionId'),
       title: readString(record, 'title'),
@@ -85,6 +92,13 @@ export class GoalRecordMapper {
       version: readNumber(record, 'version'),
     });
   }
+}
+
+function readOptionalMain(record: UnknownRecord): boolean {
+  if (record.isMain === undefined) return false;
+  if (typeof record.isMain !== 'boolean')
+    throw invalidRecord('Признак главной цели указан неверно.');
+  return record.isMain;
 }
 
 function readOptionalIntentionLevel(record: UnknownRecord): GoalIntentionLevel | null {

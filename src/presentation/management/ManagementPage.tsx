@@ -1,14 +1,20 @@
+import { GoalManagementPanel } from '../goals/GoalManagementPanel';
 import { lazy, Suspense, useState, type ReactNode } from 'react';
 import type {
   ArchiveDirection,
+  ArchiveGoal,
   ArchiveProject,
   CompleteProject,
   CreateDirection,
+  CreateGoal,
   CreateProject,
+  DeletePilotGoal,
   CreateDecisionForDate,
   GetDirectionDetails,
   GetDirections,
   GetDirectionsOverview,
+  GetGoalById,
+  GetGoals,
   GetManagementOverview,
   GetProjects,
   GetProjectLifeActions,
@@ -20,10 +26,12 @@ import type {
   RestoreProject,
   ResumeProject,
   UpdateDirection,
+  UpdateGoal,
   UpdateProject,
   ApplyDirectionStrategicReview,
 } from '../../application';
 import type { DayDate } from '../../domain';
+import type { GoalAlbumRoute } from '../goals/GoalAlbumNavigation';
 import { ManagementDaySection } from './ManagementDaySection';
 import { ManagementNavigation } from './ManagementNavigation';
 import { MANAGEMENT_SECTION, type ManagementSection } from './ManagementSection';
@@ -38,8 +46,8 @@ import {
 const DirectionsSection = lazy(() =>
   import('./DirectionsSection').then((module) => ({ default: module.DirectionsSection })),
 );
-const ProjectsSection = lazy(() =>
-  import('./ProjectsSection').then((module) => ({ default: module.ProjectsSection })),
+const GoalAlbumPage = lazy(() =>
+  import('../goals/GoalAlbumPage').then((module) => ({ default: module.GoalAlbumPage })),
 );
 
 interface ManagementPageProps {
@@ -66,27 +74,45 @@ interface ManagementPageProps {
   readonly createDecisionForDate: Pick<CreateDecisionForDate, 'execute'>;
   readonly currentDate: DayDate;
   readonly getSpheres: Pick<GetSpheres, 'execute'>;
+  readonly getGoals: Pick<GetGoals, 'execute'>;
+  readonly getGoalById: Pick<GetGoalById, 'execute'>;
+  readonly createGoal: Pick<CreateGoal, 'execute'>;
+  readonly updateGoal: Pick<UpdateGoal, 'execute'>;
+  readonly archiveGoal: Pick<ArchiveGoal, 'execute'>;
+  readonly deleteGoal: Pick<DeletePilotGoal, 'execute'>;
+  readonly goalRoute: GoalAlbumRoute;
+  readonly onGoalRouteChange: (route: GoalAlbumRoute) => void;
+  readonly onLeaveGoalAlbum: () => void;
   readonly renderDecisionsPage: (initialDecisionId: string | null) => ReactNode;
   readonly actionsPage: ReactNode;
   readonly todayPage: ReactNode;
   readonly onOpenDay: () => void;
   readonly initialProjectId?: string | null;
+  readonly initialSection?: ManagementSection | undefined;
 }
 
 export function ManagementPage(props: ManagementPageProps) {
   const [navigation, setNavigation] = useState(() =>
-    props.initialProjectId === undefined || props.initialProjectId === null
-      ? INITIAL_MANAGEMENT_NAVIGATION
-      : pushManagementRoute(openManagementSection(MANAGEMENT_SECTION.projects), {
+    props.initialProjectId !== undefined && props.initialProjectId !== null
+      ? pushManagementRoute(openManagementSection(MANAGEMENT_SECTION.projects), {
           section: MANAGEMENT_SECTION.projects,
           directionId: null,
           projectId: props.initialProjectId,
           decisionId: null,
-        }),
+        })
+      : props.initialSection === undefined
+        ? INITIAL_MANAGEMENT_NAVIGATION
+        : openManagementSection(props.initialSection),
   );
   const { route } = navigation;
 
   function openSection(section: ManagementSection): void {
+    if (section === MANAGEMENT_SECTION.projects) section = MANAGEMENT_SECTION.goals;
+    if (section === MANAGEMENT_SECTION.goals) {
+      props.onGoalRouteChange({ view: 'album' });
+    } else {
+      props.onLeaveGoalAlbum();
+    }
     if (section === MANAGEMENT_SECTION.day) {
       props.onOpenDay();
     }
@@ -94,6 +120,13 @@ export function ManagementPage(props: ManagementPageProps) {
   }
 
   function openNested(nextRoute: Parameters<typeof pushManagementRoute>[1]): void {
+    if (nextRoute.section === MANAGEMENT_SECTION.projects) {
+      props.onGoalRouteChange(
+        nextRoute.projectId ? { view: 'detail', goalId: nextRoute.projectId } : { view: 'album' },
+      );
+      setNavigation(openManagementSection(MANAGEMENT_SECTION.goals));
+      return;
+    }
     setNavigation((current) => pushManagementRoute(current, nextRoute));
   }
 
@@ -103,7 +136,12 @@ export function ManagementPage(props: ManagementPageProps) {
 
   return (
     <div className="management-page">
-      <ManagementNavigation activeSection={route.section} onOpenSection={openSection} />
+      <ManagementNavigation
+        activeSection={
+          route.section === MANAGEMENT_SECTION.projects ? MANAGEMENT_SECTION.goals : route.section
+        }
+        onOpenSection={openSection}
+      />
       <div className="management-page-content">
         <Suspense
           fallback={
@@ -158,44 +196,6 @@ export function ManagementPage(props: ManagementPageProps) {
               getSpheres={props.getSpheres}
               initialSelectedDirectionId={route.directionId}
               onBackFromInitialDetail={route.directionId === null ? undefined : goBack}
-              onOpenProject={(projectId, directionId) => {
-                setNavigation((current) =>
-                  pushManagementRoute(
-                    current,
-                    {
-                      section: MANAGEMENT_SECTION.projects,
-                      directionId: null,
-                      projectId,
-                      decisionId: null,
-                    },
-                    {
-                      section: MANAGEMENT_SECTION.directions,
-                      directionId,
-                      projectId: null,
-                      decisionId: null,
-                    },
-                  ),
-                );
-              }}
-            />
-          ) : null}
-          {route.section === MANAGEMENT_SECTION.projects ? (
-            <ProjectsSection
-              createProject={props.createProject}
-              updateProject={props.updateProject}
-              archiveProject={props.archiveProject}
-              restoreProject={props.restoreProject}
-              completeProject={props.completeProject}
-              pauseProject={props.pauseProject}
-              resumeProject={props.resumeProject}
-              makeProjectMain={props.makeProjectMain}
-              getProjects={props.getProjects}
-              getProjectLifeActions={props.getProjectLifeActions}
-              createDecisionForDate={props.createDecisionForDate}
-              currentDate={props.currentDate}
-              getDirections={props.getDirections}
-              getSpheres={props.getSpheres}
-              selectedProjectId={route.projectId}
               onOpenProject={(projectId) =>
                 openNested({
                   section: MANAGEMENT_SECTION.projects,
@@ -204,15 +204,33 @@ export function ManagementPage(props: ManagementPageProps) {
                   decisionId: null,
                 })
               }
-              onOpenDirection={(directionId) =>
-                openNested({
-                  section: MANAGEMENT_SECTION.directions,
-                  directionId,
-                  projectId: null,
-                  decisionId: null,
-                })
+            />
+          ) : null}
+          {route.section === MANAGEMENT_SECTION.goals ||
+          route.section === MANAGEMENT_SECTION.projects ? (
+            <GoalAlbumPage
+              renderManagement={(goal, onChanged) => (
+                <GoalManagementPanel {...props} goal={goal} onChanged={onChanged} />
+              )}
+              route={
+                route.section === MANAGEMENT_SECTION.projects
+                  ? route.projectId
+                    ? { view: 'detail', goalId: route.projectId }
+                    : { view: 'album' }
+                  : props.goalRoute
               }
-              onBack={goBack}
+              getGoals={props.getGoals}
+              getDirections={props.getDirections}
+              getSpheres={props.getSpheres}
+              getGoalById={props.getGoalById}
+              createGoal={props.createGoal}
+              updateGoal={props.updateGoal}
+              archiveGoal={props.archiveGoal}
+              deleteGoal={props.deleteGoal}
+              onRouteChange={(next) => {
+                props.onGoalRouteChange(next);
+                setNavigation(openManagementSection(MANAGEMENT_SECTION.goals));
+              }}
             />
           ) : null}
           {route.section === MANAGEMENT_SECTION.decisions

@@ -826,7 +826,7 @@ test('runs and restores the WALK-05 guided reflection flow', async ({ page }, te
   }
   await preparation
     .getByRole('textbox', { name: /Вопрос для размышления/ })
-    .fill('Стоит ли запускать проект?');
+    .fill('Стоит ли запускать цель?');
   await expectNoHorizontalOverflow(page);
   await expectStageWithinViewport(page, '.walk-preparation-form', mobile);
   await attachWalkScreenshot(
@@ -845,7 +845,7 @@ test('runs and restores the WALK-05 guided reflection flow', async ({ page }, te
     'Что известно наверняка, без интерпретаций?',
   );
   await expect(guidance.locator('textarea, input')).toHaveCount(0);
-  await expect(page.getByText('Стоит ли запускать проект?', { exact: true })).toBeVisible();
+  await expect(page.getByText('Стоит ли запускать цель?', { exact: true })).toBeVisible();
   if (mobile) await expectTouchSafeReflectionControls(page);
   await attachWalkScreenshot(
     page,
@@ -877,11 +877,11 @@ test('runs and restores the WALK-05 guided reflection flow', async ({ page }, te
 
   await guidance.getByRole('button', { name: 'Без сопровождения', exact: true }).click();
   await expect(guidance).toHaveCount(0);
-  await expect(page.getByText('Стоит ли запускать проект?', { exact: true })).toBeVisible();
+  await expect(page.getByText('Стоит ли запускать цель?', { exact: true })).toBeVisible();
   await expect(page.getByText(/Сопровождение отключено/)).toBeVisible();
   await page.reload();
   await expect(guidance).toHaveCount(0);
-  await expect(page.getByText('Стоит ли запускать проект?', { exact: true })).toBeVisible();
+  await expect(page.getByText('Стоит ли запускать цель?', { exact: true })).toBeVisible();
   await expectNoHorizontalOverflow(page);
   await attachWalkScreenshot(
     page,

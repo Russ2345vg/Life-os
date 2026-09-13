@@ -26,7 +26,7 @@ const SOURCE_LABELS: Readonly<Record<WalkLinkedEntityType, string>> = {
   decision: 'Связано с решением',
   routine: 'Связано с распорядком',
   goal: 'Связано с целью',
-  project: 'Связано с проектом',
+  project: 'Связано с целью',
   lifeAction: 'Связано с действием',
 };
 

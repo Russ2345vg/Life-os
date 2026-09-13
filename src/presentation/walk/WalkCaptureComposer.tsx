@@ -1,3 +1,5 @@
+import { VoiceField } from '../voice-input/VoiceField';
+import { VoiceTextArea } from '../voice-input/VoiceTextArea';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { MAX_WALK_CAPTURE_LENGTH } from '../../domain';
 
@@ -87,18 +89,18 @@ export function WalkCaptureComposer({ isSaving, onSave }: Props) {
             }
           }}
         >
-          <label>
+          <VoiceField>
             <span>Мысль</span>
-            <textarea
+            <VoiceTextArea
               ref={field}
               rows={3}
               maxLength={MAX_WALK_CAPTURE_LENGTH}
               value={draft}
               disabled={isSaving}
               placeholder="Коротко запишите то, что хочется сохранить"
-              onChange={(event) => setDraft(event.currentTarget.value)}
+              onValueChange={(value) => setDraft(value)}
             />
-          </label>
+          </VoiceField>
           <div className="walk-capture-form-meta">
             <span>Прогулка продолжается в прежнем режиме</span>
             <span>

@@ -5,9 +5,16 @@ import { LIFE_OS_STORE, LifeOsIndexedDb } from './indexed-db/LifeOsIndexedDb';
 import { executeIndexedDbRequest } from './indexed-db/IndexedDbRequest';
 import { DirectionRecordMapper } from './mappers/DirectionRecordMapper';
 import type { DirectionRecord } from './records/DirectionRecord';
+import {
+  IndexedDbPilotMutationRecorder,
+  PILOT_MUTATION_STORES,
+} from '../sync/pilot/IndexedDbPilotMutationRecorder';
 
 export class IndexedDbDirectionRepository implements DirectionRepository {
-  public constructor(readonly indexedDb: LifeOsIndexedDb = new LifeOsIndexedDb()) {}
+  public constructor(
+    readonly indexedDb: LifeOsIndexedDb = new LifeOsIndexedDb(),
+    readonly mutationRecorder: IndexedDbPilotMutationRecorder = new IndexedDbPilotMutationRecorder(),
+  ) {}
 
   public async findById(id: EntityId): Promise<Direction | null> {
     const database = await this.indexedDb.open();
@@ -30,13 +37,22 @@ export class IndexedDbDirectionRepository implements DirectionRepository {
 
   public async create(direction: Direction): Promise<boolean> {
     const database = await this.indexedDb.open();
+    const transaction = database.transaction(
+      [LIFE_OS_STORE.directions, ...PILOT_MUTATION_STORES],
+      'readwrite',
+    );
+    const completion = observeTransaction(transaction);
     try {
-      await executeIndexedDbRequest(database, LIFE_OS_STORE.directions, 'readwrite', (store) =>
-        store.add(DirectionRecordMapper.toRecord(direction)),
-      );
+      const record = DirectionRecordMapper.toRecord(direction);
+      await observeRequest(transaction.objectStore(LIFE_OS_STORE.directions).add(record));
+      const recorded = await this.mutationRecorder.recordUpsert(transaction, 'direction', record);
+      await completion;
+      this.mutationRecorder.notifyCommitted(recorded);
       return true;
     } catch (error: unknown) {
-      if (isConstraintError(error)) return false;
+      abortQuietly(transaction);
+      await settleTransaction(completion);
+      if (isConstraintError(error) || isConstraintDomError(error)) return false;
       throw error;
     }
   }
@@ -46,7 +62,10 @@ export class IndexedDbDirectionRepository implements DirectionRepository {
     expectedVersion: number,
   ): Promise<boolean> {
     const database = await this.indexedDb.open();
-    const transaction = database.transaction(LIFE_OS_STORE.directions, 'readwrite');
+    const transaction = database.transaction(
+      [LIFE_OS_STORE.directions, ...PILOT_MUTATION_STORES],
+      'readwrite',
+    );
     const store = transaction.objectStore(LIFE_OS_STORE.directions);
     const completion = observeTransaction(transaction);
     const stored = await observeRequest<DirectionRecord | undefined>(
@@ -57,8 +76,11 @@ export class IndexedDbDirectionRepository implements DirectionRepository {
       await settleTransaction(completion);
       return false;
     }
-    await observeRequest(store.put(DirectionRecordMapper.toRecord(direction)));
+    const record = DirectionRecordMapper.toRecord(direction);
+    await observeRequest(store.put(record));
+    const recorded = await this.mutationRecorder.recordUpsert(transaction, 'direction', record);
     await completion;
+    this.mutationRecorder.notifyCommitted(recorded);
     return true;
   }
 
@@ -67,7 +89,10 @@ export class IndexedDbDirectionRepository implements DirectionRepository {
   ): Promise<boolean> {
     if (updates.length === 0) return true;
     const database = await this.indexedDb.open();
-    const transaction = database.transaction(LIFE_OS_STORE.directions, 'readwrite');
+    const transaction = database.transaction(
+      [LIFE_OS_STORE.directions, ...PILOT_MUTATION_STORES],
+      'readwrite',
+    );
     const store = transaction.objectStore(LIFE_OS_STORE.directions);
     const completion = observeTransaction(transaction);
     for (const { direction, expectedVersion } of updates) {
@@ -80,10 +105,15 @@ export class IndexedDbDirectionRepository implements DirectionRepository {
         return false;
       }
     }
+    let recorded = false;
     for (const { direction } of updates) {
-      await observeRequest(store.put(DirectionRecordMapper.toRecord(direction)));
+      const record = DirectionRecordMapper.toRecord(direction);
+      await observeRequest(store.put(record));
+      recorded =
+        (await this.mutationRecorder.recordUpsert(transaction, 'direction', record)) || recorded;
     }
     await completion;
+    this.mutationRecorder.notifyCommitted(recorded);
     return true;
   }
 
@@ -99,6 +129,23 @@ export class IndexedDbDirectionRepository implements DirectionRepository {
     );
     return values.map((value) => DirectionRecordMapper.fromRecord(value));
   }
+}
+
+function abortQuietly(transaction: IDBTransaction): void {
+  try {
+    transaction.abort();
+  } catch {
+    /* Transaction already settled. */
+  }
+}
+
+function isConstraintDomError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'name' in error &&
+    error.name === 'ConstraintError'
+  );
 }
 
 function isConstraintError(error: unknown): boolean {

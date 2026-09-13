@@ -24,3 +24,17 @@ export type { RoutineOccurrenceExecutionRecord } from './RoutineOccurrenceExecut
 export type { WalkRecord } from './WalkRecord';
 export type { RecommendationApplicationRecord } from './RecommendationApplicationRecord';
 export type { SphereRecord } from './SphereRecord';
+export type {
+  SyncAppliedEventRecord,
+  SyncAttachmentQueueRecord,
+  SyncConflictRecord,
+  SyncCursorRecord,
+  SyncDeviceCacheRecord,
+  SyncObjectMetaRecord,
+  SyncOutboxRecord,
+  SyncQuarantineRecord,
+  SyncSettingsRecord,
+  SyncSnapshotMetaRecord,
+  SyncStructuredBootstrapRecord,
+  SyncStructuredBootstrapTypeRecord,
+} from './SyncStoreRecords';

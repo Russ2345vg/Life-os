@@ -1,3 +1,6 @@
+import { Project } from '../../../domain';
+import { ProjectRecordMapper } from '../mappers/ProjectRecordMapper';
+import { GOAL_MIGRATION_BACKUP, GOAL_MIGRATION_BINDINGS } from './LegacyProjectGoalMigration';
 import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it } from 'vitest';
 import { EntityId, GOAL_STAGE, GOAL_STATUS } from '../../../domain';
@@ -9,11 +12,85 @@ import { executeIndexedDbRequest } from './IndexedDbRequest';
 import {
   LIFE_OS_DATABASE_NAME,
   LIFE_OS_DATABASE_VERSION,
+  LIFE_OS_SYNC_STORE,
   LIFE_OS_STORE,
   LifeOsIndexedDb,
 } from './LifeOsIndexedDb';
 
 describe('LifeOsIndexedDb', () => {
+  it('returns the same mutation-capturing connection to concurrent open callers', async () => {
+    const indexedDb = new LifeOsIndexedDb(new IDBFactory());
+    const [first, second] = await Promise.all([indexedDb.open(), indexedDb.open()]);
+    expect(second).toBe(first);
+    expect(await indexedDb.open()).toBe(first);
+    indexedDb.close();
+  });
+
+  it('SYNC-01 upgrades a literal v19 database without changing any existing record', async () => {
+    const factory = new IDBFactory();
+    const legacy = await openLiteralVersion19Database(factory);
+    const expectedByStore: Record<string, object[]> = Object.fromEntries(
+      LEGACY_VERSION_19_STORES.map((storeName) => [
+        storeName,
+        storeName === 'projects'
+          ? [
+              ProjectRecordMapper.toRecord(
+                Project.create({
+                  id: EntityId.create('legacy-projects'),
+                  title: 'Legacy project',
+                  now: new Date('2026-09-01T00:00:00Z'),
+                }),
+              ),
+            ]
+          : [{ id: `legacy-${storeName}`, marker: storeName, nested: { preserved: true } }],
+      ]),
+    );
+    const write = legacy.transaction(LEGACY_VERSION_19_STORES, 'readwrite');
+    for (const storeName of LEGACY_VERSION_19_STORES) {
+      write.objectStore(storeName).put(expectedByStore[storeName]![0]);
+    }
+    await transactionDone(write);
+    legacy.close();
+
+    const adapter = new LifeOsIndexedDb(factory);
+    const upgraded = await adapter.open();
+
+    expect(upgraded.version).toBe(LIFE_OS_DATABASE_VERSION);
+    for (const storeName of LEGACY_VERSION_19_STORES) {
+      expect(
+        await executeIndexedDbRequest(upgraded, storeName, 'readonly', (store) => store.getAll()),
+      ).toEqual(
+        storeName === 'goals'
+          ? expect.arrayContaining(expectedByStore[storeName]!)
+          : expectedByStore[storeName],
+      );
+      const transaction = upgraded.transaction(storeName, 'readonly');
+      const store = transaction.objectStore(storeName);
+      expect(
+        [...store.indexNames].map((indexName) => ({
+          name: indexName,
+          keyPath: store.index(indexName).keyPath,
+          unique: store.index(indexName).unique,
+        })),
+      ).toEqual(
+        storeName === 'goals'
+          ? [
+              { name: 'byDirectionId', keyPath: 'directionId', unique: false },
+              { name: 'bySphereId', keyPath: 'sphereId', unique: false },
+              { name: 'byStatus', keyPath: 'status', unique: false },
+            ]
+          : (LEGACY_VERSION_19_INDEXES[storeName] ?? []),
+      );
+    }
+    for (const storeName of SYNC_01_TECHNICAL_STORES) {
+      expect([...upgraded.objectStoreNames]).toContain(storeName);
+      expect(
+        await executeIndexedDbRequest(upgraded, storeName, 'readonly', (store) => store.getAll()),
+      ).toEqual([]);
+    }
+    adapter.close();
+  });
+
   it('WALK-14 opens v17 Walk outcome and return context unchanged while adding empty Capture storage', async () => {
     const factory = new IDBFactory();
     const legacy = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -77,7 +154,7 @@ describe('LifeOsIndexedDb', () => {
     adapter.close();
   });
 
-  it('создаёт текущую схему и все object store с ключом id', async () => {
+  it('создаёт текущую схему с domain и изолированными technical object stores', async () => {
     const indexedDb = new LifeOsIndexedDb(new IDBFactory());
 
     const database = await indexedDb.open();
@@ -91,6 +168,8 @@ describe('LifeOsIndexedDb', () => {
       LIFE_OS_STORE.directions,
       LIFE_OS_STORE.eveningCycles,
       LIFE_OS_STORE.exerciseDefinitions,
+      GOAL_MIGRATION_BACKUP,
+      GOAL_MIGRATION_BINDINGS,
       LIFE_OS_STORE.goals,
       LIFE_OS_STORE.journal,
       LIFE_OS_STORE.lifeActions,
@@ -103,6 +182,16 @@ describe('LifeOsIndexedDb', () => {
       LIFE_OS_STORE.routineOccurrenceExecutions,
       LIFE_OS_STORE.routineOccurrenceOverrides,
       LIFE_OS_STORE.spheres,
+      LIFE_OS_SYNC_STORE.appliedEvents,
+      LIFE_OS_SYNC_STORE.attachmentQueue,
+      LIFE_OS_SYNC_STORE.conflicts,
+      LIFE_OS_SYNC_STORE.cursor,
+      LIFE_OS_SYNC_STORE.deviceCache,
+      LIFE_OS_SYNC_STORE.objectMeta,
+      LIFE_OS_SYNC_STORE.outbox,
+      LIFE_OS_SYNC_STORE.quarantine,
+      LIFE_OS_SYNC_STORE.settings,
+      LIFE_OS_SYNC_STORE.snapshotMeta,
       LIFE_OS_STORE.tomorrowPlans,
       LIFE_OS_STORE.walkCaptures,
       LIFE_OS_STORE.walks,
@@ -112,6 +201,25 @@ describe('LifeOsIndexedDb', () => {
     for (const storeName of Object.values(LIFE_OS_STORE)) {
       expect(transaction.objectStore(storeName).keyPath).toBe('id');
     }
+    expect(
+      Object.fromEntries(
+        Object.entries(LIFE_OS_SYNC_STORE).map(([key, storeName]) => [
+          key,
+          database.transaction(storeName).objectStore(storeName).keyPath,
+        ]),
+      ),
+    ).toEqual({
+      appliedEvents: 'eventId',
+      attachmentQueue: 'attachmentId',
+      conflicts: 'conflictId',
+      cursor: 'spaceId',
+      deviceCache: 'deviceId',
+      objectMeta: 'objectId',
+      outbox: 'eventId',
+      quarantine: 'quarantineId',
+      settings: 'id',
+      snapshotMeta: 'snapshotId',
+    });
 
     indexedDb.close();
   });
@@ -140,7 +248,7 @@ describe('LifeOsIndexedDb', () => {
       (store) => store.getAll(),
     );
 
-    expect(upgraded.version).toBe(19);
+    expect(upgraded.version).toBe(LIFE_OS_DATABASE_VERSION);
     expect(restoredMorning).toEqual(morningRecord);
     expect(
       indexesOf(upgraded.transaction('exerciseDefinitions').objectStore('exerciseDefinitions')),
@@ -240,6 +348,7 @@ describe('LifeOsIndexedDb', () => {
       byDayId: true,
     });
     expect(indexesOf(transaction.objectStore(LIFE_OS_STORE.goals))).toEqual({
+      bySphereId: false,
       byDirectionId: false,
       byStatus: false,
     });
@@ -280,7 +389,7 @@ describe('LifeOsIndexedDb', () => {
     const secondConnection = await indexedDb.open();
 
     expect(secondConnection).not.toBe(firstConnection);
-    expect([...secondConnection.objectStoreNames]).toHaveLength(21);
+    expect([...secondConnection.objectStoreNames]).toHaveLength(33);
     indexedDb.close();
   });
 
@@ -599,7 +708,7 @@ describe('LifeOsIndexedDb', () => {
     expect([...upgraded.objectStoreNames]).toContain(LIFE_OS_STORE.goals);
     expect(
       indexesOf(upgraded.transaction(LIFE_OS_STORE.goals).objectStore(LIFE_OS_STORE.goals)),
-    ).toEqual({ byDirectionId: false, byStatus: false });
+    ).toEqual({ byDirectionId: false, bySphereId: false, byStatus: false });
     indexedDb.close();
   });
 
@@ -652,7 +761,7 @@ describe('LifeOsIndexedDb', () => {
     });
     expect(
       indexesOf(upgraded.transaction(LIFE_OS_STORE.goals).objectStore(LIFE_OS_STORE.goals)),
-    ).toEqual({ byDirectionId: false, byStatus: false });
+    ).toEqual({ byDirectionId: false, bySphereId: false, byStatus: false });
     indexedDb.close();
   });
 });
@@ -899,6 +1008,146 @@ function openLiteralVersion18Database(factory: IDBFactory): Promise<IDBDatabase>
         if (name === LIFE_OS_STORE.morningCycles) {
           store.createIndex('byDayId', 'dayId', { unique: true });
           store.createIndex('byDateKey', 'dateKey', { unique: true });
+        }
+      }
+    });
+    request.addEventListener('success', () => resolve(request.result));
+    request.addEventListener('error', () => reject(request.error));
+  });
+}
+
+const LEGACY_VERSION_19_STORES = [
+  'days',
+  'decisions',
+  'lifeActions',
+  'actionSessions',
+  'routineBlocks',
+  'routineOccurrenceOverrides',
+  'routineOccurrenceExecutions',
+  'walks',
+  'walkCaptures',
+  'spheres',
+  'journal',
+  'directions',
+  'projects',
+  'eveningCycles',
+  'exerciseDefinitions',
+  'tomorrowPlans',
+  'preparationPlans',
+  'preparationRules',
+  'recommendationApplications',
+  'morningCycles',
+  'goals',
+] as const;
+
+const SYNC_01_TECHNICAL_STORES = [
+  'sync_outbox',
+  'sync_object_meta',
+  'sync_cursor',
+  'sync_conflicts',
+  'sync_device_cache',
+  'sync_attachment_queue',
+  'sync_snapshot_meta',
+  'sync_settings',
+  'sync_quarantine',
+  'sync_applied_events',
+] as const;
+
+type LegacyStoreName = (typeof LEGACY_VERSION_19_STORES)[number];
+
+const LEGACY_VERSION_19_INDEXES: Partial<
+  Readonly<
+    Record<
+      LegacyStoreName,
+      readonly Readonly<{ name: string; keyPath: string | string[]; unique: boolean }>[]
+    >
+  >
+> = {
+  days: [{ name: 'byDate', keyPath: 'date', unique: true }],
+  decisions: [
+    { name: 'byPlannedDate', keyPath: 'plannedDate', unique: false },
+    { name: 'byProjectId', keyPath: 'projectId', unique: false },
+  ],
+  lifeActions: [
+    { name: 'byDecisionId', keyPath: 'decisionId', unique: false },
+    { name: 'byPlannedDate', keyPath: 'plannedDate', unique: false },
+  ],
+  actionSessions: [
+    { name: 'byLifeActionId', keyPath: 'lifeActionId', unique: false },
+    { name: 'byStatus', keyPath: 'status', unique: false },
+  ],
+  routineBlocks: [{ name: 'byAnchorDate', keyPath: 'anchorDate', unique: false }],
+  routineOccurrenceOverrides: [
+    { name: 'byOccurrence', keyPath: ['routineBlockId', 'occurrenceDate'], unique: true },
+    { name: 'byTargetDate', keyPath: 'targetDate', unique: false },
+  ],
+  routineOccurrenceExecutions: [
+    { name: 'byOccurrence', keyPath: ['routineBlockId', 'occurrenceDate'], unique: true },
+    { name: 'byStatus', keyPath: 'status', unique: false },
+  ],
+  walks: [
+    { name: 'byDate', keyPath: 'date', unique: false },
+    { name: 'byStatus', keyPath: 'status', unique: false },
+  ],
+  walkCaptures: [
+    { name: 'byStatus', keyPath: 'status', unique: false },
+    { name: 'byWalkId', keyPath: 'walkId', unique: false },
+  ],
+  spheres: [
+    { name: 'byNormalizedName', keyPath: 'normalizedName', unique: true },
+    { name: 'byStatus', keyPath: 'status', unique: false },
+  ],
+  journal: [
+    { name: 'byEffectiveDate', keyPath: 'effectiveDate', unique: false },
+    { name: 'byOccurredAt', keyPath: 'occurredAt', unique: false },
+    { name: 'bySphereId', keyPath: 'sphereId', unique: false },
+    { name: 'bySubjectId', keyPath: 'subjectId', unique: false },
+  ],
+  directions: [
+    { name: 'bySphereId', keyPath: 'sphereId', unique: false },
+    { name: 'byStatus', keyPath: 'status', unique: false },
+  ],
+  projects: [
+    { name: 'byDirectionId', keyPath: 'directionId', unique: false },
+    { name: 'bySphereId', keyPath: 'sphereId', unique: false },
+    { name: 'byStatus', keyPath: 'status', unique: false },
+  ],
+  eveningCycles: [
+    { name: 'byDateKey', keyPath: 'dateKey', unique: true },
+    { name: 'byDayId', keyPath: 'dayId', unique: true },
+    { name: 'byState', keyPath: 'state', unique: false },
+  ],
+  exerciseDefinitions: [{ name: 'byNormalizedName', keyPath: 'normalizedName', unique: true }],
+  tomorrowPlans: [
+    { name: 'byCycleId', keyPath: 'cycleId', unique: true },
+    { name: 'byStatus', keyPath: 'status', unique: false },
+    { name: 'byTargetDateKey', keyPath: 'targetDateKey', unique: true },
+  ],
+  preparationPlans: [
+    { name: 'byCycleId', keyPath: 'cycleId', unique: false },
+    { name: 'byStatus', keyPath: 'status', unique: false },
+    { name: 'byTargetDayId', keyPath: 'targetDayId', unique: true },
+    { name: 'byTomorrowPlanId', keyPath: 'tomorrowPlanId', unique: false },
+  ],
+  recommendationApplications: [{ name: 'byStatus', keyPath: 'status', unique: false }],
+  morningCycles: [
+    { name: 'byDateKey', keyPath: 'dateKey', unique: true },
+    { name: 'byDayId', keyPath: 'dayId', unique: true },
+  ],
+  goals: [
+    { name: 'byDirectionId', keyPath: 'directionId', unique: false },
+    { name: 'byStatus', keyPath: 'status', unique: false },
+  ],
+};
+
+function openLiteralVersion19Database(factory: IDBFactory): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = factory.open(LIFE_OS_DATABASE_NAME, 19);
+    request.addEventListener('upgradeneeded', () => {
+      for (const storeName of LEGACY_VERSION_19_STORES) {
+        const store = request.result.createObjectStore(storeName, { keyPath: 'id' });
+        for (const index of LEGACY_VERSION_19_INDEXES[storeName] ?? []) {
+          store.createIndex(index.name, index.keyPath, { unique: index.unique });
         }
       }
     });

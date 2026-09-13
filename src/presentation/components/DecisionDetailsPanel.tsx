@@ -1,3 +1,6 @@
+import { VoiceField } from '../voice-input/VoiceField';
+import { VoiceTextArea } from '../voice-input/VoiceTextArea';
+import { VoiceTextInput } from '../voice-input/VoiceTextInput';
 import type { ChangeEvent, FormEvent } from 'react';
 import type { DecisionActionOverview, SpheresSnapshot } from '../../application';
 import {
@@ -313,13 +316,13 @@ export function DecisionDetailsPanel({
                     <dd>{details.decision.sacrifices ?? 'Не указаны'}</dd>
                   </div>
                   <div>
-                    <dt>Проект</dt>
+                    <dt>Цель</dt>
                     <dd>
                       {linkedProject === null ? (
                         details.decision.projectId === null ? (
                           'Не указан'
                         ) : (
-                          'Проект недоступен'
+                          'Цель недоступна'
                         )
                       ) : (
                         <button
@@ -333,7 +336,7 @@ export function DecisionDetailsPanel({
                     </dd>
                   </div>
                   <div>
-                    <dt>Связь с проектом</dt>
+                    <dt>Связь с целью</dt>
                     <dd>{details.decision.projectReference ?? 'Не указана'}</dd>
                   </div>
                   <div>
@@ -721,19 +724,19 @@ function DecisionRescheduleForm({
           Через неделю
         </button>
       </div>
-      <label>
+      <VoiceField>
         <span>Причина переноса</span>
-        <textarea
+        <VoiceTextArea
           value={form.reason}
           maxLength={500}
           rows={3}
           disabled={isSaving}
           aria-required="true"
           placeholder="Почему решение переносится и что изменится на новой дате"
-          onChange={(event: ChangeEvent<HTMLTextAreaElement>) => onReasonChange(event.target.value)}
+          onValueChange={(value) => onReasonChange(value)}
         />
         <small>{form.reason.trim().length} из 500 символов</small>
-      </label>
+      </VoiceField>
       {decision.kind === DECISION_KIND.main ? (
         <p className="decision-reschedule-position-note">
           На новой дате решение займёт свободную позицию автоматически
@@ -844,7 +847,7 @@ function DecisionEditForm({
 
       {started ? (
         <p className="decision-edit-policy-note" role="status">
-          День уже начат. Формулировка, вид, сфера, приоритет и проект зафиксированы. Можно уточнить
+          День уже начат. Формулировка, вид, сфера, приоритет и цель зафиксированы. Можно уточнить
           причину, ожидаемый результат, цену и жертвы.
         </p>
       ) : (
@@ -884,51 +887,45 @@ function DecisionEditForm({
         </label>
       </div>
 
-      <label>
+      <VoiceField>
         <span>Формулировка решения *</span>
-        <input
+        <VoiceTextInput
           value={form.title}
           disabled={isSaving || started}
           maxLength={200}
           aria-required="true"
           aria-invalid={titleError !== null}
-          onChange={(event: ChangeEvent<HTMLInputElement>) =>
-            onTextChange('title', event.target.value)
-          }
+          onValueChange={(value) => onTextChange('title', value)}
         />
         {titleError === null ? null : <small className="field-error">{titleError}</small>}
-      </label>
+      </VoiceField>
 
-      <label>
+      <VoiceField>
         <span>Причина</span>
-        <textarea
+        <VoiceTextArea
           value={form.reason ?? ''}
           disabled={isSaving}
           maxLength={1000}
           rows={3}
-          onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
-            onTextChange('reason', event.target.value)
-          }
+          onValueChange={(value) => onTextChange('reason', value)}
         />
-      </label>
+      </VoiceField>
 
-      <label>
+      <VoiceField>
         <span>Ожидаемый результат{kind === DECISION_KIND.main ? ' *' : ''}</span>
-        <textarea
+        <VoiceTextArea
           value={form.expectedResult}
           disabled={isSaving}
           maxLength={1000}
           rows={3}
           aria-required={kind === DECISION_KIND.main}
           aria-invalid={expectedResultError !== null}
-          onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
-            onTextChange('expectedResult', event.target.value)
-          }
+          onValueChange={(value) => onTextChange('expectedResult', value)}
         />
         {expectedResultError === null ? null : (
           <small className="field-error">{expectedResultError}</small>
         )}
-      </label>
+      </VoiceField>
 
       <div className="decision-edit-grid">
         <label>
@@ -941,7 +938,7 @@ function DecisionEditForm({
           />
         </label>
         <label>
-          <span>Проект</span>
+          <span>Цель</span>
           <select
             value={form.projectId ?? ''}
             disabled={isSaving || started}
@@ -950,11 +947,11 @@ function DecisionEditForm({
               const project = projects.find((item) => item.id.toString() === projectId);
               onTextChange('projectId', projectId);
               if ((form.sphereId ?? '') === '' && project?.sphereId !== null) {
-                onTextChange('sphereId', project?.sphereId.toString() ?? '');
+                onTextChange('sphereId', project?.sphereId?.toString() ?? '');
               }
             }}
           >
-            <option value="">Без проекта</option>
+            <option value="">Без цели</option>
             {projects
               .filter(
                 (project) =>
@@ -970,43 +967,37 @@ function DecisionEditForm({
         </label>
       </div>
 
-      <label>
-        <span>Старая ссылка на проект</span>
-        <input
+      <VoiceField>
+        <span>Старая ссылка на цель</span>
+        <VoiceTextInput
           value={form.projectReference ?? ''}
           disabled={isSaving || started}
           maxLength={200}
-          onChange={(event: ChangeEvent<HTMLInputElement>) =>
-            onTextChange('projectReference', event.target.value)
-          }
+          onValueChange={(value) => onTextChange('projectReference', value)}
         />
-      </label>
+      </VoiceField>
 
-      <label>
+      <VoiceField>
         <span>Цена решения</span>
-        <textarea
+        <VoiceTextArea
           value={form.price ?? ''}
           disabled={isSaving}
           maxLength={500}
           rows={2}
-          onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
-            onTextChange('price', event.target.value)
-          }
+          onValueChange={(value) => onTextChange('price', value)}
         />
-      </label>
+      </VoiceField>
 
-      <label>
+      <VoiceField>
         <span>Жертвы</span>
-        <textarea
+        <VoiceTextArea
           value={form.sacrifices ?? ''}
           disabled={isSaving}
           maxLength={1000}
           rows={3}
-          onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
-            onTextChange('sacrifices', event.target.value)
-          }
+          onValueChange={(value) => onTextChange('sacrifices', value)}
         />
-      </label>
+      </VoiceField>
 
       {generalError === null ? null : (
         <p className="form-error" role="alert">
@@ -1075,19 +1066,17 @@ function DecisionConfirmationForm({
   return (
     <form className="decision-confirmation-form" onSubmit={onSubmit} noValidate>
       <h4>Подтверждение решения</h4>
-      <label>
+      <VoiceField>
         <span>Фактический результат решения *</span>
-        <textarea
+        <VoiceTextArea
           value={actualResult}
           disabled={isSaving}
           maxLength={2000}
           rows={4}
           aria-required="true"
-          onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
-            onActualResultChange(event.target.value)
-          }
+          onValueChange={(value) => onActualResultChange(value)}
         />
-      </label>
+      </VoiceField>
       <p className="decision-confirmation-help">
         Проверьте общий итог. Завершённые действия будут зафиксированы как доказательства результата
         решения.
@@ -1169,40 +1158,36 @@ function LifeActionForm({
 }: LifeActionFormProps) {
   return (
     <form className="life-action-form" onSubmit={onSubmit} noValidate>
-      <label>
+      <VoiceField>
         <span>Название действия *</span>
-        <input
+        <VoiceTextInput
           value={form.title}
           disabled={isSaving}
           maxLength={200}
           aria-required="true"
-          onChange={(event: ChangeEvent<HTMLInputElement>) => onTitleChange(event.target.value)}
+          onValueChange={(value) => onTitleChange(value)}
         />
-      </label>
-      <label>
+      </VoiceField>
+      <VoiceField>
         <span>Ожидаемый результат *</span>
-        <textarea
+        <VoiceTextArea
           value={form.expectedResult}
           disabled={isSaving}
           maxLength={1000}
           rows={3}
           aria-required="true"
-          onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
-            onExpectedResultChange(event.target.value)
-          }
+          onValueChange={(value) => onExpectedResultChange(value)}
         />
-      </label>
-      <label>
+      </VoiceField>
+      <VoiceField>
         <span>Описание</span>
-        <textarea
+        <VoiceTextArea
           value={form.description}
           disabled={isSaving}
           rows={3}
-          onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
-            onDescriptionChange(event.target.value)
-          }
+          onValueChange={(value) => onDescriptionChange(value)}
         />
-      </label>
+      </VoiceField>
 
       {error === null ? null : (
         <p className="form-error" role="alert">

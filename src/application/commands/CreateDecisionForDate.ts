@@ -29,6 +29,8 @@ export interface CreateDecisionForDateInput {
   readonly title: string;
   readonly kind: DecisionKind;
   readonly plannedDate: DayDate;
+  /** A confirmed date must never be silently redirected to the next day. */
+  readonly requireExactDate?: boolean;
   readonly expectedResult?: string;
   readonly reason?: string;
   readonly sphereId?: string | null;
@@ -83,6 +85,14 @@ export class CreateDecisionForDate {
     let effectivePlannedDate = input.plannedDate;
     const requestedDay = await this.#dayRepository.findByDate(input.plannedDate);
     if (requestedDay?.status === DAY_STATUS.completed) {
+      if (input.requireExactDate) {
+        return domainFailure(
+          new DomainError(
+            'decision.completed_day_is_immutable',
+            'Этот день уже завершён. Укажите другую дату и подтвердите задачу заново.',
+          ),
+        );
+      }
       if (!input.plannedDate.equals(currentDate)) {
         return domainFailure(
           new DomainError(

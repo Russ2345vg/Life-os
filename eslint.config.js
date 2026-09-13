@@ -22,6 +22,8 @@ export default tseslint.config(
       '.worktrees/**',
       'playwright-report/**',
       'test-results/**',
+      'src-tauri/target/**',
+      'src-tauri/gen/**',
     ],
   },
   js.configs.recommended,

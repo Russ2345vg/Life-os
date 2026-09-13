@@ -38,7 +38,7 @@ export class UpdateDirection {
         return failure(
           new DomainError(
             'direction.sphere_has_incompatible_projects',
-            'Сферу нельзя изменить: у направления есть проекты из другой сферы. Сначала измените связи проектов.',
+            'Сферу нельзя изменить: у направления есть цели из другой сферы. Сначала измените связи целей.',
           ),
         );
       }

@@ -2,6 +2,7 @@ export const MANAGEMENT_SECTION = {
   overview: 'overview',
   directions: 'directions',
   projects: 'projects',
+  goals: 'goals',
   decisions: 'decisions',
   actions: 'actions',
   day: 'day',

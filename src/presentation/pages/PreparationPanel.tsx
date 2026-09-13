@@ -393,7 +393,7 @@ export function PreparationSceneView({
                 ) : null}
                 {snapshot.project === null ? null : (
                   <p>
-                    <span>Проект</span>
+                    <span>Цель</span>
                     <strong>{snapshot.project.title}</strong>
                   </p>
                 )}

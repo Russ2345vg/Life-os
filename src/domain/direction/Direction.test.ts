@@ -50,7 +50,7 @@ describe('Direction', () => {
       strategicIntent: '  Создать систему осознанного управления жизнью.  ',
       desiredState: 'LifeOS поддерживает целостный жизненный контур.',
       inScope: 'Продукт и методология',
-      outOfScope: 'Клиентские проекты',
+      outOfScope: 'Клиентские цели',
       now,
     });
     const updated = original.update(
@@ -66,13 +66,13 @@ describe('Direction', () => {
       strategicIntent: 'Создать систему осознанного управления жизнью.',
       desiredState: 'LifeOS поддерживает целостный жизненный контур.',
       inScope: 'Продукт и методология',
-      outOfScope: 'Клиентские проекты',
+      outOfScope: 'Клиентские цели',
     });
     expect(updated).toMatchObject({
       strategicIntent: null,
       desiredState: 'Устойчивая работа системы',
       inScope: 'Продукт и методология',
-      outOfScope: 'Клиентские проекты',
+      outOfScope: 'Клиентские цели',
       version: 2,
     });
   });

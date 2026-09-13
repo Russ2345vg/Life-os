@@ -1,0 +1,3 @@
+# Local Supabase CLI linkage/cache; never part of migrations or source control.
+.temp/
+.branches/

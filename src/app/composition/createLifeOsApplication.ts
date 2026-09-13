@@ -136,6 +136,7 @@ import {
   CreateGoal,
   UpdateGoal,
   ArchiveGoal,
+  DeletePilotGoal,
   GetGoalById,
   GetGoals,
   ApplyDirectionStrategicReview,
@@ -195,12 +196,19 @@ import { LifeOsIndexedDb } from '../../infrastructure/persistence/indexed-db/Lif
 import { LifeOsApplication } from './LifeOsApplication';
 import { LifeOsApplicationInitializationError } from './LifeOsApplicationInitializationError';
 import { BrowserLocalSettingsStore } from '../settings/BrowserLocalSettingsStore';
+import { MeaningfulLocalSettingsSync } from '../../infrastructure/sync/MeaningfulLocalSettingsSync';
+import type { SupabasePublicEnvironment } from '../../infrastructure/sync/supabase/SupabaseConfig';
+import { createLifeOsSyncApplication } from './createLifeOsSyncApplication';
+import { IndexedDbPilotMutationRecorder } from '../../infrastructure/sync/pilot/IndexedDbPilotMutationRecorder';
+import { IndexedDbPilotDeleteRepository } from '../../infrastructure/sync/pilot/IndexedDbPilotDeleteRepository';
+import { LIFE_OS_SYNC_REGISTRY } from '../../infrastructure/sync/LifeOsSyncRegistry';
 
 export interface CreateLifeOsApplicationDependencies {
   readonly database?: LifeOsIndexedDb;
   readonly clock?: Clock;
   readonly currentDateProvider?: CurrentDateProvider;
   readonly idGenerator?: IdGenerator;
+  readonly syncEnvironment?: SupabasePublicEnvironment;
 }
 
 export async function createLifeOsApplication(
@@ -210,6 +218,20 @@ export async function createLifeOsApplication(
 
   try {
     await database.open();
+
+    const clock = dependencies.clock ?? new SystemClock();
+    const currentDateProvider =
+      dependencies.currentDateProvider ?? new SystemCurrentDateProvider(clock);
+    const idGenerator = dependencies.idGenerator ?? new CryptoIdGenerator();
+    const mutationRecorder = new IndexedDbPilotMutationRecorder({
+      createId: () => idGenerator.generate().toString(),
+      now: () => clock.now(),
+    });
+    database.configureSyncMutationCapture(mutationRecorder, LIFE_OS_SYNC_REGISTRY, [
+      'direction',
+      'project',
+      'goal',
+    ]);
 
     const dayRepository = new IndexedDbDayRepository(database);
     const decisionRepository = new IndexedDbDecisionRepository(database);
@@ -225,7 +247,7 @@ export async function createLifeOsApplication(
       database,
     );
     const journalRepository = new IndexedDbJournalRepository(database);
-    const journalUnitOfWork = new IndexedDbJournalUnitOfWork(database);
+    const journalUnitOfWork = new IndexedDbJournalUnitOfWork(database, mutationRecorder);
     const routineBlockRepository = new IndexedDbRoutineBlockRepository(database);
     const routineOccurrenceOverrideRepository = new IndexedDbRoutineOccurrenceOverrideRepository(
       database,
@@ -237,16 +259,30 @@ export async function createLifeOsApplication(
     const walkRepository = new IndexedDbWalkRepository(database);
     const walkCaptureRepository = new IndexedDbWalkCaptureRepository(database);
     const sphereRepository = new IndexedDbSphereRepository(database);
-    const directionRepository = new IndexedDbDirectionRepository(database);
-    const projectRepository = new IndexedDbProjectRepository(database);
-    const goalRepository = new IndexedDbGoalRepository(database);
+    const directionRepository = new IndexedDbDirectionRepository(database, mutationRecorder);
+    const projectRepository = new IndexedDbProjectRepository(database, mutationRecorder);
+    const goalRepository = new IndexedDbGoalRepository(database, mutationRecorder);
     const openDayConflictReader = new IndexedDbOpenDayConflictReader(database);
     const openDayRecoveryUnitOfWork = new IndexedDbOpenDayRecoveryUnitOfWork(database);
-    const clock = dependencies.clock ?? new SystemClock();
-    const currentDateProvider =
-      dependencies.currentDateProvider ?? new SystemCurrentDateProvider(clock);
-    const idGenerator = dependencies.idGenerator ?? new CryptoIdGenerator();
-    const localSettings = new BrowserLocalSettingsStore();
+    let meaningfulSettingsSync: MeaningfulLocalSettingsSync | null = null;
+    const localSettings = new BrowserLocalSettingsStore(undefined, () => {
+      void meaningfulSettingsSync?.reconcile().catch(() => undefined);
+    });
+    meaningfulSettingsSync = new MeaningfulLocalSettingsSync(
+      database,
+      mutationRecorder,
+      localSettings,
+    );
+    const sync = createLifeOsSyncApplication({
+      database,
+      clock,
+      idGenerator,
+      mutationRecorder,
+      meaningfulSettingsSync,
+      ...(dependencies.syncEnvironment === undefined
+        ? {}
+        : { environment: dependencies.syncEnvironment }),
+    });
     const morningExerciseCatalog = new MorningExerciseCatalogService(
       exerciseDefinitionRepository,
       clock,
@@ -822,11 +858,21 @@ export async function createLifeOsApplication(
     const getProjectsForDirection = new GetProjectsForDirection(projectRepository);
     const getProjectById = new GetProjectById(projectRepository);
     const createGoal = new CreateGoal(goalRepository, directionRepository, clock, idGenerator);
-    const updateGoal = new UpdateGoal(goalRepository, directionRepository, clock);
+    const updateGoal = new UpdateGoal(
+      goalRepository,
+      directionRepository,
+      clock,
+      decisionRepository,
+    );
     const archiveGoal = new ArchiveGoal(goalRepository, clock);
+    const deletePilotGoal = new DeletePilotGoal(
+      new IndexedDbPilotDeleteRepository(database, mutationRecorder),
+    );
     const getGoalById = new GetGoalById(goalRepository);
     const getGoals = new GetGoals(goalRepository);
     const application = new LifeOsApplication({
+      sync,
+      localSettings,
       dayRepository,
       decisionRepository,
       lifeActionRepository,
@@ -999,6 +1045,7 @@ export async function createLifeOsApplication(
       createGoal,
       updateGoal,
       archiveGoal,
+      deletePilotGoal,
       getGoalById,
       getGoals,
       closeDatabase: () => database.close(),

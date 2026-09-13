@@ -30,14 +30,14 @@ export class CreateProject {
       directionId === null ? null : await this.directionRepository.findById(directionId);
     if (directionId !== null && direction === null) {
       return failure(
-        new DomainError('project.direction_not_found', 'Направление проекта не найдено.'),
+        new DomainError('project.direction_not_found', 'Направление цели не найдено.'),
       );
     }
     if (direction?.status === 'archived') {
       return failure(
         new DomainError(
           'project.archived_direction',
-          'Нельзя создать новый проект в архивном направлении.',
+          'Нельзя создать новую цель в архивном направлении.',
         ),
       );
     }
@@ -65,7 +65,7 @@ export class CreateProject {
         : await this.repository.create(project);
       return created
         ? success(project)
-        : failure(new DomainError('project.id_conflict', 'Не удалось создать проект.'));
+        : failure(new DomainError('project.id_conflict', 'Не удалось создать цель.'));
     } catch (error: unknown) {
       return projectFailure(error);
     }

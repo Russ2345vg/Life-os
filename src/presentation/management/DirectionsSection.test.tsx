@@ -15,7 +15,7 @@ import {
 const NOW = new Date('2026-08-10T08:00:00.000Z');
 
 describe('Directions presentation', () => {
-  it('renders a compact main card with the total project count and a mobile-accessible menu', () => {
+  it('renders the direction name, description and sphere without operational statistics', () => {
     const sphere = Sphere.create({
       id: EntityId.create('sphere-product'),
       name: 'Продукт',
@@ -43,10 +43,12 @@ describe('Directions presentation', () => {
     );
 
     expect(markup).toContain('Развитие LifeOS');
-    expect(markup).toContain('3 проекта');
-    expect(markup).toContain('Состояние уточняется');
-    expect(markup).toContain('Данные загружаются');
-    expect(markup).toContain('aria-label="Главное направление"');
+    expect(markup).toContain('Продукт');
+    expect(markup).not.toContain('3 цели');
+    expect(markup).toContain(direction.description);
+    expect(markup).not.toContain('Состояние уточняется');
+    expect(markup).not.toContain('Данные загружаются');
+    expect(markup).toContain('role="link"');
     expect(markup).toContain('<details');
     expect(markup).toContain('Редактировать');
     expect(markup).not.toContain('Сделать главным');
@@ -55,7 +57,7 @@ describe('Directions presentation', () => {
   it('renders the explanatory empty state with its create action', () => {
     const markup = renderToStaticMarkup(createElement(EmptyDirections, { onCreate: vi.fn() }));
     expect(markup).toContain('Пока нет направлений');
-    expect(markup).toContain('долгосрочный вектор движения');
+    expect(markup).toContain('Создайте первое направление');
     expect(markup).toContain('Создать направление');
   });
 
@@ -330,8 +332,8 @@ describe('Directions presentation', () => {
     for (const label of [
       'Стратегический замысел',
       'Желаемое состояние',
-      'Главный проект',
-      'Проекты',
+      'Главная цель',
+      'Цели',
       'Решения',
       'Действия',
       'Сессии',
@@ -341,8 +343,8 @@ describe('Directions presentation', () => {
     ])
       expect(questions).toContain(label);
     expect(questions).toContain('Направление всё ещё актуально?');
-    expect(questions).toContain('Какой проект сейчас должен быть главным?');
-    expect(questions).toContain('Нужен ли новый проект?');
+    expect(questions).toContain('Какая цель сейчас должна быть главной?');
+    expect(questions).toContain('Нужна ли новая цель?');
     expect(summary).toContain('Подтвердить и применить');
     expect(summary).toContain('одной операцией');
     expect(questions).not.toContain('KPI');

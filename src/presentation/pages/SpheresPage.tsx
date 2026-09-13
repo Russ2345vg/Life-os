@@ -1,3 +1,6 @@
+import { VoiceField } from '../voice-input/VoiceField';
+import { VoiceTextInput } from '../voice-input/VoiceTextInput';
+import { VoiceTextArea } from '../voice-input/VoiceTextArea';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import type {
   ArchiveSphere,
@@ -236,33 +239,31 @@ export function SphereForm(props: SphereFormProps) {
           <h2>{props.mode === 'create' ? 'Создать сферу' : 'Изменить сферу'}</h2>
         </div>
       </div>
-      <label className="sphere-field" htmlFor="sphere-name">
+      <VoiceField className="sphere-field" htmlFor="sphere-name">
         <span>Название</span>
-        <input
+        <VoiceTextInput
           id="sphere-name"
           name="name"
           required
           autoFocus
           maxLength={MAX_SPHERE_NAME_LENGTH}
           value={props.draft.name}
-          onChange={(event) => props.onChange({ ...props.draft, name: event.currentTarget.value })}
+          onValueChange={(value) => props.onChange({ ...props.draft, name: value })}
         />
-      </label>
-      <label className="sphere-field" htmlFor="sphere-description">
+      </VoiceField>
+      <VoiceField className="sphere-field" htmlFor="sphere-description">
         <span>
           Описание <small>необязательно</small>
         </span>
-        <textarea
+        <VoiceTextArea
           id="sphere-description"
           name="description"
           rows={3}
           maxLength={MAX_SPHERE_DESCRIPTION_LENGTH}
           value={props.draft.description}
-          onChange={(event) =>
-            props.onChange({ ...props.draft, description: event.currentTarget.value })
-          }
+          onValueChange={(value) => props.onChange({ ...props.draft, description: value })}
         />
-      </label>
+      </VoiceField>
       <div className="sphere-form-visuals">
         <label className="sphere-field" htmlFor="sphere-icon">
           <span>

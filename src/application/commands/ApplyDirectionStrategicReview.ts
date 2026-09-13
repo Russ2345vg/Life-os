@@ -125,7 +125,7 @@ export class ApplyDirectionStrategicReview {
         ) {
           throw new DomainError(
             'direction_review.archived_with_project_changes',
-            'При переносе направления в архив нельзя одновременно менять его проекты.',
+            'При переносе направления в архив нельзя одновременно менять его цели.',
           );
         }
       } else {
@@ -220,7 +220,7 @@ function moveProject(project: Project, status: StrategicReviewProjectStatus, now
   if (project.status === PROJECT_STATUS.paused) return project.resume(now);
   throw new DomainError(
     'direction_review.invalid_project_transition',
-    'Выбранное изменение состояния проекта недоступно.',
+    'Выбранное изменение состояния цели недоступно.',
   );
 }
 
@@ -235,7 +235,7 @@ function assignMainProject(
   if (main.status !== PROJECT_STATUS.active) {
     throw new DomainError(
       'direction_review.inactive_main_project',
-      'Главным можно назначить только активный проект.',
+      'Главной можно назначить только активную цель.',
     );
   }
   return projects.map((project) =>
@@ -250,7 +250,7 @@ function assertUniqueProjectChanges(
   if (changes.length !== byId.size) {
     throw new DomainError(
       'direction_review.duplicate_project_change',
-      'Один проект нельзя изменить дважды в одном обзоре.',
+      'Одну цель нельзя изменить дважды в одном обзоре.',
     );
   }
 }
@@ -258,13 +258,13 @@ function assertUniqueProjectChanges(
 function conflict(): DomainError {
   return new DomainError(
     'direction_review.version_conflict',
-    'Направление или проекты уже изменились. Обновите обзор и повторите попытку.',
+    'Направление или цели уже изменились. Обновите обзор и повторите попытку.',
   );
 }
 
 function notFound(entity: 'direction' | 'project'): DomainError {
   return new DomainError(
     `direction_review.${entity}_not_found`,
-    entity === 'direction' ? 'Направление не найдено.' : 'Проект направления не найден.',
+    entity === 'direction' ? 'Направление не найдено.' : 'Цель направления не найдена.',
   );
 }

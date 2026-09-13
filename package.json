@@ -1,10 +1,11 @@
 {
   "name": "lifeos-app",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.4",
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "tauri": "tauri",
     "build": "node scripts/run-check.mjs build",
     "typecheck": "node scripts/run-check.mjs typecheck",
     "lint": "node scripts/run-check.mjs lint",
@@ -18,15 +19,21 @@
     "format:check": "node scripts/run-check.mjs format-check",
     "verify": "npm run typecheck && npm run lint && npm run test && npm run test:infra && npm run test:alpha && npm run build && npm run format:check && git diff --check",
     "verify:full": "npm run verify && npm run test:e2e",
-    "test:alpha": "node scripts/run-vitest.mjs alpha"
+    "test:alpha": "node scripts/run-vitest.mjs alpha",
+    "test:release": "node --test scripts/release-publish.node-test.mjs",
+    "release:publish": "node scripts/release-publish.mjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.112.4",
+    "@tauri-apps/api": "^2.11.1",
+    "@tauri-apps/plugin-updater": "^2.11.0",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@playwright/test": "1.62.1",
+    "@tauri-apps/cli": "2.11.4",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.4",
     "@vitejs/plugin-react": "6.0.5",
@@ -35,6 +42,7 @@
     "eslint-plugin-react-refresh": "0.5.3",
     "fake-indexeddb": "^6.2.5",
     "prettier": "3.9.6",
+    "supabase": "^2.116.0",
     "typescript": "6.0.3",
     "typescript-eslint": "8.65.0",
     "vite": "8.2.0",

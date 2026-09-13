@@ -1,3 +1,5 @@
+import { VoiceField } from '../voice-input/VoiceField';
+import { VoiceTextArea } from '../voice-input/VoiceTextArea';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import {
   WALK_INTENT,
@@ -125,18 +127,18 @@ export function WalkQuickCompletionPanel(props: WalkQuickCompletionPanelProps) {
         </div>
       </fieldset>
 
-      <label className="walk-completion-reflection">
+      <VoiceField className="walk-completion-reflection">
         <span>
           {reflectionPrompt} <small>необязательно</small>
         </span>
-        <textarea
+        <VoiceTextArea
           rows={3}
           maxLength={1000}
           value={reflection}
           disabled={props.isSaving}
-          onChange={(event) => setReflection(event.currentTarget.value)}
+          onValueChange={(value) => setReflection(value)}
         />
-      </label>
+      </VoiceField>
 
       {props.error === null ? null : (
         <p className="walk-completion-error" role="alert">

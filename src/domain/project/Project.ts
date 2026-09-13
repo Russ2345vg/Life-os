@@ -68,15 +68,15 @@ export class Project extends Entity {
       'project.desired_result_too_long',
     );
     if (!isProjectStatus(data.status)) {
-      throw new DomainError('project.invalid_status', 'Указан неизвестный статус проекта.');
+      throw new DomainError('project.invalid_status', 'Указан неизвестный статус цели.');
     }
     if (typeof data.isMain !== 'boolean') {
-      throw new DomainError('project.invalid_is_main', 'Признак главного проекта указан неверно.');
+      throw new DomainError('project.invalid_is_main', 'Признак главной цели указан неверно.');
     }
     if (data.status !== PROJECT_STATUS.active && data.isMain) {
       throw new DomainError(
         'project.inactive_cannot_be_main',
-        'Только активный проект может быть главным.',
+        'Только активная цель может быть главной.',
       );
     }
     assertLifecycle(data.createdAt, data.updatedAt, data.version);
@@ -139,7 +139,7 @@ export class Project extends Entity {
   public complete(updatedAt: Date): Project {
     if (this.status === PROJECT_STATUS.completed) return this;
     if (this.status !== PROJECT_STATUS.active && this.status !== PROJECT_STATUS.paused) {
-      throw new DomainError('project.cannot_complete', 'Архивный проект нельзя завершить.');
+      throw new DomainError('project.cannot_complete', 'Архивную цель нельзя завершить.');
     }
     return this.withStatus(PROJECT_STATUS.completed, updatedAt, false);
   }
@@ -158,7 +158,7 @@ export class Project extends Entity {
     if (this.status !== PROJECT_STATUS.active) {
       throw new DomainError(
         'project.inactive_cannot_be_main',
-        'Только активный проект можно сделать главным.',
+        'Только активную цель можно сделать главной.',
       );
     }
     return this.withMain(true, updatedAt);
@@ -170,7 +170,7 @@ export class Project extends Entity {
 
   private assertStatus(expected: ProjectStatus, code: string): void {
     if (this.status !== expected) {
-      throw new DomainError(code, 'Переход проекта в запрошенный статус недоступен.');
+      throw new DomainError(code, 'Переход цели в запрошенный статус недоступен.');
     }
   }
 
@@ -219,7 +219,7 @@ function sameOptionalEntityId(left: EntityId | null, right: EntityId | null): bo
 function normalizeRequiredText(value: string, maxLength: number): string {
   const normalized = value.trim().replace(/\s+/gu, ' ');
   if (normalized.length === 0) {
-    throw new DomainError('project.title_required', 'Название проекта обязательно.');
+    throw new DomainError('project.title_required', 'Название цели обязательно.');
   }
   if (normalized.length > maxLength) {
     throw new DomainError(
@@ -255,6 +255,6 @@ function assertLifecycle(createdAt: Date, updatedAt: Date, version: number): voi
     );
   }
   if (!Number.isInteger(version) || version < 1) {
-    throw new DomainError('project.invalid_version', 'Версия проекта указана неверно.');
+    throw new DomainError('project.invalid_version', 'Версия цели указана неверно.');
   }
 }

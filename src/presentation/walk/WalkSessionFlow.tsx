@@ -1,3 +1,5 @@
+import { VoiceField } from '../voice-input/VoiceField';
+import { VoiceTextArea } from '../voice-input/VoiceTextArea';
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import {
   WALK_INTENT,
@@ -252,11 +254,11 @@ export function WalkPreparationForm(props: WalkPreparationFormProps) {
 
         <div className="walk-preparation-personalization">
           {props.intent === WALK_INTENT.reflection ? (
-            <label className="walk-reflection-field">
+            <VoiceField className="walk-reflection-field">
               <span>
                 Вопрос для размышления <small>необязательно</small>
               </span>
-              <textarea
+              <VoiceTextArea
                 rows={2}
                 maxLength={500}
                 value={reflectionQuestion}
@@ -266,9 +268,9 @@ export function WalkPreparationForm(props: WalkPreparationFormProps) {
                     ? presentation.prompt
                     : DECISION_WALK_DEFAULT_QUESTION
                 }
-                onChange={(event) => setReflectionQuestion(event.currentTarget.value)}
+                onValueChange={(value) => setReflectionQuestion(value)}
               />
-            </label>
+            </VoiceField>
           ) : null}
 
           <WalkBeforeStateInput

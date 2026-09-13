@@ -8,12 +8,14 @@ async function openDecision(page: Page): Promise<void> {
   await page.goto('/');
   await page.getByRole('button', { name: 'Добавить главное решение', exact: true }).click();
   await page.getByRole('textbox', { name: 'Название решения *', exact: true }).fill(TITLE);
-  await page
-    .getByRole('textbox', {
-      name: 'Ожидаемый результат * Сформулируйте конкретный и проверяемый результат.',
-      exact: true,
-    })
-    .fill('Уточнить направление без автоматического принятия решения');
+  const expectedResult = page.getByRole('textbox', {
+    name: 'Ожидаемый результат *',
+    exact: true,
+  });
+  await expect(expectedResult).toHaveAccessibleDescription(
+    'Сформулируйте конкретный и проверяемый результат.',
+  );
+  await expectedResult.fill('Уточнить направление без автоматического принятия решения');
   await page
     .getByRole('main')
     .getByRole('button', { name: 'Создать решение', exact: true })
@@ -38,7 +40,7 @@ async function expectWalkFocus(page: Page, title: string): Promise<void> {
   const heading = page.getByRole('heading', { name: title, exact: true });
   await expect(heading).toBeFocused();
   // The stage heading keeps keyboard focus and uses the shared LifeOS focus treatment.
-  await expect(heading).toHaveCSS('outline-color', 'rgb(199, 168, 98)');
+  await expect(heading).toHaveCSS('outline-color', 'rgb(237, 188, 140)');
   await expect(heading).toHaveCSS('outline-style', 'solid');
   await expect(heading).toHaveCSS('outline-width', '2px');
   await expect(heading).toHaveCSS('outline-offset', '2px');

@@ -1,0 +1,200 @@
+.application-global-actions {
+  margin-block: var(--space-3);
+}
+.application-global-actions .voice-command-entry {
+  width: 100%;
+}
+.application-desktop-sidebar {
+  overflow-y: auto;
+}
+.application-sidebar-collapsed .voice-command-entry {
+  width: 2.75rem;
+  padding: 0;
+}
+.application-sidebar-collapsed .voice-command-entry span {
+  display: none;
+}
+
+.voice-command-entry {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 2.75rem;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-medium);
+  background: var(--surface-glass);
+  color: var(--text-primary);
+}
+
+.voice-command-entry:hover {
+  border-color: var(--gold-main);
+}
+.voice-command-entry > svg {
+  color: var(--gold-main);
+}
+
+.voice-command-palette {
+  box-sizing: border-box;
+  width: min(36rem, calc(100% - var(--space-8)));
+  max-height: calc(100dvh - var(--space-8));
+  overflow: auto;
+  padding: var(--space-8);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xlarge);
+  background: var(--surface-glass-overlay);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-deep);
+}
+.voice-command-palette::backdrop {
+  background: color-mix(in srgb, var(--bg-canvas) 80%, transparent);
+  backdrop-filter: blur(var(--blur-popover));
+}
+.voice-command-heading,
+.voice-command-record,
+.voice-command-feedback {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.voice-command-heading > svg {
+  color: var(--gold-main);
+  flex-shrink: 0;
+}
+.voice-command-heading h2 {
+  margin: var(--space-1) 0 0;
+}
+.voice-command-heading .eyebrow {
+  margin: 0;
+}
+.voice-command-feedback {
+  min-height: 2.75rem;
+  color: var(--text-secondary);
+}
+.voice-command-record {
+  margin-block: var(--space-4);
+}
+.voice-command-record .voice-input-button {
+  position: relative;
+  flex-shrink: 0;
+  width: 3rem;
+  height: 3rem;
+}
+.voice-command-record .voice-input-button::after {
+  right: auto;
+  left: 0;
+  width: max-content;
+  max-width: 16rem;
+  white-space: normal;
+}
+.voice-command-field {
+  display: block;
+  margin-bottom: var(--space-2);
+}
+.voice-command-palette textarea {
+  box-sizing: border-box;
+  width: 100%;
+  resize: vertical;
+  padding: var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-small);
+  background: var(--surface-field);
+  color: var(--text-primary);
+  font: inherit;
+}
+.voice-command-preview {
+  margin-top: var(--space-6);
+  padding-block: var(--space-3);
+  border-top: 1px solid var(--border-soft);
+}
+.voice-command-preview h3 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+.voice-command-preview-title {
+  font-size: 1.5rem;
+  margin-block: var(--space-3);
+  overflow-wrap: anywhere;
+}
+.voice-command-hint {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+.voice-command-error {
+  color: var(--color-error);
+}
+.voice-command-results {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+.voice-command-results li,
+.voice-command-results button {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.voice-command-results button {
+  min-height: 2.75rem;
+  width: 100%;
+  text-align: left;
+}
+.voice-command-results small {
+  display: block;
+  color: var(--text-secondary);
+  margin-top: var(--space-1);
+}
+.voice-command-preview > button {
+  min-height: 2.75rem;
+}
+.voice-command-success {
+  color: var(--color-accent-green);
+  font-weight: 700;
+}
+.voice-command-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+}
+.voice-command-actions button {
+  min-height: 2.75rem;
+}
+.voice-command-interim {
+  overflow-wrap: anywhere;
+  color: var(--text-secondary);
+}
+body:has(.application-reduce-motion) .voice-command-palette * {
+  animation: none !important;
+  transition: none !important;
+}
+@media (max-width: 60rem) {
+  .application-shell .application-mobile-header {
+    grid-template-columns: 2.75rem minmax(0, 1fr) minmax(5.5rem, auto) 2.75rem;
+  }
+  .application-shell .application-mobile-date {
+    max-width: none;
+  }
+  .application-mobile-global-actions .voice-command-entry {
+    width: 2.75rem;
+    padding: 0;
+  }
+  .application-mobile-global-actions .voice-command-entry span {
+    display: none;
+  }
+}
+@media (max-width: 40rem) {
+  .voice-command-palette {
+    width: calc(100% - var(--space-4));
+    max-height: calc(100dvh - var(--space-4));
+    padding: var(--space-4);
+    padding-bottom: max(var(--space-4), env(safe-area-inset-bottom));
+  }
+  .voice-command-actions {
+    flex-wrap: wrap;
+  }
+  .voice-command-actions button {
+    flex: 1;
+  }
+}

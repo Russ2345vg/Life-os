@@ -1,3 +1,5 @@
+import { VoiceField } from '../voice-input/VoiceField';
+import { VoiceTextArea } from '../voice-input/VoiceTextArea';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import type { GetWalkCaptureById, ProcessWalkCapture, UpdateWalkCapture } from '../../application';
 import { MAX_WALK_CAPTURE_LENGTH, type EntityId } from '../../domain';
@@ -153,17 +155,17 @@ export function WalkCaptureDetails(props: Props) {
             </>
           ) : (
             <form className="walk-capture-form" onSubmit={(event) => void save(event)}>
-              <label>
+              <VoiceField>
                 <span>Текст мысли</span>
-                <textarea
+                <VoiceTextArea
                   ref={field}
                   rows={5}
                   maxLength={MAX_WALK_CAPTURE_LENGTH}
                   value={draft.content}
                   disabled={busy}
-                  onChange={(event) => setDraft({ ...draft, content: event.currentTarget.value })}
+                  onValueChange={(value) => setDraft({ ...draft, content: value })}
                 />
-              </label>
+              </VoiceField>
               <div className="walk-form-actions">
                 <button
                   className="secondary-button"

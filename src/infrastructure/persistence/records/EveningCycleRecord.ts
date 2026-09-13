@@ -1,4 +1,5 @@
 export interface EveningCycleRecord {
+  readonly goalLinksVersion?: 1;
   readonly schemaVersion: 1;
   readonly id: string;
   readonly dayId: string;

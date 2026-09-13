@@ -497,7 +497,7 @@ describe('EveningReviewPanel', () => {
       EveningShutdownScene({
         model: buildEveningShutdownSceneModel(snapshot, {
           primaryDecisionTitle: 'Завершить вечерний режим LifeOS',
-          firstStepTitle: 'Открыть проект и продолжить работу',
+          firstStepTitle: 'Открыть цель и продолжить работу',
         }),
         isSubmitting: false,
         error: null,

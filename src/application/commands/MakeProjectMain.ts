@@ -20,7 +20,7 @@ export class MakeProjectMain {
   public async execute(input: MakeProjectMainInput): Promise<Result<Project, DomainError>> {
     const stored = await this.repository.findById(input.id);
     if (stored === null) {
-      return failure(new DomainError('project.not_found', 'Проект не найден.'));
+      return failure(new DomainError('project.not_found', 'Цель не найдена.'));
     }
     if (stored.version !== input.expectedVersion) return projectVersionConflict();
     try {

@@ -20,14 +20,21 @@ import {
   type EveningRitualSettings,
 } from '../../application/evening-settings';
 import { RELAXATION_PRACTICE, type RelaxationPractice } from '../../domain';
+import type { SystemUpdateRuntime } from '../../application/updates/SystemUpdate';
+import { SystemUpdatePanel } from '../settings/SystemUpdatePanel';
+import type { SyncApplication } from '../../application/sync/SyncApplicationService';
+import { SyncPage } from '../sync/SyncPage';
 
 interface MorePageProps {
+  readonly syncOpenRequest?: number;
   readonly settings: LocalSettings;
   readonly settingsStorageAvailable: boolean;
   readonly settingsRecoveredFromInvalidValue: boolean;
   readonly onOpenSection: (section: AppSection) => void;
   readonly onSaveSettings: (settings: LocalSettings) => boolean;
   readonly onResetSettings: () => boolean;
+  readonly systemUpdate: SystemUpdateRuntime;
+  readonly sync: SyncApplication;
 }
 
 interface MoreSectionItem {
@@ -37,9 +44,17 @@ interface MoreSectionItem {
   readonly available: boolean;
   readonly target?: AppSection;
   readonly opensSettings?: boolean;
+  readonly opensSync?: boolean;
 }
 
 const MORE_SECTIONS: readonly MoreSectionItem[] = [
+  {
+    title: 'Синхронизация',
+    description: 'Доверенные устройства, сквозное шифрование и восстановление доступа.',
+    icon: 'lock',
+    available: true,
+    opensSync: true,
+  },
   {
     title: 'Настройки',
     description: 'Стартовый раздел, плотность интерфейса и параметры мобильной шапки.',
@@ -78,10 +93,20 @@ const MORE_SECTIONS: readonly MoreSectionItem[] = [
 ];
 
 export function MorePage(props: MorePageProps) {
-  const [view, setView] = useState<'index' | 'settings'>('index');
+  const [selection, setSelection] = useState<{
+    request: number | undefined;
+    view: 'index' | 'settings' | 'sync';
+  }>({ request: props.syncOpenRequest, view: props.syncOpenRequest ? 'sync' : 'index' });
+  const view =
+    props.syncOpenRequest && props.syncOpenRequest !== selection.request ? 'sync' : selection.view;
+  const setView = (next: 'index' | 'settings' | 'sync') =>
+    setSelection({ request: props.syncOpenRequest, view: next });
 
   if (view === 'settings') {
     return <LocalSettingsPage {...props} onBack={() => setView('index')} />;
+  }
+  if (view === 'sync') {
+    return <SyncPage sync={props.sync} onBack={() => setView('index')} />;
   }
 
   return (
@@ -105,10 +130,17 @@ export function MorePage(props: MorePageProps) {
                     props.onOpenSection(item.target);
                   } else if (item.opensSettings === true) {
                     setView('settings');
+                  } else if (item.opensSync === true) {
+                    setView('sync');
                   }
                 }}
               >
-                <MoreSectionContent item={item} />
+                <MoreSectionContent
+                  item={item}
+                  updateAvailable={
+                    item.opensSettings === true && props.systemUpdate.state.status === 'available'
+                  }
+                />
               </button>
             );
           }
@@ -126,8 +158,8 @@ export function MorePage(props: MorePageProps) {
           <p className="section-page-eyebrow">Хранилище</p>
           <h2>Локальный режим активен</h2>
           <p>
-            Решения, действия и рабочие сессии сохраняются в IndexedDB этого браузера. Облачная
-            синхронизация не используется.
+            Записи сохраняются на устройстве и доступны без сети. При настроенной синхронизации
+            изменения передаются доверенным устройствам в зашифрованном виде.
           </p>
         </div>
         <span className="local-mode-indicator">Подключено</span>
@@ -147,6 +179,7 @@ export function LocalSettingsPage({
   onSaveSettings,
   onResetSettings,
   onBack,
+  systemUpdate,
 }: LocalSettingsPageProps) {
   const [draft, setDraft] = useState<LocalSettings>(() => ({
     ...copyLocalSettings(settings),
@@ -525,6 +558,12 @@ export function LocalSettingsPage({
         </fieldset>
       </section>
 
+      <SystemUpdatePanel
+        state={systemUpdate.state}
+        onCheck={systemUpdate.check}
+        onInstall={systemUpdate.install}
+      />
+
       <section className="settings-data-card">
         <div>
           <p className="section-page-eyebrow">Данные</p>
@@ -542,9 +581,10 @@ export function LocalSettingsPage({
 
 interface MoreSectionContentProps {
   readonly item: MoreSectionItem;
+  readonly updateAvailable?: boolean;
 }
 
-function MoreSectionContent({ item }: MoreSectionContentProps) {
+function MoreSectionContent({ item, updateAvailable = false }: MoreSectionContentProps) {
   return (
     <>
       <span className="more-section-icon">
@@ -555,7 +595,7 @@ function MoreSectionContent({ item }: MoreSectionContentProps) {
         <span>{item.description}</span>
       </span>
       <span className={item.available ? 'more-section-state available' : 'more-section-state'}>
-        {item.available ? 'Открыть' : 'Следующий этап'}
+        {updateAvailable ? 'Есть обновление' : item.available ? 'Открыть' : 'Следующий этап'}
       </span>
     </>
   );

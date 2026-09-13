@@ -11,7 +11,7 @@ const globalCss = readFileSync(new URL('../styles/global.css', import.meta.url),
 const directionSource = readFileSync(new URL('./DirectionsSection.tsx', import.meta.url), 'utf8');
 
 describe('D6 Direction experience', () => {
-  it('shows a Russian strategic register row with description and one compact state line', () => {
+  it('shows the description while keeping goals and activity inside the direction', () => {
     const direction = Direction.create({
       id: EntityId.create('direction-d5'),
       name: 'Развитие LifeOS',
@@ -72,18 +72,18 @@ describe('D6 Direction experience', () => {
     );
 
     for (const value of [
-      'Главное направление',
-      direction.description,
       'D5 Direction Experience',
       'Нет движения',
-      '3 проекта',
+      '3 цели',
       'Требует внимания',
       'Активность',
       '30 дней',
-      'Без сферы',
     ])
-      expect(markup).toContain(value);
-    expect(markup).not.toMatch(/Главный проект|Движение|Активные проекты|Сфера|Сигнал/);
+      expect(markup).not.toContain(value);
+    expect(markup).toContain(direction.name);
+    expect(markup).toContain(direction.description);
+    expect(markup).toContain('Без сферы');
+    expect(markup).toContain('role="link"');
   });
 
   it('hides signals when the operational state only repeats the page state', () => {
@@ -158,11 +158,11 @@ describe('D6 Direction experience', () => {
     const pulseComponentStart = directionSource.indexOf('export function DirectionPulsePanel');
     const detailSource = directionSource.slice(detailStart, pulseComponentStart);
 
-    expect(detailSource).toContain('Создать проект');
+    expect(detailSource).toContain('Создать цель');
     expect(detailSource).toContain('Выбрать из портфеля');
-    expect(detailSource).toContain('+ Создать первый проект');
-    expect(detailSource).not.toContain('+ Новый проект');
-    expect(detailSource).toContain('Проектов пока нет.');
+    expect(detailSource).toContain('+ Создать первый цель');
+    expect(detailSource).not.toContain('+ Новая цель');
+    expect(detailSource).toContain('Целей пока нет.');
     expect(detailSource).not.toContain('Портфель пока пуст.');
   });
 
@@ -178,7 +178,7 @@ describe('D6 Direction experience', () => {
 
     for (const value of [
       'Портфель · {projects.length}',
-      'Открыть проект →',
+      'Открыть цель →',
       'direction-focus-project-top',
       'direction-focus-project-bottom',
       'direction-focus-project-result',
@@ -186,7 +186,7 @@ describe('D6 Direction experience', () => {
       'direction-project-row-top',
       'direction-project-row-result',
       'direction-project-main-marker',
-      'aria-label="Главный проект"',
+      'aria-label="Главная цель"',
       '★',
       'Открыть →',
     ])
@@ -197,7 +197,7 @@ describe('D6 Direction experience', () => {
       '{counts.active} активных · {counts.paused} приостановленных',
     );
     expect(globalCss).toMatch(
-      /\.direction-detail \.direction-focus-has-project\s*{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\);[^}]*background:\s*linear-gradient/,
+      /\.direction-detail \.direction-focus-has-project\s*{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\);[^}]*background:\s*var\(--surface-glass-raised\)/,
     );
     expect(globalCss).toMatch(
       /\.direction-focus-project-bottom\s*{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\) auto;/,
@@ -206,7 +206,7 @@ describe('D6 Direction experience', () => {
       /\.direction-detail \.direction-project-grid\s*{[^}]*width:\s*100%;[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/,
     );
     expect(globalCss).toMatch(
-      /\.direction-project-row\s*{[^}]*width:\s*100%;[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\) auto;[^}]*background:\s*linear-gradient/,
+      /\.direction-project-row\s*{[^}]*width:\s*100%;[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\) auto;[^}]*background:\s*var\(--surface-glass\)/,
     );
     expect(globalCss).toMatch(
       /\.direction-project-row-result\s*{[^}]*max-width:\s*72ch;[^}]*-webkit-line-clamp:\s*2;/,
@@ -241,13 +241,13 @@ describe('D6 Direction experience', () => {
       }),
     );
     const orderedLabels = [
-      'Новый проект',
+      'Новая цель',
       'Название',
-      'Сделать главным проектом',
+      'Сделать главной целью',
       'Желаемый результат',
       'Направление: Финансовая безопасность · Сфера: Деньги',
       'Отмена',
-      'Создать проект',
+      'Создать цель',
     ];
     const positions = orderedLabels.map((label) => markup.indexOf(label));
 
@@ -266,7 +266,7 @@ describe('D6 Direction experience', () => {
       createElement(DirectionProjectCreateForm, {
         directionName: 'LifeOS',
         sphereName: null,
-        draft: { title: 'Новый проект', desiredResult: '', makeMain: true },
+        draft: { title: 'Новая цель', desiredResult: '', makeMain: true },
         saving: true,
         onDraftChange: vi.fn(),
         onSubmit: vi.fn(),
@@ -291,7 +291,7 @@ describe('D6 Direction experience', () => {
       /\.direction-project-checkbox\s*{[^}]*width:\s*1\.125rem;[^}]*height:\s*1\.125rem;/,
     );
     expect(globalCss).toMatch(
-      /input:checked \+ \.direction-project-checkbox\s*{[^}]*border-color:\s*#b59855;[^}]*background:\s*#bda25f;/,
+      /input:checked \+ \.direction-project-checkbox\s*{[^}]*border-color:\s*var\(--border-accent\);[^}]*background:\s*var\(--gold-main\);/,
     );
     expect(globalCss).toMatch(
       /@media \(max-width:\s*30rem\)[\s\S]*?\.direction-project-form\s*{[^}]*max-width:\s*100%;[^}]*padding:\s*1rem;/,

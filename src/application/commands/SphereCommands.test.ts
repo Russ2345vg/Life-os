@@ -87,7 +87,7 @@ describe('sphere commands and query', () => {
     const updated = await app.update.execute({
       id: created.value.id,
       expectedVersion: created.value.version,
-      name: 'Творческие проекты',
+      name: 'Творческие цели',
       description: 'Иллюстрация',
     });
     if (!updated.ok) throw updated.error;
@@ -104,7 +104,7 @@ describe('sphere commands and query', () => {
     });
     expect(restored).toMatchObject({
       ok: true,
-      value: { name: 'Творческие проекты', status: 'active', version: 4 },
+      value: { name: 'Творческие цели', status: 'active', version: 4 },
     });
   });
 

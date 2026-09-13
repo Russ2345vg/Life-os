@@ -129,7 +129,7 @@ export function validateDecisionCreationForm(
     projectReference: validateOptionalText(
       form.projectReference,
       200,
-      'Связь с проектом не может быть длиннее 200 символов',
+      'Связь с целью не может быть длиннее 200 символов',
     ),
     projectId: validateProjectSelection(form, projects),
     form: null,
@@ -195,13 +195,13 @@ export function errorsForDecisionCreationCode(code: string): DecisionCreationFor
     case 'decision.invalid_priority':
       return { ...errors, priority: 'Выберите приоритет решения' };
     case 'decision.invalid_project_reference':
-      return { ...errors, projectReference: 'Проверьте связь с проектом' };
+      return { ...errors, projectReference: 'Проверьте связь с целью' };
     case 'decision.project_not_found':
-      return { ...errors, projectId: 'Выбранный проект не найден' };
+      return { ...errors, projectId: 'Выбранная цель не найдена' };
     case 'decision.project_unavailable':
-      return { ...errors, projectId: 'Завершённый или архивный проект недоступен' };
+      return { ...errors, projectId: 'Завершённая или архивная цель недоступна' };
     case 'decision.project_sphere_mismatch':
-      return { ...errors, projectId: 'Сфера решения не совпадает со сферой проекта' };
+      return { ...errors, projectId: 'Сфера решения не совпадает со сферой цели' };
     case 'decision.planned_date_in_past':
       return { ...errors, plannedDate: 'Нельзя создать решение на прошедшую дату' };
     case 'decision.completed_day_is_immutable':
@@ -221,16 +221,16 @@ function validateProjectSelection(
 ): string | null {
   if (form.projectId === '') return null;
   const project = projects.find((item) => item.id.toString() === form.projectId);
-  if (project === undefined) return projects.length === 0 ? null : 'Выберите доступный проект';
+  if (project === undefined) return projects.length === 0 ? null : 'Выберите доступный цель';
   if (project.status === 'completed' || project.status === 'archived') {
-    return 'Завершённый или архивный проект недоступен';
+    return 'Завершённая или архивная цель недоступна';
   }
   if (
     project.sphereId !== null &&
     form.sphereId !== '' &&
     project.sphereId.toString() !== form.sphereId
   ) {
-    return 'Сфера решения не совпадает со сферой проекта';
+    return 'Сфера решения не совпадает со сферой цели';
   }
   return null;
 }

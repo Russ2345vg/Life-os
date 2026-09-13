@@ -16,6 +16,7 @@ export interface JournalCorrectionRecord {
 }
 
 export interface JournalEntryRecord {
+  readonly goalLinksVersion?: 1;
   readonly id: string;
   readonly type: JournalEntryType;
   readonly occurredAt: string;

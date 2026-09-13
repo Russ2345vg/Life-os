@@ -26,7 +26,9 @@ describe('ApplicationShell performance contract', () => {
 
   it('loads heavy management subsections only after they are opened', () => {
     expect(managementPage).toContain("import('./DirectionsSection')");
-    expect(managementPage).toContain("import('./ProjectsSection')");
+    expect(managementPage).not.toContain("import('./ProjectsSection')");
+    expect(managementPage).toContain('const GoalAlbumPage = lazy(');
+    expect(managementPage).toContain("import('../goals/GoalAlbumPage')");
     expect(managementPage).toContain('<Suspense');
   });
 

@@ -81,7 +81,8 @@ describe('WALK-04 completion presentation', () => {
     expect(markup.match(/type="range"/g)).toHaveLength(3);
     expect(markup.match(/name="walk-impact"/g)).toHaveLength(3);
     expect(markup).toMatch(/type="submit"[^>]*disabled/);
-    expect(markup).not.toMatch(/Фото|voice|GPS|карта/i);
+    expect(markup).not.toMatch(/Фото|GPS|карта/i);
+    expect(markup).toContain('aria-label="Голосовой ввод недоступен"');
   });
 
   it('uses the short generic reflection prompt for a recovery walk', () => {

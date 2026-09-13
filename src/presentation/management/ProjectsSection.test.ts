@@ -57,7 +57,7 @@ describe('Projects presentation', () => {
     expect(markup).toContain('Создать единый рабочий центр LifeOS');
     expect(markup).toContain('Развитие LifeOS');
     expect(markup).toContain('Продукт');
-    expect(markup).toContain('aria-label="Главный проект"');
+    expect(markup).toContain('aria-label="Главная цель"');
     expect(markup).toContain('Активный');
     expect(markup).toContain('<details');
     expect(markup).not.toContain('%');
@@ -121,7 +121,7 @@ describe('Projects presentation', () => {
     expect(markup).toContain('Действие подготовить-сборку');
     expect(markup).toContain('Готово');
     expect(markup).toContain('+ Решение');
-    expect(markup).toContain('Итог проекта');
+    expect(markup).toContain('Итог цели');
     expect(markup).toContain('История');
     expect(markup).toContain('Создано решение');
     expect(markup).toContain('Время действия');
@@ -151,7 +151,7 @@ describe('Projects presentation', () => {
     expect(markup).toContain('premium-form-content');
     expect(markup).toContain('premium-form-grid');
     expect(markup).toContain('Сформулируйте конкретный результат');
-    expect(markup).toContain('Создать проект');
+    expect(markup).toContain('Создать цель');
     expect(markup).not.toContain('KPI');
     expect(markup).not.toContain('Прогресс');
   });
@@ -179,8 +179,8 @@ describe('Projects presentation', () => {
 
   it('renders the explanatory empty state', () => {
     const markup = renderToStaticMarkup(createElement(EmptyProjects, { onCreate: vi.fn() }));
-    expect(markup).toContain('Пока нет проектов');
+    expect(markup).toContain('Пока нет целей');
     expect(markup).toContain('конкретный завершённый результат');
-    expect(markup).toContain('Создать проект');
+    expect(markup).toContain('Создать цель');
   });
 });

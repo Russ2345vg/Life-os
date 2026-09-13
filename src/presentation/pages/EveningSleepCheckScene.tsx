@@ -1,3 +1,5 @@
+import { VoiceField } from '../voice-input/VoiceField';
+import { VoiceTextArea } from '../voice-input/VoiceTextArea';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { SleepCheckApplicationService } from '../../application';
 import {
@@ -352,15 +354,15 @@ export function EveningSleepCheckSceneView({
             {model.correctiveAction.label}
           </h4>
           {model.correctiveAction.captureRequired && model.correctiveAction.selected ? (
-            <label>
-              Что оставить на завтра?
-              <textarea
+            <VoiceField>
+              <span>Что оставить на завтра?</span>
+              <VoiceTextArea
                 maxLength={280}
                 value={thoughtDraft}
                 disabled={busy}
-                onChange={(event) => onThoughtChange(event.currentTarget.value)}
+                onValueChange={(value) => onThoughtChange(value)}
               />
-            </label>
+            </VoiceField>
           ) : null}
           {!model.readOnly ? (
             <button

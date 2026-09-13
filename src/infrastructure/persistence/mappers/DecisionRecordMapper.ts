@@ -35,6 +35,7 @@ import {
 export class DecisionRecordMapper {
   public static toRecord(entity: Decision): DecisionRecord {
     return {
+      goalLinksVersion: 1,
       schemaVersion: 1,
       id: entity.id.toString(),
       title: entity.title.toString(),

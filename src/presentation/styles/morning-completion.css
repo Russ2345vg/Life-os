@@ -36,7 +36,7 @@
   padding: var(--space-1);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-medium);
-  background: var(--surface-1);
+  background: var(--surface-glass);
 }
 
 .morning-completion-tabs button,
@@ -52,7 +52,7 @@
 .morning-completion-tabs button[aria-selected='true'],
 .morning-history-period button[aria-pressed='true'] {
   color: var(--text-primary);
-  background: color-mix(in srgb, var(--section-routine) 18%, var(--surface-2));
+  background: var(--surface-selected);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--section-routine) 52%, transparent);
 }
 
@@ -62,13 +62,9 @@
   padding: var(--space-8);
   border: 1px solid color-mix(in srgb, var(--morning-completion-accent) 30%, var(--border-soft));
   border-radius: var(--radius-xlarge);
-  background:
-    radial-gradient(
-      circle at 88% 18%,
-      color-mix(in srgb, var(--morning-completion-accent) 10%, transparent),
-      transparent 34%
-    ),
-    linear-gradient(145deg, var(--surface-2), var(--surface-1));
+
+  --panel-surface: var(--surface-glass);
+  background: transparent;
   box-shadow: var(--shadow-deep);
 }
 
@@ -139,7 +135,7 @@
 .morning-history-list > li {
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-large);
-  background: color-mix(in srgb, var(--surface-2) 88%, transparent);
+  background: var(--surface-field);
 }
 
 .morning-completion-results {
@@ -230,7 +226,7 @@
   padding: var(--space-3) var(--space-4);
   border-left: 2px solid var(--danger);
   color: var(--text-primary);
-  background: color-mix(in srgb, var(--danger) 10%, var(--surface-1));
+  background: color-mix(in srgb, var(--danger) 10%, var(--surface-field));
 }
 
 .morning-completion-inline-error button {

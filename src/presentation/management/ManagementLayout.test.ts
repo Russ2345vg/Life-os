@@ -10,7 +10,7 @@ describe('Management layout contract', () => {
       /\.management-navigation-list\s*{[^}]*grid-template-columns:\s*repeat\(6,\s*minmax\(0,\s*1fr\)\)/,
     );
     expect(globalCss).toMatch(/\.management-navigation\s*{[^}]*border-bottom:/);
-    expect(globalCss).toMatch(/\.management-navigation-tab\s*{[^}]*min-height:\s*2\.25rem/);
+    expect(globalCss).toMatch(/\.management-navigation-tab\s*{[^}]*min-height:\s*2\.75rem/);
   });
 
   it('keeps compact management cards, dialogs and filters scoped to the workspace', () => {
@@ -26,15 +26,27 @@ describe('Management layout contract', () => {
     );
   });
 
-  it('uses one restrained graphite card system with accessible motion fallbacks', () => {
+  it('uses shared glass materials with accessible motion fallbacks', () => {
     expect(globalCss).toMatch(
-      /Management patch 15:[\s\S]*?--management-surface:\s*#141715[\s\S]*?--management-gold-soft:\s*#1b1911/,
+      /Management patch 15:[\s\S]*?--management-surface:\s*var\(--surface-glass\)[\s\S]*?--management-gold-soft:\s*var\(--surface-selected\)/,
     );
     expect(globalCss).toMatch(
-      /\.management-focus,[\s\S]*?\.management-overview-section\s*{[^}]*border:[^}]*border-radius:[^}]*background:/,
+      /\.management-focus,[\s\S]*?\.management-overview-section\s*{[^}]*border:[^}]*border-radius:/,
     );
     expect(globalCss).toMatch(
-      /\.history-range-panel,[\s\S]*?\.history-timeline-card\s*{[^}]*border-color:\s*var\(--management-border\)[^}]*background:\s*var\(--management-surface\)/,
+      /\.management-focus\s*{[^}]*--panel-surface:\s*var\(--surface-glass-raised\)[^}]*background:\s*transparent/,
+    );
+    expect(globalCss).toMatch(
+      /\.management-overview-section\s*{[^}]*background:\s*var\(--surface-glass-raised\)/,
+    );
+    expect(globalCss).toMatch(
+      /\.history-range-panel,[\s\S]*?\.history-timeline-card\s*{[^}]*border-color:\s*var\(--management-border\)/,
+    );
+    expect(globalCss).toMatch(
+      /\.history-summary-card\s*{[^}]*--panel-surface:\s*var\(--management-surface\)[^}]*background:\s*transparent/,
+    );
+    expect(globalCss).toMatch(
+      /\.history-range-panel,[\s\S]*?\.history-timeline-card\s*{[^}]*background:\s*var\(--management-surface\)/,
     );
     expect(globalCss).toMatch(
       /@media \(prefers-reduced-motion:\s*reduce\)[\s\S]*?animation-duration:\s*0\.01ms\s*!important/,

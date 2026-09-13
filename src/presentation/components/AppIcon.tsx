@@ -1,6 +1,7 @@
 import type { SVGProps } from 'react';
 
 export type AppIconName =
+  | 'microphone'
   | 'today'
   | 'management'
   | 'decisions'
@@ -13,9 +14,11 @@ export type AppIconName =
   | 'walks'
   | 'statistics'
   | 'spheres'
+  | 'goals'
   | 'settings'
   | 'collapse'
   | 'expand'
+  | 'arrow-right'
   | 'menu'
   | 'close'
   | 'focus'
@@ -49,6 +52,15 @@ export function AppIcon({ name, ...props }: AppIconProps) {
 
 function iconPath(name: AppIconName) {
   switch (name) {
+    case 'arrow-right':
+      return <path d="M4 12h16m-6-6 6 6-6 6" />;
+    case 'microphone':
+      return (
+        <>
+          <rect x="9" y="3" width="6" height="12" rx="3" />
+          <path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8" />
+        </>
+      );
     case 'management':
       return (
         <>
@@ -121,6 +133,14 @@ function iconPath(name: AppIconName) {
         <>
           <circle cx="12" cy="12" r="9" />
           <path d="M3 12h18M12 3c2.5 2.5 3.8 5.5 3.8 9S14.5 18.5 12 21M12 3C9.5 5.5 8.2 8.5 8.2 12S9.5 18.5 12 21" />
+        </>
+      );
+    case 'goals':
+      return (
+        <>
+          <circle cx="12" cy="12" r="8" />
+          <circle cx="12" cy="12" r="3" />
+          <path d="M12 4V2M12 22v-2M4 12H2M22 12h-2" />
         </>
       );
     case 'settings':

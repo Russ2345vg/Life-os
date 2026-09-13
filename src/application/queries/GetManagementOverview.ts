@@ -222,7 +222,7 @@ function buildSignals(
       directionId: null,
       projectId: mainProject.id.toString(),
       decisionId: null,
-      title: 'Главный проект без активных решений',
+      title: 'Главная цель без активных решений',
       detail: mainProject.title,
     });
   }
@@ -234,7 +234,7 @@ function buildSignals(
       directionId: null,
       projectId: project.id.toString(),
       decisionId: null,
-      title: 'Активный проект без решений',
+      title: 'Активный цель без решений',
       detail: project.title,
     });
   }
@@ -257,7 +257,7 @@ function buildSignals(
       directionId: mainDirection.id.toString(),
       projectId: null,
       decisionId: null,
-      title: 'Главное направление без активных проектов',
+      title: 'Главное направление без активных целей',
       detail: mainDirection.name,
     });
   }
@@ -269,7 +269,7 @@ function buildSignals(
       projectId: null,
       decisionId: null,
       title: 'Фокус не определён',
-      detail: 'Нет главного проекта или главного направления.',
+      detail: 'Нет главной цели или главного направления.',
     });
   }
 
@@ -279,7 +279,7 @@ function buildSignals(
       directionId: null,
       projectId: project.id.toString(),
       decisionId: null,
-      title: 'Неактивный проект назначен главным',
+      title: 'Неактивный цель назначен главным',
       detail: project.title,
     });
   }

@@ -11,7 +11,9 @@
   padding: clamp(24px, 4vw, 48px);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-xlarge);
-  background: var(--surface-2);
+
+  --panel-surface: var(--surface-glass-raised);
+  background: transparent;
   box-shadow: var(--shadow-deep);
 }
 

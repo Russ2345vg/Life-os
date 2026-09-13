@@ -18,6 +18,7 @@ import type { JournalEntryRecord } from '../records/JournalEntryRecord';
 export class JournalEntryRecordMapper {
   public static toRecord(entry: JournalEntry): JournalEntryRecord {
     return {
+      goalLinksVersion: 1,
       id: entry.id.toString(),
       type: entry.type,
       occurredAt: entry.occurredAt.toISOString(),

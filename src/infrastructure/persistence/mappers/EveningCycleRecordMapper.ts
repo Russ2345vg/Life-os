@@ -54,6 +54,7 @@ import { EntityId } from '../../../domain/shared/EntityId';
 export class EveningCycleRecordMapper {
   public static toRecord(cycle: EveningCycle): EveningCycleRecord {
     return {
+      goalLinksVersion: 1,
       schemaVersion: 1,
       id: cycle.id.toString(),
       dayId: cycle.dayId.toString(),

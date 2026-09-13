@@ -42,7 +42,7 @@ describe('IndexedDbSphereRepository', () => {
     const updated = await first.update.execute({
       id: created.value.id,
       expectedVersion: created.value.version,
-      name: 'Творческие проекты',
+      name: 'Творческие цели',
       description: 'Иллюстрация и музыка',
       icon: '✦',
       color: '#4455aa',
@@ -55,7 +55,7 @@ describe('IndexedDbSphereRepository', () => {
 
     expect(snapshot.active).toHaveLength(1);
     expect(snapshot.active[0]).toMatchObject({
-      name: 'Творческие проекты',
+      name: 'Творческие цели',
       description: 'Иллюстрация и музыка',
       icon: '✦',
       color: '#4455aa',

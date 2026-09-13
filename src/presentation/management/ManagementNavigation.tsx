@@ -12,7 +12,7 @@ const ITEMS: readonly {
 }[] = [
   { section: MANAGEMENT_SECTION.overview, label: 'Обзор', group: 'Обзор' },
   { section: MANAGEMENT_SECTION.directions, label: 'Направления', group: 'Курс' },
-  { section: MANAGEMENT_SECTION.projects, label: 'Проекты', group: 'Курс' },
+  { section: MANAGEMENT_SECTION.goals, label: 'Альбом целей', group: 'Курс' },
   { section: MANAGEMENT_SECTION.decisions, label: 'Решения', group: 'Исполнение' },
   { section: MANAGEMENT_SECTION.actions, label: 'Действия', group: 'Исполнение' },
   { section: MANAGEMENT_SECTION.day, label: 'День', group: 'День' },

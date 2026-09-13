@@ -929,7 +929,7 @@ describe('Walk', () => {
       mode: WALK_MODE.timer,
       startedAt,
       timerTargetMinutes: 30,
-      reflectionQuestion: 'Стоит ли запускать проект?',
+      reflectionQuestion: 'Стоит ли запускать цель?',
     });
 
     expect(started.reflectionTemplate).toBe('decision');
@@ -953,7 +953,7 @@ describe('Walk', () => {
       mode: WALK_MODE.timer,
       startedAt: new Date('2026-08-08T08:10:00.000Z'),
       timerTargetMinutes: 30,
-      reflectionQuestion: 'Стоит ли запускать проект?',
+      reflectionQuestion: 'Стоит ли запускать цель?',
     });
     const second = started.advanceReflectionStage(new Date('2026-08-08T08:11:00.000Z'));
     const third = second.advanceReflectionStage(new Date('2026-08-08T08:12:00.000Z'));
@@ -995,7 +995,7 @@ describe('Walk', () => {
     ).start({
       mode: WALK_MODE.stopwatch,
       startedAt: new Date('2026-08-08T08:10:00.000Z'),
-      reflectionQuestion: 'Стоит ли запускать проект?',
+      reflectionQuestion: 'Стоит ли запускать цель?',
     });
     expect(() =>
       Walk.rehydrate({

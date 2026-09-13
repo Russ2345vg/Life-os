@@ -144,7 +144,7 @@ describe('R4 Environment PreparationScene', () => {
   it('сохраняет first-start, project и decision контекст из snapshot', () => {
     const project = Project.create({
       id: EntityId.create('v2b-project'),
-      title: 'Проект запуска',
+      title: 'Цель запуска',
       now: NOW,
     });
     const decision = createPlannedDecision('v2b-main', DATE, DECISION_KIND.main, 1, project.id);
@@ -159,7 +159,7 @@ describe('R4 Environment PreparationScene', () => {
     expect(markup).toContain('Действие v2b-first');
     expect(markup).toContain('Результат v2b-first');
     expect(markup).toContain('Открыть подготовленное рабочее пространство.');
-    expect(markup).toContain('Проект запуска');
+    expect(markup).toContain('Цель запуска');
     expect(markup).toContain('Решение v2b-main');
     expect(markup).not.toContain('07:30');
   });
@@ -168,7 +168,7 @@ describe('R4 Environment PreparationScene', () => {
     const actionTitle = `Первый старт ${'очень конкретное действие '.repeat(7)}`.trim();
     const expectedResult = `Ожидаемый результат ${'проверяемый результат '.repeat(7)}`.trim();
     const itemTitle = `Подготовить ${'длинное название препятствия '.repeat(6)}`.trim();
-    const projectTitle = `Проект ${'устойчивого запуска '.repeat(7)}`.trim();
+    const projectTitle = `Цель ${'устойчивого запуска '.repeat(7)}`.trim();
     const project = Project.create({
       id: EntityId.create('v2b-long-project'),
       title: projectTitle,
@@ -250,7 +250,7 @@ describe('R4 Environment PreparationScene', () => {
     expect(environmentCss).toMatch(/@media \(max-width: 640px\)[\s\S]*?min-height:\s*44px/);
     expect(environmentCss).toContain('min-height: 2.75rem');
     expect(environmentCss).toMatch(
-      /\.preparation-core-option\s*\{[\s\S]*?background:\s*var\(--surface-2\)/,
+      /\.preparation-core-option\s*\{[\s\S]*?background:\s*var\(--surface-field\)/,
     );
     expect(environmentCss).toMatch(
       /\.preparation-core-option\[aria-pressed='true'\]\s*\{[\s\S]*?border-color:\s*var\(--gold-main\)/,
@@ -277,7 +277,7 @@ describe('R4 Environment PreparationScene', () => {
       /\.evening-preparation-scene\[data-core-configuring='true'\]::before[\s\S]*?right:\s*var\(--space-8\)/,
     );
     expect(environmentCss).toMatch(
-      /\.preparation-core-configuration\s*\{[\s\S]*?background:\s*linear-gradient\(/,
+      /\.preparation-core-configuration\s*\{[\s\S]*?background:\s*var\(--surface-glass\)/,
     );
     expect(environmentCss).toMatch(
       /\.evening-preparation-scene\[data-core-configuring='true'\] > \*[\s\S]*?position:\s*relative;[\s\S]*?z-index:\s*1;/,

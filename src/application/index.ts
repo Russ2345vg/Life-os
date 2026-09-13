@@ -645,6 +645,79 @@ export {
 } from './commands/StartDecisionWalk';
 export { GetLatestWalkOutcomeForDecision } from './queries/GetLatestWalkOutcomeForDecision';
 export type { WalkCaptureRepository } from './ports/WalkCaptureRepository';
+export type {
+  SyncApplyMode,
+  SyncDeletionMode,
+  SyncEntityRegistration,
+  SyncEntityType,
+  SyncIdSource,
+  SyncRegistrationReadiness,
+  SyncRegistry,
+} from './sync/SyncRegistry';
+export type {
+  LocalSnapshotReference,
+  SnapshotService,
+  SnapshotVerification,
+  SnapshotVerificationReason,
+  SnapshotPayloadCrypto,
+  LocalSnapshotCiphertext,
+} from './sync/SnapshotService';
+export type { TechnicalSyncAuth, TechnicalSyncIdentity } from './sync/ports/TechnicalSyncAuth';
+export type {
+  PilotPushAcknowledgement,
+  PilotRemoteEvent,
+  PilotSyncTransport,
+} from './sync/ports/PilotSyncTransport';
+export type {
+  PilotInstallationState,
+  PilotLocalStateView,
+  PilotLocalVersion,
+  PilotOutboxItem,
+  PilotSyncStore,
+} from './sync/ports/PilotSyncStore';
+export type {
+  SyncInstallation,
+  SyncInstallationRepository,
+  SyncMembershipStatus,
+  SyncPlatform,
+  SyncSetupState,
+} from './sync/ports/SyncInstallationRepository';
+export type {
+  CachedSyncDevice,
+  SyncDeviceCacheRepository,
+} from './sync/ports/SyncDeviceCacheRepository';
+export type {
+  PreparedFirstSpace,
+  PreparedRotation,
+  RecoveryAuthorization,
+  RotationRecipient,
+  SyncCryptoEnvelope,
+  SyncCryptoService,
+  SyncEnvelopeMetadata,
+  SyncRecoveryEnvelope,
+} from './sync/ports/SyncCryptoService';
+export {
+  createPairingSecret,
+  parsePairingPayload,
+  serializePairingPayload,
+  type PairingPayload,
+} from './sync/PairingPayload';
+export type {
+  PendingEnvelope,
+  PendingSyncDevice,
+  RecoveryChallenge,
+  RevocationResult,
+  SyncTrustTransport,
+} from './sync/ports/SyncTrustTransport';
+export {
+  SyncApplicationService,
+  type SyncApplication,
+  type SyncApplicationDependencies,
+  type SyncConnectionState,
+  type SyncOverview,
+  type SyncPairingInvitation,
+} from './sync/SyncApplicationService';
+export * from './sync/pilot';
 export { CreateWalkCapture, type CreateWalkCaptureInput } from './commands/CreateWalkCapture';
 export { UpdateWalkCapture, type UpdateWalkCaptureInput } from './commands/UpdateWalkCapture';
 export { ProcessWalkCapture, type ProcessWalkCaptureInput } from './commands/ProcessWalkCapture';

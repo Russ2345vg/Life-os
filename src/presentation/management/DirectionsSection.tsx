@@ -1,4 +1,15 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { VoiceField } from '../voice-input/VoiceField';
+import { VoiceTextInput } from '../voice-input/VoiceTextInput';
+import { VoiceTextArea } from '../voice-input/VoiceTextArea';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from 'react';
 import type {
   ArchiveDirection,
   CreateDirection,
@@ -32,8 +43,10 @@ import {
 } from '../../domain/direction';
 import { MAX_PROJECT_DESIRED_RESULT_LENGTH, MAX_PROJECT_TITLE_LENGTH } from '../../domain/project';
 import { SectionPageHeader } from '../components/SectionPageHeader';
+import { AppIcon } from '../components/AppIcon';
 import { DirectionSphereIcon } from './DirectionSphereIcon';
 import { projectStatusLabel } from './projectPresentation';
+import '../styles/directions-compact.css';
 
 export interface DirectionsSectionProps {
   readonly createDirection: Pick<CreateDirection, 'execute'>;
@@ -92,7 +105,6 @@ type DirectionState =
       readonly status: 'ready';
       readonly overview: readonly DirectionOverviewItem[];
       readonly spheres: SpheresSnapshot;
-      readonly details: ReadonlyMap<string, DirectionDetailsSnapshot>;
     }
   | { readonly status: 'error' };
 
@@ -129,6 +141,14 @@ export function DirectionsSection(props: DirectionsSectionProps) {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [review, setReview] = useState<StrategicReviewState>({ status: 'closed' });
+  const [choosingMain, setChoosingMain] = useState(false);
+  const [mainChoice, setMainChoice] = useState('');
+  const catalog = useRef<HTMLElement>(null);
+  const chooseMainButton = useRef<HTMLButtonElement>(null);
+  const archiveButton = useRef<HTMLButtonElement>(null);
+  const focusAfterLoad = useRef<string | null>(null);
+  const lastOpenedDirection = useRef<string | null>(null);
+  const pendingDetailFocus = useRef<string | null>(selectedId);
 
   const load = useCallback(async (): Promise<void> => {
     try {
@@ -136,12 +156,11 @@ export function DirectionsSection(props: DirectionsSectionProps) {
         props.getDirectionsOverview.execute(),
         props.getSpheres.execute(),
       ]);
-      const details = await loadDirectionListDetails(overview, props.getDirectionDetails);
-      setState({ status: 'ready', overview, spheres, details });
+      setState({ status: 'ready', overview, spheres });
     } catch {
       setState({ status: 'error' });
     }
-  }, [props.getDirectionDetails, props.getDirectionsOverview, props.getSpheres]);
+  }, [props.getDirectionsOverview, props.getSpheres]);
 
   const loadDetail = useCallback(
     async (id: string): Promise<void> => {
@@ -162,9 +181,8 @@ export function DirectionsSection(props: DirectionsSectionProps) {
   useEffect(() => {
     let active = true;
     void Promise.all([props.getDirectionsOverview.execute(), props.getSpheres.execute()])
-      .then(async ([overview, spheres]) => {
-        const details = await loadDirectionListDetails(overview, props.getDirectionDetails);
-        if (active) setState({ status: 'ready', overview, spheres, details });
+      .then(([overview, spheres]) => {
+        if (active) setState({ status: 'ready', overview, spheres });
       })
       .catch(() => {
         if (active) setState({ status: 'error' });
@@ -172,7 +190,33 @@ export function DirectionsSection(props: DirectionsSectionProps) {
     return () => {
       active = false;
     };
-  }, [props.getDirectionDetails, props.getDirectionsOverview, props.getSpheres]);
+  }, [props.getDirectionsOverview, props.getSpheres]);
+
+  useEffect(() => {
+    if (selectedId !== null || state.status !== 'ready' || focusAfterLoad.current === null) return;
+    const row = [
+      ...(catalog.current?.querySelectorAll<HTMLElement>('[data-direction-id]') ?? []),
+    ].find((element) => element.dataset.directionId === focusAfterLoad.current);
+    const target =
+      row?.querySelector<HTMLElement>('.direction-card-menu > summary') ?? archiveButton.current;
+    target?.focus();
+    focusAfterLoad.current = null;
+  }, [selectedId, state]);
+
+  useEffect(() => {
+    if (
+      selectedId === null ||
+      detail.status !== 'ready' ||
+      pendingDetailFocus.current !== selectedId
+    )
+      return;
+    const heading = document.querySelector<HTMLElement>('.direction-detail h1');
+    if (heading) {
+      heading.tabIndex = -1;
+      heading.focus();
+      pendingDetailFocus.current = null;
+    }
+  }, [detail, selectedId]);
 
   useEffect(() => {
     if (selectedId === null) return;
@@ -223,6 +267,26 @@ export function DirectionsSection(props: DirectionsSectionProps) {
         : [],
     [state],
   );
+
+  function openDirection(id: string): void {
+    lastOpenedDirection.current = id;
+    pendingDetailFocus.current = id;
+    setDetail({ status: 'loading' });
+    setSelectedId(id);
+  }
+
+  function openMainChoice(): void {
+    setMainChoice(
+      mainDirection?.direction.id.toString() ?? activeDirections[0]?.direction.id.toString() ?? '',
+    );
+    setChoosingMain(true);
+  }
+
+  function cancelMainChoice(): void {
+    if (busyId !== null) return;
+    setChoosingMain(false);
+    chooseMainButton.current?.focus();
+  }
 
   function openCreate(): void {
     setEditing(null);
@@ -304,6 +368,7 @@ export function DirectionsSection(props: DirectionsSectionProps) {
         return;
       }
       setMessage(restore ? 'Направление восстановлено.' : 'Направление перемещено в архив.');
+      focusAfterLoad.current = direction.id.toString();
       if (!restore && selectedId === direction.id.toString()) {
         setSelectedId(null);
         setDetail({ status: 'idle' });
@@ -321,18 +386,25 @@ export function DirectionsSection(props: DirectionsSectionProps) {
     setBusyId(direction.id.toString());
     setMessage(null);
     setError(null);
-    const result = await props.makeDirectionMain.execute({
-      id: direction.id,
-      expectedVersion: direction.version,
-    });
-    if (result.ok) {
+    try {
+      const result = await props.makeDirectionMain.execute({
+        id: direction.id,
+        expectedVersion: direction.version,
+      });
+      if (!result.ok) {
+        setError(result.error.message);
+        return;
+      }
       setMessage('Главное направление обновлено.');
+      setChoosingMain(false);
+      focusAfterLoad.current = direction.id.toString();
       await load();
       if (selectedId !== null) await loadDetail(selectedId);
-    } else {
-      setError(result.error.message);
+    } catch {
+      setError('Не удалось выбрать главное направление. Повторите попытку.');
+    } finally {
+      setBusyId(null);
     }
-    setBusyId(null);
   }
 
   async function createProject(event: FormEvent<HTMLFormElement>): Promise<void> {
@@ -349,7 +421,7 @@ export function DirectionsSection(props: DirectionsSectionProps) {
     if (result.ok) {
       setProjectDraft(EMPTY_PROJECT_DRAFT);
       setProjectFormOpen(false);
-      setMessage('Проект создан в текущем направлении.');
+      setMessage('Цель создана в текущем направлении.');
       await Promise.all([load(), loadDetail(detail.snapshot.direction.id.toString())]);
     } else {
       setError(result.error.message);
@@ -448,6 +520,7 @@ export function DirectionsSection(props: DirectionsSectionProps) {
             props.onBackFromInitialDetail();
             return;
           }
+          focusAfterLoad.current = lastOpenedDirection.current;
           setSelectedId(null);
           setDetail({ status: 'idle' });
           setProjectFormOpen(false);
@@ -473,7 +546,7 @@ export function DirectionsSection(props: DirectionsSectionProps) {
             expectedVersion: project.version,
           });
           if (result.ok) {
-            setMessage('Главный проект направления обновлён.');
+            setMessage('Главная цель направления обновлена.');
             await loadDetail(detail.snapshot.direction.id.toString());
           } else {
             setError(result.error.message);
@@ -511,21 +584,25 @@ export function DirectionsSection(props: DirectionsSectionProps) {
   }
 
   return (
-    <main className="section-page management-entity-page directions-section">
+    <main
+      ref={catalog}
+      className="section-page management-entity-page directions-section directions-compact"
+    >
       <SectionPageHeader
         eyebrow="Управление"
         title="Направления"
         description="Долгосрочные векторы, в которых сейчас развивается система."
         action={
-          formOpen ? null : (
+          formOpen ||
+          state.status !== 'ready' ||
+          (mainDirection === null && activeDirections.length === 0) ? null : (
             <button
-              className="direction-create-cta"
+              className="secondary-button"
               type="button"
               aria-expanded="false"
               onClick={openCreate}
             >
-              <span aria-hidden="true">+</span>
-              Новое направление
+              Создать направление
             </button>
           )
         }
@@ -533,7 +610,7 @@ export function DirectionsSection(props: DirectionsSectionProps) {
 
       {formOpen && spheres !== null ? (
         <DirectionForm
-          mode="create"
+          mode={editing === null ? 'create' : 'edit'}
           draft={draft}
           spheres={spheres}
           saving={saving}
@@ -557,74 +634,168 @@ export function DirectionsSection(props: DirectionsSectionProps) {
       {state.status === 'error' ? (
         <div className="section-page-error" role="alert">
           <p>Не удалось загрузить направления.</p>
-          <button className="secondary-button" type="button" onClick={() => void load()}>
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={() => {
+              setState({ status: 'loading' });
+              void load();
+            }}
+          >
             Повторить
           </button>
         </div>
       ) : null}
 
       {state.status === 'ready' ? (
-        <div className="management-entity-sections">
-          <DirectionGroup title="Главное направление" count={mainDirection === null ? 0 : 1}>
-            {mainDirection === null ? (
-              <p className="management-empty-line">Главное направление пока не выбрано.</p>
-            ) : (
-              <DirectionCards
-                items={[mainDirection]}
-                spheres={state.spheres}
-                details={state.details}
-                busyId={busyId}
-                onOpen={setSelectedId}
-                onEdit={openEdit}
-                onMakeMain={(direction) => void makeMain(direction)}
-                onArchive={(direction) => void changeArchiveState(direction, false)}
-              />
-            )}
-          </DirectionGroup>
+        <div className="directions-catalog">
+          {mainDirection !== null || activeDirections.length > 0 ? (
+            <section
+              className={`directions-priority${mainDirection === null ? ' is-empty' : ''}`}
+              aria-label="Главное направление"
+            >
+              {mainDirection === null ? (
+                <>
+                  <div>
+                    <h2>Главное направление</h2>
+                    <strong>Главное направление пока не выбрано.</strong>
+                  </div>
+                  <button
+                    ref={chooseMainButton}
+                    className="secondary-button"
+                    type="button"
+                    aria-expanded={choosingMain}
+                    disabled={busyId !== null}
+                    onClick={openMainChoice}
+                  >
+                    Выбрать главное
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="directions-priority-heading">
+                    <h2>Главное направление</h2>
+                    <button
+                      ref={chooseMainButton}
+                      type="button"
+                      aria-expanded={choosingMain}
+                      disabled={busyId !== null}
+                      onClick={openMainChoice}
+                    >
+                      Изменить выбор
+                    </button>
+                  </div>
+                  <DirectionCard
+                    key={mainDirection.direction.id.toString()}
+                    item={mainDirection}
+                    spheres={state.spheres}
+                    busy={busyId !== null}
+                    onOpen={openDirection}
+                    onEdit={openEdit}
+                    onMakeMain={undefined}
+                    onArchive={(direction) => void changeArchiveState(direction, false)}
+                    onRestore={undefined}
+                  />
+                </>
+              )}
+              {choosingMain ? (
+                <form
+                  className="directions-main-picker"
+                  aria-label="Выбор главного направления"
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape') {
+                      event.preventDefault();
+                      cancelMainChoice();
+                    }
+                  }}
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    const item = state.overview.find(
+                      (item) => item.direction.id.toString() === mainChoice,
+                    );
+                    if (item) void makeMain(item.direction);
+                  }}
+                >
+                  <label>
+                    Направление
+                    <select
+                      autoFocus
+                      value={mainChoice}
+                      disabled={busyId !== null}
+                      onChange={(event) => setMainChoice(event.currentTarget.value)}
+                    >
+                      {state.overview
+                        .filter((item) => item.direction.status === DIRECTION_STATUS.active)
+                        .map((item) => (
+                          <option
+                            key={item.direction.id.toString()}
+                            value={item.direction.id.toString()}
+                          >
+                            {item.direction.name}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                  <button className="primary-button" type="submit" disabled={busyId !== null}>
+                    {busyId !== null ? 'Сохраняем…' : 'Назначить'}
+                  </button>
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    disabled={busyId !== null}
+                    onClick={cancelMainChoice}
+                  >
+                    Отмена
+                  </button>
+                </form>
+              ) : null}
+            </section>
+          ) : formOpen ? null : (
+            <EmptyDirections onCreate={openCreate} />
+          )}
 
-          <DirectionGroup title="Остальные направления" count={activeDirections.length}>
-            {activeDirections.length === 0 && mainDirection === null ? (
-              <EmptyDirections onCreate={openCreate} />
-            ) : activeDirections.length === 0 ? (
-              <p className="management-empty-line">Других активных направлений нет.</p>
-            ) : (
+          {activeDirections.length > 0 ? (
+            <DirectionGroup
+              title={mainDirection === null ? 'Все направления' : 'Остальные направления'}
+            >
               <DirectionCards
                 items={activeDirections}
                 spheres={state.spheres}
-                details={state.details}
                 busyId={busyId}
-                onOpen={setSelectedId}
+                onOpen={openDirection}
                 onEdit={openEdit}
                 onMakeMain={(direction) => void makeMain(direction)}
                 onArchive={(direction) => void changeArchiveState(direction, false)}
               />
-            )}
-          </DirectionGroup>
+            </DirectionGroup>
+          ) : null}
 
-          <section className="management-archive" aria-labelledby="archived-directions-heading">
-            <div className="management-archive-heading">
-              <h2 id="archived-directions-heading">Архив</h2>
-              <button
-                className="secondary-button"
-                type="button"
-                onClick={() => setShowArchived((current) => !current)}
-              >
-                {showArchived ? 'Скрыть' : `Показать (${archivedDirections.length})`}
-              </button>
-            </div>
+          <section className="directions-archive" aria-label="Архив">
+            <button
+              ref={archiveButton}
+              className="directions-archive-toggle"
+              type="button"
+              aria-expanded={showArchived}
+              aria-controls="archived-directions"
+              onClick={() => setShowArchived((current) => !current)}
+            >
+              <AppIcon name="arrow-right" />
+              Архив
+            </button>
             {showArchived ? (
-              archivedDirections.length === 0 ? (
-                <p className="management-empty-line">Архив пуст.</p>
-              ) : (
-                <DirectionCards
-                  items={archivedDirections}
-                  spheres={state.spheres}
-                  details={state.details}
-                  busyId={busyId}
-                  onOpen={setSelectedId}
-                  onRestore={(direction) => void changeArchiveState(direction, true)}
-                />
-              )
+              <div id="archived-directions" className="directions-archive-content">
+                {archivedDirections.length === 0 ? (
+                  <p className="management-empty-line">Архив пуст.</p>
+                ) : (
+                  <DirectionCards
+                    items={archivedDirections}
+                    spheres={state.spheres}
+                    busyId={busyId}
+                    onOpen={openDirection}
+                    onRestore={(direction) => void changeArchiveState(direction, true)}
+                  />
+                )}
+              </div>
             ) : null}
           </section>
         </div>
@@ -749,13 +920,13 @@ function DirectionDetail(props: DirectionDetailProps) {
         {mainProject === null ? (
           <div className="direction-focus-empty">
             <div>
-              <h2 id="direction-focus-heading">Нет главного проекта</h2>
+              <h2 id="direction-focus-heading">Нет главной цели</h2>
               <p>Направление пока не запущено в работу.</p>
             </div>
             {direction.status === DIRECTION_STATUS.active ? (
               <div className="direction-focus-actions">
                 <button className="primary-button" type="button" onClick={props.onOpenProjectForm}>
-                  Создать проект
+                  Создать цель
                 </button>
                 <a className="secondary-button" href="#direction-projects-heading">
                   Выбрать из портфеля
@@ -777,7 +948,7 @@ function DirectionDetail(props: DirectionDetailProps) {
               <span className="direction-focus-project-result">
                 {mainProject.desiredResult ?? 'Не задан'}
               </span>
-              <span className="direction-focus-project-action">Открыть проект →</span>
+              <span className="direction-focus-project-action">Открыть цель →</span>
             </span>
           </button>
         )}
@@ -787,11 +958,11 @@ function DirectionDetail(props: DirectionDetailProps) {
         <div className="management-list-heading">
           <div>
             <h2 id="direction-projects-heading">Портфель · {projects.length}</h2>
-            {projects.length === 0 ? <p>Проектов пока нет.</p> : null}
+            {projects.length === 0 ? <p>Целей пока нет.</p> : null}
           </div>
           {direction.status === DIRECTION_STATUS.active && !props.projectFormOpen ? (
             <button className="primary-button" type="button" onClick={props.onOpenProjectForm}>
-              Добавить проект
+              Добавить цель
             </button>
           ) : null}
         </div>
@@ -815,7 +986,7 @@ function DirectionDetail(props: DirectionDetailProps) {
               type="button"
               onClick={props.onOpenProjectForm}
             >
-              + Создать первый проект
+              + Создать первый цель
             </button>
           ) : null
         ) : projects.length > 0 ? (
@@ -919,22 +1090,20 @@ export function DirectionProjectCreateForm(props: DirectionProjectCreateFormProp
       aria-busy={props.saving}
       onSubmit={props.onSubmit}
     >
-      <h3 id="direction-project-form-title">Новый проект</h3>
+      <h3 id="direction-project-form-title">Новая цель</h3>
 
-      <label className="direction-project-field" htmlFor="direction-project-title">
+      <VoiceField className="direction-project-field" htmlFor="direction-project-title">
         <span>Название</span>
-        <input
+        <VoiceTextInput
           id="direction-project-title"
           required
           autoFocus
           maxLength={MAX_PROJECT_TITLE_LENGTH}
           placeholder="Например: Финансовая подушка"
           value={props.draft.title}
-          onChange={(event) =>
-            props.onDraftChange({ ...props.draft, title: event.currentTarget.value })
-          }
+          onValueChange={(value) => props.onDraftChange({ ...props.draft, title: value })}
         />
-      </label>
+      </VoiceField>
 
       <label className="direction-project-main-option" htmlFor="direction-project-main">
         <input
@@ -946,23 +1115,21 @@ export function DirectionProjectCreateForm(props: DirectionProjectCreateFormProp
           }
         />
         <span className="direction-project-checkbox" aria-hidden="true" />
-        <span>Сделать главным проектом</span>
+        <span>Сделать главной целью</span>
       </label>
 
-      <label className="direction-project-field" htmlFor="direction-project-result">
+      <VoiceField className="direction-project-field" htmlFor="direction-project-result">
         <span>
           Желаемый результат <small>необязательно</small>
         </span>
-        <textarea
+        <VoiceTextArea
           id="direction-project-result"
           rows={2}
           maxLength={MAX_PROJECT_DESIRED_RESULT_LENGTH}
           value={props.draft.desiredResult}
-          onChange={(event) =>
-            props.onDraftChange({ ...props.draft, desiredResult: event.currentTarget.value })
-          }
+          onValueChange={(value) => props.onDraftChange({ ...props.draft, desiredResult: value })}
         />
-      </label>
+      </VoiceField>
 
       <p className="direction-project-context">
         Направление: {props.directionName} · Сфера: {props.sphereName ?? 'Без сферы'}
@@ -978,7 +1145,7 @@ export function DirectionProjectCreateForm(props: DirectionProjectCreateFormProp
           Отмена
         </button>
         <button className="primary-button" type="submit" disabled={props.saving}>
-          {props.saving ? 'Создание…' : 'Создать проект'}
+          {props.saving ? 'Создание…' : 'Создать цель'}
         </button>
       </div>
     </form>
@@ -1108,12 +1275,12 @@ export function DirectionStrategicReview(props: {
             <dt>Что изменено</dt>
             <dd>
               {result.directionChanged ? 'Направление и ' : ''}
-              {result.changedProjectCount} проектов
-              {result.createdProject === null ? '' : ', создан новый проект'}
+              {result.changedProjectCount} целей
+              {result.createdProject === null ? '' : ', создана новая цель'}
             </dd>
           </div>
           <div>
-            <dt>Новый главный проект</dt>
+            <dt>Новая главная цель</dt>
             <dd>{result.mainProject?.title ?? 'Не выбран'}</dd>
           </div>
           <div>
@@ -1218,37 +1385,33 @@ export function DirectionStrategicReview(props: {
 
         {draft.remainsRelevant ? (
           <>
-            <label className="management-field">
+            <VoiceField className="management-field">
               <span>Стратегический замысел остаётся верным?</span>
-              <textarea
+              <VoiceTextArea
                 rows={3}
                 maxLength={MAX_DIRECTION_STRATEGIC_TEXT_LENGTH}
                 value={draft.strategicIntent}
-                onChange={(event) =>
-                  props.onChange({ ...draft, strategicIntent: event.currentTarget.value })
-                }
+                onValueChange={(value) => props.onChange({ ...draft, strategicIntent: value })}
               />
-            </label>
-            <label className="management-field">
+            </VoiceField>
+            <VoiceField className="management-field">
               <span>Желаемое состояние нужно изменить?</span>
-              <textarea
+              <VoiceTextArea
                 rows={3}
                 maxLength={MAX_DIRECTION_STRATEGIC_TEXT_LENGTH}
                 value={draft.desiredState}
-                onChange={(event) =>
-                  props.onChange({ ...draft, desiredState: event.currentTarget.value })
-                }
+                onValueChange={(value) => props.onChange({ ...draft, desiredState: value })}
               />
-            </label>
+            </VoiceField>
 
             <fieldset>
-              <legend>Какие проекты продолжить, приостановить или архивировать?</legend>
+              <legend>Какие цели продолжить, приостановить или архивировать?</legend>
               <div className="direction-review-projects">
                 {reviewableProjects(props.snapshot).map((project) => (
                   <label key={project.id.toString()}>
                     <span>{project.title}</span>
                     <select
-                      aria-label={`Состояние проекта ${project.title}`}
+                      aria-label={`Состояние цели ${project.title}`}
                       value={draft.projectStatuses[project.id.toString()]}
                       onChange={(event) =>
                         props.onChange({
@@ -1276,7 +1439,7 @@ export function DirectionStrategicReview(props: {
             </fieldset>
 
             <label className="management-field">
-              <span>Какой проект сейчас должен быть главным?</span>
+              <span>Какая цель сейчас должна быть главной?</span>
               <select
                 value={draft.newProjectIsMain ? '__new__' : draft.mainProjectId}
                 onChange={(event) =>
@@ -1295,13 +1458,13 @@ export function DirectionStrategicReview(props: {
                   </option>
                 ))}
                 {draft.createProject && draft.newProjectTitle.trim().length > 0 ? (
-                  <option value="__new__">Новый проект</option>
+                  <option value="__new__">Новая цель</option>
                 ) : null}
               </select>
             </label>
 
             <fieldset>
-              <legend>Нужен ли новый проект?</legend>
+              <legend>Нужна ли новая цель?</legend>
               <label>
                 <input
                   type="checkbox"
@@ -1316,35 +1479,35 @@ export function DirectionStrategicReview(props: {
                     })
                   }
                 />{' '}
-                Создать проект в этом направлении
+                Создать цель в этом направлении
               </label>
               {draft.createProject ? (
                 <div className="direction-review-new-project">
-                  <label className="management-field">
+                  <VoiceField className="management-field">
                     <span>Название</span>
-                    <input
+                    <VoiceTextInput
                       required
                       maxLength={MAX_PROJECT_TITLE_LENGTH}
                       value={draft.newProjectTitle}
-                      onChange={(event) =>
-                        props.onChange({ ...draft, newProjectTitle: event.currentTarget.value })
+                      onValueChange={(value) =>
+                        props.onChange({ ...draft, newProjectTitle: value })
                       }
                     />
-                  </label>
-                  <label className="management-field">
+                  </VoiceField>
+                  <VoiceField className="management-field">
                     <span>Желаемый результат</span>
-                    <textarea
+                    <VoiceTextArea
                       rows={2}
                       maxLength={MAX_PROJECT_DESIRED_RESULT_LENGTH}
                       value={draft.newProjectDesiredResult}
-                      onChange={(event) =>
+                      onValueChange={(value) =>
                         props.onChange({
                           ...draft,
-                          newProjectDesiredResult: event.currentTarget.value,
+                          newProjectDesiredResult: value,
                         })
                       }
                     />
-                  </label>
+                  </VoiceField>
                 </div>
               ) : null}
             </fieldset>
@@ -1376,11 +1539,11 @@ function DirectionReviewFacts(props: { readonly snapshot: DirectionDetailsSnapsh
         <dd>{direction.desiredState ?? 'Не задано'}</dd>
       </div>
       <div>
-        <dt>Главный проект</dt>
+        <dt>Главная цель</dt>
         <dd>{mainProject?.title ?? 'Не выбран'}</dd>
       </div>
       <div>
-        <dt>Проекты</dt>
+        <dt>Цели</dt>
         <dd>
           {pulse.activeProjectCount} активных · {pulse.pausedProjectCount} приостановленных ·{' '}
           {pulse.completedProjectCount} завершённых
@@ -1443,15 +1606,15 @@ function strategicReviewSummary(
     if (nextStatus !== project.status)
       changes.push(`${project.title}: ${projectStatusLabel(nextStatus!)}.`);
   }
-  if (draft.createProject) changes.push(`Создать проект «${draft.newProjectTitle.trim()}».`);
+  if (draft.createProject) changes.push(`Создать цель «${draft.newProjectTitle.trim()}».`);
   const currentMainId = snapshot.mainProject?.id.toString() ?? '';
-  if (draft.newProjectIsMain) changes.push('Назначить новый проект главным.');
+  if (draft.newProjectIsMain) changes.push('Назначить новую цель главной.');
   else if (draft.mainProjectId !== currentMainId) {
     const main = snapshot.projects.find((project) => project.id.toString() === draft.mainProjectId);
     changes.push(
       main === undefined
-        ? 'Снять текущий главный проект.'
-        : `Назначить главным проект «${main.title}».`,
+        ? 'Снять текущую главную цель.'
+        : `Назначить главной цель «${main.title}».`,
     );
   }
   return changes;
@@ -1485,8 +1648,8 @@ function DirectionProjectGroup(props: {
                   {project.isMain ? (
                     <span
                       className="direction-project-main-marker"
-                      aria-label="Главный проект"
-                      title="Главный проект"
+                      aria-label="Главная цель"
+                      title="Главная цель"
                     >
                       ★
                     </span>
@@ -1548,24 +1711,23 @@ export function DirectionForm(props: DirectionFormProps) {
         </div>
       </div>
       <div className="management-form-grid">
-        <label className="management-field" htmlFor="direction-name">
+        <VoiceField className="management-field" htmlFor="direction-name">
           <span>
             Название{' '}
             <span className="direction-required-mark" aria-hidden="true">
               *
             </span>
           </span>
-          <input
+          <VoiceTextInput
             id="direction-name"
+            placeholder="Введите название направления"
             required
             autoFocus
             maxLength={MAX_DIRECTION_NAME_LENGTH}
             value={props.draft.name}
-            onChange={(event) =>
-              props.onChange({ ...props.draft, name: event.currentTarget.value })
-            }
+            onValueChange={(value) => props.onChange({ ...props.draft, name: value })}
           />
-        </label>
+        </VoiceField>
         <label className="management-field" htmlFor="direction-sphere">
           <span>Сфера</span>
           <select
@@ -1580,78 +1742,73 @@ export function DirectionForm(props: DirectionFormProps) {
           </select>
           {isCreate ? <small className="direction-field-helper">Можно выбрать позже</small> : null}
         </label>
-        <label className="management-field management-field-wide" htmlFor="direction-description">
+        <VoiceField
+          className="management-field management-field-wide"
+          htmlFor="direction-description"
+        >
           <span>{isCreate ? 'Короткое описание' : 'Описание'}</span>
-          <textarea
+          <VoiceTextArea
             id="direction-description"
             rows={isCreate ? 2 : 3}
             maxLength={MAX_DIRECTION_DESCRIPTION_LENGTH}
             placeholder={isCreate ? 'Одно предложение о долгосрочном векторе' : undefined}
             value={props.draft.description}
-            onChange={(event) =>
-              props.onChange({ ...props.draft, description: event.currentTarget.value })
-            }
+            onValueChange={(value) => props.onChange({ ...props.draft, description: value })}
           />
-        </label>
+        </VoiceField>
         {props.mode === 'edit' ? (
           <fieldset className="direction-strategic-form-fields management-field-wide">
             <legend>Стратегический контур</legend>
-            <label className="management-field" htmlFor="direction-strategic-intent">
+            <VoiceField className="management-field" htmlFor="direction-strategic-intent">
               <span>
                 Замысел <small>необязательно</small>
               </span>
-              <textarea
+              <VoiceTextArea
                 id="direction-strategic-intent"
                 rows={3}
                 maxLength={MAX_DIRECTION_STRATEGIC_TEXT_LENGTH}
                 value={props.draft.strategicIntent}
-                onChange={(event) =>
-                  props.onChange({ ...props.draft, strategicIntent: event.currentTarget.value })
+                onValueChange={(value) =>
+                  props.onChange({ ...props.draft, strategicIntent: value })
                 }
               />
-            </label>
-            <label className="management-field" htmlFor="direction-desired-state">
+            </VoiceField>
+            <VoiceField className="management-field" htmlFor="direction-desired-state">
               <span>
                 Желаемое состояние <small>необязательно</small>
               </span>
-              <textarea
+              <VoiceTextArea
                 id="direction-desired-state"
                 rows={3}
                 maxLength={MAX_DIRECTION_STRATEGIC_TEXT_LENGTH}
                 value={props.draft.desiredState}
-                onChange={(event) =>
-                  props.onChange({ ...props.draft, desiredState: event.currentTarget.value })
-                }
+                onValueChange={(value) => props.onChange({ ...props.draft, desiredState: value })}
               />
-            </label>
-            <label className="management-field" htmlFor="direction-in-scope">
+            </VoiceField>
+            <VoiceField className="management-field" htmlFor="direction-in-scope">
               <span>
                 Входит <small>необязательно</small>
               </span>
-              <textarea
+              <VoiceTextArea
                 id="direction-in-scope"
                 rows={3}
                 maxLength={MAX_DIRECTION_STRATEGIC_TEXT_LENGTH}
                 value={props.draft.inScope}
-                onChange={(event) =>
-                  props.onChange({ ...props.draft, inScope: event.currentTarget.value })
-                }
+                onValueChange={(value) => props.onChange({ ...props.draft, inScope: value })}
               />
-            </label>
-            <label className="management-field" htmlFor="direction-out-of-scope">
+            </VoiceField>
+            <VoiceField className="management-field" htmlFor="direction-out-of-scope">
               <span>
                 Не входит <small>необязательно</small>
               </span>
-              <textarea
+              <VoiceTextArea
                 id="direction-out-of-scope"
                 rows={3}
                 maxLength={MAX_DIRECTION_STRATEGIC_TEXT_LENGTH}
                 value={props.draft.outOfScope}
-                onChange={(event) =>
-                  props.onChange({ ...props.draft, outOfScope: event.currentTarget.value })
-                }
+                onValueChange={(value) => props.onChange({ ...props.draft, outOfScope: value })}
               />
-            </label>
+            </VoiceField>
           </fieldset>
         ) : null}
       </div>
@@ -1722,18 +1879,15 @@ export function DirectionStrategicOutline(props: {
 
 function DirectionGroup({
   title,
-  count,
   children,
 }: {
   readonly title: string;
-  readonly count: number;
   readonly children: ReactNode;
 }) {
   return (
     <section className="direction-group" aria-label={title}>
       <div className="management-list-heading">
         <h2>{title}</h2>
-        <span>{count}</span>
       </div>
       {children}
     </section>
@@ -1743,7 +1897,6 @@ function DirectionGroup({
 function DirectionCards(props: {
   readonly items: readonly DirectionOverviewItem[];
   readonly spheres: SpheresSnapshot;
-  readonly details: ReadonlyMap<string, DirectionDetailsSnapshot>;
   readonly busyId: string | null;
   readonly onOpen: (id: string) => void;
   readonly onEdit?: (direction: Direction) => void;
@@ -1758,8 +1911,7 @@ function DirectionCards(props: {
           key={item.direction.id.toString()}
           item={item}
           spheres={props.spheres}
-          detail={props.details.get(item.direction.id.toString())}
-          busy={props.busyId === item.direction.id.toString()}
+          busy={props.busyId !== null}
           onOpen={props.onOpen}
           onEdit={props.onEdit}
           onMakeMain={props.onMakeMain}
@@ -1784,64 +1936,36 @@ export function DirectionCard(props: {
 }) {
   const { direction } = props.item;
   const sphere = findSphere(props.spheres, direction.sphereId?.toString() ?? null);
-  const operationalState = props.detail?.operationalState;
-  const movementLabel =
-    operationalState === undefined
-      ? direction.status === DIRECTION_STATUS.active
-        ? 'Состояние уточняется'
-        : 'В архиве'
-      : operationalState === 'moving'
-        ? 'Есть движение'
-        : 'Нет движения';
-  const attentionLabel =
-    operationalState === undefined
-      ? direction.status === DIRECTION_STATUS.active
-        ? 'Данные загружаются'
-        : 'В архиве'
-      : operationalState === 'moving'
-        ? 'В норме'
-        : 'Требует внимания';
+  const hasLeadingEmoji = /^[\p{Extended_Pictographic}\p{Emoji_Presentation}]/u.test(
+    direction.name.trimStart(),
+  );
   return (
-    <article className={`direction-card${direction.isMain ? ' direction-card-main' : ''}`}>
+    <article
+      data-direction-id={direction.id.toString()}
+      className={`direction-card${direction.isMain ? ' direction-card-main' : ''}`}
+    >
       <button
+        role="link"
         className="direction-card-open"
         type="button"
         onClick={() => props.onOpen(direction.id.toString())}
       >
-        <span className="direction-card-identity">
-          <DirectionSphereIcon
-            className="direction-card-sphere-icon"
-            sphereName={sphere?.name ?? null}
-          />
-        </span>
+        {hasLeadingEmoji ? null : (
+          <span className="direction-card-identity">
+            <DirectionSphereIcon
+              className="direction-card-sphere-icon"
+              sphereName={sphere?.name ?? null}
+            />
+          </span>
+        )}
         <span className="direction-card-content">
-          <span className="direction-card-heading">
-            <strong>{direction.name}</strong>
-            {direction.isMain ? <span aria-label="Главное направление">★</span> : null}
-          </span>
-          {direction.description === null ? null : (
+          <strong>{direction.name}</strong>
+          {direction.description ? (
             <span className="direction-card-description">{direction.description}</span>
-          )}
-          <span className="direction-card-state">
-            <span>{props.detail?.mainProject?.title ?? 'Нет активного проекта'}</span>
-            <span>{movementLabel}</span>
-            <span>{formatProjectCount(props.item.totalProjectCount)}</span>
-            <span className={operationalState === 'moving' ? undefined : 'is-attention'}>
-              {attentionLabel}
-            </span>
-          </span>
+          ) : null}
         </span>
-        <span className="direction-card-aside">
-          <span className="direction-card-sphere-chip">{sphere?.name ?? 'Без сферы'}</span>
-          <span className="direction-card-activity">
-            <span>Активность</span>
-            <span aria-hidden="true">·</span>
-            <strong>30 дней</strong>
-          </span>
-        </span>
-        <span className="direction-card-arrow" aria-hidden="true">
-          →
-        </span>
+        <span className="direction-card-sphere">{sphere?.name ?? 'Без сферы'}</span>
+        <AppIcon className="direction-card-arrow" name="arrow-right" />
       </button>
       <DirectionMenu
         direction={direction}
@@ -1863,9 +1987,31 @@ function DirectionMenu(props: {
   readonly onArchive: ((direction: Direction) => void) | undefined;
   readonly onRestore: ((direction: Direction) => void) | undefined;
 }) {
+  const menu = useRef<HTMLDetailsElement>(null);
+  function close(): void {
+    if (!menu.current) return;
+    menu.current.open = false;
+    menu.current.querySelector('summary')?.focus();
+  }
   return (
-    <details className="direction-card-menu">
-      <summary aria-label={`Действия: ${props.direction.name}`}>•••</summary>
+    <details
+      ref={menu}
+      className="direction-card-menu"
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          event.stopPropagation();
+          close();
+        }
+      }}
+      onClick={(event) => {
+        if ((event.target as HTMLElement).closest('button')) close();
+      }}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) event.currentTarget.open = false;
+      }}
+    >
+      <summary aria-label={`Действия: ${props.direction.name}`}>⋯</summary>
       <div className="direction-card-menu-popover">
         {props.onMakeMain === undefined || props.direction.isMain ? null : (
           <button
@@ -1913,9 +2059,9 @@ export function EmptyDirections({ onCreate }: { readonly onCreate: () => void })
     <div className="management-empty-state direction-empty-state">
       <div>
         <strong>Пока нет направлений</strong>
-        <p>Направление задаёт долгосрочный вектор движения и объединяет связанные проекты.</p>
+        <p>Создайте первое направление.</p>
       </div>
-      <button className="secondary-button" type="button" onClick={onCreate}>
+      <button className="primary-button" type="button" onClick={onCreate}>
         Создать направление
       </button>
     </div>
@@ -1954,19 +2100,6 @@ function findSphere(snapshot: SpheresSnapshot, id: string | null): Sphere | null
   );
 }
 
-async function loadDirectionListDetails(
-  overview: readonly DirectionOverviewItem[],
-  query: Pick<GetDirectionDetails, 'execute'>,
-): Promise<ReadonlyMap<string, DirectionDetailsSnapshot>> {
-  const active = overview.filter((item) => item.direction.status === DIRECTION_STATUS.active);
-  const snapshots = await Promise.all(active.map((item) => query.execute(item.direction.id, 7)));
-  return new Map(
-    snapshots.flatMap((snapshot) =>
-      snapshot === null ? [] : [[snapshot.direction.id.toString(), snapshot] as const],
-    ),
-  );
-}
-
 function formatDateTime(value: Date): string {
   return new Intl.DateTimeFormat('ru-RU', { dateStyle: 'medium', timeStyle: 'short' }).format(
     value,
@@ -1977,22 +2110,8 @@ function operationalStateLabel(state: DirectionDetailsSnapshot['operationalState
   return state === 'moving'
     ? 'Движется'
     : state === 'no_active_project'
-      ? 'Нет активного проекта'
+      ? 'Нет активной цели'
       : 'Нет исполнения';
-}
-
-function formatProjectCount(count: number): string {
-  const remainder100 = count % 100;
-  const remainder10 = count % 10;
-  const noun =
-    remainder100 >= 11 && remainder100 <= 14
-      ? 'проектов'
-      : remainder10 === 1
-        ? 'проект'
-        : remainder10 >= 2 && remainder10 <= 4
-          ? 'проекта'
-          : 'проектов';
-  return `${count} ${noun}`;
 }
 
 function formatActualTime(durationMs: number): string {

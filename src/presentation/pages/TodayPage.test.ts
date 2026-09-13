@@ -1755,7 +1755,7 @@ describe('TodayPage view and workflow', () => {
 
     expect(markup).toContain('Уточнение решения');
     expect(markup).toContain('Можно уточнить причину, ожидаемый результат, цену и жертвы');
-    expect(markup).toContain('Формулировка, вид, сфера, приоритет и проект зафиксированы');
+    expect(markup).toContain('Формулировка, вид, сфера, приоритет и цель зафиксированы');
     expect(markup.match(/disabled=""/g)?.length).toBeGreaterThanOrEqual(5);
     expect(markup).not.toContain('>Перенести<');
   });
@@ -2838,7 +2838,7 @@ describe('TodayPage view and workflow', () => {
     expect(markup).toContain('Высокий');
     expect(markup).toContain('Цена концентрации');
     expect(markup).toContain('Отказ от отвлечений');
-    expect(markup).toContain('Проект LifeOS');
+    expect(markup).toContain('Цель LifeOS');
     expect(markup).toContain('Затрачено времени');
     expect(markup).toContain('5 мин');
     expect(markup).toContain('Фактические результаты действий');
@@ -2883,7 +2883,7 @@ function createDetailedDecision(): Decision {
     price: 'Цена концентрации',
     sacrifices: 'Отказ от отвлечений',
     priority: DECISION_PRIORITY.high,
-    projectReference: 'Проект LifeOS',
+    projectReference: 'Цель LifeOS',
     occurredAt: new Date('2026-08-02T07:00:00.000+09:00'),
     eventId: EntityId.create('detailed-decision-created'),
   });

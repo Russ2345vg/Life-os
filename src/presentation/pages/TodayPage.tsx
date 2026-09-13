@@ -1,3 +1,6 @@
+import { VoiceField } from '../voice-input/VoiceField';
+import { VoiceTextInput } from '../voice-input/VoiceTextInput';
+import { VoiceTextArea } from '../voice-input/VoiceTextArea';
 import {
   useCallback,
   useEffect,
@@ -3558,11 +3561,11 @@ function DecisionForm({
           </div>
         </fieldset>
 
-        <label className="decision-title-field" htmlFor="decision-title">
+        <VoiceField className="decision-title-field" htmlFor="decision-title">
           <span>
             Название решения <span className="decision-required-mark">*</span>
           </span>
-          <input
+          <VoiceTextInput
             id="decision-title"
             value={form.title}
             disabled={isSaving}
@@ -3572,16 +3575,16 @@ function DecisionForm({
             aria-invalid={titleInvalid}
             aria-describedby={titleInvalid ? 'decision-form-error' : undefined}
             placeholder="Например: Завершить этап 17.2"
-            onChange={(event: ChangeEvent<HTMLInputElement>) => onTitleChange(event.target.value)}
+            onValueChange={(value) => onTitleChange(value)}
           />
-        </label>
+        </VoiceField>
 
-        <label className="decision-result-field" htmlFor="decision-expected-result">
+        <VoiceField className="decision-result-field" htmlFor="decision-expected-result">
           <span>
             Ожидаемый результат
             {isMain ? <span className="decision-required-mark"> *</span> : null}
           </span>
-          <textarea
+          <VoiceTextArea
             id="decision-expected-result"
             value={form.expectedResult}
             disabled={isSaving}
@@ -3596,14 +3599,12 @@ function DecisionForm({
                 : 'decision-expected-result-help'
             }
             placeholder="Что должно быть получено в результате?"
-            onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
-              onExpectedResultChange(event.target.value)
-            }
+            onValueChange={(value) => onExpectedResultChange(value)}
           />
           <small id="decision-expected-result-help">
             Сформулируйте конкретный и проверяемый результат.
           </small>
-        </label>
+        </VoiceField>
 
         <div className="form-actions today-decision-form-actions">
           <div className="today-decision-form-status">

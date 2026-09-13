@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 const stylesheetUrl = new URL('../styles/planning-tomorrow.css', import.meta.url);
 const stylesheet = existsSync(stylesheetUrl) ? readFileSync(stylesheetUrl, 'utf8') : '';
-const atmosphereUrl = new URL('../../../public/planning-tomorrow-atmosphere.png', import.meta.url);
+const atmosphereUrl = new URL('../../../public/lifeos-forest-atmosphere.png', import.meta.url);
 
 describe('TomorrowPlanningCenter visual contract', () => {
   it('изолирует визуальную систему внутри страницы и сохраняет правую панель главным центром', () => {
@@ -13,7 +13,8 @@ describe('TomorrowPlanningCenter visual contract', () => {
     expect(stylesheet).toMatch(/\.tomorrow-planning-form-card\s*{[^}]*align-self:\s*start/s);
     expect(stylesheet).toMatch(/\.tomorrow-plan-card\s*{[^}]*grid-area:\s*plan/s);
     expect(stylesheet).toMatch(/\.tomorrow-planning-form-card\s*{[^}]*grid-area:\s*form/s);
-    expect(stylesheet).toContain('/planning-tomorrow-atmosphere.png');
+    expect(stylesheet).not.toContain('/planning-tomorrow-atmosphere.png');
+    expect(stylesheet).toMatch(/\.tomorrow-planning-page\s*{[^}]*background:\s*transparent/s);
   });
 
   it('перестраивает mobile-поток, сохраняет touch targets и не допускает horizontal scroll', () => {
@@ -30,7 +31,7 @@ describe('TomorrowPlanningCenter visual contract', () => {
     expect(stylesheet).toMatch(/@media \(prefers-reduced-motion:\s*reduce\)/);
   });
 
-  it('поставляет атмосферный фон как локальный asset экрана', () => {
+  it('использует общий локальный атмосферный asset приложения', () => {
     expect(existsSync(atmosphereUrl)).toBe(true);
   });
 
@@ -41,8 +42,8 @@ describe('TomorrowPlanningCenter visual contract', () => {
     expect(stylesheet).toMatch(
       /\.tomorrow-planning-header\s*{[^}]*margin-bottom:\s*var\(--space-4\)/s,
     );
-    expect(stylesheet).toContain('rgb(11 13 15 / 48%) 0');
-    expect(stylesheet).toContain('rgb(11 13 15 / 84%) 24rem');
+    expect(stylesheet).toContain('var(--surface-glass)');
+    expect(stylesheet).toContain('var(--surface-glass-overlay)');
     expect(stylesheet).toMatch(
       /\.tomorrow-planning-form-card\s*{[^}]*padding:\s*var\(--space-5,[^}]*border-color:\s*color-mix\(in srgb, var\(--section-accent\) 12%, var\(--border-strong\)\)/s,
     );

@@ -2,11 +2,21 @@ import { describe, expect, it } from 'vitest';
 import { MANAGEMENT_SECTION } from './ManagementSection';
 import {
   INITIAL_MANAGEMENT_NAVIGATION,
+  openManagementSection,
   popManagementRoute,
   pushManagementRoute,
 } from './managementRouting';
 
 describe('Management routing', () => {
+  it('opens Goal Album as a first-class Management section without project state', () => {
+    expect(openManagementSection(MANAGEMENT_SECTION.goals).route).toEqual({
+      section: 'goals',
+      directionId: null,
+      projectId: null,
+      decisionId: null,
+    });
+  });
+
   it('returns from a project opened inside a direction to that exact direction', () => {
     const direction = {
       section: MANAGEMENT_SECTION.directions,

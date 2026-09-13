@@ -35,7 +35,7 @@ export class ProjectRecordMapper {
     assertRecordAndSchemaVersion(value);
     const record: UnknownRecord = value;
     const status = readString(record, 'status');
-    if (!isProjectStatus(status)) throw invalidRecord('Неизвестный статус проекта.');
+    if (!isProjectStatus(status)) throw invalidRecord('Неизвестный статус цели.');
     return Project.rehydrate({
       id: readEntityId(record, 'id'),
       sphereId: readNullableEntityId(record, 'sphereId'),

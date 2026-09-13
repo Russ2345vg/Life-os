@@ -1,0 +1,553 @@
+/* Overview composition uses the shared shell and material palette. */
+.management-page .management-overview {
+  --overview-canvas: var(--bg-canvas);
+  --overview-panel: var(--surface-1);
+  --overview-border: var(--border-soft);
+  --overview-accent: var(--gold-main);
+  --overview-text: var(--text-primary);
+  --overview-muted: var(--text-secondary);
+  --overview-motion-page: 280ms;
+  --color-text: var(--overview-text);
+  --color-text-muted: var(--overview-muted);
+  --color-accent-gold: var(--overview-accent);
+  position: relative;
+  isolation: isolate;
+  container-type: inline-size;
+  width: min(100% - var(--space-12), 80rem);
+  padding-block: var(--space-8) var(--space-12);
+  color: var(--overview-text);
+}
+
+.management-page .management-overview .section-page-header {
+  gap: var(--space-6);
+  align-items: flex-start;
+  padding-bottom: var(--space-6);
+  border: 0;
+}
+
+.management-page .management-overview .section-page-header h1 {
+  margin: var(--space-3) 0 0;
+  font-size: clamp(2rem, 3.2vw, 2.75rem);
+  line-height: 1.12;
+  letter-spacing: -0.035em;
+}
+
+.management-page .management-overview .section-page-eyebrow {
+  color: var(--overview-accent);
+  font-size: 0.7rem;
+  letter-spacing: 0.16em;
+}
+
+.management-page .management-overview .section-page-description {
+  margin-top: var(--space-3);
+  color: var(--overview-muted);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.overview-date {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  margin-top: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--overview-border);
+  border-radius: var(--radius-medium);
+  background: var(--surface-glass);
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+.overview-content {
+  display: grid;
+  gap: var(--space-4);
+  animation: overview-arrive var(--overview-motion-page) var(--ease-standard) both;
+}
+
+.management-overview .overview-focus {
+  display: grid;
+  grid-template-columns: 5rem minmax(0, 1fr) auto;
+  gap: var(--space-6);
+  min-height: 11rem;
+  margin: 0;
+  padding: var(--space-8);
+  border: 1px solid color-mix(in srgb, var(--overview-accent) 65%, var(--overview-border));
+  border-radius: var(--radius-large);
+
+  --panel-surface: var(--surface-glass-raised);
+  background: transparent;
+  box-shadow:
+    var(--shadow-soft),
+    inset 0 1px 0 rgb(237 188 148 / 12%);
+}
+
+.overview-focus-icon {
+  width: 5rem;
+  height: 5rem;
+  padding: var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--overview-accent) 24%, transparent);
+  border-radius: 50%;
+  color: var(--overview-accent);
+  background: rgb(237 188 148 / 6%);
+}
+
+.management-overview .overview-focus h2 {
+  margin: var(--space-2) 0;
+  color: var(--overview-text);
+  font-size: clamp(1.5rem, 2.4vw, 2rem);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.management-overview .overview-focus div > p:not(.section-page-eyebrow) {
+  margin: var(--space-2) 0 0;
+  color: var(--overview-muted);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.overview-focus-actions {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: stretch;
+}
+
+.management-overview
+  :is(
+    .primary-button,
+    .secondary-button,
+    .overview-text-action,
+    .overview-icon-action,
+    button.overview-row,
+    .overview-next
+  ) {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  cursor: pointer;
+  font: inherit;
+  transition:
+    background-color var(--motion-slow) var(--ease-standard),
+    border-color var(--motion-slow) var(--ease-standard),
+    transform var(--motion-fast) var(--ease-standard);
+}
+
+.management-overview :is(.primary-button, .secondary-button) {
+  display: inline-flex;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-small);
+  white-space: normal;
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.management-page .management-overview .primary-button {
+  min-height: 3.25rem;
+  padding-inline: var(--space-6);
+  border: 1px solid var(--overview-accent);
+  color: var(--text-on-primary);
+  background: var(--overview-accent);
+  font-size: 1rem;
+  font-weight: 750;
+  box-shadow: 0 4px 20px rgb(237 188 148 / 10%);
+}
+
+.management-overview .primary-button:hover {
+  background: var(--surface-primary);
+}
+.management-overview .secondary-button {
+  border: 1px solid var(--overview-border);
+  background: var(--surface-glass);
+  color: var(--overview-text);
+}
+.management-overview .secondary-button:hover {
+  border-color: var(--overview-accent);
+  background: var(--surface-hover);
+}
+.management-overview :is(button, h2):focus-visible {
+  outline: 2px solid var(--overview-accent);
+  outline-offset: 4px;
+}
+.management-overview button:active:not(:disabled) {
+  transform: scale(0.985);
+}
+.management-overview button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.management-overview button svg {
+  flex-shrink: 0;
+}
+
+.overview-text-action,
+.overview-icon-action {
+  border: 0;
+  background: transparent;
+  color: var(--overview-muted);
+}
+.overview-text-action:hover,
+.overview-icon-action:hover {
+  color: var(--overview-text);
+  background: rgb(255 255 255 / 5%);
+}
+
+.overview-summaries {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+.overview-card,
+.overview-signals,
+.overview-state {
+  min-width: 0;
+  border: 1px solid var(--overview-border);
+  border-radius: var(--radius-medium);
+
+  --panel-surface: var(--surface-glass);
+  background: transparent;
+  box-shadow: var(--shadow-soft);
+}
+.overview-card {
+  padding: var(--space-4);
+}
+.overview-card > header {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  min-height: 3.5rem;
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--overview-border);
+}
+.overview-card > header > svg {
+  width: 1.75rem;
+  height: 1.75rem;
+  flex-shrink: 0;
+  color: var(--overview-muted);
+}
+.overview-card > header > div {
+  min-width: 0;
+  flex: 1;
+}
+.overview-card h2 {
+  margin: 0;
+  color: var(--overview-text);
+  font-size: 1.05rem;
+  line-height: 1.3;
+}
+.overview-card header p {
+  margin: var(--space-1) 0 0;
+  color: var(--overview-muted);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+.overview-icon-action {
+  margin-right: calc(-1 * var(--space-2));
+  padding: var(--space-2);
+  border-radius: var(--radius-small);
+}
+.overview-card-body {
+  padding-top: var(--space-1);
+}
+.overview-row {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: space-between;
+  align-items: baseline;
+  width: 100%;
+  padding: var(--space-3) 0;
+  border: 0;
+  border-bottom: 1px solid rgb(179 180 181 / 16%);
+  color: var(--overview-muted);
+  background: transparent;
+  text-align: left;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+.overview-row:last-child {
+  border-bottom: 0;
+}
+.overview-row > span {
+  min-width: 0;
+}
+.overview-row > strong {
+  min-width: 0;
+  max-width: 60%;
+  color: var(--overview-text);
+  text-align: right;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.management-overview button.overview-row {
+  font-size: 0.8rem;
+}
+button.overview-row:hover {
+  color: var(--overview-text);
+  background: rgb(255 255 255 / 4%);
+}
+.overview-card-note {
+  margin: var(--space-3) 0;
+  color: var(--overview-muted);
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+.overview-next {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  width: 100%;
+  padding: var(--space-4) 0;
+  border: 0;
+  background: transparent;
+  color: var(--overview-text);
+  text-align: left;
+}
+.overview-next > svg:first-child {
+  width: 2rem;
+  height: 2rem;
+  color: var(--overview-muted);
+}
+.overview-next > svg:last-child {
+  width: 1rem;
+  margin-left: auto;
+}
+.overview-next span {
+  min-width: 0;
+}
+.overview-next strong {
+  display: block;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+.overview-next small {
+  display: block;
+  margin-top: var(--space-2);
+  color: var(--overview-muted);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+.overview-next:hover {
+  background: rgb(255 255 255 / 4%);
+}
+
+.overview-signals {
+  padding: var(--space-6);
+}
+.overview-signals-header {
+  display: flex;
+  gap: var(--space-4);
+  align-items: center;
+  margin-bottom: var(--space-4);
+}
+.overview-signals-header > svg {
+  width: 1.75rem;
+  height: 1.75rem;
+  color: var(--overview-muted);
+  flex-shrink: 0;
+}
+.overview-signals-header > div {
+  min-width: 0;
+  flex: 1;
+}
+.overview-signals-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  line-height: 1.25;
+  scroll-margin-top: 7rem;
+}
+.overview-signals-header p {
+  margin: var(--space-1) 0 0;
+  color: var(--overview-muted);
+  font-size: 0.875rem;
+}
+.overview-signal-count {
+  color: var(--overview-muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.overview-signal-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.overview-signal-list li {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr) auto;
+  gap: var(--space-4);
+  align-items: center;
+  padding: var(--space-4) var(--space-2);
+  border-top: 1px solid var(--overview-border);
+  animation: overview-fade var(--motion-slow) var(--ease-standard) both;
+}
+.overview-signal-list li > svg {
+  width: 1.75rem;
+  height: 1.75rem;
+  color: var(--overview-muted);
+}
+.overview-signal-copy {
+  min-width: 0;
+}
+.overview-signal-copy h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+.overview-signal-copy p {
+  margin: var(--space-1) 0 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--overview-muted);
+  overflow-wrap: anywhere;
+}
+.overview-signal-list .secondary-button {
+  min-width: 11rem;
+}
+.overview-empty {
+  padding-block: var(--space-4);
+  color: var(--overview-muted);
+}
+.overview-state {
+  display: grid;
+  justify-items: start;
+  align-content: center;
+  gap: var(--space-4);
+  min-height: 15rem;
+  padding: var(--space-8);
+}
+.overview-state > svg {
+  width: 3rem;
+  height: 3rem;
+  color: var(--overview-muted);
+}
+.overview-state :is(h2, p) {
+  margin: 0;
+}
+.overview-state h2 {
+  font-size: 1.5rem;
+}
+.overview-state p {
+  color: var(--overview-muted);
+}
+.overview-error {
+  border-color: var(--color-error);
+}
+
+@container (max-width: 1040px) {
+  .overview-summaries {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .management-overview .overview-focus {
+    grid-template-columns: 4rem minmax(0, 1fr);
+    padding: var(--space-6);
+  }
+  .overview-focus-icon {
+    width: 4rem;
+    height: 4rem;
+    padding: var(--space-3);
+  }
+  .overview-focus-actions {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+
+@container (max-width: 620px) {
+  .management-overview .section-page-header {
+    flex-direction: column;
+  }
+  .overview-date {
+    margin: 0;
+    padding: var(--space-2) 0;
+    border: 0;
+    background: transparent;
+  }
+  .overview-summaries {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .overview-card {
+    padding: var(--space-4);
+  }
+  .management-overview .overview-focus {
+    grid-template-columns: 1fr;
+    gap: var(--space-4);
+    padding: var(--space-6);
+    background-position:
+      center,
+      60% 35%;
+  }
+  .overview-focus-icon {
+    width: 3rem;
+    height: 3rem;
+    padding: var(--space-2);
+  }
+  .overview-focus-actions {
+    grid-column: 1;
+    justify-self: stretch;
+  }
+  .overview-signals {
+    padding: var(--space-4);
+  }
+  .overview-signals-header {
+    flex-wrap: wrap;
+    gap: var(--space-3);
+  }
+  .overview-signals-header h2 {
+    font-size: 1.25rem;
+  }
+  .overview-signal-count {
+    flex-basis: 100%;
+    padding-left: 2.5rem;
+  }
+  .overview-signal-list li {
+    grid-template-columns: 1.75rem minmax(0, 1fr);
+    gap: var(--space-3);
+    padding-block: var(--space-4);
+  }
+  .overview-signal-list .secondary-button {
+    grid-column: 2;
+    justify-self: start;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 600px) {
+  .management-page .management-overview {
+    width: calc(100% - var(--space-8));
+    padding-top: var(--space-6);
+  }
+  .management-overview::before {
+    inset-inline: calc(-1 * var(--space-4));
+  }
+}
+
+@keyframes overview-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes overview-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .management-overview *,
+  .management-overview *::before {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+  .management-overview button:active:not(:disabled) {
+    transform: none;
+  }
+}

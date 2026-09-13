@@ -74,7 +74,7 @@ describe('Direction and Project persistence', () => {
   it('normalizes an inactive legacy main project without rewriting the record', () => {
     const project = Project.create({
       id: EntityId.create('legacy-main-project'),
-      title: 'Старый главный проект',
+      title: 'Старый главная цель',
       isMain: true,
       now,
     });

@@ -305,10 +305,10 @@ describe('completed evening history scenes', () => {
       /\.evening-history-object-card\s*{[^}]*grid-template-columns:\s*6\.6rem minmax\(0, 1fr\) minmax\(10rem, auto\)/,
     );
     expect(e113cCss).toMatch(
-      /\.evening-history-outcome\.is-complete\s*{[^}]*color:\s*#7cc987[^}]*border-color:\s*#365f3e/,
+      /\.evening-history-outcome\.is-complete\s*{[^}]*color:\s*var\(--success\)[^}]*border-color:\s*var\(--success\)/,
     );
     expect(e113cCss).toMatch(
-      /\.evening-history-outcome\.is-drop\s*{[^}]*color:\s*var\(--evening-v1-red\)[^}]*border-color:\s*#613d3b/,
+      /\.evening-history-outcome\.is-drop\s*{[^}]*color:\s*var\(--evening-v1-red\)[^}]*border-color:\s*var\(--danger\)/,
     );
     expect(e113cCss).toMatch(
       /@media \(max-width: 48rem\)[\s\S]*?\.evening-history-object-card\s*{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/,
@@ -485,7 +485,7 @@ describe('completed evening history scenes', () => {
     expect(markup).toContain('Что помогло сохранить фокус?');
     expect(markup).toContain('Сохранённый инсайт дня');
     expect(markup).toContain('Ясный первый шаг');
-    expect(markup).toContain('Открыть проект до начала работы');
+    expect(markup).toContain('Открыть цель до начала работы');
     expect(markup).toContain('is-recommendation has-result');
     expect(markup).not.toContain('<button');
     expect(cycle.state).toBe(EVENING_CYCLE_STATE.completed);
@@ -533,7 +533,9 @@ describe('completed evening history scenes', () => {
     expect(e113cCss).toMatch(
       /\.evening-reflection-workspace\s*{[^}]*grid-template-columns:\s*minmax\(0, 65fr\) minmax\(16rem, 35fr\)/,
     );
-    expect(e113cCss).toMatch(/\.evening-reflection-history-answer\s*{[^}]*background:\s*#0d1215/);
+    expect(e113cCss).toMatch(
+      /\.evening-reflection-history-answer\s*{[^}]*background:\s*var\(--surface-glass\)/,
+    );
     expect(e113cCss).toMatch(
       /\.evening-reflection-guidance\s*{[^}]*grid-template-rows:\s*minmax\(0, 1fr\) 1px minmax\(0, 1fr\)/,
     );
@@ -652,7 +654,7 @@ function completedCycle(question?: ReflectionQuestion): EveningCycle {
               sourceQuestionId: question.id,
               sourceEntityIds: [],
               observation: 'Ясный первый шаг',
-              action: 'Открыть проект до начала работы',
+              action: 'Открыть цель до начала работы',
               createdAt: NOW,
             }),
           ],

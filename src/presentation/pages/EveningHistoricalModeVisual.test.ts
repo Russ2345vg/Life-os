@@ -14,19 +14,19 @@ describe('E11.3F historical-mode visual system', () => {
       /li:not\(:last-child\)::after\s*{[^}]*background:\s*#242b30;[^}]*opacity:\s*0\.68;[^}]*transform:\s*scaleY\(0\.5\)/,
     );
     expect(historicalCss).toMatch(
-      /li\.is-complete:not\(\.is-selected-history\)\s*{[^}]*color:\s*#78b781/,
+      /li\.is-complete:not\(\.is-selected-history\)\s*{[^}]*color:\s*var\(--success\)/,
     );
   });
 
   it('ослабляет KPI и сохраняет зелёный только для ready-результата', () => {
     expect(historicalCss).toMatch(
-      /\.evening-kpi-card:nth-child\(n \+ 4\)\s*{[^}]*border-color:\s*#20282d;[^}]*background:\s*#101518;[^}]*box-shadow:\s*none;/,
+      /\.evening-kpi-card:nth-child\(n \+ 4\)\s*{[^}]*border-color:\s*var\(--border-soft\);[^}]*background:\s*var\(--surface-glass\);[^}]*box-shadow:\s*none;/,
     );
     expect(historicalCss).toMatch(
-      /\.evening-kpi-card\[data-tone='ready'\]\s*{[^}]*border-color:\s*#26372b;[^}]*background:\s*#101618/,
+      /\.evening-kpi-card\[data-tone='ready'\]\s*{[^}]*border-color:\s*var\(--border-soft\);[^}]*background:\s*var\(--surface-glass\)/,
     );
     expect(historicalCss).toMatch(
-      /\.evening-kpi-card\[data-tone='ready'\][\s\S]*?\.evening-kpi-card-icon\s*{[^}]*color:\s*#70b87a/,
+      /\.evening-kpi-card\[data-tone='ready'\][\s\S]*?\.evening-kpi-card-icon\s*{[^}]*color:\s*var\(--success\)/,
     );
   });
 

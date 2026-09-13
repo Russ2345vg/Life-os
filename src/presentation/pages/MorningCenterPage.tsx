@@ -1,3 +1,5 @@
+import { VoiceField } from '../voice-input/VoiceField';
+import { VoiceTextInput } from '../voice-input/VoiceTextInput';
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import type {
   Clock,
@@ -826,16 +828,16 @@ function MorningStartStatePanel(props: {
               onChange={(event) => setClarity(Number(event.currentTarget.value))}
             />
           </label>
-          <label className="morning-start-state-mood">
+          <VoiceField className="morning-start-state-mood">
             <span>Настрой</span>
-            <input
+            <VoiceTextInput
               type="text"
               required
               value={mood}
               disabled={props.busy}
-              onChange={(event) => setMood(event.currentTarget.value)}
+              onValueChange={(value) => setMood(value)}
             />
-          </label>
+          </VoiceField>
           <div className="morning-start-state-buttons">
             <button className="primary-button" type="submit" disabled={props.busy}>
               {props.pending ? 'Сохраняем…' : 'Сохранить'}

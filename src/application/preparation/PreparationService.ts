@@ -1,6 +1,7 @@
 import {
   EVENING_CYCLE_STATE,
   PREPARATION_CATEGORY,
+  PREPARATION_PLAN_STATUS,
   PREPARATION_RULE_CONDITION,
   PREPARATION_SOURCE_TYPE,
   PreparationPlan,
@@ -115,7 +116,14 @@ export class PreparationService {
           'Подготовка связана с другим планом завтра.',
         );
       }
-      if (existing.generationSignature === signature) return snapshot(existing, context);
+      // Legacy generation signatures contain device-local versions, not portable input
+      // provenance. A read must not revoke a completed plan on that evidence alone.
+      // Explicit application mutations below remain allowed to reopen it.
+      if (
+        existing.status === PREPARATION_PLAN_STATUS.completed ||
+        existing.generationSignature === signature
+      )
+        return snapshot(existing, context);
       const changed = clonePreparationPlan(existing);
       const expectedVersion = changed.version;
       changed.synchronize(requirements, context.plan.version, signature, this.clock.now(), () =>
@@ -410,7 +418,7 @@ function generateRequirements(context: GenerationContext): readonly PreparationR
       key: `PROJECT:${context.project.id.toString()}:OPEN`,
       area: PREPARATION_AREA.tomorrowStart,
       category: PREPARATION_CATEGORY.digital,
-      title: `Открыть проект «${context.project.title}»`,
+      title: `Открыть цель «${context.project.title}»`,
       sourceType: PREPARATION_SOURCE_TYPE.project,
       sourceId: context.project.id,
       required: true,
@@ -527,7 +535,7 @@ function isPreparationCorrection(correction: { readonly action: string }): boole
 
 function categoryForText(value: string): PreparationCategory {
   const normalized = normalizeMatchText(value);
-  if (matchesAny(normalized, ['проект', 'документ', 'ноутбук', 'телефон', 'уведомлен', 'device'])) {
+  if (matchesAny(normalized, ['цель', 'документ', 'ноутбук', 'телефон', 'уведомлен', 'device'])) {
     return PREPARATION_CATEGORY.digital;
   }
   if (matchesAny(normalized, ['одежд', 'вода', 'стол', 'место', 'вещ', 'инструмент'])) {

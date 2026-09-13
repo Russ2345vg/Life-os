@@ -22,9 +22,9 @@
   padding: clamp(var(--space-6), 3vw, var(--space-8));
   border: 1px solid color-mix(in srgb, var(--gold-main) 38%, var(--border-soft));
   border-radius: var(--radius-large);
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--gold-main) 7%, transparent), transparent 54%),
-    var(--surface-1);
+
+  --panel-surface: var(--surface-glass);
+  background: transparent;
   box-shadow: var(--shadow-soft);
 }
 
@@ -68,14 +68,16 @@
   padding: var(--space-6);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-medium);
-  background: var(--surface-1);
+
+  --panel-surface: var(--surface-glass);
+  background: transparent;
 }
 
 .morning-main-action-fact.is-ready {
   border-color: color-mix(in srgb, var(--gold-main) 42%, var(--border-soft));
-  background:
-    linear-gradient(128deg, color-mix(in srgb, var(--gold-main) 5%, transparent), transparent 62%),
-    var(--surface-1);
+
+  --panel-surface: var(--surface-glass);
+  background: transparent;
 }
 
 .morning-main-action-fact-label,
@@ -108,7 +110,7 @@
   padding: var(--space-6);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-medium);
-  background: var(--surface-1);
+  background: var(--surface-glass);
 }
 
 .morning-main-action-candidates {
@@ -136,7 +138,7 @@
 
 .morning-main-action-candidates label:has(input:checked) {
   border-color: var(--gold-main);
-  background: color-mix(in srgb, var(--gold-main) 7%, var(--surface-1));
+  background: var(--surface-selected);
 }
 
 .morning-main-action-candidates label > span {

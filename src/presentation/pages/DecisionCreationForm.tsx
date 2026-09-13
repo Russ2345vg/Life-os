@@ -1,3 +1,6 @@
+import { VoiceTextInput } from '../voice-input/VoiceTextInput';
+import { VoiceField } from '../voice-input/VoiceField';
+import { VoiceTextArea } from '../voice-input/VoiceTextArea';
 import type { ChangeEvent, FormEvent } from 'react';
 import {
   DECISION_KIND,
@@ -127,7 +130,7 @@ export function DecisionCreationForm({
           fieldId="decision-title"
           wide
         >
-          <input
+          <VoiceTextInput
             id="decision-title"
             value={form.title}
             disabled={isSaving}
@@ -137,14 +140,12 @@ export function DecisionCreationForm({
             aria-invalid={errors.title !== null}
             aria-describedby={errorId('decision-title', errors.title)}
             placeholder="Например: выпустить проверяемую версию LifeOS"
-            onChange={(event: ChangeEvent<HTMLInputElement>) =>
-              onChange({ ...form, title: event.target.value })
-            }
+            onValueChange={(value) => onChange({ ...form, title: value })}
           />
         </DecisionField>
 
         <DecisionField label="Причина" error={errors.reason} fieldId="decision-reason">
-          <textarea
+          <VoiceTextArea
             id="decision-reason"
             value={form.reason}
             disabled={isSaving}
@@ -153,9 +154,7 @@ export function DecisionCreationForm({
             aria-invalid={errors.reason !== null}
             aria-describedby={errorId('decision-reason', errors.reason)}
             placeholder="Почему это решение важно именно сейчас?"
-            onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
-              onChange({ ...form, reason: event.target.value })
-            }
+            onValueChange={(value) => onChange({ ...form, reason: value })}
           />
         </DecisionField>
 
@@ -164,7 +163,7 @@ export function DecisionCreationForm({
           error={errors.expectedResult}
           fieldId="decision-expected-result"
         >
-          <textarea
+          <VoiceTextArea
             id="decision-expected-result"
             value={form.expectedResult}
             disabled={isSaving}
@@ -174,9 +173,7 @@ export function DecisionCreationForm({
             aria-invalid={errors.expectedResult !== null}
             aria-describedby={errorId('decision-expected-result', errors.expectedResult)}
             placeholder="Какой наблюдаемый итог подтвердит, что решение реализовано?"
-            onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
-              onChange({ ...form, expectedResult: event.target.value })
-            }
+            onValueChange={(value) => onChange({ ...form, expectedResult: value })}
           />
         </DecisionField>
 
@@ -190,7 +187,7 @@ export function DecisionCreationForm({
           />
         </DecisionField>
 
-        <DecisionField label="Проект" error={errors.projectId} fieldId="decision-project">
+        <DecisionField label="Цель" error={errors.projectId} fieldId="decision-project">
           <select
             id="decision-project"
             value={form.projectId}
@@ -205,12 +202,12 @@ export function DecisionCreationForm({
                 projectId,
                 sphereId:
                   form.sphereId === '' && project?.sphereId !== null
-                    ? (project?.sphereId.toString() ?? '')
+                    ? (project?.sphereId?.toString() ?? '')
                     : form.sphereId,
               });
             }}
           >
-            <option value="">Без проекта</option>
+            <option value="">Без цели</option>
             {projects
               .filter((project) => project.status !== 'completed' && project.status !== 'archived')
               .map((project) => (
@@ -239,7 +236,7 @@ export function DecisionCreationForm({
         </DecisionField>
 
         <DecisionField label="Цена решения" error={errors.price} fieldId="decision-price">
-          <textarea
+          <VoiceTextArea
             id="decision-price"
             value={form.price}
             disabled={isSaving}
@@ -248,14 +245,12 @@ export function DecisionCreationForm({
             aria-invalid={errors.price !== null}
             aria-describedby={errorId('decision-price', errors.price)}
             placeholder="Время, деньги, внимание или другой ресурс"
-            onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
-              onChange({ ...form, price: event.target.value })
-            }
+            onValueChange={(value) => onChange({ ...form, price: value })}
           />
         </DecisionField>
 
         <DecisionField label="Жертвы" error={errors.sacrifices} fieldId="decision-sacrifices">
-          <textarea
+          <VoiceTextArea
             id="decision-sacrifices"
             value={form.sacrifices}
             disabled={isSaving}
@@ -264,29 +259,25 @@ export function DecisionCreationForm({
             aria-invalid={errors.sacrifices !== null}
             aria-describedby={errorId('decision-sacrifices', errors.sacrifices)}
             placeholder="От чего придётся отказаться или что отложить?"
-            onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
-              onChange({ ...form, sacrifices: event.target.value })
-            }
+            onValueChange={(value) => onChange({ ...form, sacrifices: value })}
           />
         </DecisionField>
 
         <DecisionField
-          label="Связь с проектом"
+          label="Связь с целью"
           error={errors.projectReference}
           fieldId="decision-project-reference"
           wide
         >
-          <input
+          <VoiceTextInput
             id="decision-project-reference"
             value={form.projectReference}
             disabled={isSaving}
             maxLength={200}
             aria-invalid={errors.projectReference !== null}
             aria-describedby={errorId('decision-project-reference', errors.projectReference)}
-            placeholder="Название или ссылка на проект (необязательно)"
-            onChange={(event: ChangeEvent<HTMLInputElement>) =>
-              onChange({ ...form, projectReference: event.target.value })
-            }
+            placeholder="Название или ссылка на цель (необязательно)"
+            onValueChange={(value) => onChange({ ...form, projectReference: value })}
           />
         </DecisionField>
 
@@ -319,7 +310,7 @@ interface DecisionFieldProps {
 
 function DecisionField({ label, error, fieldId, wide = false, children }: DecisionFieldProps) {
   return (
-    <label
+    <VoiceField
       className={wide ? 'decision-form-field decision-form-field-wide' : 'decision-form-field'}
     >
       <span>{label}</span>
@@ -329,7 +320,7 @@ function DecisionField({ label, error, fieldId, wide = false, children }: Decisi
           {error}
         </small>
       )}
-    </label>
+    </VoiceField>
   );
 }
 

@@ -1,3 +1,5 @@
+import { VoiceField } from '../voice-input/VoiceField';
+import { VoiceTextInput } from '../voice-input/VoiceTextInput';
 import { useEffect, useState } from 'react';
 import {
   EVENING_RECOMMENDATION_PRIORITY,
@@ -664,13 +666,13 @@ function RecommendationPreviewFields({
           <span>Сейчас</span>
           <strong>{preview.currentValue ?? 'Не задано'}</strong>
         </p>
-        <label>
+        <VoiceField>
           <span>Норма на завтра</span>
-          <input
+          <VoiceTextInput
             value={state.targetOutcome}
-            onChange={(event) => onChange({ ...state, targetOutcome: event.target.value })}
+            onValueChange={(value) => onChange({ ...state, targetOutcome: value })}
           />
-        </label>
+        </VoiceField>
       </div>
     );
   }
@@ -697,20 +699,20 @@ function RecommendationPreviewFields({
           </label>
         ) : (
           <>
-            <label>
+            <VoiceField>
               <span>Новый первый шаг</span>
-              <input
+              <VoiceTextInput
                 value={state.firstActionTitle}
-                onChange={(event) => onChange({ ...state, firstActionTitle: event.target.value })}
+                onValueChange={(value) => onChange({ ...state, firstActionTitle: value })}
               />
-            </label>
-            <label>
+            </VoiceField>
+            <VoiceField>
               <span>Ожидаемый результат</span>
-              <input
+              <VoiceTextInput
                 value={state.firstActionResult}
-                onChange={(event) => onChange({ ...state, firstActionResult: event.target.value })}
+                onValueChange={(value) => onChange({ ...state, firstActionResult: value })}
               />
-            </label>
+            </VoiceField>
           </>
         )}
       </div>

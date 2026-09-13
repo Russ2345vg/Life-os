@@ -1502,11 +1502,11 @@ export function decisionEditErrorMessage(code: string): string {
     case 'decision.main_limit_reached':
       return 'На эту дату уже назначены три главных решения';
     case 'decision.project_not_found':
-      return 'Выбранный проект не найден';
+      return 'Выбранная цель не найдена';
     case 'decision.project_unavailable':
-      return 'Завершённый или архивный проект недоступен';
+      return 'Завершённая или архивная цель недоступна';
     case 'decision.project_sphere_mismatch':
-      return 'Сфера решения должна совпадать со сферой проекта';
+      return 'Сфера решения должна совпадать со сферой цели';
     default:
       return 'Не удалось сохранить изменения';
   }

@@ -1,20 +1,19 @@
 /* Evening Center v2 — master shell and NOT_STARTED scene. */
 
 .evening-command-center-page {
-  --evening-v2-gold: #d6ad5e;
-  --evening-v2-gold-soft: #b88c42;
-  --evening-v2-cream: #f1e7d2;
-  --evening-v2-graphite: #101416;
-  --evening-v2-graphite-soft: rgb(18 22 23 / 72%);
-  --evening-v2-warm-border: rgb(211 169 91 / 31%);
+  --evening-v2-gold: var(--gold-main);
+  --evening-v2-gold-soft: var(--gold-soft);
+  --evening-v2-cream: var(--text-primary);
+  --evening-v2-graphite: var(--surface-1);
+  --evening-v2-graphite-soft: var(--surface-field);
+  --evening-v2-warm-border: var(--border-accent);
   --evening-v2-deep-shadow: 0 1.25rem 3rem rgb(0 0 0 / 34%);
   --evening-shell-header-padding-block: var(--space-3);
   --evening-shell-header-to-stepper: var(--space-2);
   --evening-shell-stepper-to-status: 1.375rem;
   --evening-shell-status-to-scene: var(--space-6);
 
-  background:
-    radial-gradient(circle at 74% 2%, rgb(214 173 94 / 7%), transparent 30rem), var(--evening-v1-bg);
+  background: transparent;
 }
 
 .evening-command-center-page .evening-command-center {
@@ -69,7 +68,7 @@
 
 .evening-command-center-page .evening-command-center-journey li {
   min-height: 3.9rem;
-  color: #737a7c;
+  color: var(--text-muted);
 }
 
 .evening-command-center-page .evening-command-center-journey li:not(:last-child)::after {
@@ -97,9 +96,9 @@
 .evening-command-center-page .evening-command-center-journey li > button > span:first-child {
   width: 2rem;
   height: 2rem;
-  color: #8b9192;
-  border-color: #3a4041;
-  background: #15191b;
+  color: var(--text-muted);
+  border-color: var(--border-soft);
+  background: var(--surface-field);
   font-size: 0.8125rem;
 }
 
@@ -110,8 +109,8 @@
   > span:first-child {
   color: var(--evening-v2-cream);
   border-color: var(--evening-v2-gold-soft);
-  background: #1b1811;
-  box-shadow: 0 0 1rem rgb(214 173 94 / 15%);
+  background: var(--surface-selected);
+  box-shadow: 0 0 1rem rgb(237 188 140 / 15%);
 }
 
 .evening-command-center-page
@@ -121,7 +120,7 @@
   > span:first-child {
   color: var(--evening-v2-cream);
   border-color: rgb(194 156 87 / 48%);
-  background: #171714;
+  background: var(--surface-field);
 }
 
 .evening-command-center-page .evening-journey-copy strong {
@@ -136,7 +135,7 @@
 }
 
 .evening-command-center-page .evening-command-center-journey li.is-complete {
-  color: #c8c1b3;
+  color: var(--text-secondary);
 }
 
 .evening-command-center-page .evening-command-center-kpis {
@@ -173,15 +172,20 @@
 .evening-command-center-page .evening-kpi-card-icon.is-ready {
   width: 2.5rem;
   height: 2.5rem;
-  color: #e2c98f;
+  color: var(--gold-soft);
   border-color: rgb(211 169 91 / 34%);
   background: rgb(29 27 22 / 70%);
   box-shadow: none;
 }
 
 .evening-command-center-page .evening-kpi-card-label {
-  color: #b8ad98;
+  color: var(--text-secondary);
   font-size: 0.75rem;
+}
+
+.evening-command-center-page .evening-kpi-card-icon.is-ready {
+  color: var(--success);
+  border-color: var(--success);
 }
 
 .evening-command-center-page .evening-kpi-card-value {
@@ -193,7 +197,7 @@
 .evening-command-center-page .evening-kpi-card-meta,
 .evening-command-center-page .evening-kpi-card[data-tone='current'] .evening-kpi-card-meta,
 .evening-command-center-page .evening-kpi-card[data-tone='ready'] .evening-kpi-card-meta {
-  color: #8d877c;
+  color: var(--text-muted);
 }
 
 .evening-command-center-page .evening-kpi-card[data-tone='current'],
@@ -233,18 +237,7 @@
   overflow: hidden;
   border: 1px solid rgb(211 169 91 / 22%);
   border-radius: var(--radius-xlarge);
-  background-image:
-    linear-gradient(
-      180deg,
-      transparent 0%,
-      transparent 64%,
-      rgb(5 8 9 / 16%) 73%,
-      rgb(5 8 9 / 38%) 86%,
-      rgb(5 8 9 / 64%) 100%
-    ),
-    linear-gradient(90deg, rgb(5 8 9 / 20%), rgb(5 8 9 / 55%) 50%, rgb(5 8 9 / 20%)),
-    linear-gradient(180deg, rgb(5 8 9 / 16%), rgb(5 8 9 / 25%) 48%, rgb(5 8 9 / 42%)),
-    url('/evening-center-v2-landscape.png');
+  background: var(--surface-glass-raised);
   background-position: center;
   background-size: cover;
   box-shadow: var(--evening-v2-deep-shadow);
@@ -252,13 +245,10 @@
 
 .evening-command-center-page .evening-not-started-card::before {
   position: absolute;
-  inset: 8% 20% 16%;
-  background: radial-gradient(
-    ellipse at center,
-    rgb(4 7 8 / 72%),
-    rgb(4 7 8 / 46%) 48%,
-    transparent 76%
-  );
+  inset: 0;
+  border-radius: inherit;
+  background: transparent;
+  backdrop-filter: blur(var(--blur-surface));
   content: '';
   pointer-events: none;
 }
@@ -285,8 +275,8 @@
   width: 2.5rem;
   height: 2.5rem;
   place-items: center;
-  color: #e2c98f;
-  filter: drop-shadow(0 0 0.35rem rgb(214 173 94 / 12%));
+  color: var(--gold-soft);
+  filter: drop-shadow(0 0 0.35rem rgb(237 188 140 / 12%));
 }
 
 .evening-command-center-page .evening-not-started-hero-copy h3 {
@@ -300,7 +290,7 @@
 
 .evening-command-center-page .evening-not-started-hero-copy p {
   margin-top: var(--space-4);
-  color: #c1c0ba;
+  color: var(--text-secondary);
   font-size: 1rem;
   line-height: 1.55;
   text-wrap: balance;
@@ -323,9 +313,9 @@
   min-width: 16.5rem;
   min-height: 3.25rem;
   padding: 0.75rem 1.2rem 0.75rem 1.35rem;
-  color: #21180c;
+  color: var(--text-on-primary);
   border: 1px solid #cfa75b;
-  background: linear-gradient(180deg, #d8b367, #c79a4c);
+  background: var(--surface-primary);
   box-shadow:
     inset 0 1px rgb(255 243 216 / 16%),
     0 0.55rem 1.4rem rgb(196 145 60 / 13%);
@@ -368,7 +358,7 @@
   align-items: center;
   gap: var(--space-2);
   margin: 0;
-  color: #aaa69d;
+  color: var(--text-secondary);
   font-size: 0.8125rem;
 }
 
@@ -376,7 +366,7 @@
   min-height: auto;
   margin-top: 0.3125rem;
   padding: var(--space-1) var(--space-2);
-  color: #7f8585;
+  color: var(--text-muted);
   background: transparent;
   box-shadow: none;
   font-size: 0.72rem;
@@ -384,14 +374,14 @@
 }
 
 .evening-command-center-page .evening-r7-skip-trigger:hover:not(:disabled) {
-  color: #9a9f9e;
+  color: var(--text-secondary);
   background: transparent;
   box-shadow: none;
   transform: none;
 }
 
 .evening-command-center-page .evening-r7-skip-trigger:focus-visible {
-  outline-color: #7f8585;
+  outline-color: var(--border-strong);
   box-shadow: none;
 }
 
@@ -422,7 +412,7 @@
   }
 
   .evening-command-center-page .evening-command-center-kpis {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .evening-command-center-page .evening-not-started-card {

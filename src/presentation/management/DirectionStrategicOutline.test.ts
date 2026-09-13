@@ -30,6 +30,7 @@ describe('Direction strategic outline', () => {
     expect(detailMarkup).toContain('Желаемое состояние');
     expect(detailMarkup).toContain('Входит');
     expect(detailMarkup).toContain('Не входит');
+    expect(cardMarkup).toContain(direction.name);
     expect(cardMarkup).toContain(direction.description);
     expect(cardMarkup).not.toContain(direction.strategicIntent);
     expect(cardMarkup).not.toContain(direction.desiredState);

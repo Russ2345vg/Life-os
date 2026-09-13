@@ -1,3 +1,5 @@
+import { VoiceField } from '../voice-input/VoiceField';
+import { VoiceTextInput } from '../voice-input/VoiceTextInput';
 import type { RoutineActionOption } from '../../application';
 import { ROUTINE_BLOCK_ASSIGNMENT, ROUTINE_BLOCK_RECURRENCE, type IsoWeekday } from '../../domain';
 import {
@@ -59,19 +61,19 @@ export function RoutineBlockForm({
           <h2 id="routine-form-title">{isEditing ? 'Редактировать блок' : 'Создать блок'}</h2>
         </header>
         <div className="routine-form-grid">
-          <label className="routine-field routine-field-wide">
+          <VoiceField className="routine-field routine-field-wide">
             <span>Название</span>
-            <input
+            <VoiceTextInput
               autoFocus
               value={form.title}
               disabled={isSaving}
               aria-invalid={errors.title === undefined ? undefined : true}
-              onChange={(event) => onChange({ ...form, title: event.target.value })}
+              onValueChange={(value) => onChange({ ...form, title: value })}
             />
             {errors.title === undefined ? null : (
               <small className="form-error">{errors.title}</small>
             )}
-          </label>
+          </VoiceField>
           <label className="routine-field">
             <span>Дата начала правила</span>
             <input

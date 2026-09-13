@@ -32,6 +32,7 @@ describe('WalkRecordMapper', () => {
     const record = WalkRecordMapper.toRecord(walk);
     expect(record).toEqual({
       schemaVersion: 1,
+      goalLinksVersion: 1,
       id: 'walk-mapper',
       date: '2026-08-08',
       type: WALK_TYPE.reflection,

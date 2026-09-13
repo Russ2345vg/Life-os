@@ -1,5 +1,6 @@
 import type {
   ActionSessionRepository,
+  SyncApplication,
   Clock,
   CompleteCurrentDay,
   CompleteEveningCycle,
@@ -147,6 +148,7 @@ import type {
   CreateGoal,
   UpdateGoal,
   ArchiveGoal,
+  DeletePilotGoal,
   GetGoalById,
   GetGoals,
   ApplyDirectionStrategicReview,
@@ -173,8 +175,11 @@ import type {
 } from '../../application';
 import { EnsureCurrentDay } from '../../application';
 import type { Day, DayDate } from '../../domain';
+import type { BrowserLocalSettingsStore } from '../settings/BrowserLocalSettingsStore';
 
 interface LifeOsApplicationServices {
+  readonly sync: SyncApplication;
+  readonly localSettings: BrowserLocalSettingsStore;
   readonly dayRepository: DayRepository;
   readonly decisionRepository: DecisionRepository;
   readonly lifeActionRepository: LifeActionRepository;
@@ -347,12 +352,15 @@ interface LifeOsApplicationServices {
   readonly createGoal: CreateGoal;
   readonly updateGoal: UpdateGoal;
   readonly archiveGoal: ArchiveGoal;
+  readonly deletePilotGoal: DeletePilotGoal;
   readonly getGoalById: GetGoalById;
   readonly getGoals: GetGoals;
   readonly closeDatabase: () => void;
 }
 
 export class LifeOsApplication {
+  public readonly sync: SyncApplication;
+  public readonly localSettings: BrowserLocalSettingsStore;
   public readonly dayRepository: DayRepository;
   public readonly decisionRepository: DecisionRepository;
   public readonly lifeActionRepository: LifeActionRepository;
@@ -525,12 +533,15 @@ export class LifeOsApplication {
   public readonly createGoal: CreateGoal;
   public readonly updateGoal: UpdateGoal;
   public readonly archiveGoal: ArchiveGoal;
+  public readonly deletePilotGoal: DeletePilotGoal;
   public readonly getGoalById: GetGoalById;
   public readonly getGoals: GetGoals;
 
   readonly #closeDatabase: () => void;
 
   public constructor(services: LifeOsApplicationServices) {
+    this.sync = services.sync;
+    this.localSettings = services.localSettings;
     this.dayRepository = services.dayRepository;
     this.decisionRepository = services.decisionRepository;
     this.lifeActionRepository = services.lifeActionRepository;
@@ -703,12 +714,14 @@ export class LifeOsApplication {
     this.createGoal = services.createGoal;
     this.updateGoal = services.updateGoal;
     this.archiveGoal = services.archiveGoal;
+    this.deletePilotGoal = services.deletePilotGoal;
     this.getGoalById = services.getGoalById;
     this.getGoals = services.getGoals;
     this.#closeDatabase = services.closeDatabase;
   }
 
   public close(): void {
+    void this.sync.close();
     this.#closeDatabase();
   }
 }

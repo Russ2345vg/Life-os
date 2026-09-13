@@ -1,3 +1,5 @@
+import { VoiceField } from '../voice-input/VoiceField';
+import { VoiceTextArea } from '../voice-input/VoiceTextArea';
 import { useEffect, useRef, type RefObject } from 'react';
 import {
   REFLECTION_QUESTION_KIND,
@@ -180,17 +182,17 @@ function ReflectionFollowUp({
       <details>
         <summary>Использовать этот вывод завтра?</summary>
         <div className="evening-reflection-correction">
-          <label>
+          <VoiceField>
             <span>Корректировка</span>
-            <textarea
+            <VoiceTextArea
               rows={2}
               maxLength={2000}
               value={correctionAction}
               disabled={disabled}
               placeholder="Перед рабочей сессией убирать телефон со стола"
-              onChange={(event) => onCorrectionActionChange(event.target.value)}
+              onValueChange={(value) => onCorrectionActionChange(value)}
             />
-          </label>
+          </VoiceField>
           <button
             className="secondary-button"
             type="button"
@@ -351,32 +353,32 @@ function ReflectionQuestionCard({
       ) : null}
 
       {isGeneralLearningChoice && draft.yesNo === true ? (
-        <label className="evening-reflection-text evening-reflection-insight-field">
+        <VoiceField className="evening-reflection-text evening-reflection-insight-field">
           <span>Вывод дня</span>
-          <textarea
+          <VoiceTextArea
             className="evening-reflection-insight-textarea"
             rows={2}
             maxLength={2000}
             value={draft.text}
             disabled={disabled}
             placeholder="Коротко сформулируйте вывод дня"
-            onChange={(event) => onDraftChange({ ...draft, text: event.target.value })}
+            onValueChange={(value) => onDraftChange({ ...draft, text: value })}
           />
-        </label>
+        </VoiceField>
       ) : null}
 
       {isText ? (
-        <label className="evening-reflection-text">
+        <VoiceField className="evening-reflection-text">
           <span>{question.required ? 'Короткий вывод' : 'Ответ — по желанию'}</span>
-          <textarea
+          <VoiceTextArea
             rows={3}
             maxLength={2000}
             value={draft.text}
             disabled={disabled}
             placeholder="Записать короткий вывод…"
-            onChange={(event) => onDraftChange({ ...draft, text: event.target.value })}
+            onValueChange={(value) => onDraftChange({ ...draft, text: value })}
           />
-        </label>
+        </VoiceField>
       ) : null}
 
       <footer className="evening-reflection-actions">

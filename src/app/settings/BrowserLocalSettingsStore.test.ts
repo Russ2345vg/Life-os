@@ -155,6 +155,44 @@ describe('BrowserLocalSettingsStore', () => {
     expect(store.load().settings).toEqual(CUSTOM_SETTINGS);
   });
 
+  it('уведомляет sync bridge после успешного локального изменения meaningful settings', () => {
+    const storage = new MemoryStorage();
+    let notifications = 0;
+    const store = new BrowserLocalSettingsStore(storage, () => {
+      notifications += 1;
+    });
+
+    expect(store.save(CUSTOM_SETTINGS)).toBe(true);
+    expect(store.reset()).toBe(true);
+    expect(notifications).toBe(2);
+  });
+
+  it('применяет удалённый Evening Ritual без echo и сохраняет локальные UI-предпочтения', () => {
+    const storage = new MemoryStorage();
+    let notifications = 0;
+    const store = new BrowserLocalSettingsStore(storage, () => {
+      notifications += 1;
+    });
+    let externalChanges = 0;
+    store.subscribe(() => {
+      externalChanges += 1;
+    });
+    store.save(CUSTOM_SETTINGS);
+    externalChanges = 0;
+    const remoteEveningRitual = {
+      ...DEFAULT_LOCAL_SETTINGS.eveningRitual,
+      notificationEnabled: true,
+    };
+
+    expect(store.applyEveningRitualFromSync(remoteEveningRitual)).toBe(true);
+    expect(store.load().settings).toEqual({
+      ...CUSTOM_SETTINGS,
+      eveningRitual: remoteEveningRitual,
+    });
+    expect(notifications).toBe(1);
+    expect(externalChanges).toBe(1);
+  });
+
   it('отбрасывает повреждённые и неполные настройки', () => {
     const storage = new MemoryStorage();
     storage.setItem(

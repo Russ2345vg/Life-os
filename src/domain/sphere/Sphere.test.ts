@@ -10,7 +10,7 @@ describe('Sphere', () => {
     const sphere = Sphere.create({
       id: EntityId.create('sphere-creativity'),
       name: '  Моё   творчество  ',
-      description: '  Личные проекты  ',
+      description: '  Личные цели  ',
       icon: '  🎨  ',
       color: '#AABBCC',
       now: NOW,
@@ -18,7 +18,7 @@ describe('Sphere', () => {
 
     expect(sphere).toMatchObject({
       name: 'Моё творчество',
-      description: 'Личные проекты',
+      description: 'Личные цели',
       icon: '🎨',
       color: '#aabbcc',
       status: SPHERE_STATUS.active,

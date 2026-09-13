@@ -1,0 +1,133 @@
+/* A separate grid column reserves space for any number of end actions; no text overlay. */
+span.voice-text-control {
+  display: block;
+  min-width: 0;
+  width: 100%;
+  color: var(--text-primary);
+  /* Existing label > span caption selectors must not restyle the field wrapper. */
+  font: inherit !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+}
+
+.voice-text-control > .voice-text-control-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.voice-text-control-row > :is(input, textarea) {
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+}
+
+.voice-text-control .voice-text-actions {
+  display: flex;
+  align-items: center;
+  align-self: center;
+  gap: var(--space-1);
+}
+
+.voice-text-control[data-multiline='true'] .voice-text-actions {
+  align-self: start;
+}
+
+.voice-text-control .voice-input-button {
+  position: relative;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  min-width: calc(var(--space-8) + var(--space-3));
+  min-height: calc(var(--space-8) + var(--space-3));
+  width: calc(var(--space-8) + var(--space-3));
+  height: calc(var(--space-8) + var(--space-3));
+  padding: var(--space-2);
+  margin: 0;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-small);
+  color: var(--text-secondary);
+  background: var(--surface-glass);
+  box-shadow: none;
+  cursor: pointer;
+  transition:
+    color var(--motion-fast),
+    background var(--motion-fast);
+}
+
+.voice-text-control .voice-input-button:hover:not([aria-disabled='true']) {
+  color: var(--gold-soft);
+  background: var(--surface-hover);
+}
+.voice-text-control .voice-input-button:focus-visible {
+  outline: 2px solid var(--gold-soft);
+  outline-offset: 2px;
+}
+.voice-text-control .voice-input-button[data-voice-state='listening'] {
+  color: var(--gold-main);
+  border-color: var(--gold-main);
+}
+.voice-text-control .voice-input-button[data-voice-state='success'] {
+  color: var(--success);
+}
+.voice-text-control .voice-input-button[data-voice-state='error'] {
+  color: var(--danger);
+}
+.voice-text-control .voice-input-button[aria-disabled='true'] {
+  cursor: default;
+  opacity: 0.65;
+}
+.voice-text-control .voice-input-button[data-voice-state='listening'] svg {
+  animation: voice-listening var(--motion-feedback) ease-in-out infinite alternate;
+}
+.voice-text-control .voice-text-feedback {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  white-space: normal;
+}
+.voice-text-control .voice-text-feedback:empty {
+  display: none;
+}
+.voice-text-control .voice-text-feedback[role='alert'] {
+  color: var(--color-error);
+}
+@keyframes voice-listening {
+  to {
+    opacity: 0.55;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .voice-text-control .voice-input-button,
+  .voice-text-control .voice-input-button[data-voice-state='listening'] svg {
+    animation: none;
+    transition: none;
+  }
+}
+
+/* Same data-tooltip + hover/focus convention as the collapsed LifeOS navigation. */
+.voice-input-button::after {
+  position: absolute;
+  z-index: 40;
+  right: 0;
+  bottom: calc(100% + var(--space-1));
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-small);
+  background: var(--surface-glass-overlay);
+  box-shadow: var(--shadow-soft);
+  color: var(--text-primary);
+  content: attr(data-tooltip);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+}
+.voice-input-button:hover::after,
+.voice-input-button:focus-visible::after {
+  opacity: 1;
+}

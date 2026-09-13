@@ -1,3 +1,6 @@
+import { VoiceField } from '../voice-input/VoiceField';
+import { VoiceTextInput } from '../voice-input/VoiceTextInput';
+import { VoiceTextArea } from '../voice-input/VoiceTextArea';
 import {
   useCallback,
   useEffect,
@@ -434,24 +437,24 @@ export function TomorrowComposer({
                 ) : null}
                 {isCreatingPrimary ? (
                   <div className="tomorrow-inline-editor">
-                    <label>
+                    <VoiceField>
                       <span>Решение</span>
-                      <input
+                      <VoiceTextInput
                         value={newPrimaryTitle}
                         disabled={saving}
-                        onChange={(event) => setNewPrimaryTitle(event.target.value)}
+                        onValueChange={(value) => setNewPrimaryTitle(value)}
                         placeholder="Что важно завершить?"
                       />
-                    </label>
-                    <label>
+                    </VoiceField>
+                    <VoiceField>
                       <span>Ожидаемый результат</span>
-                      <textarea
+                      <VoiceTextArea
                         rows={2}
                         value={newPrimaryResult}
                         disabled={saving}
-                        onChange={(event) => setNewPrimaryResult(event.target.value)}
+                        onValueChange={(value) => setNewPrimaryResult(value)}
                       />
-                    </label>
+                    </VoiceField>
                   </div>
                 ) : null}
               </section>
@@ -489,23 +492,23 @@ export function TomorrowComposer({
                     </button>
                   ))}
                 </div>
-                <label className="tomorrow-active-outcome-field">
+                <VoiceField className="tomorrow-active-outcome-field">
                   <span className="sr-only">
                     Граница результата — {workingForm.activeOutcome.label}
                   </span>
-                  <textarea
+                  <VoiceTextArea
                     rows={1}
                     aria-label={`Граница результата — ${workingForm.activeOutcome.label}`}
                     value={workingForm.activeOutcome.value}
                     disabled={saving || workingForm.followingBlocksDisabled}
-                    onChange={(event) => {
-                      if (selectedOutcomeLevel === 'minimum') setMinimum(event.target.value);
-                      else if (selectedOutcomeLevel === 'target') setTarget(event.target.value);
-                      else setStretch(event.target.value);
+                    onValueChange={(value) => {
+                      if (selectedOutcomeLevel === 'minimum') setMinimum(value);
+                      else if (selectedOutcomeLevel === 'target') setTarget(value);
+                      else setStretch(value);
                     }}
                     placeholder={outcomeLevelPlaceholder(selectedOutcomeLevel)}
                   />
-                </label>
+                </VoiceField>
               </section>
             ) : null}
 
@@ -541,25 +544,25 @@ export function TomorrowComposer({
                 ) : null}
                 {firstActionId.length === 0 ? (
                   <div className="tomorrow-inline-editor tomorrow-action-editor">
-                    <label className="tomorrow-action-main-field">
+                    <VoiceField className="tomorrow-action-main-field">
                       <span>Конкретное первое действие</span>
-                      <input
+                      <VoiceTextInput
                         value={newActionTitle}
                         disabled={saving || !primaryReady}
-                        onChange={(event) => setNewActionTitle(event.target.value)}
+                        onValueChange={(value) => setNewActionTitle(value)}
                         placeholder="Конкретное действие для старта завтра"
                       />
-                    </label>
-                    <label className="tomorrow-action-result-field">
+                    </VoiceField>
+                    <VoiceField className="tomorrow-action-result-field">
                       <span>Ожидаемый результат</span>
-                      <textarea
+                      <VoiceTextArea
                         rows={1}
                         value={newActionResult}
                         disabled={saving || !primaryReady}
-                        onChange={(event) => setNewActionResult(event.target.value)}
+                        onValueChange={(value) => setNewActionResult(value)}
                         placeholder="Что должно измениться после первого шага?"
                       />
-                    </label>
+                    </VoiceField>
                   </div>
                 ) : (
                   <div className="tomorrow-first-action-selected">
@@ -611,7 +614,7 @@ export function TomorrowComposer({
                     const isCreating = creatingSupportingSlots[index] === true;
                     return isCreating ? (
                       <div className="tomorrow-supporting-row is-empty" key={`draft-${index}`}>
-                        <input
+                        <VoiceTextInput
                           aria-label={
                             index === 0
                               ? 'Новое дополнительное решение'
@@ -619,7 +622,7 @@ export function TomorrowComposer({
                           }
                           value={title}
                           disabled={saving || workingForm.followingBlocksDisabled}
-                          onChange={(event) => setTitle(event.target.value)}
+                          onValueChange={(value) => setTitle(value)}
                           placeholder="Название решения"
                         />
                         <button

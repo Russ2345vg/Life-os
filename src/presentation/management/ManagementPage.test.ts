@@ -13,10 +13,10 @@ import { projectStatusLabel } from './projectPresentation';
 const NOW = new Date('2026-08-10T08:00:00.000Z');
 
 describe('Management workspace', () => {
-  it('предоставляет прямой доступ ко всем шести подразделам', () => {
+  it('оставляет один Альбом целей вместо отдельного раздела проектов', () => {
     const markup = renderToStaticMarkup(
       createElement(ManagementNavigation, {
-        activeSection: MANAGEMENT_SECTION.projects,
+        activeSection: MANAGEMENT_SECTION.goals,
         onOpenSection: vi.fn(),
       }),
     );
@@ -26,7 +26,8 @@ describe('Management workspace', () => {
     expect(markup).not.toContain('<small>');
     expect(markup).toContain('Обзор');
     expect(markup).toContain('Направления');
-    expect(markup).toContain('Проекты');
+    expect(markup).not.toContain('Проекты');
+    expect(markup).toContain('Альбом целей');
     expect(markup).toContain('Решения');
     expect(markup).toContain('Действия');
     expect(markup).toContain('День');
@@ -46,7 +47,7 @@ describe('Management workspace', () => {
     }).archive(new Date('2026-08-10T09:00:00.000Z'));
     const activeProject = Project.create({
       id: EntityId.create('project-active'),
-      title: 'Активный проект',
+      title: 'Активный цель',
       now: NOW,
     });
     const pausedProject = Project.create({
@@ -56,7 +57,7 @@ describe('Management workspace', () => {
     }).pause(new Date('2026-08-10T09:00:00.000Z'));
     const archivedProject = Project.create({
       id: EntityId.create('project-archived'),
-      title: 'Архивный проект',
+      title: 'Архивную цель',
       now: NOW,
     }).archive(new Date('2026-08-10T09:00:00.000Z'));
 
@@ -93,7 +94,7 @@ describe('Management workspace', () => {
               projectId: null,
               decisionId: null,
               title: 'Фокус не определён',
-              detail: 'Нет главного проекта или главного направления.',
+              detail: 'Нет главной цели или главного направления.',
             },
           ],
         },
@@ -133,7 +134,7 @@ describe('Management workspace', () => {
       }),
     );
 
-    expect(markup).toContain('Критичных сигналов нет');
+    expect(markup).toContain('Нет сигналов, требующих внимания');
     expect(markup).toContain('role="status"');
   });
 
@@ -152,14 +153,14 @@ describe('Management workspace', () => {
     expect(markup).not.toContain('management-day-card');
   });
 
-  it('показывает существующие статусы проектов без расчёта прогресса', () => {
+  it('показывает существующие статусы целей без расчёта прогресса', () => {
     expect(projectStatusLabel(PROJECT_STATUS.active)).toBe('Активный');
     expect(projectStatusLabel(PROJECT_STATUS.paused)).toBe('Приостановлен');
     expect(projectStatusLabel(PROJECT_STATUS.completed)).toBe('Завершён');
     expect(projectStatusLabel(PROJECT_STATUS.archived)).toBe('Архив');
   });
 
-  it('выбирает главный проект раньше главного направления и сохраняет fallback', () => {
+  it('выбирает главная цель раньше главного направления и сохраняет fallback', () => {
     const mainDirection = Direction.create({
       id: EntityId.create('direction-main'),
       name: 'Развитие LifeOS',

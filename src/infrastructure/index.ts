@@ -44,6 +44,8 @@ export { InMemoryPreparationRuleRepository } from './persistence/InMemoryPrepara
 export {
   LIFE_OS_DATABASE_NAME,
   LIFE_OS_DATABASE_VERSION,
+  LIFE_OS_DOMAIN_STORE,
+  LIFE_OS_SYNC_STORE,
   LIFE_OS_STORE,
   LifeOsIndexedDb,
 } from './persistence/indexed-db/LifeOsIndexedDb';
@@ -83,6 +85,16 @@ export type {
   RoutineOccurrenceExecutionRecord,
   WalkRecord,
   SphereRecord,
+  SyncAppliedEventRecord,
+  SyncAttachmentQueueRecord,
+  SyncConflictRecord,
+  SyncCursorRecord,
+  SyncDeviceCacheRecord,
+  SyncObjectMetaRecord,
+  SyncOutboxRecord,
+  SyncQuarantineRecord,
+  SyncSettingsRecord,
+  SyncSnapshotMetaRecord,
   TomorrowPlanRecord,
   PreparationItemRecord,
   PreparationPlanRecord,
@@ -94,3 +106,28 @@ export { ExerciseDefinitionRecordMapper } from './persistence/mappers/ExerciseDe
 export type { ExerciseDefinitionRecord } from './persistence/records/ExerciseDefinitionRecord';
 export { IndexedDbWalkCaptureRepository } from './persistence/IndexedDbWalkCaptureRepository';
 export { WalkCaptureRecordMapper } from './persistence/mappers/WalkCaptureRecordMapper';
+export { IndexedDbSnapshotService } from './sync/IndexedDbSnapshotService';
+export { IndexedDbPilotDeleteRepository } from './sync/pilot/IndexedDbPilotDeleteRepository';
+export { IndexedDbPilotMutationRecorder } from './sync/pilot/IndexedDbPilotMutationRecorder';
+export { IndexedDbPilotSyncStore } from './sync/pilot/IndexedDbPilotSyncStore';
+export { PilotBootstrapService } from './sync/pilot/PilotBootstrapService';
+export { SupabasePilotSyncTransport } from './sync/supabase/SupabasePilotSyncTransport';
+export { LIFE_OS_SYNC_REGISTRY, LIFE_OS_SYNC_REGISTRY_CONTRACT } from './sync/LifeOsSyncRegistry';
+export {
+  LIFE_OS_LOCAL_STORAGE_POLICY,
+  LIFE_OS_LOCAL_STORAGE_SYNC_ALLOWLIST,
+  classifyLifeOsLocalStorageKey,
+  projectMeaningfulLocalSettings,
+  type LifeOsLocalStoragePolicyEntry,
+  type LocalStorageSyncClassification,
+  type MeaningfulLocalSettingsSnapshot,
+} from './sync/LifeOsLocalStoragePolicy';
+export {
+  readSupabasePublicConfig,
+  type SupabasePublicConfig,
+  type SupabasePublicEnvironment,
+} from './sync/supabase/SupabaseConfig';
+export {
+  createLifeOsSupabaseClient,
+  type SupabaseClientDependencies,
+} from './sync/supabase/createLifeOsSupabaseClient';

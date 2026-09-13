@@ -1,3 +1,6 @@
+import { VoiceField } from '../voice-input/VoiceField';
+import { VoiceTextInput } from '../voice-input/VoiceTextInput';
+import { VoiceTextArea } from '../voice-input/VoiceTextArea';
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import {
   ArchiveProject,
@@ -268,7 +271,7 @@ export function ProjectsSection(props: ProjectsSectionProps) {
         return;
       }
       setDecisionFormOpen(false);
-      setMessage('Решение создано и связано с проектом.');
+      setMessage('Решение создано и связано с целью.');
       await load();
     } catch {
       setDecisionErrors({
@@ -308,11 +311,11 @@ export function ProjectsSection(props: ProjectsSectionProps) {
       setFormOpen(false);
       setEditing(null);
       setDraft(EMPTY_DRAFT);
-      setMessage(wasCreating ? 'Проект создан.' : 'Проект обновлён.');
+      setMessage(wasCreating ? 'Цель создана.' : 'Цель обновлена.');
       await load();
       if (wasCreating) props.onOpenProject(result.value.id.toString());
     } catch {
-      setError('Не удалось сохранить проект. Повторите попытку.');
+      setError('Не удалось сохранить цель. Повторите попытку.');
     } finally {
       setSaving(false);
     }
@@ -322,9 +325,9 @@ export function ProjectsSection(props: ProjectsSectionProps) {
     if (busyId !== null) return;
     if (
       (action === 'complete' &&
-        !window.confirm('Завершить проект? Он останется в истории и перестанет быть главным.')) ||
+        !window.confirm('Завершить цель? Она останется в истории и перестанет быть главной.')) ||
       (action === 'archive' &&
-        !window.confirm('Архивировать проект? Его можно будет восстановить из архива.'))
+        !window.confirm('Архивировать цель? Его можно будет восстановить из архива.'))
     ) {
       return;
     }
@@ -352,7 +355,7 @@ export function ProjectsSection(props: ProjectsSectionProps) {
       setMessage(actionMessage(action));
       await load();
     } catch {
-      setError('Не удалось изменить проект. Повторите попытку.');
+      setError('Не удалось изменить цель. Повторите попытку.');
     } finally {
       setBusyId(null);
     }
@@ -361,7 +364,7 @@ export function ProjectsSection(props: ProjectsSectionProps) {
   if (props.selectedProjectId !== null) {
     return (
       <main className="section-page project-detail-page">
-        {state.status === 'loading' ? <p role="status">Загружаем проект…</p> : null}
+        {state.status === 'loading' ? <p role="status">Загружаем цель…</p> : null}
         {state.status === 'error' || (state.status === 'ready' && selectedProject === null) ? (
           <ProjectLoadError onBack={props.onBack} onRetry={() => void load()} />
         ) : null}
@@ -422,16 +425,16 @@ export function ProjectsSection(props: ProjectsSectionProps) {
     <main className="section-page projects-page">
       <SectionPageHeader
         eyebrow="Управление · Курс"
-        title="Проекты"
+        title="Цели"
         description="Ограниченная работа с конкретным завершённым результатом."
         action={
           <button className="primary-button" type="button" onClick={openCreate}>
-            + Новый проект
+            + Новая цель
           </button>
         }
       />
 
-      <div className="project-filters" role="group" aria-label="Фильтр проектов">
+      <div className="project-filters" role="group" aria-label="Фильтр целей">
         {FILTERS.map((item) => (
           <button
             key={item.value}
@@ -450,10 +453,10 @@ export function ProjectsSection(props: ProjectsSectionProps) {
           {error}
         </p>
       ) : null}
-      {state.status === 'loading' ? <p role="status">Загружаем проекты…</p> : null}
+      {state.status === 'loading' ? <p role="status">Загружаем цели…</p> : null}
       {state.status === 'error' ? (
         <div className="section-page-error" role="alert">
-          <p>Не удалось загрузить проекты.</p>
+          <p>Не удалось загрузить цели.</p>
           <button className="secondary-button" type="button" onClick={() => void load()}>
             Повторить
           </button>
@@ -504,7 +507,7 @@ function ProjectGroups(props: {
   if (props.projects.length === 0) return <EmptyProjects onCreate={props.onCreate} />;
   const groups = buildGroups(props.projects, props.filter);
   if (groups.length === 0) {
-    return <p className="project-filter-empty">В этой категории пока нет проектов.</p>;
+    return <p className="project-filter-empty">В этой категории пока нет целей.</p>;
   }
   return (
     <div className="project-groups">
@@ -553,7 +556,7 @@ export function ProjectCard(props: {
         <span className="project-card-heading">
           <strong>{props.project.title}</strong>
           {props.project.isMain ? (
-            <span className="project-card-star" aria-label="Главный проект">
+            <span className="project-card-star" aria-label="Главная цель">
               ★
             </span>
           ) : null}
@@ -613,7 +616,7 @@ function ProjectMenu(props: {
         ) : null}
         {project.status === PROJECT_STATUS.active || project.status === PROJECT_STATUS.paused ? (
           <MenuButton disabled={props.busy} onClick={() => props.onAction(project, 'complete')}>
-            Завершить проект
+            Завершить цель
           </MenuButton>
         ) : null}
         {project.status === PROJECT_STATUS.archived ? (
@@ -668,11 +671,11 @@ export function ProjectDetails(props: {
       </button>
       <header className="project-detail-header">
         <div>
-          <p className="section-page-eyebrow">Управление · Проект</p>
+          <p className="section-page-eyebrow">Управление · Цель</p>
           <h1>{props.project.title}</h1>
           <div className="project-detail-badges">
             {props.project.isMain ? (
-              <span className="project-main-badge">★ Главный проект</span>
+              <span className="project-main-badge">★ Главная цель</span>
             ) : null}
             <span className="management-status">{projectStatusLabel(props.project.status)}</span>
           </div>
@@ -712,77 +715,14 @@ export function ProjectDetails(props: {
           <DetailBlock title="Описание">
             <p>{props.project.description ?? 'Описание пока не добавлено.'}</p>
           </DetailBlock>
-          <DetailBlock title="Решения">
-            {(props.decisions ?? []).filter((decision) => !decision.isDeleted()).length === 0 ? (
-              <p>Связанных решений пока нет.</p>
-            ) : (
-              <ul className="project-decision-list">
-                {(props.decisions ?? [])
-                  .filter((decision) => !decision.isDeleted())
-                  .map((decision) => (
-                    <li key={decision.id.toString()}>
-                      <strong>{decision.title.toString()}</strong>
-                      <span>{decision.plannedDate?.toString() ?? 'Без даты'}</span>
-                    </li>
-                  ))}
-              </ul>
-            )}
-          </DetailBlock>
-          <DetailBlock title="Действия">
-            {(props.lifeActions ?? []).length === 0 ? (
-              <p>У решений проекта пока нет действий.</p>
-            ) : (
-              <ul className="project-decision-list">
-                {(props.lifeActions ?? []).map((lifeAction) => (
-                  <li key={lifeAction.id.toString()}>
-                    <strong>{lifeAction.title.toString()}</strong>
-                    <span>
-                      {lifeActionStatusLabel(lifeAction.status)} ·{' '}
-                      {lifeAction.plannedDate?.toString() ?? 'Без даты'}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </DetailBlock>
-          <DetailBlock title="Итог проекта">
-            <dl className="project-summary">
-              <ProjectSummaryItem label="Решений" value={summary.decisionCount.toString()} />
-              <ProjectSummaryItem
-                label="Выполненных действий"
-                value={summary.completedLifeActionCount.toString()}
-              />
-              <ProjectSummaryItem
-                label="Завершённых сессий"
-                value={summary.completedActionSessionCount.toString()}
-              />
-              <ProjectSummaryItem
-                label="Время действия"
-                value={formatActionDuration(summary.totalActionDurationMs)}
-              />
-            </dl>
-          </DetailBlock>
-          <DetailBlock title="История">
-            {(props.history ?? []).length === 0 ? (
-              <p>Событий проекта пока нет.</p>
-            ) : (
-              <ol className="project-history-list">
-                {(props.history ?? []).map((event) => (
-                  <li key={event.id}>
-                    <time dateTime={event.occurredAt.toISOString()}>
-                      {formatHistoryDate(event.occurredAt)}
-                    </time>
-                    <span>
-                      <strong>{projectHistoryEventLabel(event)}</strong>
-                      <small>{event.subjectTitle}</small>
-                    </span>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </DetailBlock>
+          <ProjectActivity
+            decisions={props.decisions}
+            lifeActions={props.lifeActions}
+            history={props.history}
+            summary={summary}
+          />
         </div>
-        <aside className="project-detail-context" aria-label="Контекст проекта">
+        <aside className="project-detail-context" aria-label="Контекст цели">
           <div>
             <span>Направление</span>
             {direction === null ? (
@@ -807,6 +747,89 @@ export function ProjectDetails(props: {
   );
 }
 
+export function ProjectActivity(props: {
+  readonly decisions?: readonly Decision[] | undefined;
+  readonly lifeActions?: readonly LifeAction[] | undefined;
+  readonly history?: readonly ProjectHistoryEvent[] | undefined;
+  readonly summary?: ProjectHistorySummary | undefined;
+}) {
+  const summary = props.summary ?? EMPTY_PROJECT_SUMMARY;
+  return (
+    <>
+      {' '}
+      <DetailBlock title="Решения">
+        {(props.decisions ?? []).filter((decision) => !decision.isDeleted()).length === 0 ? (
+          <p>Связанных решений пока нет.</p>
+        ) : (
+          <ul className="project-decision-list">
+            {(props.decisions ?? [])
+              .filter((decision) => !decision.isDeleted())
+              .map((decision) => (
+                <li key={decision.id.toString()}>
+                  <strong>{decision.title.toString()}</strong>
+                  <span>{decision.plannedDate?.toString() ?? 'Без даты'}</span>
+                </li>
+              ))}
+          </ul>
+        )}
+      </DetailBlock>
+      <DetailBlock title="Действия">
+        {(props.lifeActions ?? []).length === 0 ? (
+          <p>У решений цели пока нет действий.</p>
+        ) : (
+          <ul className="project-decision-list">
+            {(props.lifeActions ?? []).map((lifeAction) => (
+              <li key={lifeAction.id.toString()}>
+                <strong>{lifeAction.title.toString()}</strong>
+                <span>
+                  {lifeActionStatusLabel(lifeAction.status)} ·{' '}
+                  {lifeAction.plannedDate?.toString() ?? 'Без даты'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </DetailBlock>
+      <DetailBlock title="Итог цели">
+        <dl className="project-summary">
+          <ProjectSummaryItem label="Решений" value={summary.decisionCount.toString()} />
+          <ProjectSummaryItem
+            label="Выполненных действий"
+            value={summary.completedLifeActionCount.toString()}
+          />
+          <ProjectSummaryItem
+            label="Завершённых сессий"
+            value={summary.completedActionSessionCount.toString()}
+          />
+          <ProjectSummaryItem
+            label="Время действия"
+            value={formatActionDuration(summary.totalActionDurationMs)}
+          />
+        </dl>
+      </DetailBlock>
+      <DetailBlock title="История">
+        {(props.history ?? []).length === 0 ? (
+          <p>Событий цели пока нет.</p>
+        ) : (
+          <ol className="project-history-list">
+            {(props.history ?? []).map((event) => (
+              <li key={event.id}>
+                <time dateTime={event.occurredAt.toISOString()}>
+                  {formatHistoryDate(event.occurredAt)}
+                </time>
+                <span>
+                  <strong>{projectHistoryEventLabel(event)}</strong>
+                  <small>{event.subjectTitle}</small>
+                </span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </DetailBlock>
+    </>
+  );
+}
+
 function ProjectSummaryItem(props: { readonly label: string; readonly value: string }) {
   return (
     <div>
@@ -819,7 +842,7 @@ function ProjectSummaryItem(props: { readonly label: string; readonly value: str
 function projectHistoryEventLabel(event: ProjectHistoryEvent): string {
   switch (event.kind) {
     case PROJECT_HISTORY_EVENT_KIND.projectCreated:
-      return 'Создан проект';
+      return 'Создана цель';
     case PROJECT_HISTORY_EVENT_KIND.decisionCreated:
       return 'Создано решение';
     case PROJECT_HISTORY_EVENT_KIND.lifeActionCompleted:
@@ -829,7 +852,7 @@ function projectHistoryEventLabel(event: ProjectHistoryEvent): string {
     case PROJECT_HISTORY_EVENT_KIND.decisionConfirmed:
       return 'Подтверждено решение';
     case PROJECT_HISTORY_EVENT_KIND.projectStatusChanged:
-      return `Изменён статус проекта: ${projectStatusLabel(
+      return `Изменён статус цели: ${projectStatusLabel(
         event.projectStatus ?? PROJECT_STATUS.active,
       )}`;
   }
@@ -870,7 +893,7 @@ function DetailBlock(props: {
 function ProjectLoadError(props: { readonly onBack: () => void; readonly onRetry: () => void }) {
   return (
     <div className="section-page-error" role="alert">
-      <p>Не удалось открыть проект. Возможно, он больше недоступен.</p>
+      <p>Не удалось открыть цель. Возможно, она больше недоступна.</p>
       <div className="management-form-actions">
         <button className="secondary-button" type="button" onClick={props.onBack}>
           Назад
@@ -895,7 +918,7 @@ function ProjectFormDialog(props: ProjectFormProps) {
         <button
           className="management-dialog-close"
           type="button"
-          aria-label="Закрыть форму проекта"
+          aria-label="Закрыть форму цели"
           disabled={props.saving}
           onClick={props.onCancel}
         >
@@ -936,30 +959,28 @@ export function ProjectForm(props: ProjectFormProps) {
       <div className="management-form-heading premium-form-heading">
         <div>
           <p className="section-page-eyebrow premium-form-eyebrow">
-            {props.mode === 'create' ? 'Новый проект' : 'Редактирование'}
+            {props.mode === 'create' ? 'Новая цель' : 'Редактирование'}
           </p>
           <h2 id="project-form-title">
-            {props.mode === 'create' ? 'Создать проект' : 'Изменить проект'}
+            {props.mode === 'create' ? 'Создать цель' : 'Изменить цель'}
           </h2>
           <p className="premium-form-intro">
-            Сформулируйте конкретный результат и привяжите проект к нужному контексту.
+            Сформулируйте конкретный результат и привяжите цель к нужному контексту.
           </p>
         </div>
       </div>
       <div className="management-form-grid premium-form-grid">
-        <label className="management-field management-field-wide" htmlFor="project-title">
+        <VoiceField className="management-field management-field-wide" htmlFor="project-title">
           <span>Название</span>
-          <input
+          <VoiceTextInput
             id="project-title"
             required
             autoFocus
             maxLength={MAX_PROJECT_TITLE_LENGTH}
             value={props.draft.title}
-            onChange={(event) =>
-              props.onChange({ ...props.draft, title: event.currentTarget.value })
-            }
+            onValueChange={(value) => props.onChange({ ...props.draft, title: value })}
           />
-        </label>
+        </VoiceField>
         <label className="management-field" htmlFor="project-direction">
           <span>
             Направление <small>необязательно</small>
@@ -1011,34 +1032,36 @@ export function ProjectForm(props: ProjectFormProps) {
             Выбранное направление не принадлежит выбранной сфере. Измените одно из значений.
           </p>
         ) : null}
-        <label className="management-field management-field-wide" htmlFor="project-desired-result">
+        <VoiceField
+          className="management-field management-field-wide"
+          htmlFor="project-desired-result"
+        >
           <span>
             Желаемый результат <small>необязательно</small>
           </span>
-          <textarea
+          <VoiceTextArea
             id="project-desired-result"
             rows={3}
             maxLength={MAX_PROJECT_DESIRED_RESULT_LENGTH}
             value={props.draft.desiredResult}
-            onChange={(event) =>
-              props.onChange({ ...props.draft, desiredResult: event.currentTarget.value })
-            }
+            onValueChange={(value) => props.onChange({ ...props.draft, desiredResult: value })}
           />
-        </label>
-        <label className="management-field management-field-wide" htmlFor="project-description">
+        </VoiceField>
+        <VoiceField
+          className="management-field management-field-wide"
+          htmlFor="project-description"
+        >
           <span>
             Описание <small>необязательно</small>
           </span>
-          <textarea
+          <VoiceTextArea
             id="project-description"
             rows={4}
             maxLength={MAX_PROJECT_DESCRIPTION_LENGTH}
             value={props.draft.description}
-            onChange={(event) =>
-              props.onChange({ ...props.draft, description: event.currentTarget.value })
-            }
+            onValueChange={(value) => props.onChange({ ...props.draft, description: value })}
           />
-        </label>
+        </VoiceField>
       </div>
       {props.error !== null ? (
         <p className="form-error" role="alert">
@@ -1050,7 +1073,7 @@ export function ProjectForm(props: ProjectFormProps) {
           {props.saving
             ? 'Сохраняем…'
             : props.mode === 'create'
-              ? 'Создать проект'
+              ? 'Создать цель'
               : 'Сохранить изменения'}
         </button>
         <button
@@ -1070,11 +1093,11 @@ export function EmptyProjects({ onCreate }: { readonly onCreate: () => void }) {
   return (
     <div className="management-empty-state project-empty-state">
       <div>
-        <strong>Пока нет проектов</strong>
-        <p>Проект превращает направление в конкретный завершённый результат.</p>
+        <strong>Пока нет целей</strong>
+        <p>Цель превращает направление в конкретный завершённый результат.</p>
       </div>
       <button className="secondary-button" type="button" onClick={onCreate}>
-        Создать проект
+        Создать цель
       </button>
     </div>
   );
@@ -1100,7 +1123,7 @@ function buildGroups(
     { title: 'АРХИВ', status: PROJECT_STATUS.archived },
   ];
   return [
-    ...(main.length === 0 ? [] : [{ title: 'ГЛАВНЫЙ ПРОЕКТ', projects: main }]),
+    ...(main.length === 0 ? [] : [{ title: 'ГЛАВНЫЙ Цель', projects: main }]),
     ...definitions.flatMap((definition) => {
       const matching = projects.filter(
         (project) => project.status === definition.status && !project.isMain,
@@ -1123,16 +1146,16 @@ function findSphere(snapshot: SpheresSnapshot, id: EntityId | null): Sphere | nu
 function actionMessage(action: ProjectAction): string {
   switch (action) {
     case 'main':
-      return 'Главный проект изменён.';
+      return 'Главная цель изменён.';
     case 'pause':
-      return 'Проект приостановлен.';
+      return 'Цель приостановлен.';
     case 'resume':
-      return 'Проект возобновлён.';
+      return 'Цель возобновлён.';
     case 'complete':
-      return 'Проект завершён.';
+      return 'Цель завершён.';
     case 'archive':
-      return 'Проект перемещён в архив.';
+      return 'Цель перемещён в архив.';
     case 'restore':
-      return 'Проект восстановлен активным.';
+      return 'Цель восстановлен активным.';
   }
 }

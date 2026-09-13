@@ -7,6 +7,8 @@ import type { InterfaceDensity } from '../settings/localSettings';
 import { selectApplicationSection } from './applicationShellNavigation';
 
 interface ApplicationShellViewProps {
+  readonly globalActions?: ReactNode;
+  readonly syncIndicator?: ReactNode;
   readonly activeSection: AppSection;
   readonly currentDate: DayDate;
   readonly selectedDate: DayDate;
@@ -57,6 +59,8 @@ export function ApplicationShellView({
   showMobileWeekday,
   sidebarCollapsed,
   onToggleSidebar,
+  syncIndicator,
+  globalActions,
 }: ApplicationShellViewProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
@@ -94,119 +98,131 @@ export function ApplicationShellView({
   }
 
   return (
-    <div
-      className={[
-        'application-shell',
-        `application-density-${interfaceDensity}`,
-        sidebarCollapsed ? 'application-sidebar-collapsed' : '',
-        reduceMotion ? 'application-reduce-motion' : '',
-      ]
-        .filter(Boolean)
-        .join(' ')}
-    >
-      <a className="skip-link" href="#application-content">
-        Перейти к содержимому
-      </a>
-
-      <aside
-        className="application-sidebar application-desktop-sidebar"
-        aria-label="Навигация LifeOS"
-      >
-        <SidebarContent
-          activeSection={activeSection}
-          currentDayStatus={currentDayStatus}
-          dayStatus={dayStatus}
-          collapsed={sidebarCollapsed}
-          onOpenSection={onOpenSection}
-          onToggleSidebar={onToggleSidebar}
-        />
-      </aside>
-
-      <div className="application-stage">
-        <header className="application-mobile-header">
-          <button
-            ref={mobileMenuButtonRef}
-            className="application-mobile-menu-button"
-            type="button"
-            aria-label="Открыть меню"
-            aria-expanded={mobileMenuOpen}
-            aria-controls="application-mobile-menu"
-            onClick={() => setMobileMenuOpen(true)}
-          >
-            <AppIcon name="menu" />
-          </button>
-          <div className="application-mobile-heading">
-            <p className="application-mobile-brand">LifeOS</p>
-            <p className="application-mobile-section" aria-live="polite">
-              {currentSectionLabel}
-            </p>
-          </div>
-          <div className="application-mobile-date">
-            <span
-              className={`application-mobile-day-status application-mobile-day-status-${currentDayStatus}`}
-            >
-              {dayStatus.shortTitle}
-            </span>
-            <strong>{selectedDateLabel}</strong>
-            {showMobileWeekday ? <span>{formatSelectedDateWeekday(selectedDate)}</span> : null}
-          </div>
-        </header>
-
-        <div id="application-content" className="application-content" tabIndex={-1}>
-          {children}
-        </div>
+    <>
+      <div className="application-wordmark" aria-hidden="true">
+        LifeOS
       </div>
+      <div
+        className={[
+          'application-shell',
+          `application-density-${interfaceDensity}`,
+          sidebarCollapsed ? 'application-sidebar-collapsed' : '',
+          reduceMotion ? 'application-reduce-motion' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+      >
+        <a className="skip-link" href="#application-content">
+          Перейти к содержимому
+        </a>
 
-      {mobileMenuOpen ? (
-        <ApplicationMobileMenu
-          activeSection={activeSection}
-          currentDayStatus={currentDayStatus}
-          onOpenSection={onOpenSection}
-          onClose={closeMobileMenu}
-          closeButtonRef={mobileMenuCloseButtonRef}
-        />
-      ) : null}
-
-      <nav className="application-bottom-navigation" aria-label="Мобильная навигация">
-        <NavigationButton
-          item={MOBILE_NAVIGATION[0]!}
-          active={activeSection === APP_SECTION.today}
-          onOpenSection={onOpenSection}
-          mobile
-        />
-        <NavigationButton
-          item={MOBILE_NAVIGATION[1]!}
-          active={activeSection === APP_SECTION.management}
-          onOpenSection={onOpenSection}
-          mobile
-        />
-        <button
-          className="application-create-navigation"
-          type="button"
-          aria-label="Создать решение"
-          onClick={onCreate}
+        <aside
+          className="application-sidebar application-desktop-sidebar"
+          aria-label="Навигация LifeOS"
         >
-          <span className="application-create-icon">
-            <AppIcon name="create" />
-          </span>
-          <span>Создать</span>
-        </button>
-        <NavigationButton
-          item={MOBILE_NAVIGATION[2]!}
-          active={activeSection === APP_SECTION.history}
-          onOpenSection={onOpenSection}
-          mobile
-        />
-        <NavigationButton
-          item={MOBILE_NAVIGATION[3]!}
-          active={
-            activeSection === APP_SECTION.more || activeSection === APP_SECTION.eveningAnalytics
-          }
-          onOpenSection={onOpenSection}
-          mobile
-        />
-      </nav>
-    </div>
+          <SidebarContent
+            globalActions={globalActions}
+            syncIndicator={syncIndicator}
+            activeSection={activeSection}
+            currentDayStatus={currentDayStatus}
+            dayStatus={dayStatus}
+            collapsed={sidebarCollapsed}
+            onOpenSection={onOpenSection}
+            onToggleSidebar={onToggleSidebar}
+          />
+        </aside>
+
+        <div className="application-stage">
+          <header className="application-mobile-header">
+            <button
+              ref={mobileMenuButtonRef}
+              className="application-mobile-menu-button"
+              type="button"
+              aria-label="Открыть меню"
+              aria-expanded={mobileMenuOpen}
+              aria-controls="application-mobile-menu"
+              onClick={() => setMobileMenuOpen(true)}
+            >
+              <AppIcon name="menu" />
+            </button>
+            <div className="application-mobile-heading">
+              <p className="application-mobile-brand">LifeOS</p>
+              <p className="application-mobile-section" aria-live="polite">
+                {currentSectionLabel}
+              </p>
+            </div>
+            <div className="application-mobile-date">
+              <span
+                className={`application-mobile-day-status application-mobile-day-status-${currentDayStatus}`}
+              >
+                {dayStatus.shortTitle}
+              </span>
+              <strong>{selectedDateLabel}</strong>
+              {showMobileWeekday ? <span>{formatSelectedDateWeekday(selectedDate)}</span> : null}
+            </div>
+            {globalActions ? (
+              <div className="application-mobile-global-actions">{globalActions}</div>
+            ) : null}
+          </header>
+
+          {syncIndicator ? <div className="application-sync-status">{syncIndicator}</div> : null}
+
+          <div id="application-content" className="application-content" tabIndex={-1}>
+            {children}
+          </div>
+        </div>
+
+        {mobileMenuOpen ? (
+          <ApplicationMobileMenu
+            activeSection={activeSection}
+            currentDayStatus={currentDayStatus}
+            onOpenSection={onOpenSection}
+            onClose={closeMobileMenu}
+            closeButtonRef={mobileMenuCloseButtonRef}
+          />
+        ) : null}
+
+        <nav className="application-bottom-navigation" aria-label="Мобильная навигация">
+          <NavigationButton
+            item={MOBILE_NAVIGATION[0]!}
+            active={activeSection === APP_SECTION.today}
+            onOpenSection={onOpenSection}
+            mobile
+          />
+          <NavigationButton
+            item={MOBILE_NAVIGATION[1]!}
+            active={activeSection === APP_SECTION.management}
+            onOpenSection={onOpenSection}
+            mobile
+          />
+          <button
+            className="application-create-navigation"
+            type="button"
+            aria-label="Создать решение"
+            onClick={onCreate}
+          >
+            <span className="application-create-icon">
+              <AppIcon name="create" />
+            </span>
+            <span>Создать</span>
+          </button>
+          <NavigationButton
+            item={MOBILE_NAVIGATION[2]!}
+            active={activeSection === APP_SECTION.history}
+            onOpenSection={onOpenSection}
+            mobile
+          />
+          <NavigationButton
+            item={MOBILE_NAVIGATION[3]!}
+            active={
+              activeSection === APP_SECTION.more || activeSection === APP_SECTION.eveningAnalytics
+            }
+            onOpenSection={onOpenSection}
+            mobile
+          />
+        </nav>
+      </div>
+    </>
   );
 }
 
@@ -256,6 +272,8 @@ export function ApplicationMobileMenu({
 }
 
 interface SidebarContentProps {
+  readonly globalActions?: ReactNode;
+  readonly syncIndicator?: ReactNode;
   readonly activeSection: AppSection;
   readonly currentDayStatus: DayStatus;
   readonly dayStatus: DayStatusDescription;
@@ -267,6 +285,8 @@ interface SidebarContentProps {
 }
 
 function SidebarContent({
+  globalActions,
+  syncIndicator,
   activeSection,
   currentDayStatus,
   dayStatus,
@@ -322,6 +342,7 @@ function SidebarContent({
         ))}
       </nav>
 
+      {globalActions ? <div className="application-global-actions">{globalActions}</div> : null}
       <div
         className={`application-day-status application-day-status-${currentDayStatus}`}
         aria-label={`${dayStatus.title}. ${dayStatus.description}`}
@@ -334,17 +355,21 @@ function SidebarContent({
         </div>
       </div>
 
-      <div
-        className="application-sidebar-status"
-        aria-label="Локальный режим. Данные хранятся на устройстве"
-        title={collapsed ? 'Локальный режим' : undefined}
-      >
-        <span className="application-status-dot" aria-hidden="true" />
-        <div className="application-status-copy">
-          <strong>Локальный режим</strong>
-          <span>Данные хранятся на устройстве</span>
+      {syncIndicator ? (
+        <div className="application-sidebar-sync">{syncIndicator}</div>
+      ) : (
+        <div
+          className="application-sidebar-status"
+          aria-label="Локальный режим. Данные хранятся на устройстве"
+          title={collapsed ? 'Локальный режим' : undefined}
+        >
+          <span className="application-status-dot" aria-hidden="true" />
+          <div className="application-status-copy">
+            <strong>Локальный режим</strong>
+            <span>Данные хранятся на устройстве</span>
+          </div>
         </div>
-      </div>
+      )}
     </>
   );
 }

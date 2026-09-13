@@ -7,6 +7,7 @@ export interface DecisionRescheduleHistoryRecord {
 }
 
 export interface DecisionRecord {
+  readonly goalLinksVersion?: 1;
   readonly schemaVersion: 1;
   readonly id: string;
   readonly title: string;

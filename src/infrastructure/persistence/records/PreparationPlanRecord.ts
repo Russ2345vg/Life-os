@@ -17,6 +17,7 @@ export interface PreparationItemRecord {
 }
 
 export interface PreparationPlanRecord {
+  readonly goalLinksVersion?: 1;
   readonly schemaVersion: 1;
   readonly id: string;
   readonly cycleId: string;

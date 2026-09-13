@@ -1,4 +1,5 @@
 export interface WalkRecord {
+  readonly goalLinksVersion?: 1;
   readonly schemaVersion: 1;
   readonly id: string;
   readonly date: string;

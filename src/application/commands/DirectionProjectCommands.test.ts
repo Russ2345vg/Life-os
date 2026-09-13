@@ -137,7 +137,7 @@ describe('Direction and Project commands', () => {
       await app.createProject.execute({
         sphereId: EntityId.create('sphere-b'),
         directionId: direction.value.id,
-        title: 'Несовместимый проект',
+        title: 'Несовместимый цель',
       }),
     ).toMatchObject({ ok: false, error: { code: 'project.direction_sphere_mismatch' } });
 
@@ -145,7 +145,7 @@ describe('Direction and Project commands', () => {
       await app.createProject.execute({
         sphereId: null,
         directionId: direction.value.id,
-        title: 'Проект без обязательного контекста сферы',
+        title: 'Цель без обязательного контекста сферы',
       }),
     ).toMatchObject({ ok: false, error: { code: 'project.direction_sphere_mismatch' } });
   });
@@ -207,7 +207,7 @@ describe('Direction and Project commands', () => {
     if (!direction.ok) throw direction.error;
     const project = await app.createProject.execute({
       directionId: direction.value.id,
-      title: 'Связанный проект',
+      title: 'Связанный цель',
     });
     if (!project.ok) throw project.error;
 
@@ -273,12 +273,12 @@ describe('Direction and Project commands', () => {
 
   it('updates and performs all project lifecycle commands', async () => {
     const app = setup();
-    const created = await app.createProject.execute({ title: 'Проект' });
+    const created = await app.createProject.execute({ title: 'Цель' });
     if (!created.ok) throw created.error;
     const updated = await app.updateProject.execute({
       id: created.value.id,
       expectedVersion: 1,
-      title: 'Обновлённый проект',
+      title: 'Обновлённый цель',
     });
     if (!updated.ok) throw updated.error;
     const paused = await app.pauseProject.execute({ id: updated.value.id, expectedVersion: 2 });
@@ -302,7 +302,7 @@ describe('Direction and Project commands', () => {
 
     expect(restored).toMatchObject({
       ok: true,
-      value: { title: 'Обновлённый проект', isMain: false, status: 'active', version: 7 },
+      value: { title: 'Обновлённый цель', isMain: false, status: 'active', version: 7 },
     });
   });
 

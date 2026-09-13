@@ -150,8 +150,9 @@ describe('IndexedDbEveningCycleRepository', () => {
   });
 
   it('round-trips полный relaxation snapshot без изменения версии базы', async () => {
-    expect(LIFE_OS_DATABASE_VERSION).toBe(19);
     const database = new LifeOsIndexedDb(new IDBFactory());
+    const initialVersion = (await database.open()).version;
+    expect(initialVersion).toBe(LIFE_OS_DATABASE_VERSION);
     const repository = new IndexedDbEveningCycleRepository(database);
     const stored = relaxationCycle('2026-08-30', RELAXATION_PRACTICE.breathing, true);
 
@@ -160,6 +161,7 @@ describe('IndexedDbEveningCycleRepository', () => {
 
     const restored = await repository.findByDateKey(DayDate.create('2026-08-30'));
 
+    expect((await database.open()).version).toBe(initialVersion);
     expect(restored?.relaxation?.defaultPractice).toBe(RELAXATION_PRACTICE.breathing);
     expect(restored?.relaxation?.selectedPractice).toBe(RELAXATION_PRACTICE.breathing);
     expect(restored?.relaxation?.defaultChangedForFuture).toBe(true);
@@ -212,8 +214,9 @@ describe('IndexedDbEveningCycleRepository', () => {
   });
 
   it('round-trips partial и completed R6 facts в schemaVersion 1 без DB bump', async () => {
-    expect(LIFE_OS_DATABASE_VERSION).toBe(19);
     const database = new LifeOsIndexedDb(new IDBFactory());
+    const initialVersion = (await database.open()).version;
+    expect(initialVersion).toBe(LIFE_OS_DATABASE_VERSION);
     const repository = new IndexedDbEveningCycleRepository(database);
     const partial = sleepCheckCycle('2026-08-30');
     partial.setAfterRelaxationRatings(4, 5, at('2026-08-30', '22:11:00'));
@@ -227,6 +230,7 @@ describe('IndexedDbEveningCycleRepository', () => {
     database.close();
     const restored = await repository.findByDateKey(DayDate.create('2026-08-30'));
 
+    expect((await database.open()).version).toBe(initialVersion);
     expect(EveningCycleRecordMapper.toRecord(partial).schemaVersion).toBe(1);
     expect(restored?.state).toBe(EVENING_CYCLE_STATE.sleepCheck);
     expect(restored?.sleepCheck).toMatchObject({

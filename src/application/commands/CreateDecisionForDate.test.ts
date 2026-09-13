@@ -219,7 +219,7 @@ describe('CreateDecisionForDate', () => {
     expect(decision.projectReference).toBe('LifeOS');
   });
 
-  it('связывает решение с проектом и наследует его сферу', async () => {
+  it('связывает решение с целью и наследует его сферу', async () => {
     const context = createContext();
     const project = Project.create({
       id: EntityId.create('project-lifeos'),
@@ -240,12 +240,12 @@ describe('CreateDecisionForDate', () => {
     expect(decision.sphereId?.equals(project.sphereId!)).toBe(true);
   });
 
-  it('отклоняет несовместимые сферы решения и проекта', async () => {
+  it('отклоняет несовместимые сферы решения и цели', async () => {
     const context = createContext();
     const project = Project.create({
       id: EntityId.create('project-sphere'),
       sphereId: EntityId.create('sphere-project'),
-      title: 'Проект',
+      title: 'Цель',
       now: NOW,
     });
     await context.projectRepository.create(project);
@@ -259,18 +259,18 @@ describe('CreateDecisionForDate', () => {
     expectFailureCode(result, 'decision.project_sphere_mismatch');
   });
 
-  it('не связывает новое решение с завершённым проектом', async () => {
+  it('не связывает новое решение с завершённым целью', async () => {
     const context = createContext();
     const active = Project.create({
       id: EntityId.create('project-completed'),
-      title: 'Завершённый проект',
+      title: 'Завершённый цель',
       now: NOW,
     });
     const completed = active.complete(new Date(NOW.getTime() + 1));
     await context.projectRepository.create(completed);
 
     const result = await context.command.execute({
-      ...mainInput('Позднее решение проекта'),
+      ...mainInput('Позднее решение цели'),
       projectId: completed.id.toString(),
     });
 
@@ -287,6 +287,25 @@ describe('CreateDecisionForDate', () => {
     expect(context.repository.saveCount).toBe(0);
     expect(context.idGenerator.generatedCount).toBe(0);
     expect(context.clock.callCount).toBe(0);
+  });
+
+  it('не переносит явно подтверждённую дату с завершённого дня', async () => {
+    const context = createContext();
+    const day = Day.openCurrent({
+      id: context.idGenerator.generate(),
+      currentDate: DATE,
+      occurredAt: NOW,
+      createdEventId: context.idGenerator.generate(),
+      openedEventId: context.idGenerator.generate(),
+    });
+    day.complete(NOW, context.idGenerator.generate(), 'День закрыт');
+    await context.dayRepository.save(day);
+    const result = await context.command.execute({
+      ...mainInput('Подтверждённая дата'),
+      requireExactDate: true,
+    });
+    expectFailureCode(result, 'decision.completed_day_is_immutable');
+    expect(context.repository.saveCount).toBe(0);
   });
 
   it('после закрытия дня сохраняет новую рабочую мысль на следующий день', async () => {

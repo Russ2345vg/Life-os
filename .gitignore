@@ -9,3 +9,19 @@ test-results/
 Thumbs.db
 .idea/
 .vscode/
+
+# Local Android release signing (REL-04)
+*.jks
+*.keystore
+**/key.properties
+**/keystore.properties
+
+# Local updater/release secrets (REL-05)
+.env
+.env.*
+!.env.example
+*.key
+*.key.pub
+**/updater-signing.properties
+src-tauri/tauri.release.conf.json
+src-tauri/target/release-channel/

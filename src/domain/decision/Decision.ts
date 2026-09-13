@@ -175,7 +175,7 @@ export class Decision extends Entity {
     assertDecisionPriority(this.#priority);
     this.#projectReference = normalizeOptionalDecisionField(
       data.projectReference ?? null,
-      'Связь с проектом',
+      'Связь с целью',
       200,
       'decision.invalid_project_reference',
     );
@@ -482,7 +482,7 @@ export class Decision extends Entity {
     const priority = input.priority ?? this.#priority;
     const projectReference = normalizeOptionalDecisionField(
       input.projectReference === undefined ? this.#projectReference : input.projectReference,
-      'Связь с проектом',
+      'Связь с целью',
       200,
       'decision.invalid_project_reference',
     );

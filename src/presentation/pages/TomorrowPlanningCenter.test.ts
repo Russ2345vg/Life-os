@@ -74,7 +74,7 @@ describe('TomorrowPlanningCenter', () => {
     expect(focus).toBeLessThan(save);
   });
 
-  it('сводит количество решений и уникальных связанных проектов в блоке Завтра в фокусе', () => {
+  it('сводит количество решений и уникальных связанных целей в блоке Завтра в фокусе', () => {
     const sharedProjectId = EntityId.create('project-focus');
     const plan = [
       createPlannedDecision('focus-main', PLANNED_DATE, DECISION_KIND.main, 1, sharedProjectId),
@@ -90,7 +90,7 @@ describe('TomorrowPlanningCenter', () => {
 
     expect(markup).toContain('Завтра в фокусе');
     expect(markup).toContain('2 решения');
-    expect(markup).toContain('1 проект');
+    expect(markup).toContain('1 цель');
   });
 
   it('различает одно главное Решение и главное с дополнительным', () => {

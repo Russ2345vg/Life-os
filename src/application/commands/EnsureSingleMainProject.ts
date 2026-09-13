@@ -30,7 +30,7 @@ export class EnsureSingleMainProject {
       if (!(await this.repository.replaceMain(winner, winner.version, this.clock.now()))) {
         throw new DomainError(
           'project.main_reconciliation_conflict',
-          'Не удалось восстановить единственный главный проект направления.',
+          'Не удалось восстановить единственную главную цель направления.',
         );
       }
     }

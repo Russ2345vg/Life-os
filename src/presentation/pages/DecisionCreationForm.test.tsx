@@ -35,17 +35,17 @@ describe('DecisionCreationForm', () => {
     expect(markup).toContain('Причина');
     expect(markup).toContain('Ожидаемый результат');
     expect(markup).toContain('Сфера');
-    expect(markup).toContain('Проект');
+    expect(markup).toContain('Цель');
     expect(markup).toContain('Цена решения');
     expect(markup).toContain('Жертвы');
     expect(markup).toContain('Приоритет');
-    expect(markup).toContain('Связь с проектом');
+    expect(markup).toContain('Связь с целью');
     expect(markup).toContain('min="2026-08-05"');
     expect(markup).toContain('value="normal" selected=""');
     expect(markup).toContain('Создать решение');
   });
 
-  it('предлагает для нового решения только незавершённые и неархивные проекты', () => {
+  it('предлагает для нового решения только незавершённые и неархивные цели', () => {
     const active = Project.create({
       id: EntityId.create('active'),
       title: 'Активный',

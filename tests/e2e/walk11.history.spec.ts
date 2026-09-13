@@ -281,7 +281,7 @@ test('WALK-11 journal filters, facts, thoughts and Decision navigation never mut
   await page.locator('[data-walk-history-row="history-reflection"]').click();
   const heading = page.getByRole('heading', { name: 'Размышление', exact: true });
   await expect(heading).toBeFocused();
-  await expect(heading).toHaveCSS('outline-color', 'rgb(199, 168, 98)');
+  await expect(heading).toHaveCSS('outline-color', 'rgb(237, 188, 140)');
   await expect(heading).toHaveCSS('outline-width', '2px');
   await expect(page.getByText('Фактически:', { exact: false })).toContainText('20 мин');
   await expect(

@@ -1,3 +1,4 @@
+import type { DecisionsByProjectReader } from '../ports/DecisionsByProjectReader';
 import type {
   EntityId,
   Goal,
@@ -22,6 +23,7 @@ import {
 } from './goalCommandSupport';
 
 export interface UpdateGoalInput {
+  readonly sphereId?: EntityId | null;
   readonly id: EntityId;
   readonly expectedVersion: number;
   readonly directionId?: EntityId | null;
@@ -44,6 +46,7 @@ export class UpdateGoal {
     readonly repository: GoalRepository,
     readonly directionRepository: DirectionRepository,
     readonly clock: Clock,
+    readonly decisionsByProjectReader?: DecisionsByProjectReader,
   ) {}
 
   public async execute(input: UpdateGoalInput): Promise<Result<Goal, DomainError>> {
@@ -59,18 +62,47 @@ export class UpdateGoal {
         ? directionId === null
         : directionId !== null && stored.directionId.equals(directionId);
     const activatesGoal = stored.status !== GOAL_STATUS.active && status === GOAL_STATUS.active;
-    const directionFailure = await validateGoalDirection(
-      this.directionRepository,
-      directionId,
-      status,
-      directionUnchanged && !activatesGoal,
-    );
+    const sphereId =
+      directionId === null
+        ? input.sphereId === undefined
+          ? stored.sphereId
+          : input.sphereId
+        : ((await this.directionRepository.findById(directionId))?.sphereId ?? null);
+    if (
+      sphereId !== null &&
+      sphereId.toString() !== stored.sphereId?.toString() &&
+      this.decisionsByProjectReader
+    ) {
+      const decisions = await this.decisionsByProjectReader.findByProjectId(stored.id);
+      if (decisions.some((decision) => !decision.sphereId?.equals(sphereId))) {
+        return failure(
+          new DomainError(
+            'goal.decision_sphere_mismatch',
+            'Сфера цели должна совпадать со сферой связанных решений.',
+          ),
+        );
+      }
+    }
+    const preservesUnassigned =
+      stored.status === GOAL_STATUS.active &&
+      stored.directionId === null &&
+      directionId === null &&
+      status === GOAL_STATUS.active;
+    const directionFailure = preservesUnassigned
+      ? null
+      : await validateGoalDirection(
+          this.directionRepository,
+          directionId,
+          status,
+          directionUnchanged && !activatesGoal,
+        );
     if (directionFailure !== null) return directionFailure;
     try {
       const updated = stored.update(
         {
           title: input.title,
           directionId,
+          sphereId,
           ...(input.description === undefined ? {} : { description: input.description }),
           ...(input.whyImportant === undefined ? {} : { whyImportant: input.whyImportant }),
           ...(input.whyNow === undefined ? {} : { whyNow: input.whyNow }),

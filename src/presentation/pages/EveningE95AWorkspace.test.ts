@@ -49,7 +49,7 @@ describe('E9.5A Evening Command Center workspace', () => {
       /\.tomorrow-dashboard\s*{[^}]*grid-template-areas:\s*none;[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/,
     );
     expect(tomorrowFormCss).toMatch(
-      /\.tomorrow-primary-card\.is-empty\s*{[^}]*background:\s*linear-gradient/,
+      /\.tomorrow-primary-card\.is-empty\s*{[^}]*background:\s*var\(--surface-glass\)/,
     );
     expect(tomorrowFormCss).toMatch(
       /:is\(\s*\.tomorrow-primary-card,[\s\S]*?\.tomorrow-supporting\s*\)[\s\S]*?min-height:\s*0;[^}]*border:\s*1px solid/,

@@ -11,20 +11,7 @@
   overflow: hidden;
   border: 1px solid var(--evening-v1-border-strong);
   border-radius: var(--evening-v1-radius-lg);
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--bg-canvas) 64%, transparent),
-      var(--bg-canvas)
-    ),
-    linear-gradient(
-      100deg,
-      color-mix(in srgb, var(--text-secondary) 8%, transparent),
-      transparent 56%,
-      color-mix(in srgb, var(--gold-main) 7%, transparent)
-    ),
-    url('/planning-tomorrow-atmosphere.png') center 42% / cover no-repeat,
-    var(--bg-canvas);
+  background: var(--surface-glass-raised);
   box-shadow:
     inset 0 1px color-mix(in srgb, var(--text-primary) 5%, transparent),
     var(--shadow-deep);
@@ -124,15 +111,13 @@
   padding: var(--space-3) var(--space-4);
   border: 1px solid var(--evening-v1-border);
   border-radius: var(--radius-medium);
-  background: color-mix(in srgb, var(--surface-1) 88%, transparent);
+  background: var(--surface-glass);
   box-shadow: inset 0 1px color-mix(in srgb, var(--text-primary) 3%, transparent);
 }
 
 .evening-command-center-page .tomorrow-primary-card,
 .evening-command-center-page .tomorrow-primary-card.is-empty {
-  background:
-    linear-gradient(110deg, color-mix(in srgb, var(--gold-main) 8%, transparent), transparent 48%),
-    color-mix(in srgb, var(--surface-1) 92%, transparent);
+  background: var(--surface-glass);
 }
 
 .evening-command-center-page .tomorrow-working-section-heading {
@@ -162,7 +147,7 @@
   border: 1px solid color-mix(in srgb, var(--gold-main) 42%, var(--border-strong));
   border-radius: 50%;
   color: var(--gold-soft);
-  background: color-mix(in srgb, var(--gold-main) 8%, var(--surface-1));
+  background: var(--surface-glass);
   font-size: 0.68rem;
   font-variant-numeric: tabular-nums;
   font-weight: 800;
@@ -192,7 +177,7 @@
   border: 1px solid color-mix(in srgb, var(--gold-main) 42%, var(--border-strong));
   border-radius: var(--radius-small);
   color: var(--text-primary);
-  background: color-mix(in srgb, var(--bg-canvas) 78%, transparent);
+  background: var(--surface-glass);
   box-shadow: none;
   font-size: 0.875rem;
   font-weight: 620;
@@ -202,7 +187,7 @@
 .evening-command-center-page .tomorrow-primary-empty-cta[aria-expanded='true'] {
   color: var(--gold-soft);
   border-color: var(--gold-main);
-  background: color-mix(in srgb, var(--gold-main) 7%, var(--surface-1));
+  background: var(--surface-hover);
   box-shadow: 0 0 1rem color-mix(in srgb, var(--gold-main) 8%, transparent);
 }
 
@@ -308,7 +293,7 @@
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-small);
   color: var(--text-primary);
-  background: color-mix(in srgb, var(--bg-canvas) 84%, transparent);
+  background: var(--surface-field);
   font: inherit;
   font-size: 0.84rem;
   line-height: 1.4;
@@ -334,7 +319,7 @@
 .evening-command-center-page .tomorrow-first-action-card,
 .evening-command-center-page .tomorrow-supporting {
   border: 1px solid var(--evening-v1-border);
-  background: color-mix(in srgb, var(--surface-1) 86%, transparent);
+  background: var(--surface-glass);
 }
 
 .evening-command-center-page
@@ -348,7 +333,7 @@
   overflow: hidden;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-small);
-  background: color-mix(in srgb, var(--bg-canvas) 76%, transparent);
+  background: var(--surface-glass);
 }
 
 .evening-command-center-page .tomorrow-outcome-levels > button {
@@ -382,7 +367,7 @@
 
 .evening-command-center-page .tomorrow-outcome-levels > button.is-selected {
   color: var(--gold-soft);
-  background: color-mix(in srgb, var(--gold-main) 10%, var(--surface-1));
+  background: var(--surface-selected);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold-main) 36%, transparent);
 }
 
@@ -418,7 +403,7 @@
   min-height: 2.75rem;
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--border-strong);
-  background: color-mix(in srgb, var(--bg-canvas) 84%, transparent);
+  background: var(--surface-field);
 }
 
 .evening-command-center-page .tomorrow-supporting-list {
@@ -436,7 +421,7 @@
   padding: var(--space-1) var(--space-2);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-small);
-  background: color-mix(in srgb, var(--bg-canvas) 74%, transparent);
+  background: var(--surface-glass);
 }
 
 .evening-command-center-page .tomorrow-supporting-row :is(input, select) {
@@ -476,7 +461,7 @@
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-small);
-  background: color-mix(in srgb, var(--surface-1) 88%, transparent);
+  background: var(--surface-glass);
 }
 
 .evening-command-center-page .tomorrow-scene-footer {
@@ -490,7 +475,7 @@
   border: 0;
   border-top: 1px solid var(--evening-v1-border);
   border-radius: 0;
-  background: color-mix(in srgb, var(--bg-canvas) 92%, transparent);
+  background: var(--surface-glass);
 }
 
 .evening-command-center-page .tomorrow-scene-footer .primary-button {
@@ -506,7 +491,7 @@
 .evening-command-center-page .tomorrow-scene-footer .primary-button:disabled {
   border-color: var(--border-strong);
   color: var(--text-muted);
-  background: color-mix(in srgb, var(--surface-3) 88%, var(--bg-canvas));
+  background: var(--surface-field);
   box-shadow: none;
 }
 

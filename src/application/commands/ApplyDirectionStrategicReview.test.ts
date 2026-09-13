@@ -85,7 +85,7 @@ describe('ApplyDirectionStrategicReview', () => {
     const project = Project.create({
       id: EntityId.create('project-safe'),
       directionId: direction.id,
-      title: 'Исходный проект',
+      title: 'Исходный цель',
       isMain: true,
       now: NOW,
     });

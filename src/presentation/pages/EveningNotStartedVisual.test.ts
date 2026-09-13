@@ -54,13 +54,17 @@ describe('NOT_STARTED Evening Command Center visual contract', () => {
 
   it('оставляет neutral графитовым, current золотым, ready зелёным', () => {
     expect(finalVisualCss).toMatch(
-      /\.evening-kpi-card-icon\s*{[^}]*color:\s*#8d969a;[^}]*background:\s*#11171a/,
+      /\.evening-kpi-card-icon\s*{[^}]*color:\s*var\(--text-muted\);[^}]*background:\s*#11171a/,
     );
     expect(finalVisualCss).toMatch(
       /\.evening-kpi-card-icon\.is-current\s*{[^}]*color:\s*var\(--evening-v1-gold-bright\)/,
     );
-    expect(finalVisualCss).toMatch(/\.evening-kpi-card-icon\.is-ready\s*{[^}]*color:\s*#7bc887/);
-    expect(finalVisualCss).toMatch(/\.evening-kpi-card\[data-tone='ready'\]\s*{[^}]*#31533a/);
+    expect(finalVisualCss).toMatch(
+      /\.evening-kpi-card-icon\.is-ready\s*{[^}]*color:\s*var\(--success\)/,
+    );
+    expect(finalVisualCss).toMatch(
+      /\.evening-kpi-card\[data-tone='ready'\]\s*{[^}]*var\(--success\)/,
+    );
   });
 
   it('рендерит длинный KPI одним текстовым слоем', () => {
@@ -130,7 +134,7 @@ describe('NOT_STARTED Evening Command Center visual contract', () => {
 
   it('закрепляет один primary CTA со всеми интерактивными состояниями', () => {
     expect(startStateCss).toMatch(
-      /\.evening-not-started-primary\.primary-button\s*{[^}]*min-height:\s*3rem;[^}]*background:\s*linear-gradient\(180deg, #e2b452, #c99132\)/,
+      /\.evening-not-started-primary\.primary-button\s*{[^}]*min-height:\s*3rem;[^}]*background:\s*var\(--surface-primary\)/,
     );
     expect(startStateCss).toContain(
       '.evening-not-started-primary.primary-button:hover:not(:disabled)',

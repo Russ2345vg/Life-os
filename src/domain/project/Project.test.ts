@@ -48,7 +48,7 @@ describe('Project', () => {
   });
 
   it('pauses, resumes, completes, archives and restores', () => {
-    const project = Project.create({ id: EntityId.create('project-1'), title: 'Проект', now });
+    const project = Project.create({ id: EntityId.create('project-1'), title: 'Цель', now });
     const paused = project.pause(new Date('2026-08-10T09:00:00.000Z'));
     const resumed = paused.resume(new Date('2026-08-10T10:00:00.000Z'));
     const completed = resumed.complete(new Date('2026-08-10T11:00:00.000Z'));
@@ -75,7 +75,7 @@ describe('Project', () => {
     expect(paused).toMatchObject({ status: 'paused', isMain: false });
     expect(resumed).toMatchObject({ status: 'active', isMain: false });
     expect(() => paused.makeMain(new Date('2026-08-10T11:00:00.000Z'))).toThrowError(
-      'Только активный проект можно сделать главным.',
+      'Только активную цель можно сделать главной.',
     );
   });
 });

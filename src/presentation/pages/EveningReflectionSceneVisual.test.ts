@@ -69,7 +69,7 @@ describe('EveningReflectionScene visual composition', () => {
     const question = createQuestion(REFLECTION_QUESTION_TYPE.optionalText, false);
     const markup = renderScene(createSession(question, 0, 1), {
       text: 'Сохранить короткий вывод',
-      correctionAction: 'Открыть проект до начала работы',
+      correctionAction: 'Открыть цель до начала работы',
       lastAnsweredQuestionId: 'previous-question',
     });
 

@@ -24,6 +24,7 @@ import { IndexedDbEveningCycleRepository } from './IndexedDbEveningCycleReposito
 import { IndexedDbEveningHistoryReader } from './IndexedDbEveningHistoryReader';
 import { IndexedDbPreparationPlanRepository } from './IndexedDbPreparationPlanRepository';
 import { IndexedDbTomorrowPlanRepository } from './IndexedDbTomorrowPlanRepository';
+import { GOAL_MIGRATION_BACKUP } from './indexed-db/LegacyProjectGoalMigration';
 import {
   LIFE_OS_DATABASE_NAME,
   LIFE_OS_DATABASE_VERSION,
@@ -32,7 +33,7 @@ import {
 } from './indexed-db/LifeOsIndexedDb';
 
 describe('R9 Evening Ritual v2 backward compatibility', () => {
-  it('upgrades literal E1-E11 records without rewriting them and exposes the current read model', async () => {
+  it('preserves literal E1-E11 facts while normalizing legacy project references', async () => {
     const factory = new IDBFactory();
     const legacy = await openVersion13EveningDatabase(factory);
     await seedLegacyEveningRecords(legacy);
@@ -55,8 +56,22 @@ describe('R9 Evening Ritual v2 backward compatibility', () => {
     await expect(readRawEveningRecords(upgraded)).resolves.toEqual({
       cycles: LEGACY_EVENING_CYCLES,
       tomorrowPlans: [LEGACY_TOMORROW_PLAN],
-      preparationPlans: [LEGACY_PREPARATION_PLAN],
+      preparationPlans: [
+        {
+          ...LEGACY_PREPARATION_PLAN,
+          goalLinksVersion: 1,
+          items: LEGACY_PREPARATION_PLAN.items.map((item) =>
+            item.sourceType === 'PROJECT'
+              ? { ...item, sourceId: 'goal-from-project:legacy-project' }
+              : item,
+          ),
+        },
+      ],
     });
+    const backup = upgraded.transaction(GOAL_MIGRATION_BACKUP).objectStore(GOAL_MIGRATION_BACKUP);
+    await expect(
+      observeRequest(backup.get(`preparationPlans:${LEGACY_PREPARATION_PLAN.id}`)),
+    ).resolves.toMatchObject({ value: LEGACY_PREPARATION_PLAN });
 
     const cycleRepository = new IndexedDbEveningCycleRepository(database);
     const completed = await cycleRepository.findByDayId(
@@ -127,7 +142,7 @@ describe('R9 Evening Ritual v2 backward compatibility', () => {
     expect(preparation?.targetDayId.toString()).toBe(LEGACY_TOMORROW_PLAN.targetDayId);
     expect(preparation?.items.map((item) => item.recommendedDurationMinutes)).toEqual([null, null]);
     expect(preparation?.items.map((item) => item.sourceId?.toString() ?? null)).toEqual([
-      'legacy-project',
+      'goal-from-project:legacy-project',
       'legacy-action-first',
     ]);
 

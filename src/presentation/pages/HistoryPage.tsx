@@ -1,3 +1,6 @@
+import { VoiceField } from '../voice-input/VoiceField';
+import { VoiceTextInput } from '../voice-input/VoiceTextInput';
+import { VoiceTextArea } from '../voice-input/VoiceTextArea';
 import { useMemo, useState, type FormEvent } from 'react';
 import type {
   CancelDecisionSafely,
@@ -397,15 +400,15 @@ function JournalTimelineFilterPanel({
       </div>
 
       <div className="journal-filter-fields">
-        <label className="journal-filter-search">
+        <VoiceField className="journal-filter-search">
           <span>Название</span>
-          <input
+          <VoiceTextInput
             type="search"
             value={filters.query}
             placeholder="Название решения или действия"
-            onChange={(event) => onChange({ ...filters, query: event.currentTarget.value })}
+            onValueChange={(value) => onChange({ ...filters, query: value })}
           />
-        </label>
+        </VoiceField>
         <label>
           <span>Дата</span>
           <input
@@ -697,24 +700,24 @@ function JournalCorrectionForm({
               <dd>{target.currentValue ?? 'Не указано'}</dd>
             </div>
           </dl>
-          <label>
+          <VoiceField>
             <span>Новое значение</span>
-            <textarea
+            <VoiceTextArea
               required
               maxLength={target.field === 'lifeAction.actualResult' ? 2_000 : 1_000}
               value={newValue}
-              onChange={(event) => setNewValue(event.currentTarget.value)}
+              onValueChange={(value) => setNewValue(value)}
             />
-          </label>
-          <label>
+          </VoiceField>
+          <VoiceField>
             <span>Причина исправления</span>
-            <textarea
+            <VoiceTextArea
               required
               maxLength={2_000}
               value={reason}
-              onChange={(event) => setReason(event.currentTarget.value)}
+              onValueChange={(value) => setReason(value)}
             />
-          </label>
+          </VoiceField>
           <p className="journal-correction-confirmation">
             Исходная запись останется в истории. Исправление будет добавлено как новое событие.
           </p>

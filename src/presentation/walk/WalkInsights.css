@@ -3,7 +3,7 @@
   padding: var(--space-4);
   border: 1px solid var(--color-accent-gold);
   border-radius: var(--radius-medium);
-  background: var(--color-surface);
+  background: var(--surface-glass-raised);
 }
 
 .walk-recommendation h2 {

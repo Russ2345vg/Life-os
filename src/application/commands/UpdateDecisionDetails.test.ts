@@ -140,12 +140,12 @@ describe('UpdateDecisionDetails', () => {
     expect(result.value.expectedResult).toBeNull();
   });
 
-  it('назначает проект и наследует его сферу при редактировании', async () => {
+  it('назначает цель и наследует его сферу при редактировании', async () => {
     const decision = createPlannedDecision('project-edit', DATE, DECISION_KIND.additional);
     const project = Project.create({
       id: EntityId.create('project-edit-target'),
       sphereId: EntityId.create('sphere-project'),
-      title: 'Проект редактирования',
+      title: 'Цель редактирования',
       now: NOW,
     });
     const context = createContext([decision], [project]);

@@ -4,3 +4,4 @@ export {
   createLifeOsApplication,
   type CreateLifeOsApplicationDependencies,
 } from './createLifeOsApplication';
+export { createLifeOsSyncApplication } from './createLifeOsSyncApplication';

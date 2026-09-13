@@ -3,21 +3,28 @@ import type { EntityId, Project } from '../../domain';
 import { DomainError } from '../../shared/errors/DomainError';
 import { LIFE_OS_STORE, LifeOsIndexedDb } from './indexed-db/LifeOsIndexedDb';
 import { executeIndexedDbRequest } from './indexed-db/IndexedDbRequest';
-import { ProjectRecordMapper } from './mappers/ProjectRecordMapper';
-import type { ProjectRecord } from './records/ProjectRecord';
+import { ProjectGoalCompatibility as ProjectRecordMapper } from './mappers/ProjectGoalCompatibility';
+import type { GoalRecord as ProjectRecord } from './records/GoalRecord';
+import {
+  IndexedDbPilotMutationRecorder,
+  PILOT_MUTATION_STORES,
+} from '../sync/pilot/IndexedDbPilotMutationRecorder';
 
 export class IndexedDbProjectRepository implements ProjectRepository {
-  public constructor(readonly indexedDb: LifeOsIndexedDb = new LifeOsIndexedDb()) {}
+  public constructor(
+    readonly indexedDb: LifeOsIndexedDb = new LifeOsIndexedDb(),
+    readonly mutationRecorder: IndexedDbPilotMutationRecorder = new IndexedDbPilotMutationRecorder(),
+  ) {}
 
   public async findById(id: EntityId): Promise<Project | null> {
     const database = await this.indexedDb.open();
     const value = await executeIndexedDbRequest<unknown>(
       database,
-      LIFE_OS_STORE.projects,
+      LIFE_OS_STORE.goals,
       'readonly',
       (store) => store.get(id.toString()),
     );
-    return value === undefined ? null : ProjectRecordMapper.fromRecord(value);
+    return value === undefined ? null : this.projectFromGoalRecord(value);
   }
 
   public async findAll(): Promise<readonly Project[]> {
@@ -25,7 +32,7 @@ export class IndexedDbProjectRepository implements ProjectRepository {
   }
 
   public async findBySphereId(sphereId: EntityId): Promise<readonly Project[]> {
-    return this.readMany((store) => store.index('bySphereId').getAll(sphereId.toString()));
+    return (await this.findAll()).filter((goal) => goal.sphereId?.equals(sphereId));
   }
 
   public async findByDirectionId(directionId: EntityId): Promise<readonly Project[]> {
@@ -34,13 +41,19 @@ export class IndexedDbProjectRepository implements ProjectRepository {
 
   public async create(project: Project): Promise<boolean> {
     const database = await this.indexedDb.open();
+    const transaction = this.writeTransaction(database);
+    const completion = observeTransaction(transaction);
     try {
-      await executeIndexedDbRequest(database, LIFE_OS_STORE.projects, 'readwrite', (store) =>
-        store.add(ProjectRecordMapper.toRecord(project)),
-      );
+      const record = ProjectRecordMapper.toRecord(project);
+      await observeRequest(transaction.objectStore(LIFE_OS_STORE.goals).add(record));
+      const recorded = await this.mutationRecorder.recordUpsert(transaction, 'goal', record);
+      await completion;
+      this.mutationRecorder.notifyCommitted(recorded);
       return true;
     } catch (error: unknown) {
-      if (isConstraintError(error)) return false;
+      abortQuietly(transaction);
+      await settleTransaction(completion);
+      if (isConstraintError(error) || isConstraintDomError(error)) return false;
       throw error;
     }
   }
@@ -48,8 +61,8 @@ export class IndexedDbProjectRepository implements ProjectRepository {
   public async createAndReplaceMain(project: Project, updatedAt: Date): Promise<boolean> {
     if (!project.isMain) return false;
     const database = await this.indexedDb.open();
-    const transaction = database.transaction(LIFE_OS_STORE.projects, 'readwrite');
-    const store = transaction.objectStore(LIFE_OS_STORE.projects);
+    const transaction = this.writeTransaction(database);
+    const store = transaction.objectStore(LIFE_OS_STORE.goals);
     const completion = observeTransaction(transaction);
     try {
       if (
@@ -60,9 +73,18 @@ export class IndexedDbProjectRepository implements ProjectRepository {
         await settleTransaction(completion);
         return false;
       }
-      await this.clearMainInDirection(store, project, updatedAt);
-      await observeRequest(store.add(ProjectRecordMapper.toRecord(project)));
+      const demoted = await this.clearMainInDirection(store, project, updatedAt);
+      let recorded = false;
+      for (const record of demoted) {
+        recorded =
+          (await this.mutationRecorder.recordUpsert(transaction, 'goal', record)) || recorded;
+      }
+      const record = ProjectRecordMapper.toRecord(project);
+      await observeRequest(store.add(record));
+      recorded =
+        (await this.mutationRecorder.recordUpsert(transaction, 'goal', record)) || recorded;
       await completion;
+      this.mutationRecorder.notifyCommitted(recorded);
       return true;
     } catch (error: unknown) {
       try {
@@ -78,8 +100,8 @@ export class IndexedDbProjectRepository implements ProjectRepository {
 
   public async updateIfVersionMatches(project: Project, expectedVersion: number): Promise<boolean> {
     const database = await this.indexedDb.open();
-    const transaction = database.transaction(LIFE_OS_STORE.projects, 'readwrite');
-    const store = transaction.objectStore(LIFE_OS_STORE.projects);
+    const transaction = this.writeTransaction(database);
+    const store = transaction.objectStore(LIFE_OS_STORE.goals);
     const completion = observeTransaction(transaction);
     const stored = await observeRequest<ProjectRecord | undefined>(
       store.get(project.id.toString()),
@@ -89,8 +111,11 @@ export class IndexedDbProjectRepository implements ProjectRepository {
       await settleTransaction(completion);
       return false;
     }
-    await observeRequest(store.put(ProjectRecordMapper.toRecord(project)));
+    const record = ProjectRecordMapper.toRecord(project, stored);
+    await observeRequest(store.put(record));
+    const recorded = await this.mutationRecorder.recordUpsert(transaction, 'goal', record);
     await completion;
+    this.mutationRecorder.notifyCommitted(recorded);
     return true;
   }
 
@@ -100,8 +125,8 @@ export class IndexedDbProjectRepository implements ProjectRepository {
     updatedAt: Date,
   ): Promise<boolean> {
     const database = await this.indexedDb.open();
-    const transaction = database.transaction(LIFE_OS_STORE.projects, 'readwrite');
-    const store = transaction.objectStore(LIFE_OS_STORE.projects);
+    const transaction = this.writeTransaction(database);
+    const store = transaction.objectStore(LIFE_OS_STORE.goals);
     const completion = observeTransaction(transaction);
     const stored = await observeRequest<ProjectRecord | undefined>(
       store.get(project.id.toString()),
@@ -111,9 +136,17 @@ export class IndexedDbProjectRepository implements ProjectRepository {
       await settleTransaction(completion);
       return false;
     }
-    await this.clearMainInDirection(store, project, updatedAt);
-    await observeRequest(store.put(ProjectRecordMapper.toRecord(project)));
+    const demoted = await this.clearMainInDirection(store, project, updatedAt);
+    let recorded = false;
+    for (const record of demoted) {
+      recorded =
+        (await this.mutationRecorder.recordUpsert(transaction, 'goal', record)) || recorded;
+    }
+    const record = ProjectRecordMapper.toRecord(project, stored);
+    await observeRequest(store.put(record));
+    recorded = (await this.mutationRecorder.recordUpsert(transaction, 'goal', record)) || recorded;
     await completion;
+    this.mutationRecorder.notifyCommitted(recorded);
     return true;
   }
 
@@ -121,22 +154,43 @@ export class IndexedDbProjectRepository implements ProjectRepository {
     store: IDBObjectStore,
     project: Project,
     updatedAt: Date,
-  ): Promise<void> {
+  ): Promise<readonly ProjectRecord[]> {
     const directionId = project.directionId;
     const records = await observeRequest<ProjectRecord[]>(
       directionId === null
         ? store.getAll()
         : store.index('byDirectionId').getAll(directionId.toString()),
     );
+    const changed: ProjectRecord[] = [];
     for (const record of records) {
       if (record.id === project.id.toString()) continue;
       const current = ProjectRecordMapper.fromRecord(record);
       if (current.isMain && (directionId !== null || current.directionId === null)) {
-        await observeRequest(
-          store.put(ProjectRecordMapper.toRecord(current.removeMain(updatedAt))),
-        );
+        const updated = ProjectRecordMapper.toRecord(current.removeMain(updatedAt), record);
+        await observeRequest(store.put(updated));
+        changed.push(updated);
       }
     }
+    return changed;
+  }
+
+  private writeTransaction(database: IDBDatabase): IDBTransaction {
+    return database.transaction([LIFE_OS_STORE.goals, ...PILOT_MUTATION_STORES], 'readwrite');
+  }
+
+  private async projectFromGoalRecord(value: unknown): Promise<Project> {
+    const project = ProjectRecordMapper.fromRecord(value);
+    if (project.sphereId !== null || project.directionId === null) return project;
+    const database = await this.indexedDb.open();
+    const direction = await executeIndexedDbRequest<{ sphereId?: string | null } | undefined>(
+      database,
+      LIFE_OS_STORE.directions,
+      'readonly',
+      (store) => store.get(project.directionId!.toString()),
+    );
+    return direction?.sphereId
+      ? ProjectRecordMapper.fromRecord({ ...(value as object), sphereId: direction.sphereId })
+      : project;
   }
 
   private async readMany(
@@ -145,12 +199,29 @@ export class IndexedDbProjectRepository implements ProjectRepository {
     const database = await this.indexedDb.open();
     const values = await executeIndexedDbRequest(
       database,
-      LIFE_OS_STORE.projects,
+      LIFE_OS_STORE.goals,
       'readonly',
       request,
     );
-    return values.map((value) => ProjectRecordMapper.fromRecord(value));
+    return Promise.all(values.map((value) => this.projectFromGoalRecord(value)));
   }
+}
+
+function abortQuietly(transaction: IDBTransaction): void {
+  try {
+    transaction.abort();
+  } catch {
+    /* Transaction already settled. */
+  }
+}
+
+function isConstraintDomError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'name' in error &&
+    error.name === 'ConstraintError'
+  );
 }
 
 function isConstraintError(error: unknown): boolean {

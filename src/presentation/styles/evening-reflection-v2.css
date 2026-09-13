@@ -7,10 +7,7 @@
   overflow: hidden;
   border: 1px solid rgb(211 169 91 / 22%);
   border-radius: var(--radius-xlarge);
-  background-image:
-    linear-gradient(180deg, rgb(5 8 11 / 46%), rgb(5 8 10 / 67%)),
-    linear-gradient(90deg, rgb(8 12 15 / 42%), rgb(5 8 10 / 70%) 54%, rgb(6 9 12 / 48%)),
-    url('/evening-center-v2-landscape.png');
+  background: var(--surface-glass-raised);
   background-position: center 58%;
   background-size: cover;
   box-shadow: var(--evening-v2-deep-shadow);
@@ -18,8 +15,10 @@
 
 .evening-command-center-page .evening-reflection-scene::before {
   position: absolute;
-  inset: 6% 16% 10%;
-  background: radial-gradient(ellipse at center, rgb(4 8 11 / 48%), transparent 72%);
+  inset: 0;
+  border-radius: inherit;
+  background: transparent;
+  backdrop-filter: blur(var(--blur-surface));
   content: '';
   pointer-events: none;
 }
@@ -38,7 +37,7 @@
   height: 2.25rem;
   place-items: center;
   color: var(--evening-v2-cream);
-  filter: drop-shadow(0 0 0.45rem rgb(214 173 94 / 16%));
+  filter: drop-shadow(0 0 0.45rem rgb(237 188 140 / 16%));
   transform: translateX(-50%);
 }
 
@@ -60,11 +59,11 @@
   min-height: clamp(21rem, calc(100vh - 33.75rem), 27rem);
   padding: var(--space-6);
   border-color: var(--evening-v2-warm-border);
-  background: linear-gradient(145deg, rgb(245 226 187 / 5%), transparent 58%), rgb(13 17 20 / 86%);
+  --panel-surface: var(--surface-glass-raised);
+  background: transparent;
   box-shadow:
     inset 0 1px rgb(255 241 211 / 7%),
     0 1rem 2.5rem rgb(0 0 0 / 24%);
-  backdrop-filter: blur(10px);
 }
 
 .evening-command-center-page .evening-reflection-heading-description {
@@ -115,10 +114,10 @@
   button.is-selected {
   color: var(--evening-v2-cream);
   border-color: var(--evening-v2-gold-soft);
-  background: linear-gradient(135deg, rgb(214 173 94 / 14%), transparent 62%), rgb(20 19 16 / 88%);
+  background: linear-gradient(135deg, rgb(237 188 140 / 14%), transparent 62%), rgb(20 19 16 / 88%);
   box-shadow:
     inset 0 1px rgb(255 241 211 / 8%),
-    0 0 1rem rgb(214 173 94 / 7%);
+    0 0 1rem rgb(237 188 140 / 7%);
 }
 
 .evening-command-center-page .evening-reflection-insight-field {
@@ -135,8 +134,8 @@
   .evening-reflection-actions
   .primary-button {
   min-height: 3.25rem;
-  border-color: #cfa75b;
-  background: linear-gradient(180deg, #d8b367, #c79a4c);
+  border-color: var(--border-accent);
+  background: var(--surface-primary);
   box-shadow:
     inset 0 1px rgb(255 243 216 / 16%),
     0 0.55rem 1.4rem rgb(196 145 60 / 13%);

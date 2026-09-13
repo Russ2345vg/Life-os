@@ -213,9 +213,9 @@ describe('Evening Center v2 master shell', () => {
     expect(v2Css).not.toContain('var(--space-5)');
   });
 
-  it('затемняет низ hero единым градиентом без отдельной blurred CTA-панели', () => {
+  it('использует общее стекло hero и сохраняет прозрачную CTA-панель', () => {
     expect(v2Css).toMatch(
-      /\.evening-command-center-page \.evening-not-started-card\s*{[^}]*grid-template-rows:\s*auto auto;[^}]*gap:\s*1\.875rem;[^}]*linear-gradient\(\s*180deg,\s*transparent 0%,\s*transparent 64%/s,
+      /\.evening-command-center-page \.evening-not-started-card\s*{[^}]*grid-template-rows:\s*auto auto;[^}]*gap:\s*1\.875rem;[^}]*background:\s*var\(--surface-glass-raised\)/s,
     );
     expect(v2Css).toMatch(
       /\.evening-command-center-page \.evening-not-started-cta-zone\s*{[^}]*border-top:\s*0;[^}]*background:\s*transparent;[^}]*backdrop-filter:\s*none;/s,

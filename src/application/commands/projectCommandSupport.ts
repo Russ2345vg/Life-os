@@ -23,9 +23,7 @@ export async function validateProjectReferences(
   if (directionId === null) return null;
   const direction = await directionRepository.findById(directionId);
   if (direction === null) {
-    return failure(
-      new DomainError('project.direction_not_found', 'Направление проекта не найдено.'),
-    );
+    return failure(new DomainError('project.direction_not_found', 'Направление цели не найдено.'));
   }
   const referencesMatch =
     direction.sphereId === null
@@ -52,7 +50,7 @@ export async function changeProject(
     return failure(new DomainError('project.invalid_expected_version', 'Версия указана неверно.'));
   }
   const stored = await repository.findById(input.id);
-  if (stored === null) return failure(new DomainError('project.not_found', 'Проект не найден.'));
+  if (stored === null) return failure(new DomainError('project.not_found', 'Цель не найдена.'));
   if (stored.version !== input.expectedVersion) return projectVersionConflict();
   try {
     const changed = change(stored, clock.now());
@@ -67,6 +65,6 @@ export async function changeProject(
 
 export function projectVersionConflict(): Failure<DomainError> {
   return failure(
-    new DomainError('project.version_conflict', 'Проект уже изменился. Обновите данные.'),
+    new DomainError('project.version_conflict', 'Цель уже изменилась. Обновите данные.'),
   );
 }

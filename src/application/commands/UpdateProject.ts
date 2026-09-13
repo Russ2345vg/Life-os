@@ -31,7 +31,7 @@ export class UpdateProject {
 
   public async execute(input: UpdateProjectInput): Promise<Result<Project, DomainError>> {
     const stored = await this.repository.findById(input.id);
-    if (stored === null) return failure(new DomainError('project.not_found', 'Проект не найден.'));
+    if (stored === null) return failure(new DomainError('project.not_found', 'Цель не найдена.'));
     if (stored.version !== input.expectedVersion) return projectVersionConflict();
     const sphereId = input.sphereId === undefined ? stored.sphereId : input.sphereId;
     const directionId = input.directionId === undefined ? stored.directionId : input.directionId;
@@ -54,7 +54,7 @@ export class UpdateProject {
         return failure(
           new DomainError(
             'project.decision_sphere_mismatch',
-            'Нельзя изменить сферу проекта: она не совпадает со сферой связанного решения.',
+            'Нельзя изменить сферу цели: она не совпадает со сферой связанного решения.',
           ),
         );
       }

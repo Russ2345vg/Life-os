@@ -15,7 +15,7 @@ describe('ActionProjectReference', () => {
       createElement(ActionProjectReference, { project, onOpenProject: vi.fn() }),
     );
 
-    expect(markup).toContain('Проект');
+    expect(markup).toContain('Цель');
     expect(markup).toContain('Выпустить LifeOS');
     expect(markup).toContain('<button');
   });

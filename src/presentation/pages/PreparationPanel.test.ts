@@ -68,10 +68,7 @@ describe('PreparationPanel completed history', () => {
         PREPARATION_AREA.tomorrowStart,
       ),
     ];
-    const firstAction = createReadyLifeAction(
-      'открыть-проект-lifeos',
-      DayDate.create('2026-08-22'),
-    );
+    const firstAction = createReadyLifeAction('открыть-цель-lifeos', DayDate.create('2026-08-22'));
     const markup = renderToStaticMarkup(
       PreparationSceneView({
         snapshot: { ...preparationSnapshotForCore([...sleep, ...tomorrow]), firstAction },
@@ -91,7 +88,7 @@ describe('PreparationPanel completed history', () => {
     expect(renderedText(markup)).toContain('Выбрано 4 из 3–6');
     expect(markup).toContain('Для спокойного вечера');
     expect(markup).toContain('Для завтра');
-    expect(renderedText(markup)).toContain('Завтра: Действие открыть-проект-lifeos');
+    expect(renderedText(markup)).toContain('Завтра: Действие открыть-цель-lifeos');
     expect(markup).toContain('class="preparation-tomorrow-context"');
     expect(markup).not.toContain('class="preparation-first-start"');
     expect(markup).not.toContain('Первый старт завтра');
@@ -134,7 +131,7 @@ describe('PreparationPanel completed history', () => {
       PreparationSceneView({
         snapshot: {
           ...snapshot,
-          firstAction: createReadyLifeAction('открыть-проект-lifeos', DayDate.create('2026-08-22')),
+          firstAction: createReadyLifeAction('открыть-цель-lifeos', DayDate.create('2026-08-22')),
         },
         mode: EVENING_CYCLE_MODE.normal,
         completedReview: false,
@@ -147,7 +144,7 @@ describe('PreparationPanel completed history', () => {
       }),
     );
 
-    expect(markup).toContain('Подготовить всё для: Действие открыть-проект-lifeos');
+    expect(markup).toContain('Подготовить всё для: Действие открыть-цель-lifeos');
     expect(markup).not.toContain('Подготовить ENVIRONMENT:TOMORROW:FIRST_ACTION');
   });
 

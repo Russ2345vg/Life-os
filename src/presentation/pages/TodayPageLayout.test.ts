@@ -37,10 +37,10 @@ describe('TodayPage layout contract', () => {
       /\.today-page \.main-decision-list \.decision-card::before\s*{[^}]*width:\s*3px[^}]*background:\s*var\(--color-accent-gold\)/,
     );
     expect(globalCss).toMatch(
-      /\.today-page \.main-decision-list \.decision-card\s*{[^}]*border:\s*1px solid rgb\(199 168 98 \/ 22%\)[^}]*background:\s*linear-gradient\(90deg,\s*rgb\(199 168 98 \/ 10%\),\s*rgb\(199 168 98 \/ 3\.5%\) 34%,\s*transparent 68%\)/,
+      /\.today-page \.main-decision-list \.decision-card\s*{[^}]*border:\s*1px solid rgb\(237 188 140 \/ 22%\)[^}]*background:\s*var\(--surface-glass\)/,
     );
     expect(globalCss).toMatch(
-      /\.today-page \.additional-decision-list \.decision-card\s*{[^}]*border:\s*1px solid rgb\(255 255 255 \/ 6%\)[^}]*background:\s*#151916/,
+      /\.today-page \.additional-decision-list \.decision-card\s*{[^}]*border:\s*1px solid rgb\(255 255 255 \/ 6%\)[^}]*background:\s*var\(--surface-glass\)/,
     );
   });
 

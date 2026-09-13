@@ -22,6 +22,7 @@ import { DecisionsPageContent } from './DecisionsPage';
 import { HistoryPageContent } from './HistoryPage';
 import { LocalSettingsPage, MorePage } from './MorePage';
 import { DEFAULT_LOCAL_SETTINGS } from '../settings/localSettings';
+import type { SyncApplication } from '../../application/sync/SyncApplicationService';
 
 const DATE = DayDate.create('2026-08-04');
 
@@ -43,6 +44,34 @@ function createActionListItem(
 
 function render(element: React.ReactElement) {
   return renderToStaticMarkup(element);
+}
+
+function createSyncApplicationStub(): SyncApplication {
+  return {
+    loadOverview: vi.fn(),
+    setupFirstSpace: vi.fn(),
+    confirmRecoverySaved: vi.fn(),
+    exportRecoveryMaterial: vi.fn(),
+    createPairingInvitation: vi.fn(),
+    cancelPairingInvitation: vi.fn(),
+    fulfillPendingPairings: vi.fn(),
+    claimPairingPayload: vi.fn(),
+    completePendingPairing: vi.fn(),
+    recover: vi.fn(),
+    revokeDevice: vi.fn(),
+    retryPendingRotation: vi.fn(),
+    updateDeviceName: vi.fn(),
+    pilotStatus: vi.fn(() => ({
+      state: 'idle' as const,
+      pendingCount: 0,
+      conflictCount: 0,
+      lastSuccessfulSyncAt: null,
+    })),
+    subscribePilotStatus: vi.fn(() => vi.fn()),
+    syncPilotNow: vi.fn(),
+    notifyPilotMutation: vi.fn(),
+    close: vi.fn(),
+  };
 }
 
 describe('section overview pages', () => {
@@ -199,6 +228,12 @@ describe('section overview pages', () => {
         onOpenSection,
         onSaveSettings: vi.fn(() => true),
         onResetSettings: vi.fn(() => true),
+        systemUpdate: {
+          state: { status: 'idle', currentVersion: '1.0.2' },
+          check: vi.fn(),
+          install: vi.fn(),
+        },
+        sync: createSyncApplicationStub(),
       }),
     );
 
@@ -223,6 +258,12 @@ describe('section overview pages', () => {
         onSaveSettings: vi.fn(() => true),
         onResetSettings: vi.fn(() => true),
         onBack: vi.fn(),
+        systemUpdate: {
+          state: { status: 'idle', currentVersion: '1.0.2' },
+          check: vi.fn(),
+          install: vi.fn(),
+        },
+        sync: createSyncApplicationStub(),
       }),
     );
 
@@ -295,6 +336,12 @@ describe('section overview pages', () => {
         onSaveSettings: vi.fn(() => true),
         onResetSettings: vi.fn(() => true),
         onBack: vi.fn(),
+        systemUpdate: {
+          state: { status: 'idle', currentVersion: '1.0.2' },
+          check: vi.fn(),
+          install: vi.fn(),
+        },
+        sync: createSyncApplicationStub(),
       }),
     );
 

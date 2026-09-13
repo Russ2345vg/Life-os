@@ -1,5 +1,6 @@
 export const GOAL_STATUS = {
   active: 'active',
+  paused: 'paused',
   future: 'future',
   achieved: 'achieved',
   archived: 'archived',

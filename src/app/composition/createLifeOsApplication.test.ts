@@ -293,7 +293,7 @@ describe('createLifeOsApplication', () => {
     ).toEqual(['Дом', 'Деньги', 'Здоровье', 'Отношения', 'Работа', 'Развитие'].sort());
     const custom = await firstApplication.createSphere.execute({
       name: 'Творчество',
-      description: 'Личные проекты',
+      description: 'Личные цели',
     });
     expect(custom.ok).toBe(true);
     firstApplication.close();
@@ -306,7 +306,7 @@ describe('createLifeOsApplication', () => {
     expect(snapshot.active).toHaveLength(7);
     expect(snapshot.active.filter((sphere) => sphere.name === 'Здоровье')).toHaveLength(1);
     expect(snapshot.active.find((sphere) => sphere.name === 'Творчество')).toMatchObject({
-      description: 'Личные проекты',
+      description: 'Личные цели',
       version: 1,
     });
     reloaded.close();

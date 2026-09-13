@@ -1,3 +1,6 @@
+import { VoiceTextInput } from '../voice-input/VoiceTextInput';
+import { VoiceField } from '../voice-input/VoiceField';
+import { VoiceTextArea } from '../voice-input/VoiceTextArea';
 import {
   useEffect,
   useReducer,
@@ -429,7 +432,7 @@ export function TomorrowPlanningCenter({
               error={state.errors.title}
               fieldId="tomorrow-decision-title"
             >
-              <input
+              <VoiceTextInput
                 ref={titleInputRef}
                 id="tomorrow-decision-title"
                 value={state.form.title}
@@ -438,16 +441,16 @@ export function TomorrowPlanningCenter({
                 aria-invalid={state.errors.title !== null}
                 aria-describedby={errorId('tomorrow-decision-title', state.errors.title)}
                 placeholder="Что важно решить завтра?"
-                onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                onValueChange={(value) =>
                   dispatch({
                     type: 'form_changed',
-                    form: { ...state.form, title: event.target.value },
+                    form: { ...state.form, title: value },
                   })
                 }
               />
             </PlanningField>
 
-            <PlanningField label="Проект" error={state.errors.projectId} fieldId="tomorrow-project">
+            <PlanningField label="Цель" error={state.errors.projectId} fieldId="tomorrow-project">
               <select
                 id="tomorrow-project"
                 value={state.form.projectId}
@@ -464,13 +467,13 @@ export function TomorrowPlanningCenter({
                       projectId,
                       sphereId:
                         state.form.sphereId === '' && project?.sphereId !== null
-                          ? (project?.sphereId.toString() ?? '')
+                          ? (project?.sphereId?.toString() ?? '')
                           : state.form.sphereId,
                     },
                   });
                 }}
               >
-                <option value="">Без проекта</option>
+                <option value="">Без цели</option>
                 {projects
                   .filter(
                     (project) =>
@@ -486,11 +489,11 @@ export function TomorrowPlanningCenter({
             </PlanningField>
 
             <PlanningField
-              label="Связь с проектом / целью (необязательно)"
+              label="Связь с целью (необязательно)"
               error={state.errors.projectReference}
               fieldId="tomorrow-project-reference"
             >
-              <input
+              <VoiceTextInput
                 id="tomorrow-project-reference"
                 value={state.form.projectReference}
                 maxLength={200}
@@ -500,11 +503,11 @@ export function TomorrowPlanningCenter({
                   'tomorrow-project-reference',
                   state.errors.projectReference,
                 )}
-                placeholder="Проект или цель"
-                onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                placeholder="Цель"
+                onValueChange={(value) =>
                   dispatch({
                     type: 'form_changed',
-                    form: { ...state.form, projectReference: event.target.value },
+                    form: { ...state.form, projectReference: value },
                   })
                 }
               />
@@ -535,7 +538,7 @@ export function TomorrowPlanningCenter({
               fieldId="tomorrow-expected-result"
             >
               <span className="tomorrow-textarea-shell">
-                <textarea
+                <VoiceTextArea
                   id="tomorrow-expected-result"
                   value={state.form.expectedResult}
                   rows={3}
@@ -548,10 +551,10 @@ export function TomorrowPlanningCenter({
                     state.errors.expectedResult,
                   )}
                   placeholder="Какой результат вы хотите получить?"
-                  onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
+                  onValueChange={(value) =>
                     dispatch({
                       type: 'form_changed',
-                      form: { ...state.form, expectedResult: event.target.value },
+                      form: { ...state.form, expectedResult: value },
                     })
                   }
                 />
@@ -613,17 +616,17 @@ export function TomorrowPlanningCenter({
                   error={state.errors.reason}
                   fieldId="tomorrow-reason"
                 >
-                  <textarea
+                  <VoiceTextArea
                     id="tomorrow-reason"
                     value={state.form.reason}
                     rows={2}
                     maxLength={1000}
                     disabled={state.isSaving || capacityReached}
                     aria-invalid={state.errors.reason !== null}
-                    onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
+                    onValueChange={(value) =>
                       dispatch({
                         type: 'form_changed',
-                        form: { ...state.form, reason: event.target.value },
+                        form: { ...state.form, reason: value },
                       })
                     }
                   />
@@ -633,17 +636,17 @@ export function TomorrowPlanningCenter({
                   error={state.errors.price}
                   fieldId="tomorrow-price"
                 >
-                  <textarea
+                  <VoiceTextArea
                     id="tomorrow-price"
                     value={state.form.price}
                     rows={2}
                     maxLength={500}
                     disabled={state.isSaving || capacityReached}
                     aria-invalid={state.errors.price !== null}
-                    onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
+                    onValueChange={(value) =>
                       dispatch({
                         type: 'form_changed',
-                        form: { ...state.form, price: event.target.value },
+                        form: { ...state.form, price: value },
                       })
                     }
                   />
@@ -653,17 +656,17 @@ export function TomorrowPlanningCenter({
                   error={state.errors.sacrifices}
                   fieldId="tomorrow-sacrifices"
                 >
-                  <textarea
+                  <VoiceTextArea
                     id="tomorrow-sacrifices"
                     value={state.form.sacrifices}
                     rows={2}
                     maxLength={1000}
                     disabled={state.isSaving || capacityReached}
                     aria-invalid={state.errors.sacrifices !== null}
-                    onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
+                    onValueChange={(value) =>
                       dispatch({
                         type: 'form_changed',
-                        form: { ...state.form, sacrifices: event.target.value },
+                        form: { ...state.form, sacrifices: value },
                       })
                     }
                   />
@@ -722,11 +725,11 @@ export function TomorrowPlanningCenter({
           </div>
           <div
             className="tomorrow-focus-metric"
-            aria-label={`${linkedProjectCount} ${formatCount(linkedProjectCount, 'проект', 'проекта', 'проектов')}`}
+            aria-label={`${linkedProjectCount} ${formatCount(linkedProjectCount, 'цель', 'цели', 'целей')}`}
           >
             <EveningVisualIcon name="preparation" size={20} />
             <strong>{linkedProjectCount}</strong>
-            <span>{formatCount(linkedProjectCount, 'проект', 'проекта', 'проектов')}</span>
+            <span>{formatCount(linkedProjectCount, 'цель', 'цели', 'целей')}</span>
           </div>
           <div className="tomorrow-focus-metric">
             <EveningVisualIcon name="clock" size={20} />
@@ -814,11 +817,11 @@ function PlanningField({
   readonly children: ReactNode;
 }) {
   return (
-    <label className="tomorrow-planning-field">
+    <VoiceField className="tomorrow-planning-field">
       <span>{label}</span>
       {children}
       {error === null ? null : <small id={`${fieldId}-error`}>{error}</small>}
-    </label>
+    </VoiceField>
   );
 }
 
@@ -844,11 +847,11 @@ function errorsForUpdateCode(code: string): DecisionCreationFormErrors {
     case 'decision.main_limit_reached':
       return { ...errors, kind: 'Все места для главных Решений уже заняты' };
     case 'decision.project_not_found':
-      return { ...errors, projectId: 'Выбранный проект не найден' };
+      return { ...errors, projectId: 'Выбранная цель не найдена' };
     case 'decision.project_unavailable':
-      return { ...errors, projectId: 'Завершённый или архивный проект недоступен' };
+      return { ...errors, projectId: 'Завершённая или архивная цель недоступна' };
     case 'decision.project_sphere_mismatch':
-      return { ...errors, projectId: 'Сфера решения не совпадает со сферой проекта' };
+      return { ...errors, projectId: 'Сфера решения не совпадает со сферой цели' };
     default:
       return { ...errors, form: 'Не удалось сохранить изменения' };
   }

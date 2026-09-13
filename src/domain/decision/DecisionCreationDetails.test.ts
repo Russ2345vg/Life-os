@@ -20,7 +20,7 @@ function createDecision(overrides: Partial<Parameters<typeof Decision.createDraf
 }
 
 describe('сведения создания решения', () => {
-  it('нормализует причину, сферу, цену, жертвы и связь с проектом', () => {
+  it('нормализует причину, сферу, цену, жертвы и связь с целью', () => {
     const decision = createDecision({
       reason: '  Причина  ',
       sphereId: EntityId.create('sphere-growth'),

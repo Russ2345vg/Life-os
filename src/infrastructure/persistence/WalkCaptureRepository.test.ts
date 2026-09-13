@@ -1,8 +1,9 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, describe, expect, it } from 'vitest';
 import * as infrastructure from '../index';
-import { EntityId, WalkCapture } from '../../domain';
+import { EntityId, Project, WalkCapture } from '../../domain';
 import { executeIndexedDbRequest } from './indexed-db/IndexedDbRequest';
+import { ProjectRecordMapper } from './mappers/ProjectRecordMapper';
 
 const databases: infrastructure.LifeOsIndexedDb[] = [];
 afterEach(() => {
@@ -120,14 +121,28 @@ it('WalkCapture schema upgrades a live v17 connection and preserves every existi
     request.onerror = () => reject(request.error);
   });
   expect([...legacy.objectStoreNames]).not.toContain('walkCaptures');
+  const legacyRecord = {
+    id: 'legacy-record',
+    content: 'Данные до WALK-10',
+    version: 7,
+  };
+  const expectedByStore = Object.fromEntries(
+    legacyStores.map((name) => [
+      name,
+      name === 'projects'
+        ? ProjectRecordMapper.toRecord(
+            Project.create({
+              id: EntityId.create('legacy-record'),
+              title: 'Данные до WALK-10',
+              now,
+            }),
+          )
+        : { ...legacyRecord, context: { source: name } },
+    ]),
+  );
   for (const name of legacyStores) {
     await executeIndexedDbRequest(legacy, name, 'readwrite', (store) =>
-      store.add({
-        id: 'legacy-record',
-        content: 'Данные до WALK-10',
-        version: 7,
-        context: { source: name },
-      }),
+      store.add(expectedByStore[name]),
     );
   }
   let notified = false;
@@ -152,12 +167,7 @@ it('WalkCapture schema upgrades a live v17 connection and preserves every existi
       await executeIndexedDbRequest(upgraded, name, 'readonly', (store) =>
         store.get('legacy-record'),
       ),
-    ).toEqual({
-      id: 'legacy-record',
-      content: 'Данные до WALK-10',
-      version: 7,
-      context: { source: name },
-    });
+    ).toEqual(expectedByStore[name]);
   }
   expect(
     await executeIndexedDbRequest(upgraded, 'walkCaptures', 'readonly', (store) => store.getAll()),

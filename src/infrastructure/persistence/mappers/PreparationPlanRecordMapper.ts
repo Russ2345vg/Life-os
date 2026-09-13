@@ -30,6 +30,7 @@ import {
 export class PreparationPlanRecordMapper {
   public static toRecord(plan: PreparationPlan): PreparationPlanRecord {
     return {
+      goalLinksVersion: 1,
       schemaVersion: 1,
       id: plan.id.toString(),
       cycleId: plan.cycleId.toString(),

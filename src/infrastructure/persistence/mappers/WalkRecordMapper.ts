@@ -51,6 +51,7 @@ import type {
 export class WalkRecordMapper {
   public static toRecord(walk: Walk): WalkRecord {
     return {
+      goalLinksVersion: 1,
       schemaVersion: 1,
       id: walk.id.toString(),
       date: walk.date.toString(),

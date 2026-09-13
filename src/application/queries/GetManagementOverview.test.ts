@@ -33,10 +33,10 @@ describe('GetManagementOverview', () => {
       name: 'Архив',
       now: NOW,
     }).archive(NOW);
-    const mainProject = project('project-main', 'Главный проект', true, direction.id);
-    const emptyProject = project('project-empty', 'Проект без решений');
-    const decisionProject = project('project-decision', 'Проект без действий');
-    const coveredProject = project('project-covered', 'Проект с действием');
+    const mainProject = project('project-main', 'Главная цель', true, direction.id);
+    const emptyProject = project('project-empty', 'Цель без решений');
+    const decisionProject = project('project-decision', 'Цель без действий');
+    const coveredProject = project('project-covered', 'Цель с действием');
 
     const mainDecision = confirmDecision(
       createPlannedDecision('main-today', TODAY, DECISION_KIND.main, 1, mainProject.id),
@@ -87,7 +87,7 @@ describe('GetManagementOverview', () => {
     expect(snapshot.focus).toEqual({
       kind: 'project',
       id: 'project-main',
-      title: 'Главный проект',
+      title: 'Главная цель',
       desiredResult: null,
       directionName: 'Развитие LifeOS',
     });
@@ -108,8 +108,8 @@ describe('GetManagementOverview', () => {
       MANAGEMENT_SIGNAL_KIND.decisionWithoutUnfinishedActions,
     ]);
     expect(snapshot.signals.map((signal) => signal.detail)).toEqual([
-      'Главный проект',
-      'Проект без решений',
+      'Главная цель',
+      'Цель без решений',
       'Решение without-actions',
     ]);
   });
@@ -142,12 +142,12 @@ describe('GetManagementOverview', () => {
         projectId: null,
         decisionId: null,
         title: 'Фокус не определён',
-        detail: 'Нет главного проекта или главного направления.',
+        detail: 'Нет главной цели или главного направления.',
       },
     ]);
   });
 
-  it('использует главное направление как fallback, когда главного проекта нет', async () => {
+  it('использует главное направление как fallback, когда главной цели нет', async () => {
     const mainDirection = Direction.create({
       id: id('direction-fallback'),
       name: 'Главное направление',
@@ -176,7 +176,7 @@ describe('GetManagementOverview', () => {
       directionId: 'direction-fallback',
       projectId: null,
       decisionId: null,
-      title: 'Главное направление без активных проектов',
+      title: 'Главное направление без активных целей',
       detail: 'Главное направление',
     });
   });
@@ -211,11 +211,11 @@ describe('GetManagementOverview', () => {
   it('не создаёт сигналов, когда все связи покрыты', async () => {
     const direction = Direction.create({
       id: id('direction-covered'),
-      name: 'Направление с проектом',
+      name: 'Направление с целью',
       isMain: true,
       now: NOW,
     });
-    const mainProject = project('project-covered-main', 'Главный проект', true, direction.id);
+    const mainProject = project('project-covered-main', 'Главная цель', true, direction.id);
     const decision = createPlannedDecision(
       'covered-main',
       TODAY,

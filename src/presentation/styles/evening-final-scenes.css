@@ -37,9 +37,7 @@
   padding: clamp(1.5rem, 3vw, 2.25rem) clamp(1.25rem, 4vw, 3rem);
   border: 1px solid #353b3f;
   border-radius: 1rem;
-  background:
-    radial-gradient(circle at 14% 46%, rgb(213 165 66 / 8%), transparent 19rem),
-    linear-gradient(145deg, rgb(255 255 255 / 1.8%), transparent 42%), #111518;
+  background: var(--surface-glass);
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 3%),
     0 1rem 3rem rgb(0 0 0 / 14%);
@@ -57,9 +55,7 @@
 }
 
 .evening-command-center-page .evening-shutdown-scene.is-emergency .evening-shutdown-workspace {
-  background:
-    radial-gradient(circle at 14% 46%, rgb(151 162 155 / 5%), transparent 19rem),
-    linear-gradient(145deg, rgb(255 255 255 / 1.5%), transparent 42%), #111518;
+  background: var(--surface-glass);
 }
 
 .evening-command-center-page .evening-shutdown-content {
@@ -92,7 +88,7 @@
 .evening-command-center-page .evening-shutdown-content .evening-shutdown-heading h3 {
   max-width: none;
   margin: 0;
-  color: #f1f2f1;
+  color: var(--text-primary);
   font-size: clamp(1.7rem, 3vw, 2.25rem);
   font-weight: 720;
   line-height: 1.08;
@@ -101,7 +97,7 @@
 
 .evening-command-center-page .evening-shutdown-content .evening-shutdown-heading > p:last-child {
   margin: 0;
-  color: #a8afac;
+  color: var(--text-secondary);
   font-size: 0.93rem;
   line-height: 1.45;
 }
@@ -150,7 +146,7 @@
   min-width: 0;
   gap: 0.55rem;
   align-items: center;
-  color: #e8ebea;
+  color: var(--text-primary);
 }
 
 .evening-command-center-page .evening-final-tomorrow-heading svg {
@@ -191,14 +187,14 @@
 }
 
 .evening-command-center-page .evening-shutdown-content .evening-final-tomorrow-primary dd {
-  color: #eceeed;
+  color: var(--text-primary);
   font-size: 0.93rem;
   font-weight: 680;
   line-height: 1.35;
 }
 
 .evening-command-center-page .evening-shutdown-content .evening-final-tomorrow-step dd {
-  color: #b0b7b3;
+  color: var(--text-secondary);
   font-size: 0.8rem;
   font-weight: 560;
   line-height: 1.4;
@@ -214,7 +210,7 @@
 }
 
 .evening-command-center-page .evening-shutdown-content .evening-final-command-error {
-  color: #d8b87b;
+  color: var(--danger);
 }
 
 .evening-command-center-page .evening-shutdown-content .evening-complete-day-action {
@@ -238,7 +234,7 @@
   align-items: center;
   justify-content: center;
   margin: 0;
-  color: #858d89;
+  color: var(--text-muted);
   font-size: 0.76rem;
   line-height: 1.4;
   text-align: center;
@@ -270,9 +266,7 @@
   padding: clamp(1.5rem, 3vw, 2.3rem) clamp(1.25rem, 4vw, 3rem);
   border: 1px solid #2d3437;
   border-radius: 1rem;
-  background:
-    radial-gradient(circle at 14% 42%, rgb(181 198 188 / 5%), transparent 17rem),
-    linear-gradient(115deg, #10171a, #101416 64%);
+  background: var(--surface-glass);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 2%);
 }
 
@@ -328,11 +322,11 @@
 
 .evening-command-center-page .evening-recovery-content .evening-final-tomorrow dt svg {
   flex: 0 0 auto;
-  color: #6eaa77;
+  color: var(--gold-main);
 }
 
 .evening-command-center-page .evening-recovery-content .evening-final-tomorrow dd {
-  color: #d8ddda;
+  color: var(--text-primary);
   font-size: 0.86rem;
   font-weight: 620;
   line-height: 1.4;
@@ -340,7 +334,7 @@
 }
 
 .evening-command-center-page .evening-recovery-content .evening-final-tomorrow-primary dd {
-  color: #ecefed;
+  color: var(--text-primary);
   font-size: 0.94rem;
 }
 
@@ -460,9 +454,7 @@
   overflow: hidden;
   border: 1px solid #353b3f;
   border-radius: 1rem;
-  background:
-    radial-gradient(circle at 16% 28%, rgb(213 165 66 / 8%), transparent 17rem),
-    linear-gradient(145deg, rgb(255 255 255 / 1.8%), transparent 42%), #111518;
+  background: var(--surface-glass);
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 3%),
     0 1rem 3rem rgb(0 0 0 / 14%);
@@ -496,7 +488,7 @@
 .evening-command-center-page .evening-shutdown-scene .evening-final-hero h3 {
   max-width: none;
   margin: 0;
-  color: #f1f2f1;
+  color: var(--text-primary);
   font-size: clamp(1.7rem, 3vw, 2.25rem);
   font-weight: 720;
   line-height: 1.08;
@@ -505,7 +497,7 @@
 
 .evening-command-center-page .evening-shutdown-scene .evening-final-hero-copy > p:last-child {
   margin: 0;
-  color: #a8afac;
+  color: var(--text-secondary);
   font-size: 0.93rem;
   line-height: 1.45;
 }
@@ -517,18 +509,18 @@
   aspect-ratio: 1;
   place-items: center;
   justify-self: center;
-  border: 1px solid rgb(213 165 66 / 25%);
+  border: 1px solid rgb(237 188 140 / 25%);
   border-radius: 999px;
   background:
-    radial-gradient(circle, rgb(213 165 66 / 10%) 0 28%, transparent 29%),
-    radial-gradient(circle, transparent 0 49%, rgb(213 165 66 / 18%) 50%, transparent 51%);
-  box-shadow: 0 0 2.4rem rgb(213 165 66 / 8%);
+    radial-gradient(circle, rgb(237 188 140 / 10%) 0 28%, transparent 29%),
+    radial-gradient(circle, transparent 0 49%, rgb(237 188 140 / 18%) 50%, transparent 51%);
+  box-shadow: 0 0 2.4rem rgb(237 188 140 / 8%);
 }
 
 .evening-command-center-page .evening-shutdown-visual::before,
 .evening-command-center-page .evening-shutdown-visual::after {
   position: absolute;
-  border: 1px solid rgb(213 165 66 / 17%);
+  border: 1px solid rgb(237 188 140 / 17%);
   border-radius: inherit;
   content: '';
 }
@@ -550,13 +542,13 @@
   width: 55%;
   aspect-ratio: 1;
   place-items: center;
-  color: #f2b548;
+  color: var(--gold-soft);
   border: 1px solid #9a7128;
   border-radius: 999px;
-  background: radial-gradient(circle at 50% 35%, rgb(213 165 66 / 18%), transparent 68%), #171812;
+  background: var(--surface-glass);
   box-shadow:
-    inset 0 0 1.25rem rgb(213 165 66 / 8%),
-    0 0 1.3rem rgb(213 165 66 / 10%);
+    inset 0 0 1.25rem rgb(237 188 140 / 8%),
+    0 0 1.3rem rgb(237 188 140 / 10%);
 }
 
 .evening-command-center-page .evening-shutdown-visual-core svg {
@@ -566,13 +558,11 @@
 }
 
 .evening-command-center-page .evening-shutdown-scene.is-emergency .evening-shutdown-stage {
-  background:
-    radial-gradient(circle at 16% 28%, rgb(151 162 155 / 5%), transparent 17rem),
-    linear-gradient(145deg, rgb(255 255 255 / 1.5%), transparent 42%), #111518;
+  background: var(--surface-glass);
 }
 
 .evening-command-center-page .evening-shutdown-scene.is-emergency .evening-final-kicker {
-  color: #8f9993;
+  color: var(--text-muted);
 }
 
 .evening-command-center-page .evening-shutdown-scene.is-emergency .evening-shutdown-visual {
@@ -609,7 +599,7 @@
 .evening-command-center-page .evening-shutdown-readiness > h4,
 .evening-command-center-page .evening-shutdown-scene .evening-final-tomorrow > h4 {
   margin: 0 0 0.7rem;
-  color: #8f9793;
+  color: var(--text-muted);
   font-size: 0.66rem;
   font-weight: 800;
   letter-spacing: 0.12em;
@@ -631,7 +621,7 @@
   gap: 0.55rem;
   align-items: center;
   padding: 0;
-  color: #c7ceca;
+  color: var(--text-primary);
   border: 0;
   background: transparent;
   font-size: 0.82rem;
@@ -644,10 +634,10 @@
   height: 1.25rem;
   flex: 0 0 1.25rem;
   place-items: center;
-  color: #7fca88;
+  color: var(--success);
   border: 1px solid #3e7048;
   border-radius: 999px;
-  background: #101a13;
+  background: var(--surface-field);
 }
 
 .evening-command-center-page .evening-shutdown-readiness .evening-final-facts svg {
@@ -683,19 +673,19 @@
 }
 
 .evening-command-center-page .evening-shutdown-scene .evening-final-tomorrow dt {
-  color: #818985;
+  color: var(--text-muted);
   font-size: 0.74rem;
 }
 
 .evening-command-center-page .evening-shutdown-scene .evening-final-tomorrow-primary dd {
-  color: #eceeed;
+  color: var(--text-primary);
   font-size: 0.93rem;
   font-weight: 680;
   line-height: 1.35;
 }
 
 .evening-command-center-page .evening-shutdown-scene .evening-final-tomorrow-step dd {
-  color: #b0b7b3;
+  color: var(--text-secondary);
   font-size: 0.8rem;
   font-weight: 560;
   line-height: 1.4;
@@ -711,7 +701,7 @@
 }
 
 .evening-command-center-page .evening-shutdown-core .evening-final-command-error {
-  color: #d8b87b;
+  color: var(--danger);
 }
 
 .evening-command-center-page .evening-shutdown-core .evening-complete-day-action {
@@ -735,7 +725,7 @@
   align-items: center;
   justify-self: center;
   margin: 0.25rem 0 0;
-  color: #79bb82;
+  color: var(--success);
   font-size: 0.82rem;
 }
 
@@ -748,7 +738,7 @@
   padding: 1.5rem;
   border: 1px solid #5e502f;
   border-radius: 1rem;
-  background: radial-gradient(circle at 8% 50%, rgb(213 165 66 / 8%), transparent 12rem), #111518;
+  background: var(--surface-glass);
 }
 
 .evening-command-center-page .evening-shutdown-blocking-mark {
@@ -756,10 +746,10 @@
   width: 5.5rem;
   height: 5.5rem;
   place-items: center;
-  color: #d9b25c;
+  color: var(--gold-main);
   border: 1px solid #6c592e;
   border-radius: 999px;
-  background: #18170f;
+  background: var(--surface-glass);
   font-size: 2rem;
 }
 
@@ -782,7 +772,7 @@
 }
 
 .evening-command-center-page .evening-shutdown-blocking-copy > p:not(.evening-final-kicker) {
-  color: #aeb5b1;
+  color: var(--text-secondary);
   line-height: 1.5;
 }
 
@@ -794,7 +784,7 @@
 /* Recovery */
 
 .evening-command-center-page .evening-command-center.is-recovery {
-  background: radial-gradient(circle at 42% 15%, rgb(107 154 118 / 3%), transparent 30rem), #090d0f;
+  background: transparent;
 }
 
 .evening-command-center-page .evening-recovery-scene {
@@ -810,9 +800,7 @@
   padding: clamp(1.5rem, 3vw, 2.2rem);
   border: 1px solid #2d3437;
   border-radius: 1rem;
-  background:
-    radial-gradient(circle at 14% 42%, rgb(181 198 188 / 5%), transparent 17rem),
-    linear-gradient(115deg, #10171a, #101416 64%);
+  background: var(--surface-glass-raised);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 2%);
 }
 
@@ -929,10 +917,10 @@
   width: 3.75rem;
   height: 3.75rem;
   place-items: center;
-  color: #82ca8d;
+  color: var(--success);
   border: 1px solid #4b8956;
   border-radius: 999px;
-  background: #101a14;
+  background: var(--surface-glass);
   box-shadow: 0 0 0 0.35rem #0f1416;
 }
 
@@ -943,12 +931,12 @@
 }
 
 .evening-command-center-page .evening-recovery-summary .evening-final-kicker {
-  color: #8a9890;
+  color: var(--text-muted);
 }
 
 .evening-command-center-page .evening-recovery-summary h3 {
   margin: 0;
-  color: #eef1ef;
+  color: var(--text-primary);
   font-size: clamp(2rem, 3.8vw, 2.75rem);
   font-weight: 700;
   line-height: 1.08;
@@ -957,14 +945,14 @@
 
 .evening-command-center-page .evening-recovery-summary .evening-final-date {
   margin: 0;
-  color: #8d9691;
+  color: var(--text-muted);
   font-size: 0.82rem;
 }
 
 .evening-command-center-page .evening-recovery-lead {
   max-width: 42rem;
   margin: 0.7rem 0 0;
-  color: #b2b9b5;
+  color: var(--text-secondary);
   font-size: 1rem;
   line-height: 1.55;
 }
@@ -975,7 +963,7 @@
   align-items: center;
   width: fit-content;
   margin: 0.35rem 0 0;
-  color: #75b77e;
+  color: var(--gold-main);
   font-size: 0.82rem;
   font-weight: 650;
 }
@@ -995,7 +983,7 @@
 
 .evening-command-center-page .evening-recovery-hero .evening-final-tomorrow > h4 {
   margin: 0;
-  color: #7f8983;
+  color: var(--text-muted);
   font-size: 0.65rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -1027,19 +1015,19 @@
 }
 
 .evening-command-center-page .evening-recovery-hero .evening-final-tomorrow dt {
-  color: #7d8781;
+  color: var(--text-muted);
   font-size: 0.72rem;
 }
 
 .evening-command-center-page .evening-recovery-hero .evening-final-tomorrow dd {
-  color: #d8ddda;
+  color: var(--text-primary);
   font-size: 0.86rem;
   font-weight: 620;
   line-height: 1.4;
 }
 
 .evening-command-center-page .evening-recovery-hero .evening-final-tomorrow-primary dd {
-  color: #ecefed;
+  color: var(--text-primary);
   font-size: 0.94rem;
 }
 
@@ -1052,7 +1040,7 @@
   padding: 1.25rem 1.5rem;
   border: 1px solid #28332e;
   border-radius: 1rem;
-  background: linear-gradient(100deg, rgb(103 184 115 / 4%), transparent 34%), #0f1414;
+  background: var(--surface-glass);
 }
 
 .evening-command-center-page .evening-recovery-state-icon {
@@ -1060,7 +1048,7 @@
   width: 4.5rem;
   height: 4.5rem;
   place-items: center;
-  color: #75b77e;
+  color: var(--gold-main);
   border: 1px solid #2e4835;
   border-radius: 999px;
   background: #111a15;
@@ -1078,13 +1066,13 @@
 }
 
 .evening-command-center-page .evening-recovery-state h4 {
-  color: #e3e8e5;
+  color: var(--text-primary);
   font-size: clamp(1.15rem, 2.2vw, 1.45rem);
 }
 
 .evening-command-center-page .evening-recovery-state p {
   max-width: 32rem;
-  color: #919b95;
+  color: var(--text-muted);
   font-size: 0.82rem;
   line-height: 1.5;
 }
@@ -1094,7 +1082,7 @@
   gap: 0.6rem;
   margin: 0;
   padding: 0;
-  color: #8d9791;
+  color: var(--text-muted);
   font-size: 0.78rem;
   list-style: none;
 }
@@ -1109,7 +1097,7 @@
 
 .evening-command-center-page .evening-recovery-state li svg {
   flex: 0 0 auto;
-  color: #6eaa77;
+  color: var(--gold-main);
   border: 1px solid #36543d;
   border-radius: 999px;
   padding: 0.08rem;
@@ -1119,17 +1107,17 @@
   width: min(100%, 20rem);
   min-height: 3rem;
   justify-self: center;
-  color: #c8ceca;
+  color: var(--text-primary);
   border: 1px solid #363d40;
   border-radius: 0.7rem;
-  background: linear-gradient(180deg, rgb(255 255 255 / 2%), transparent), #141819;
+  background: var(--surface-glass);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 2%);
 }
 
 .evening-command-center-page .evening-recovery-close:hover {
-  color: #eef0ef;
-  border-color: #4a5357;
-  background: #181d1f;
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+  background: var(--surface-hover);
 }
 
 .evening-command-center-page .evening-recovery-close:focus-visible {

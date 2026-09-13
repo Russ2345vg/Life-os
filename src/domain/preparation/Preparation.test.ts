@@ -305,7 +305,7 @@ function requirements(): readonly PreparationRequirement[] {
       key: 'digital',
       area: PREPARATION_AREA.tomorrowStart,
       category: PREPARATION_CATEGORY.digital,
-      title: 'Открыть проект',
+      title: 'Открыть цель',
       sourceType: PREPARATION_SOURCE_TYPE.project,
       sourceId: id('project'),
       required: true,

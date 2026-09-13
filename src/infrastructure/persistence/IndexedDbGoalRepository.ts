@@ -5,9 +5,16 @@ import { LIFE_OS_STORE, LifeOsIndexedDb } from './indexed-db/LifeOsIndexedDb';
 import { executeIndexedDbRequest } from './indexed-db/IndexedDbRequest';
 import { GoalRecordMapper } from './mappers/GoalRecordMapper';
 import type { GoalRecord } from './records/GoalRecord';
+import {
+  IndexedDbPilotMutationRecorder,
+  PILOT_MUTATION_STORES,
+} from '../sync/pilot/IndexedDbPilotMutationRecorder';
 
 export class IndexedDbGoalRepository implements GoalRepository {
-  public constructor(readonly indexedDb: LifeOsIndexedDb = new LifeOsIndexedDb()) {}
+  public constructor(
+    readonly indexedDb: LifeOsIndexedDb = new LifeOsIndexedDb(),
+    readonly mutationRecorder: IndexedDbPilotMutationRecorder = new IndexedDbPilotMutationRecorder(),
+  ) {}
 
   public async findById(id: EntityId): Promise<Goal | null> {
     const database = await this.indexedDb.open();
@@ -44,20 +51,32 @@ export class IndexedDbGoalRepository implements GoalRepository {
 
   public async create(goal: Goal): Promise<boolean> {
     const database = await this.indexedDb.open();
+    const transaction = database.transaction(
+      [LIFE_OS_STORE.goals, ...PILOT_MUTATION_STORES],
+      'readwrite',
+    );
+    const completion = observeTransaction(transaction);
     try {
-      await executeIndexedDbRequest(database, LIFE_OS_STORE.goals, 'readwrite', (store) =>
-        store.add(GoalRecordMapper.toRecord(goal)),
-      );
+      const record = GoalRecordMapper.toRecord(goal);
+      await observeRequest(transaction.objectStore(LIFE_OS_STORE.goals).add(record));
+      const recorded = await this.mutationRecorder.recordUpsert(transaction, 'goal', record);
+      await completion;
+      this.mutationRecorder.notifyCommitted(recorded);
       return true;
     } catch (error: unknown) {
-      if (isConstraintError(error)) return false;
+      abortQuietly(transaction);
+      await settleTransaction(completion);
+      if (isConstraintError(error) || isConstraintDomError(error)) return false;
       throw error;
     }
   }
 
   public async updateIfVersionMatches(goal: Goal, expectedVersion: number): Promise<boolean> {
     const database = await this.indexedDb.open();
-    const transaction = database.transaction(LIFE_OS_STORE.goals, 'readwrite');
+    const transaction = database.transaction(
+      [LIFE_OS_STORE.goals, ...PILOT_MUTATION_STORES],
+      'readwrite',
+    );
     const store = transaction.objectStore(LIFE_OS_STORE.goals);
     const completion = observeTransaction(transaction);
     const stored = await observeRequest<GoalRecord | undefined>(store.get(goal.id.toString()));
@@ -66,10 +85,30 @@ export class IndexedDbGoalRepository implements GoalRepository {
       await settleTransaction(completion);
       return false;
     }
-    await observeRequest(store.put(GoalRecordMapper.toRecord(goal)));
+    const record = GoalRecordMapper.toRecord(goal);
+    await observeRequest(store.put(record));
+    const recorded = await this.mutationRecorder.recordUpsert(transaction, 'goal', record);
     await completion;
+    this.mutationRecorder.notifyCommitted(recorded);
     return true;
   }
+}
+
+function abortQuietly(transaction: IDBTransaction): void {
+  try {
+    transaction.abort();
+  } catch {
+    /* Transaction already settled. */
+  }
+}
+
+function isConstraintDomError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'name' in error &&
+    error.name === 'ConstraintError'
+  );
 }
 
 function isConstraintError(error: unknown): boolean {

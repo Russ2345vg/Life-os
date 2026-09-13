@@ -1,3 +1,5 @@
+import { VoiceField } from '../voice-input/VoiceField';
+import { VoiceTextArea } from '../voice-input/VoiceTextArea';
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import {
   AdvanceWalkReflectionStage,
@@ -63,6 +65,8 @@ import {
   useSpheres,
 } from '../components/sphereReferenceModel';
 import { useDateQuery } from '../date/useDateQuery';
+import { useSyncContentChanged } from '../sync/SyncStatusContext';
+import { AttachmentSyncStatus } from '../sync/AttachmentSyncStatus';
 import { WalkSubmissionGuard } from '../walk/WalkSubmissionGuard';
 import { WalkCaptureComposer, type WalkCaptureSaveResult } from '../walk/WalkCaptureComposer';
 import { WalkCaptureInbox } from '../walk/WalkCaptureInbox';
@@ -182,6 +186,7 @@ const WALK_STATISTICS_PERIOD_OPTIONS: readonly {
 export function WalksPage(props: WalksPageProps) {
   const { decisionLaunchRequest, onDecisionLaunchConsumed } = props;
   const { state, reload } = useDateQuery(props.selectedDate, props.getWalksForDate);
+  useSyncContentChanged('walks', reload);
   const spheres = useSpheres(props.getSpheres);
   const [activeWalkState, setActiveWalkState] = useState<ActiveWalkState>({ status: 'loading' });
   const [sessionPhase, setSessionPhase] = useState<WalkSessionPhase>('center');
@@ -1637,16 +1642,16 @@ export function WalkCompletionForm(props: WalkCompletionFormProps) {
 
   return (
     <form className="walk-completion-form" onSubmit={submit}>
-      <label>
+      <VoiceField>
         <span>Что дала эта прогулка?</span>
-        <textarea
+        <VoiceTextArea
           value={result}
           maxLength={MAX_WALK_RESULT_LENGTH}
           rows={4}
           disabled={props.isSaving}
-          onChange={(event) => setResult(event.target.value)}
+          onValueChange={(value) => setResult(value)}
         />
-      </label>
+      </VoiceField>
       <label className="walk-photo-field">
         <span>Фото (необязательно)</span>
         <input
@@ -1803,6 +1808,11 @@ export function WalkResultCard(props: WalkResultCardProps) {
       )}
       {!completed ? null : (
         <div className="walk-photo-actions">
+          <AttachmentSyncStatus
+            entityType="walk"
+            objectId={walk.id.toString()}
+            localAvailable={walk.photo !== null}
+          />
           <label className="secondary-button">
             {walk.photo === null ? 'Добавить фото' : 'Заменить фото'}
             <input
