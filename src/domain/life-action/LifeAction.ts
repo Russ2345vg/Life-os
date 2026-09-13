@@ -56,6 +56,8 @@ export interface LifeActionRehydrationData {
   readonly status: LifeActionStatus;
   readonly decisionId: EntityId | null;
   readonly sphereId?: EntityId | null;
+  readonly goalId?: EntityId | null;
+  readonly isNext?: boolean;
   readonly plannedDate: DayDate | null;
   readonly createdAt: Date;
   readonly readyAt: Date | null;
@@ -73,6 +75,8 @@ export class LifeAction extends Entity {
   #description: string | null;
   readonly #decisionId: EntityId | null;
   #sphereId: EntityId | null;
+  readonly #goalId: EntityId | null;
+  readonly #isNext: boolean;
   readonly #createdAt: Date;
   readonly #domainEvents: DomainEvent[];
   #expectedResult: ActionExpectedResult | null;
@@ -97,6 +101,8 @@ export class LifeAction extends Entity {
     this.#status = data.status;
     this.#decisionId = data.decisionId;
     this.#sphereId = data.sphereId ?? null;
+    this.#goalId = data.goalId ?? null;
+    this.#isNext = data.isNext ?? false;
     this.#plannedDate = data.plannedDate;
     this.#createdAt = copyDate(data.createdAt);
     this.#readyAt = copyOptionalDate(data.readyAt);
@@ -183,6 +189,14 @@ export class LifeAction extends Entity {
 
   public get sphereId(): EntityId | null {
     return this.#sphereId;
+  }
+
+  public get goalId(): EntityId | null {
+    return this.#goalId;
+  }
+
+  public get isNext(): boolean {
+    return this.#isNext;
   }
 
   public get plannedDate(): DayDate | null {

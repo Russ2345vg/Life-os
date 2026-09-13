@@ -466,6 +466,8 @@ function cloneLifeAction(item: LifeAction): LifeAction {
     status: item.status,
     decisionId: item.decisionId,
     sphereId: item.sphereId,
+    goalId: item.goalId,
+    isNext: item.isNext,
     plannedDate: item.plannedDate,
     createdAt: item.createdAt,
     readyAt: item.readyAt,

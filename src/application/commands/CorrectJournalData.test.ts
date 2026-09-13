@@ -6,6 +6,7 @@ import {
   JOURNAL_ENTRY_TYPE,
   JOURNAL_SUBJECT_TYPE,
   JournalEntry,
+  LifeAction,
 } from '../../domain';
 import { DomainError } from '../../shared/errors/DomainError';
 import { FakeClock } from '../../test/helpers/Fakes';
@@ -28,6 +29,27 @@ const OCCURRED_AT = new Date('2026-08-09T10:00:00.000+09:00');
 const CORRECTED_AT = new Date('2026-08-09T12:00:00.000+09:00');
 
 describe('CorrectJournalData', () => {
+  it('preserves Compatibility Bridge fields when correcting a LifeAction', async () => {
+    const action = withBridgeFields(
+      completeLifeAction(createReadyLifeAction('bridge-action', DATE)),
+    );
+    const setup = await createSetup(actionCompletedSource(action.id), { lifeActions: [action] });
+
+    const result = await setup.command.execute({
+      commandId: EntityId.create('bridge-correction'),
+      sourceEntryId: EntityId.create('source'),
+      newValue: 'Исправленный результат',
+      reason: 'Уточнение результата',
+    });
+
+    expect(result.ok).toBe(true);
+    const saved = await setup.lifeActions.findById(action.id);
+    expect({ goalId: saved?.goalId?.toString(), isNext: saved?.isNext }).toEqual({
+      goalId: 'bridge-goal',
+      isNext: true,
+    });
+  });
+
   it('corrects an allowed field and appends a separate immutable event', async () => {
     const action = completeLifeAction(createReadyLifeAction('action', DATE));
     action.clearUncommittedEvents();
@@ -357,5 +379,30 @@ function source(
     subjectId,
     labelAtEvent: subjectId.toString(),
     createdAt: OCCURRED_AT,
+  });
+}
+
+function withBridgeFields(action: LifeAction): LifeAction {
+  return LifeAction.rehydrate({
+    id: action.id,
+    title: action.title,
+    description: action.description,
+    expectedResult: action.expectedResult,
+    actualResult: action.actualResult,
+    status: action.status,
+    decisionId: action.decisionId,
+    sphereId: action.sphereId,
+    goalId: EntityId.create('bridge-goal'),
+    isNext: true,
+    plannedDate: action.plannedDate,
+    createdAt: action.createdAt,
+    readyAt: action.readyAt,
+    startedAt: action.startedAt,
+    completedAt: action.completedAt,
+    cancelledAt: action.cancelledAt,
+    cancelReason: action.cancelReason,
+    archivedAt: action.archivedAt,
+    rescheduleCount: action.rescheduleCount,
+    version: action.version,
   });
 }

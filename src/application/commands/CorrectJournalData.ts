@@ -357,6 +357,8 @@ function cloneLifeAction(lifeAction: LifeAction): LifeAction {
     status: lifeAction.status,
     decisionId: lifeAction.decisionId,
     sphereId: lifeAction.sphereId,
+    goalId: lifeAction.goalId,
+    isNext: lifeAction.isNext,
     plannedDate: lifeAction.plannedDate,
     createdAt: lifeAction.createdAt,
     readyAt: lifeAction.readyAt,

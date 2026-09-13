@@ -11,6 +11,50 @@ import type { LifeActionRecord } from '../records/LifeActionRecord';
 import { LifeActionRecordMapper } from './LifeActionRecordMapper';
 
 describe('LifeActionRecordMapper', () => {
+  it('читает V1 без bridge-полей как null/false и сохраняет все legacy-поля', () => {
+    const record = LifeActionRecordMapper.toRecord(completedAction());
+    delete (record as { goalId?: string | null }).goalId;
+    delete (record as { isNext?: boolean }).isNext;
+
+    const restored = LifeActionRecordMapper.fromRecord(record);
+
+    expect(restored.goalId).toBeNull();
+    expect(restored.isNext).toBe(false);
+    expect(LifeActionRecordMapper.toRecord(restored)).toEqual({
+      ...record,
+      goalId: null,
+      isNext: false,
+    });
+  });
+
+  it.each([
+    { goalId: 'goal-1', isNext: true },
+    { goalId: null, isNext: false },
+  ])('сохраняет bridge-поля $goalId/$isNext и legacy-поля при round-trip', (fields) => {
+    const record: LifeActionRecord = {
+      ...LifeActionRecordMapper.toRecord(completedAction()),
+      ...fields,
+    };
+
+    const restored = LifeActionRecordMapper.fromRecord(record);
+
+    expect(restored.goalId?.toString() ?? null).toBe(fields.goalId);
+    expect(restored.isNext).toBe(fields.isNext);
+    expect(LifeActionRecordMapper.toRecord(restored)).toEqual(record);
+    expect(restored.getUncommittedEvents()).toHaveLength(0);
+  });
+
+  it.each([{ goalId: '  ' }, { isNext: 'true' }, { isNext: null }])(
+    'отклоняет повреждённые bridge-поля %j',
+    (fields) => {
+      const record = { ...LifeActionRecordMapper.toRecord(completedAction()), ...fields };
+
+      expect(() =>
+        LifeActionRecordMapper.fromRecord(record as unknown as LifeActionRecord),
+      ).toThrowError();
+    },
+  );
+
   it('преобразует LifeAction в независимую plain record без очистки событий', () => {
     const action = completedAction();
     const eventCount = action.getUncommittedEvents().length;

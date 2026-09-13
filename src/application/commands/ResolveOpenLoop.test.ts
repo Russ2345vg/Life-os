@@ -12,6 +12,7 @@ import {
   DayDate,
   EntityId,
   EVENING_CYCLE_STATE,
+  LifeAction,
   OPEN_LOOP_ENTITY_TYPE,
   OPEN_LOOP_REQUIREMENT,
   OPEN_LOOP_RESOLUTION,
@@ -48,6 +49,52 @@ const NEXT_DAY = DayDate.create('2026-08-15');
 const EVENING = new Date('2026-08-14T22:00:00.000+09:00');
 
 describe('E3: разбор незавершённого', () => {
+  it('preserves Compatibility Bridge fields when carrying a LifeAction forward', async () => {
+    const context = await createContext();
+    const action = withBridgeFields(createReadyLifeAction('bridge-direct', DAY));
+    await context.actions.save(action);
+    await context.query.execute(DAY);
+
+    const result = await context.command.execute({
+      dateKey: DAY,
+      entityType: OPEN_LOOP_ENTITY_TYPE.lifeAction,
+      entityId: action.id,
+      resolution: OPEN_LOOP_RESOLUTION.carryForward,
+    });
+
+    expect(result.ok).toBe(true);
+    const saved = await context.actions.findById(action.id);
+    expect({ goalId: saved?.goalId?.toString(), isNext: saved?.isNext }).toEqual({
+      goalId: 'bridge-goal',
+      isNext: true,
+    });
+  });
+
+  it('preserves Compatibility Bridge fields when carrying a Decision and its LifeAction', async () => {
+    const context = await createContext();
+    const decision = createPlannedDecision('bridge-decision', DAY);
+    const action = withBridgeFields(
+      createReadyLifeAction('bridge-linked', DAY, { decisionId: decision.id }),
+    );
+    await context.decisions.save(decision);
+    await context.actions.save(action);
+    await context.query.execute(DAY);
+
+    const result = await context.command.execute({
+      dateKey: DAY,
+      entityType: OPEN_LOOP_ENTITY_TYPE.decision,
+      entityId: decision.id,
+      resolution: OPEN_LOOP_RESOLUTION.carryForward,
+    });
+
+    expect(result.ok).toBe(true);
+    const saved = await context.actions.findById(action.id);
+    expect({ goalId: saved?.goalId?.toString(), isNext: saved?.isNext }).toEqual({
+      goalId: 'bridge-goal',
+      isNext: true,
+    });
+  });
+
   it('находит только обязательные незавершённые элементы дня и одинаково отвечает повторным UI-входам', async () => {
     const context = await createContext();
     const planned = createPlannedDecision('open-decision', DAY);
@@ -422,4 +469,29 @@ function itemKey(item: { readonly entityType: string; readonly entityId: string 
 
 function id(value: string): EntityId {
   return EntityId.create(value);
+}
+
+function withBridgeFields(action: LifeAction): LifeAction {
+  return LifeAction.rehydrate({
+    id: action.id,
+    title: action.title,
+    description: action.description,
+    expectedResult: action.expectedResult,
+    actualResult: action.actualResult,
+    status: action.status,
+    decisionId: action.decisionId,
+    sphereId: action.sphereId,
+    goalId: EntityId.create('bridge-goal'),
+    isNext: true,
+    plannedDate: action.plannedDate,
+    createdAt: action.createdAt,
+    readyAt: action.readyAt,
+    startedAt: action.startedAt,
+    completedAt: action.completedAt,
+    cancelledAt: action.cancelledAt,
+    cancelReason: action.cancelReason,
+    archivedAt: action.archivedAt,
+    rescheduleCount: action.rescheduleCount,
+    version: action.version,
+  });
 }

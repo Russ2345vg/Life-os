@@ -10,6 +10,28 @@ import { LIFE_ACTION_STATUS, type LifeActionStatus } from './LifeActionStatus';
 import { LifeActionTitle } from './LifeActionTitle';
 
 describe('LifeAction.rehydrate', () => {
+  it('читает V1 без bridge-полей как goalId=null и isNext=false', () => {
+    const action = LifeAction.rehydrate(completedData());
+
+    expect(action.goalId).toBeNull();
+    expect(action.isNext).toBe(false);
+    expect(action.getUncommittedEvents()).toHaveLength(0);
+  });
+
+  it('сохраняет bridge-поля без включения правил следующего шага', () => {
+    const action = LifeAction.rehydrate({
+      ...completedData(),
+      goalId: id('goal-1'),
+      isNext: true,
+    });
+
+    expect(action.goalId?.toString()).toBe('goal-1');
+    expect(action.isNext).toBe(true);
+    expect(action.status).toBe(LIFE_ACTION_STATUS.completed);
+    expect(action.version).toBe(7);
+    expect(action.getUncommittedEvents()).toHaveLength(0);
+  });
+
   it('восстанавливает существующее состояние и версию без новых событий', () => {
     const action = LifeAction.rehydrate(completedData());
 
