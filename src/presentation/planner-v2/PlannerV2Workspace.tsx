@@ -178,7 +178,7 @@ export function PlannerV2Workspace({
           {navLink({ view: 'new-action', goalId: null, title: null }, 'Новое действие', 'create')}
         </nav>
         <button className="planner-rollback" type="button" onClick={onExit}>
-          Вернуться к прежнему Сегодня
+          Старая версия
         </button>
       </aside>
       <main ref={mainContent} id="planner-main-content" className="planner-content" tabIndex={-1}>

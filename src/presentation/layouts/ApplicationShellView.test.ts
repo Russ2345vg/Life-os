@@ -82,7 +82,7 @@ describe('ApplicationShellView', () => {
 
     expect(markup).not.toContain('application-sidebar-collapsed');
     expect(markup).toContain('aria-label="Свернуть боковое меню"');
-    expect(markup).toContain('<span class="application-navigation-label">День</span>');
+    expect(markup).toContain('<span class="application-navigation-label">Сегодня</span>');
   });
 
   it('сохраняет одноколоночное содержимое Сегодня при обоих состояниях бокового меню', () => {
@@ -175,7 +175,7 @@ describe('ApplicationShellView', () => {
     expect(mobileMenu).toContain('aria-current="page"');
   });
 
-  it('даёт вход в V2 из desktop и mobile menu, сохраняя обычный День', () => {
+  it('показывает основной Сегодня на desktop и mobile без временного пункта V2', () => {
     const desktop = renderShell(APP_SECTION.today);
     const mobileMenu = renderToStaticMarkup(
       createElement(ApplicationMobileMenu, {
@@ -187,13 +187,11 @@ describe('ApplicationShellView', () => {
     );
 
     for (const markup of [desktop, mobileMenu]) {
-      expect(markup).toContain('href="#/v2/today"');
-      expect(markup).toContain('aria-label="V2 Планировщик"');
-      expect(markup).toContain('<span class="application-navigation-label">День</span>');
+      expect(markup).toContain('aria-label="Сегодня"');
+      expect(markup).toContain('<span class="application-navigation-label">Сегодня</span>');
+      expect(markup).not.toContain('V2 Планировщик');
     }
-    expect(desktop.slice(desktop.indexOf('Мобильная навигация'))).not.toContain(
-      'href="#/v2/today"',
-    );
+    expect(desktop.slice(desktop.indexOf('Мобильная навигация'))).toContain('aria-label="Сегодня"');
   });
 
   it('готовит мобильное меню поверх страницы с управлением закрытием', () => {

@@ -45,7 +45,11 @@ export function startBrowserApplicationRouteSync(
     }
     if (hash !== '') return;
     const section = readApplicationSectionFromHistoryState(input.readHistoryState());
-    if (section !== null) input.restoreSection(section);
+    if (section === APP_SECTION.today) {
+      input.restore({ section: APP_SECTION.today, route: { view: 'today' } });
+    } else if (section !== null) {
+      input.restoreSection(section);
+    }
   };
 
   input.windowTarget.addEventListener('popstate', restoreRoute);

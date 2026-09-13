@@ -11,6 +11,7 @@ import { APP_SECTION, type AppSection } from '../presentation/navigation/AppSect
 import {
   parseApplicationRoute,
   resolveInitialApplicationSection,
+  resolveInitialPlannerV2Route,
 } from '../presentation/navigation/ApplicationRoute';
 import {
   buildGoalAlbumRoute,
@@ -113,9 +114,6 @@ export function ApplicationShell() {
     initialRoute?.section === APP_SECTION.routine ? initialRoute.route : null;
   const initialGoalRoute =
     initialRoute?.section === APP_SECTION.management ? initialRoute.route : null;
-  const [v2Route, setV2Route] = useState<PlannerV2Route | null>(
-    initialRoute?.section === APP_SECTION.today ? initialRoute.route : null,
-  );
   const [todayActionSelectionStore] = useState(() => new BrowserTodayActionSelectionStore());
   const [actionListFiltersStore] = useState(() => new BrowserActionListFiltersStore());
   const [sidebarPreferenceStore] = useState(() => new BrowserSidebarPreferenceStore());
@@ -125,6 +123,9 @@ export function ApplicationShell() {
   });
   const [settings, setSettings] = useState<LocalSettings>(() =>
     copyLocalSettings(settingsRuntime.initial.settings),
+  );
+  const [v2Route, setV2Route] = useState<PlannerV2Route | null>(() =>
+    resolveInitialPlannerV2Route(initialRoute, settingsRuntime.initial.settings.defaultSection),
   );
   useEffect(
     () =>
@@ -274,7 +275,8 @@ export function ApplicationShell() {
         getActiveWalk: application.getActiveWalk,
         getApplicationMode: application.getApplicationMode,
         hasInitialRoutineRoute: initialRoute !== null,
-        hasInitialPlannerRoute: initialRoute?.section === APP_SECTION.today,
+        hasInitialPlannerRoute:
+          initialRoute?.section === APP_SECTION.today && initialRoute.route !== null,
       });
       if (!active) return;
       setActiveWalkRestored(result.status === 'active-walk');
@@ -366,9 +368,16 @@ export function ApplicationShell() {
   );
 
   function openSection(section: AppSection, openSync = false): void {
-    setV2Route(null);
     setSyncOpenRequest((current) => (openSync ? current + 1 : 0));
     setDecisionReturnId(null);
+    if (section === APP_SECTION.today) {
+      pushApplicationRouteToBrowser(window, buildPlannerV2Route({ view: 'today' }), activeSection);
+      setV2Route({ view: 'today' });
+      setMorningView(null);
+      setActiveSection(APP_SECTION.today);
+      return;
+    }
+    setV2Route(null);
     if (section === APP_SECTION.management) {
       setManagementRequest((current) => ({
         projectId: null,
@@ -436,7 +445,13 @@ export function ApplicationShell() {
   }
 
   function openToday(): void {
-    leaveRoutedSection(APP_SECTION.today);
+    openSection(APP_SECTION.today);
+  }
+
+  function openLegacyToday(): void {
+    pushApplicationRouteToBrowser(window, '#/legacy/today', activeSection);
+    setV2Route(null);
+    setMorningView(null);
     setActiveSection(APP_SECTION.today);
   }
 
@@ -629,7 +644,7 @@ export function ApplicationShell() {
               setV2Route(route);
               setActiveSection(APP_SECTION.today);
             }}
-            onExit={() => openSection(APP_SECTION.today)}
+            onExit={openLegacyToday}
           />
         </Suspense>
       </SyncStatusProvider>

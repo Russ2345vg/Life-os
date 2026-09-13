@@ -5,7 +5,7 @@ import { APP_SECTION, resolveMenuEntrySection, type AppSection } from './AppSect
 import { parsePlannerV2Route, type PlannerV2Route } from '../planner-v2/PlannerV2Navigation';
 
 export type RoutedApplicationSection =
-  | { readonly section: typeof APP_SECTION.today; readonly route: PlannerV2Route }
+  | { readonly section: typeof APP_SECTION.today; readonly route: PlannerV2Route | null }
   | {
       readonly section: typeof APP_SECTION.management;
       readonly managementSection: typeof MANAGEMENT_SECTION.goals;
@@ -19,6 +19,7 @@ export type RoutedApplicationSection =
 export function parseApplicationRoute(hash: string): RoutedApplicationSection | null {
   const plannerRoute = parsePlannerV2Route(hash);
   if (plannerRoute !== null) return { section: APP_SECTION.today, route: plannerRoute };
+  if (hash === '#/legacy/today') return { section: APP_SECTION.today, route: null };
   const goalRoute = parseGoalAlbumRoute(hash);
   if (goalRoute !== null) {
     return {
@@ -34,6 +35,14 @@ export function parseApplicationRoute(hash: string): RoutedApplicationSection | 
   }
 
   return null;
+}
+
+export function resolveInitialPlannerV2Route(
+  route: RoutedApplicationSection | null,
+  defaultSection: AppSection,
+): PlannerV2Route | null {
+  if (route !== null) return route.section === APP_SECTION.today ? route.route : null;
+  return resolveMenuEntrySection(defaultSection) === APP_SECTION.today ? { view: 'today' } : null;
 }
 
 export function resolveInitialApplicationSection(
