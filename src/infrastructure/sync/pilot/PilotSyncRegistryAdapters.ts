@@ -1,3 +1,7 @@
+import {
+  InboxIdeaRecordMapper,
+  FocusPeriodRecordMapper,
+} from '../../persistence/PlannerRecordMappers';
 import { DomainError } from '../../../shared/errors/DomainError';
 import { normalizeLegacyGoalLinks } from '../../../shared/legacyGoalIdentity';
 import { parseEveningRitualSettings } from '../../../application/evening-settings';
@@ -168,6 +172,18 @@ const PILOT_BINDINGS: Readonly<Record<PilotEntityType, PilotAdapterBinding>> = O
     recommendationApplicationReferences,
   ),
   morning_cycle: mapped(MorningCycleRecordMapper, morningCycleReferences),
+  inbox_idea: mapped(InboxIdeaRecordMapper, (record) =>
+    record.targetType === 'goal'
+      ? optional(record, 'targetId', 'goal')
+      : optional(record, 'targetId', 'life_action'),
+  ),
+  focus_period: mapped(FocusPeriodRecordMapper, (record) =>
+    FocusPeriodRecordMapper.fromRecord({ ...record, version: 1 }).goals.map((g) => ({
+      entityType: 'goal',
+      objectId: g.goalId,
+      required: true,
+    })),
+  ),
   user_settings: {
     normalize: normalizeUserSettings,
     prepare: normalizeUserSettings,

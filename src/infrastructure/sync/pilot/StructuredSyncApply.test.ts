@@ -50,7 +50,7 @@ describe('SYNC-04 structured database apply', () => {
     expect((await store.localState('goal', String(fixtures.goal.id))).record).not.toBeNull();
     indexedDb.close();
   });
-  it('captures all 21 domain store writes into the existing durable outbox across restart', async () => {
+  it('captures all 23 domain store writes into the existing durable outbox across restart', async () => {
     const factory = new IDBFactory();
     const indexedDb = new LifeOsIndexedDb(factory);
     const database = await indexedDb.open();
@@ -77,7 +77,7 @@ describe('SYNC-04 structured database apply', () => {
     const records = await request<SyncOutboxRecord[]>(
       read.objectStore(LIFE_OS_SYNC_STORE.outbox).getAll(),
     );
-    expect(records).toHaveLength(21);
+    expect(records).toHaveLength(23);
     for (const record of records) {
       const payload = parsePilotSyncPayload(record.serializedPayload);
       const identityRead = connection.transaction(IDENTITY_READ_STORES);
@@ -158,7 +158,7 @@ describe('SYNC-04 structured database apply', () => {
       ).toBe(true);
     }
     expect(await store.counts()).toEqual({ pending: 1, conflicts: 0, quarantined: 0 });
-    expect(await store.cursor('space')).toBe(22);
+    expect(await store.cursor('space')).toBe(24);
     indexedDb.close();
   });
 

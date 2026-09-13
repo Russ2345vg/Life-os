@@ -13,12 +13,12 @@ export async function planPlannerAction(
   command: Pick<SetLifeActionPlan, 'execute'>,
   id: string,
   date: string,
-  isNext: boolean,
+  isNext?: boolean,
 ) {
   const result = await command.execute({
     lifeActionId: EntityId.create(id),
-    plannedDate: DayDate.create(date),
-    isNext,
+    plannedDate: date ? DayDate.create(date) : null,
+    ...(isNext === undefined ? {} : { isNext }),
   });
   if (!result.ok) throw result.error;
   return result.value;

@@ -118,6 +118,14 @@ export const LIFE_OS_SYNC_REGISTRY = Object.freeze([
     dependencies: ['direction', 'sphere'],
     attachmentFields: ['coverImage'],
   }),
+  registration('inbox_idea', LIFE_OS_STORE.inboxIdeas, 'IndexedDbPlannerRepository', {
+    dependencies: ['goal', 'life_action'],
+    deletionMode: 'archive',
+  }),
+  registration('focus_period', LIFE_OS_STORE.focusPeriods, 'IndexedDbPlannerRepository', {
+    dependencies: ['goal'],
+    idSource: 'fixed_or_crypto_uuid',
+  }),
   registration('user_settings', 'lifeos.local-settings.v1', 'BrowserLocalSettingsStore', {
     idSource: 'fixed_or_crypto_uuid',
     applyMode: 'local_storage',

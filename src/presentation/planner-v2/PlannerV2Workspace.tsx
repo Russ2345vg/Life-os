@@ -20,8 +20,9 @@ import { completePlannerAction, planPlannerAction } from './plannerTodayCommands
 import { useSyncContentChanged } from '../sync/SyncStatusContext';
 import { finishPlannerSubmission } from './plannerRouteSubmission';
 import './planner-v2.css';
+import { PlannerLibraryWorkspace, type PlannerLibraryServices } from './PlannerLibraryWorkspace';
 
-export interface PlannerV2Services {
+export interface PlannerV2Services extends PlannerLibraryServices {
   readonly createLifeActionDraft: Pick<CreateLifeActionDraft, 'execute'>;
   readonly createGoal: Pick<CreateGoal, 'execute'>;
   readonly completeLifeAction: Pick<CompleteLifeAction, 'execute'>;
@@ -134,10 +135,20 @@ export function PlannerV2Workspace({
     onNavigate(target);
   };
   const today = () => onNavigate({ view: 'today' });
-  const navLink = (target: PlannerV2Route, label: string, icon: 'today' | 'goals' | 'create') => (
+  const navLink = (
+    target: PlannerV2Route,
+    label: string,
+    icon: 'today' | 'goals' | 'create' | 'actions' | 'history',
+  ) => (
     <a
       href={buildPlannerV2Route(target)}
-      aria-current={route.view === target.view ? 'page' : undefined}
+      aria-current={
+        route.view === target.view ||
+        (target.view === 'goals' && ['focus', 'new-goal'].includes(route.view)) ||
+        (target.view === 'actions' && ['action', 'new-action'].includes(route.view))
+          ? 'page'
+          : undefined
+      }
       onClick={(event) => {
         if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey)
           return;
@@ -174,8 +185,9 @@ export function PlannerV2Workspace({
         </a>
         <nav aria-label="Рабочий интерфейс">
           {navLink({ view: 'today' }, 'Сегодня', 'today')}
-          {navLink({ view: 'new-goal' }, 'Новая цель', 'goals')}
-          {navLink({ view: 'new-action', goalId: null, title: null }, 'Новое действие', 'create')}
+          {navLink({ view: 'goals' }, 'Цели', 'goals')}
+          {navLink({ view: 'actions' }, 'Действия', 'actions')}
+          {navLink({ view: 'inbox' }, 'Входящие', 'history')}
         </nav>
         <button className="planner-rollback" type="button" onClick={onExit}>
           Старая версия
@@ -200,7 +212,15 @@ export function PlannerV2Workspace({
             </button>
           </div>
         ) : null}
-        {data === null ? (
+        {['goals', 'focus', 'actions', 'action', 'inbox'].includes(route.view) ? (
+          <PlannerLibraryWorkspace
+            key={route.view === 'action' ? `action:${route.id}` : route.view}
+            services={services}
+            route={route}
+            today={currentDate.toString()}
+            onNavigate={navigate}
+          />
+        ) : data === null ? (
           !error && <p role="status">Загружаем…</p>
         ) : route.view === 'today' ? (
           <PlannerToday

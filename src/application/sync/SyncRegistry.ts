@@ -20,6 +20,8 @@ export type SyncEntityType =
   | 'recommendation_application'
   | 'morning_cycle'
   | 'goal'
+  | 'inbox_idea'
+  | 'focus_period'
   | 'user_settings';
 
 export const SYNC_ENTITY_TYPES: readonly SyncEntityType[] = Object.freeze([
@@ -44,6 +46,8 @@ export const SYNC_ENTITY_TYPES: readonly SyncEntityType[] = Object.freeze([
   'recommendation_application',
   'morning_cycle',
   'goal',
+  'inbox_idea',
+  'focus_period',
   'user_settings',
 ]);
 

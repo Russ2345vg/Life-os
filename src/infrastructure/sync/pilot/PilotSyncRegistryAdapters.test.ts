@@ -37,6 +37,23 @@ const goal = {
 };
 
 describe('PilotSyncRegistryAdapters', () => {
+  it('reads focus and conversion relationships from normalized wire records without version', () => {
+    const fixtures = structuredSyncFixtures();
+    const wire = normalizePilotRecord('focus_period', fixtures.focus_period);
+    expect(wire.version).toBeUndefined();
+    expect(pilotRelationshipReferences('focus_period', wire)).toEqual([
+      { entityType: 'goal', objectId: 'sync04-goal', required: true },
+    ]);
+    const converted = normalizePilotRecord('inbox_idea', {
+      ...fixtures.inbox_idea,
+      status: 'converted',
+      targetType: 'action',
+      targetId: 'sync04-life_action',
+    });
+    expect(pilotRelationshipReferences('inbox_idea', converted)).toEqual([
+      { entityType: 'life_action', objectId: 'sync04-life_action', required: true },
+    ]);
+  });
   it('extracts an optional Goal link while preserving Decision and Sphere references', () => {
     expect(
       pilotRelationshipReferences('life_action', {
@@ -87,7 +104,7 @@ describe('PilotSyncRegistryAdapters', () => {
   );
 
   it('uses the complete real dependency order and excludes Goal covers', () => {
-    expect(PILOT_DEPENDENCY_ORDER).toHaveLength(22);
+    expect(PILOT_DEPENDENCY_ORDER).toHaveLength(24);
     expect(PILOT_DEPENDENCY_ORDER.indexOf('sphere')).toBeLessThan(
       PILOT_DEPENDENCY_ORDER.indexOf('direction'),
     );
@@ -117,7 +134,7 @@ describe('PilotSyncRegistryAdapters', () => {
     expect(runtime.map(({ registration }) => registration.entityType)).toEqual(
       PILOT_DEPENDENCY_ORDER,
     );
-    expect(runtime).toHaveLength(22);
+    expect(runtime).toHaveLength(24);
   });
 
   it('preserves a local Goal cover while applying structured remote data without Outbox echo', async () => {

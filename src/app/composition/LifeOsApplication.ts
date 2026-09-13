@@ -1,3 +1,6 @@
+import { PlannerInbox } from '../../application/planner/PlannerInbox';
+import { PlannerFocus } from '../../application/planner/PlannerFocus';
+import { PlannerCatalog } from '../../application/planner/PlannerCatalog';
 import type {
   ActionSessionRepository,
   SyncApplication,
@@ -263,6 +266,9 @@ interface LifeOsApplicationServices {
   readonly createLifeActionDraft: CreateLifeActionDraft;
   readonly setLifeActionGoal: SetLifeActionGoal;
   readonly setLifeActionPlan: SetLifeActionPlan;
+  readonly plannerInbox: PlannerInbox;
+  readonly plannerFocus: PlannerFocus;
+  readonly plannerCatalog: PlannerCatalog;
   readonly getPlannerToday: GetPlannerToday;
   readonly completeLifeAction: CompleteLifeAction;
   readonly verifyLifeActionResult: VerifyLifeActionResult;
@@ -448,6 +454,9 @@ export class LifeOsApplication {
   public readonly createLifeActionDraft: CreateLifeActionDraft;
   public readonly setLifeActionGoal: SetLifeActionGoal;
   public readonly setLifeActionPlan: SetLifeActionPlan;
+  public readonly plannerInbox: PlannerInbox;
+  public readonly plannerFocus: PlannerFocus;
+  public readonly plannerCatalog: PlannerCatalog;
   public readonly getPlannerToday: GetPlannerToday;
   public readonly completeLifeAction: CompleteLifeAction;
   public readonly verifyLifeActionResult: VerifyLifeActionResult;
@@ -633,6 +642,9 @@ export class LifeOsApplication {
     this.createLifeActionDraft = services.createLifeActionDraft;
     this.setLifeActionGoal = services.setLifeActionGoal;
     this.setLifeActionPlan = services.setLifeActionPlan;
+    this.plannerInbox = services.plannerInbox;
+    this.plannerFocus = services.plannerFocus;
+    this.plannerCatalog = services.plannerCatalog;
     this.getPlannerToday = services.getPlannerToday;
     this.completeLifeAction = services.completeLifeAction;
     this.verifyLifeActionResult = services.verifyLifeActionResult;

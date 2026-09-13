@@ -45,7 +45,7 @@ interface MutationCaptureConfiguration {
 }
 
 export const LIFE_OS_DATABASE_NAME = 'lifeos';
-export const LIFE_OS_DATABASE_VERSION = 22;
+export const LIFE_OS_DATABASE_VERSION = 23;
 
 export const LIFE_OS_DOMAIN_STORE = {
   days: 'days',
@@ -69,6 +69,8 @@ export const LIFE_OS_DOMAIN_STORE = {
   recommendationApplications: 'recommendationApplications',
   morningCycles: 'morningCycles',
   goals: 'goals',
+  inboxIdeas: 'inboxIdeas',
+  focusPeriods: 'focusPeriods',
 } as const;
 
 export const LIFE_OS_STORE = LIFE_OS_DOMAIN_STORE;
@@ -220,6 +222,12 @@ export class LifeOsIndexedDb {
           if (oldVersion < 19) createVersionNineteenSchema(request.result);
           if (oldVersion < 20) createVersionTwentySchema(request.result);
           if (oldVersion < 21) createVersionTwentyOneSchema(request.transaction);
+          if (oldVersion < 23) {
+            for (const store of [LIFE_OS_STORE.inboxIdeas, LIFE_OS_STORE.focusPeriods]) {
+              if (!request.result.objectStoreNames.contains(store))
+                request.result.createObjectStore(store, { keyPath: 'id' });
+            }
+          }
           if (oldVersion < 22 && request.transaction)
             upgradeLegacyProjects(request.result, request.transaction);
         } catch (error: unknown) {

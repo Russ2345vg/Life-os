@@ -8,7 +8,9 @@ const EXPECTED_ENTITY_TYPES = [
   'direction',
   'evening_cycle',
   'exercise_definition',
+  'focus_period',
   'goal',
+  'inbox_idea',
   'journal_entry',
   'life_action',
   'morning_cycle',
@@ -34,6 +36,8 @@ const EXPECTED_ENTITY_STORES = {
   evening_cycle: 'eveningCycles',
   exercise_definition: 'exerciseDefinitions',
   goal: 'goals',
+  focus_period: 'focusPeriods',
+  inbox_idea: 'inboxIdeas',
   journal_entry: 'journal',
   life_action: 'lifeActions',
   morning_cycle: 'morningCycles',
@@ -78,7 +82,7 @@ describe('LIFE_OS_SYNC_REGISTRY', () => {
       LIFE_OS_SYNC_REGISTRY.filter(({ storageKind }) => storageKind === 'indexed_db').map(
         ({ storeName }) => storeName,
       ),
-    ).toHaveLength(21);
+    ).toHaveLength(23);
     expect(LIFE_OS_SYNC_REGISTRY.every(({ readiness }) => readiness === 'sync_ready')).toBe(true);
   });
 

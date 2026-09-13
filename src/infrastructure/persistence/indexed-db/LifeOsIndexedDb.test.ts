@@ -168,9 +168,11 @@ describe('LifeOsIndexedDb', () => {
       LIFE_OS_STORE.directions,
       LIFE_OS_STORE.eveningCycles,
       LIFE_OS_STORE.exerciseDefinitions,
+      LIFE_OS_STORE.focusPeriods,
       GOAL_MIGRATION_BACKUP,
       GOAL_MIGRATION_BINDINGS,
       LIFE_OS_STORE.goals,
+      LIFE_OS_STORE.inboxIdeas,
       LIFE_OS_STORE.journal,
       LIFE_OS_STORE.lifeActions,
       LIFE_OS_STORE.morningCycles,
@@ -389,7 +391,7 @@ describe('LifeOsIndexedDb', () => {
     const secondConnection = await indexedDb.open();
 
     expect(secondConnection).not.toBe(firstConnection);
-    expect([...secondConnection.objectStoreNames]).toHaveLength(33);
+    expect([...secondConnection.objectStoreNames]).toHaveLength(35);
     indexedDb.close();
   });
 

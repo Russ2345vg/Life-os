@@ -1,3 +1,7 @@
+import { PlannerInbox } from '../../application/planner/PlannerInbox';
+import { PlannerFocus } from '../../application/planner/PlannerFocus';
+import { PlannerCatalog } from '../../application/planner/PlannerCatalog';
+import { IndexedDbPlannerRepository } from '../../infrastructure/persistence/IndexedDbPlannerRepository';
 import type { Clock, CurrentDateProvider, IdGenerator } from '../../application';
 import {
   CompleteCurrentDay,
@@ -528,6 +532,10 @@ export async function createLifeOsApplication(
       { goalRepository, unitOfWork: journalUnitOfWork },
     );
     const getPlannerToday = new GetPlannerToday(lifeActionRepository);
+    const plannerRepository = new IndexedDbPlannerRepository(database, mutationRecorder);
+    const plannerInbox = new PlannerInbox(plannerRepository, clock, idGenerator);
+    const plannerFocus = new PlannerFocus(plannerRepository, goalRepository, clock);
+    const plannerCatalog = new PlannerCatalog(lifeActionRepository);
     const setLifeActionPlan = new SetLifeActionPlan(
       lifeActionRepository,
       journalUnitOfWork,
@@ -976,6 +984,9 @@ export async function createLifeOsApplication(
       setLifeActionGoal,
       setLifeActionPlan,
       getPlannerToday,
+      plannerInbox,
+      plannerFocus,
+      plannerCatalog,
       completeLifeAction,
       verifyLifeActionResult,
       confirmDecisionFromActions,
