@@ -89,6 +89,85 @@ describe('V2 views use the same persisted entities', () => {
     }
   });
 
+  it('moves one future Goal to active, then archives the same ID without adding records', async () => {
+    const factory = new IDBFactory();
+    const db = new LifeOsIndexedDb(factory);
+    const app = await createLifeOsApplication({ database: db, clock: new FakeClock(now) });
+    const created = await app.createGoal.execute({ title: 'Переносимая цель', status: 'future' });
+    if (!created.ok) throw created.error;
+    const original = created.value;
+    const moved = await changePlannerGoalStatus(
+      app.updateGoal,
+      original,
+      'active',
+      app.archiveGoal,
+    );
+    expect(moved.id).toEqual(original.id);
+    expect(moved.status).toBe('active');
+    expect(await app.getGoals.execute()).toHaveLength(1);
+    await expect(
+      changePlannerGoalStatus(app.updateGoal, original, 'paused', app.archiveGoal),
+    ).rejects.toThrow();
+    const archived = await changePlannerGoalStatus(
+      app.updateGoal,
+      moved,
+      'archived',
+      app.archiveGoal,
+    );
+    expect(archived.id).toEqual(original.id);
+    expect(archived.status).toBe('archived');
+    await expect(
+      changePlannerGoalStatus(app.updateGoal, archived, 'active', app.archiveGoal),
+    ).rejects.toThrow();
+    db.close();
+    const reopened = new LifeOsIndexedDb(factory);
+    try {
+      const reloaded = await createLifeOsApplication({
+        database: reopened,
+        clock: new FakeClock(now),
+      });
+      const goals = await reloaded.getGoals.execute();
+      expect(goals).toHaveLength(1);
+      expect(goals[0]).toMatchObject({ id: original.id, status: 'archived' });
+      expect(
+        buildPlannerViews({ goals, actions: [], directions: [], spheres: [] }).goalsByStatus.get(
+          'archived',
+        ),
+      ).toHaveLength(1);
+    } finally {
+      reopened.close();
+    }
+  });
+
+  it('leaves a Goal in its original column when the status write fails', async () => {
+    const db = new LifeOsIndexedDb(new IDBFactory());
+    const app = await createLifeOsApplication({ database: db, clock: new FakeClock(now) });
+    try {
+      const created = await app.createGoal.execute({
+        title: 'Остаётся на месте',
+        status: 'future',
+      });
+      if (!created.ok) throw created.error;
+      vi.spyOn(app.goalRepository, 'updateIfVersionMatches').mockRejectedValueOnce(
+        new Error('Нет доступа к хранилищу'),
+      );
+      await expect(
+        changePlannerGoalStatus(app.updateGoal, created.value, 'active', app.archiveGoal),
+      ).rejects.toThrow('Нет доступа к хранилищу');
+      const goals = await app.getGoals.execute();
+      expect(goals).toHaveLength(1);
+      expect(goals[0]).toMatchObject({ id: created.value.id, status: 'future' });
+      expect(
+        buildPlannerViews({ goals, actions: [], directions: [], spheres: [] }).goalsByStatus.get(
+          'future',
+        ),
+      ).toHaveLength(1);
+    } finally {
+      vi.restoreAllMocks();
+      db.close();
+    }
+  });
+
   it('rolls back a failed completed-date write and preserves the completion event', async () => {
     const db = new LifeOsIndexedDb(new IDBFactory());
     const app = await createLifeOsApplication({ database: db, clock: new FakeClock(now) });

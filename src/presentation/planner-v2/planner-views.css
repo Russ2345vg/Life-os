@@ -29,6 +29,30 @@
   background: var(--surface-glass);
   scroll-snap-align: start;
 }
+.planner-board-column--drop {
+  background: color-mix(in srgb, var(--planner-accent) 12%, var(--surface-glass));
+  box-shadow: inset 0 0 0 2px var(--planner-accent);
+}
+.planner-goal-drag-item[draggable='true'] {
+  cursor: grab;
+}
+.planner-goal-drag-item--active {
+  opacity: 0.55;
+  cursor: grabbing;
+}
+.planner-goal-drag-preview {
+  position: fixed;
+  z-index: 70;
+  width: min(240px, 70vw);
+  padding: var(--space-3);
+  transform: translate(12px, 12px);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 32%);
+  color: var(--text-primary);
+  pointer-events: none;
+  overflow-wrap: anywhere;
+}
 .planner-v2 .planner-board-column h2 {
   display: flex;
   justify-content: space-between;

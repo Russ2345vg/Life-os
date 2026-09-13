@@ -34,6 +34,11 @@ describe('V2 views rendering', () => {
       createElement(PlannerKanban, { data, kind: 'goals', focusIds: [], ...operations }),
     );
     expect(html).toContain(goal.title);
+    expect(html).toContain('data-goal-id="g"');
+    expect(html).toContain('data-goal-status="active"');
+    expect(html).toContain('draggable="true"');
+    expect(html).toContain('Изменить цель');
+    expect(html).toContain('#/goals/g');
     expect(html).toContain('На паузе');
     expect(html).not.toContain('<progress');
     expect(html).not.toContain('На проверке');
@@ -43,6 +48,25 @@ describe('V2 views rendering', () => {
     expect(actions).toContain('Выполнить: Самостоятельное действие');
     expect(actions).toContain('Запланировано');
     expect(actions).not.toContain('Начать');
+  });
+  it('keeps archived Goals visible but not draggable', () => {
+    const archived = goal.archive(now);
+    const archivedData = buildPlannerViews({
+      goals: [archived],
+      actions: [],
+      directions: [],
+      spheres: [],
+    });
+    const html = renderToStaticMarkup(
+      createElement(PlannerKanban, {
+        data: archivedData,
+        kind: 'goals',
+        focusIds: [],
+        ...operations,
+      }),
+    );
+    expect(html).toContain('data-goal-status="archived"');
+    expect(html).toContain('draggable="false"');
   });
   it('renders a month, selected day, undated goals, and completed controls', () => {
     const html = renderToStaticMarkup(

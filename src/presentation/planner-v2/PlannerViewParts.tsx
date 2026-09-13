@@ -1,12 +1,12 @@
 import { useId, useState, type ReactNode } from 'react';
-import type { Goal, GoalEditableStatus } from '../../domain';
+import type { Goal, GoalStatus } from '../../domain';
 import type { PlannerActionOperations } from './PlannerActionList';
 import { PlannerGoalProgress } from './PlannerGoalList';
 import { horizonLabels, importanceLabels, statusLabels } from './plannerCatalogModel';
 import type { PlannerViews } from './plannerViewsModel';
 
 export interface PlannerViewOperations extends PlannerActionOperations {
-  readonly onGoalStatus: (goal: Goal, status: GoalEditableStatus) => Promise<void>;
+  readonly onGoalStatus: (goal: Goal, status: GoalStatus) => Promise<void>;
   readonly onGoalDirection: (goal: Goal, directionId: string) => Promise<void>;
 }
 export function PlannerBatch<T>({
@@ -136,16 +136,16 @@ export function PlannerGoalCard({
                   disabled={operations.busy || pending}
                   value={goal.status}
                   onChange={(e) => {
-                    void run(() =>
-                      operations.onGoalStatus(goal, e.target.value as GoalEditableStatus),
-                    );
+                    void run(() => operations.onGoalStatus(goal, e.target.value as GoalStatus));
                   }}
                 >
-                  {(['future', 'active', 'paused', 'achieved'] as const).map((status) => (
-                    <option key={status} value={status}>
-                      {statusLabels[status]}
-                    </option>
-                  ))}
+                  {(['future', 'active', 'paused', 'achieved', 'archived'] as const).map(
+                    (status) => (
+                      <option key={status} value={status}>
+                        {statusLabels[status]}
+                      </option>
+                    ),
+                  )}
                 </select>
               </label>
               <label>

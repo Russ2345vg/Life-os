@@ -1,11 +1,18 @@
-import type { UpdateGoal } from '../../application';
-import { EntityId, type Goal, type GoalEditableStatus } from '../../domain';
+import type { ArchiveGoal, UpdateGoal } from '../../application';
+import { EntityId, type Goal, type GoalStatus } from '../../domain';
 
 export async function changePlannerGoalStatus(
   command: Pick<UpdateGoal, 'execute'>,
   goal: Goal,
-  status: GoalEditableStatus,
+  status: GoalStatus,
+  archiveCommand?: Pick<ArchiveGoal, 'execute'>,
 ) {
+  if (status === 'archived') {
+    if (!archiveCommand) throw new Error('Архивация цели недоступна.');
+    const archived = await archiveCommand.execute({ id: goal.id, expectedVersion: goal.version });
+    if (!archived.ok) throw archived.error;
+    return archived.value;
+  }
   const result = await command.execute({
     id: goal.id,
     expectedVersion: goal.version,

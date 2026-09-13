@@ -8,6 +8,7 @@ import type {
   SetLifeActionGoal,
   SetLifeActionPlan,
   UpdateGoal,
+  ArchiveGoal,
 } from '../../application';
 import type { PlannerInbox as InboxService } from '../../application/planner/PlannerInbox';
 import type { PlannerFocus as FocusService } from '../../application/planner/PlannerFocus';
@@ -43,6 +44,7 @@ export interface PlannerLibraryServices {
   readonly setLifeActionPlan: Pick<SetLifeActionPlan, 'execute'>;
   readonly setLifeActionGoal: Pick<SetLifeActionGoal, 'execute'>;
   readonly updateGoal: Pick<UpdateGoal, 'execute'>;
+  readonly archiveGoal: Pick<ArchiveGoal, 'execute'>;
 }
 interface LibraryData {
   goals: readonly Goal[];
@@ -156,7 +158,7 @@ export function PlannerLibraryWorkspace({
     },
     onGoalStatus: async (goal, status) => {
       await run(
-        () => changePlannerGoalStatus(services.updateGoal, goal, status),
+        () => changePlannerGoalStatus(services.updateGoal, goal, status, services.archiveGoal),
         'Состояние цели сохранено',
       );
     },
