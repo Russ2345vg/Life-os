@@ -7644,6 +7644,7 @@ select:focus-visible,
   border: 1px solid transparent;
   font-weight: 700;
   text-align: left;
+  text-decoration: none;
 }
 
 .application-navigation-link svg {

@@ -340,6 +340,17 @@ function SidebarContent({
             onOpenSection={onOpenSection}
           />
         ))}
+        <a
+          className="application-navigation-link"
+          href="#/v2/today"
+          aria-label="V2 Планировщик"
+          data-tooltip={collapsed ? 'V2 Планировщик' : undefined}
+          title={collapsed ? 'V2 Планировщик' : undefined}
+          onClick={onCloseMobileMenu}
+        >
+          <AppIcon name="today" />
+          <span className="application-navigation-label">V2 Планировщик</span>
+        </a>
       </nav>
 
       {globalActions ? <div className="application-global-actions">{globalActions}</div> : null}

@@ -175,6 +175,27 @@ describe('ApplicationShellView', () => {
     expect(mobileMenu).toContain('aria-current="page"');
   });
 
+  it('даёт вход в V2 из desktop и mobile menu, сохраняя обычный День', () => {
+    const desktop = renderShell(APP_SECTION.today);
+    const mobileMenu = renderToStaticMarkup(
+      createElement(ApplicationMobileMenu, {
+        activeSection: APP_SECTION.today,
+        currentDayStatus: DAY_STATUS.open,
+        onOpenSection: vi.fn(),
+        onClose: vi.fn(),
+      }),
+    );
+
+    for (const markup of [desktop, mobileMenu]) {
+      expect(markup).toContain('href="#/v2/today"');
+      expect(markup).toContain('aria-label="V2 Планировщик"');
+      expect(markup).toContain('<span class="application-navigation-label">День</span>');
+    }
+    expect(desktop.slice(desktop.indexOf('Мобильная навигация'))).not.toContain(
+      'href="#/v2/today"',
+    );
+  });
+
   it('готовит мобильное меню поверх страницы с управлением закрытием', () => {
     const markup = renderToStaticMarkup(
       createElement(ApplicationMobileMenu, {
