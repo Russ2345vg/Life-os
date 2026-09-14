@@ -6,6 +6,29 @@ import { ROUTINE_SECTION } from '../../presentation/routine/RoutineNavigation';
 import { startBrowserApplicationRouteSync } from './BrowserApplicationRouteSync';
 
 describe('startBrowserApplicationRouteSync', () => {
+  it('restores Plans and its legacy alias across back and forward navigation', () => {
+    const windowTarget = new EventTarget() as unknown as Window;
+    const restore = vi.fn();
+    let hash = '#/v2/goals/plans';
+    const stop = startBrowserApplicationRouteSync({
+      windowTarget,
+      readHash: () => hash,
+      readHistoryState: () => null,
+      restore,
+      restoreSection: vi.fn(),
+    });
+    windowTarget.dispatchEvent(new Event('popstate'));
+    hash = '#/v2/goals';
+    windowTarget.dispatchEvent(new Event('popstate'));
+    hash = '#/v2/planning';
+    windowTarget.dispatchEvent(new Event('popstate'));
+    expect(restore.mock.calls.map(([route]) => route)).toEqual([
+      { section: APP_SECTION.today, route: { view: 'planning' } },
+      { section: APP_SECTION.today, route: { view: 'goals' } },
+      { section: APP_SECTION.today, route: { view: 'planning' } },
+    ]);
+    stop();
+  });
   it('restores V2 Today and the explicit old-version route through browser navigation', () => {
     const windowTarget = new EventTarget() as unknown as Window;
     const restore = vi.fn();

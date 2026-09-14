@@ -15,6 +15,7 @@ export function PlannerViewSwitcher({
     { label: 'Канбан', route: { view: 'kanban', section } },
     { label: 'Календарь', route: { view: 'calendar', section } },
     { label: 'Древо', route: { view: 'tree', section } },
+    ...(section === 'goals' ? [{ label: 'Планы', route: { view: 'planning' } as const }] : []),
   ];
   return (
     <label className="planner-view-switcher">

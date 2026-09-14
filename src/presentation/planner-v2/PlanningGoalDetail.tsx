@@ -36,7 +36,7 @@ export function PlanningGoalDetail({
           .map((p) => `${p!.startDate} — ${p!.endDate}`)
           .join(' · ') || 'Без периода'}
       </p>
-      <a href="#/v2/planning">Выбрать период и фокус</a>
+      <a href="#/v2/goals/plans">Выбрать период и фокус</a>
       <h2>Действия</h2>
       {s.actions
         .filter(

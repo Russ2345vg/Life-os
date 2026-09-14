@@ -19,7 +19,7 @@ export function parsePlannerV2Route(hash: string): PlannerV2Route | null {
     (view === 'kanban' || view === 'calendar' || view === 'tree')
   )
     return { view, section: path === '#/v2/goals' ? 'goals' : 'actions' };
-  if (path === '#/v2/planning') return { view: 'planning' };
+  if (path === '#/v2/goals/plans' || path === '#/v2/planning') return { view: 'planning' };
   if (path === '#/v2/today') return { view: 'today' };
   if (path === '#/v2/goals') return { view: 'goals' };
   if (path === '#/v2/goals/focus') return { view: 'focus' };
@@ -53,7 +53,7 @@ export function parsePlannerV2Route(hash: string): PlannerV2Route | null {
 
 export function buildPlannerV2Route(route: PlannerV2Route): string {
   if ('section' in route) return `#/v2/${route.section}?view=${route.view}`;
-  if (route.view === 'planning') return '#/v2/planning';
+  if (route.view === 'planning') return '#/v2/goals/plans';
   if (route.view === 'today') return '#/v2/today';
   if (route.view === 'new-goal') return '#/v2/goals/new';
   if (route.view === 'goals') return '#/v2/goals';

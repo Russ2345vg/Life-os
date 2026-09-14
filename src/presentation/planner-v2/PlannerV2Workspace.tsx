@@ -24,6 +24,7 @@ import { useSyncContentChanged } from '../sync/SyncStatusContext';
 import { finishPlannerSubmission } from './plannerRouteSubmission';
 import './planner-v2.css';
 import { PlannerLibraryWorkspace, type PlannerLibraryServices } from './PlannerLibraryWorkspace';
+import { PlannerViewSwitcher } from './PlannerViewSwitcher';
 
 export interface PlannerV2Services extends PlannerLibraryServices {
   readonly planning?: PlanningServices;
@@ -149,7 +150,8 @@ export function PlannerV2Workspace({
       aria-current={
         route.view === target.view ||
         ('section' in route && route.section === target.view) ||
-        (target.view === 'goals' && ['focus', 'new-goal', 'goal'].includes(route.view)) ||
+        (target.view === 'goals' &&
+          ['focus', 'new-goal', 'goal', 'planning'].includes(route.view)) ||
         (target.view === 'actions' && ['action', 'new-action'].includes(route.view))
           ? 'page'
           : undefined
@@ -197,7 +199,6 @@ export function PlannerV2Workspace({
             {navLink({ view: 'today' }, 'Сегодня', 'today')}
             {navLink({ view: 'goals' }, 'Цели', 'goals')}
             {navLink({ view: 'actions' }, 'Действия', 'actions')}
-            {navLink({ view: 'planning' }, 'Планирование', 'today')}
             {navLink({ view: 'inbox' }, 'Входящие', 'history')}
           </nav>
           <button className="planner-rollback" type="button" onClick={onExit}>
@@ -229,11 +230,14 @@ export function PlannerV2Workspace({
             </div>
           ) : null}
           {route.view === 'planning' ? (
-            <PlanningWorkspace
-              today={currentDate.toString()}
-              services={services}
-              onNavigate={navigate}
-            />
+            <>
+              <PlannerViewSwitcher route={route} onNavigate={navigate} />
+              <PlanningWorkspace
+                today={currentDate.toString()}
+                services={services}
+                onNavigate={navigate}
+              />
+            </>
           ) : [
               'goal',
               'goals',
