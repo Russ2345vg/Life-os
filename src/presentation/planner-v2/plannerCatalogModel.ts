@@ -128,6 +128,14 @@ export function goalActions(goal: Goal, actions: readonly LifeAction[]): LifeAct
     .filter((a) => a.goalId?.equals(goal.id) && isOpenAction(a))
     .sort(comparePlannerGoalActions);
 }
+export function selectGoalCardActions(goal: Goal, actions: readonly LifeAction[]) {
+  const linked = actions.filter((action) => action.goalId?.equals(goal.id));
+  const open = linked.filter(isOpenAction).sort(comparePlannerGoalActions);
+  const completed = linked
+    .filter((action) => action.status === 'completed')
+    .sort((a, b) => (b.completedAt?.getTime() ?? 0) - (a.completedAt?.getTime() ?? 0));
+  return { open, completed, next: open.find((action) => action.isNext) ?? null };
+}
 export function comparePlannerGoalActions(a: LifeAction, b: LifeAction): number {
   return (
     Number(b.isNext) - Number(a.isNext) ||

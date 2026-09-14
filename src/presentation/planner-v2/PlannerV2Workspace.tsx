@@ -315,6 +315,7 @@ export function PlannerV2Workspace({
               key={buildPlannerV2Route(route)}
               goals={data.goals}
               initialGoalId={route.goalId}
+              lockGoal={route.returnToGoal === true}
               initialTitle={route.title}
               currentDate={currentDate.toString()}
               onCancel={today}
@@ -331,7 +332,11 @@ export function PlannerV2Workspace({
                           ? `Действие сохранено на ${draft.date}`
                           : 'Действие сохранено в блоке «Без даты»',
                     );
-                    today();
+                    if (route.returnToGoal && route.goalId && route.goalId === draft.goalId) {
+                      onNavigate({ view: 'goal', id: route.goalId });
+                    } else {
+                      today();
+                    }
                   },
                 );
               }}

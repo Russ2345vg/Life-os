@@ -266,6 +266,24 @@ describe('RescheduleLifeAction', () => {
 });
 
 describe('CompleteLifeAction', () => {
+  it('does not produce a second completion event on repeated submission', async () => {
+    const lifeAction = createReadyLifeAction('goal-card-repeat', DATE);
+    const repository = await repositoryWith(lifeAction);
+    const clock = new FakeClock(NOW);
+    const ids = new FakeIdGenerator('goal-card-complete');
+    const command = new CompleteLifeAction(repository, clock, ids);
+    const first = await command.execute({ lifeActionId: lifeAction.id });
+    expect(first.ok).toBe(true);
+    const completed = await repository.findById(lifeAction.id);
+    const version = completed?.version;
+    const eventCount = completed?.getUncommittedEvents().length;
+    const second = await command.execute({ lifeActionId: lifeAction.id });
+    expect(second.ok).toBe(true);
+    expect((await repository.findById(lifeAction.id))?.version).toBe(version);
+    expect((await repository.findById(lifeAction.id))?.getUncommittedEvents().length).toBe(
+      eventCount,
+    );
+  });
   it('завершает in_progress, сохраняет фактический результат, событие и новую версию', async () => {
     const lifeAction = markLifeActionInProgress(createReadyLifeAction('complete-progress', DATE));
     const repository = await repositoryWith(lifeAction);

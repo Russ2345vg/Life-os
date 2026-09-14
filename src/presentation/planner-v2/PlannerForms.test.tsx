@@ -5,6 +5,20 @@ import { PlannerActionForm } from './PlannerActionForm';
 import { PlannerGoalForm } from './PlannerGoalForm';
 
 describe('Planner UI forms', () => {
+  it('keeps the Goal fixed when creating from its card', () => {
+    const html = renderToStaticMarkup(
+      createElement(PlannerActionForm, {
+        goals: [{ id: 'g', title: 'Цель' }],
+        initialGoalId: 'g',
+        lockGoal: true,
+        onSubmit: async () => {},
+        onCancel: () => {},
+        currentDate: '2026-09-13',
+      }),
+    );
+    expect(html).toContain('type="hidden" name="goalId" value="g"');
+    expect(html).not.toContain('<select name="goalId"');
+  });
   it('does not visually disguise an unavailable prefilled goal as an unassigned action', () => {
     const html = renderToStaticMarkup(
       createElement(PlannerActionForm, {

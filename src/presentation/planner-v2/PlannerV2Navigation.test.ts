@@ -72,6 +72,8 @@ describe('V2 preview routes', () => {
   it('roundtrips a Goal and its optional first step without losing the original id', () => {
     const route = { view: 'new-action', goalId: 'цель / 1', title: 'Первый шаг & ещё' } as const;
     expect(parsePlannerV2Route(buildPlannerV2Route(route))).toEqual(route);
+    const fromGoal = { view: 'new-action', goalId: 'g', title: null, returnToGoal: true } as const;
+    expect(parsePlannerV2Route(buildPlannerV2Route(fromGoal))).toEqual(fromGoal);
   });
   it('offers four working entries with a visible old-version exit', () => {
     const markup = renderToStaticMarkup(

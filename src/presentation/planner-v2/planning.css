@@ -128,6 +128,103 @@
 .planning-progress details {
   margin-top: 12px;
 }
+.planner-goal-detail {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+.planner-goal-detail .planner-page-heading {
+  margin: 0;
+}
+.planner-goal-context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.planner-goal-context p {
+  margin: 0;
+}
+.planner-goal-result {
+  padding-block: var(--space-4);
+}
+.planner-goal-result p:last-child {
+  margin: var(--space-2) 0 0;
+  font-size: 20px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.planner-goal-next {
+  padding: var(--space-4);
+  background: var(--surface-1);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+.planner-goal-next h2,
+.planner-goal-actions h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.planner-goal-next .planner-action-row {
+  border-bottom: 0;
+}
+.planner-goal-section-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.planner-goal-section-heading a {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+.planner-goal-detail .planner-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.planner-goal-completed,
+.planner-goal-history {
+  border-top: 1px solid var(--border-soft);
+  padding-top: var(--space-2);
+}
+.planner-goal-completed summary,
+.planner-goal-history summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+.planner-goal-completed li {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border-soft);
+  overflow-wrap: anywhere;
+}
+.planner-goal-completed li p {
+  margin: 0;
+}
+@media (max-width: 390px) {
+  .planner-goal-detail {
+    gap: var(--space-3);
+  }
+  .planner-goal-next {
+    padding: var(--space-3);
+  }
+  .planner-goal-result p:last-child {
+    font-size: 18px;
+  }
+  .planner-goal-detail .planner-action-row {
+    gap: var(--space-2);
+  }
+  .planner-goal-detail .planner-row-details {
+    margin-left: 0;
+  }
+}
 @media (max-width: 700px) {
   .planning-columns {
     grid-template-columns: minmax(0, 1fr);

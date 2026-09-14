@@ -128,11 +128,13 @@ export function PlannerActionRow({
   onLink,
   expanded = false,
   lazyDetails = false,
+  goalContext = false,
 }: PlannerActionOperations & {
   readonly action: LifeAction;
   readonly goals: readonly Goal[];
   readonly expanded?: boolean;
   readonly lazyDetails?: boolean;
+  readonly goalContext?: boolean;
 }) {
   const [detailsOpen, setDetailsOpen] = useState(expanded);
   const [dateDraft, setDateDraft] = useState<PlannerFieldDraft | null>(null);
@@ -180,12 +182,20 @@ export function PlannerActionRow({
           >
             {action.title.toString()}
           </a>
-          <span className="planner-muted">
-            {goal?.title ?? (action.goalId ? 'Связанная цель недоступна' : 'Без цели')}
-          </span>
+          {!goalContext && (
+            <span className="planner-muted">
+              {goal?.title ?? (action.goalId ? 'Связанная цель недоступна' : 'Без цели')}
+            </span>
+          )}
           <span className="planner-muted">
             {action.plannedDate?.toString() ?? 'Без даты'}
-            {action.isNext ? ' · Главное' : ''}
+            {goalContext && action.priority === 'high' ? ' · Высокий приоритет' : ''}
+            {goalContext && action.occurrence
+              ? action.occurrence.manualDate
+                ? ' · Повтор · перенесено'
+                : ' · Повтор'
+              : ''}
+            {action.isNext ? (goalContext ? ' · Следующее' : ' · Главное') : ''}
             {action.status === 'completed' ? ' · Выполнено' : ''}
             {action.status === 'cancelled' ? ' · Отменено' : ''}
           </span>

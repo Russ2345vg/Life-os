@@ -201,7 +201,13 @@ export function PlannerLibraryWorkspace({
           </div>
         )
       ) : route.view === 'goal' ? (
-        <PlanningGoalDetail id={route.id} today={today} {...operations} />
+        <PlanningGoalDetail
+          id={route.id}
+          today={today}
+          directions={data.directions}
+          spheres={data.spheres}
+          {...operations}
+        />
       ) : 'section' in route && views ? (
         <section>
           <header className="planner-page-heading">

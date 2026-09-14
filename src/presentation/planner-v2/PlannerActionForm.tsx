@@ -17,6 +17,7 @@ export function PlannerActionForm({
   currentDate,
   initialGoalId = null,
   initialTitle = null,
+  lockGoal = false,
 }: {
   readonly goals: readonly PlannerOption[];
   readonly onSubmit: (draft: PlannerActionDraft) => Promise<void>;
@@ -24,6 +25,7 @@ export function PlannerActionForm({
   readonly currentDate: string;
   readonly initialGoalId?: string | null;
   readonly initialTitle?: string | null;
+  readonly lockGoal?: boolean;
 }) {
   const planning = usePlanning();
   const [draft, setDraft] = useState(() => emptyActionDraft(initialGoalId, initialTitle));
@@ -74,28 +76,32 @@ export function PlannerActionForm({
             placeholder="Что хотите сделать?"
           />
         </VoiceField>
-        <label>
-          <span>
-            Цель <small>необязательно</small>
-          </span>
-          <select
-            name="goalId"
-            value={draft.goalId}
-            onChange={(event) => change('goalId', event.target.value)}
-          >
-            <option value="">Без цели</option>
-            {goalUnavailable ? (
-              <option value={draft.goalId} disabled>
-                Цель недоступна
-              </option>
-            ) : null}
-            {goals.map((goal) => (
-              <option key={goal.id} value={goal.id}>
-                {goal.title}
-              </option>
-            ))}
-          </select>
-        </label>
+        {lockGoal && !goalUnavailable ? (
+          <input type="hidden" name="goalId" value={draft.goalId} />
+        ) : (
+          <label>
+            <span>
+              Цель <small>необязательно</small>
+            </span>
+            <select
+              name="goalId"
+              value={draft.goalId}
+              onChange={(event) => change('goalId', event.target.value)}
+            >
+              <option value="">Без цели</option>
+              {goalUnavailable ? (
+                <option value={draft.goalId} disabled>
+                  Цель недоступна
+                </option>
+              ) : null}
+              {goals.map((goal) => (
+                <option key={goal.id} value={goal.id}>
+                  {goal.title}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         {goalUnavailable ? (
           <p className="planner-error" role="alert">
             Выберите другую цель или «Без цели».

@@ -12,7 +12,12 @@ export type PlannerV2Route =
   | { readonly view: 'kanban' | 'calendar' | 'tree'; readonly section: 'goals' | 'actions' }
   | { readonly view: 'action'; readonly id: string }
   | { readonly view: 'new-goal' }
-  | { readonly view: 'new-action'; readonly goalId: string | null; readonly title: string | null };
+  | {
+      readonly view: 'new-action';
+      readonly goalId: string | null;
+      readonly title: string | null;
+      readonly returnToGoal?: boolean;
+    };
 
 export function parsePlannerV2Route(hash: string): PlannerV2Route | null {
   const [path, query = ''] = hash.split('?');
@@ -68,6 +73,7 @@ export function parsePlannerV2Route(hash: string): PlannerV2Route | null {
     view: 'new-action',
     goalId: params.get('goalId')?.trim() || null,
     title: params.get('title')?.trim() || null,
+    ...(params.get('returnToGoal') === '1' ? { returnToGoal: true } : {}),
   };
 }
 
@@ -92,5 +98,6 @@ export function buildPlannerV2Route(route: PlannerV2Route): string {
   const params = new URLSearchParams();
   if (route.goalId) params.set('goalId', route.goalId);
   if (route.title) params.set('title', route.title);
+  if (route.returnToGoal) params.set('returnToGoal', '1');
   return `#/v2/actions/new${params.size > 0 ? `?${params}` : ''}`;
 }
