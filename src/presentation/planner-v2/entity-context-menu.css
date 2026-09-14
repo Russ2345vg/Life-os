@@ -1,0 +1,83 @@
+.planner-entity-context {
+  position: relative;
+  min-width: 0;
+}
+.planner-entity-content {
+  min-width: 0;
+  padding-right: 50px;
+}
+.planner-v2 .planner-entity-more {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 1;
+  width: 44px;
+  min-height: 44px;
+  padding: 0;
+  font-size: 24px;
+  line-height: 1;
+}
+.planner-entity-popup {
+  position: absolute;
+  top: 47px;
+  right: 4px;
+  z-index: 30;
+  display: grid;
+  min-width: 190px;
+  padding: 6px;
+  border: 1px solid #343434;
+  border-radius: 11px;
+  background: #151515;
+  box-shadow: 0 16px 32px #000b;
+}
+.planner-entity-popup--above {
+  top: auto;
+  bottom: 47px;
+}
+.planner-v2 .planner-entity-popup button {
+  min-height: 44px;
+  border: 0;
+  text-align: left;
+}
+.planner-entity-confirm {
+  position: fixed;
+  z-index: 50;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 18px;
+  padding: 22px;
+  background: #000c;
+}
+.planner-entity-confirm > p,
+.planner-entity-confirm > div {
+  max-width: min(420px, calc(100vw - 44px));
+}
+.planner-entity-confirm > p {
+  margin: 0;
+  padding: 22px 22px 0;
+  border: 1px solid #343434;
+  border-bottom: 0;
+  border-radius: 14px 14px 0 0;
+  background: #151515;
+}
+.planner-entity-confirm > div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: -18px;
+  padding: 16px 22px 22px;
+  border: 1px solid #343434;
+  border-top: 0;
+  border-radius: 0 0 14px 14px;
+  background: #151515;
+}
+.planner-v2 .planner-entity-danger {
+  border-color: #9d4a4a;
+  color: #ffd6d6;
+}
+@media (max-width: 700px) {
+  .planner-entity-popup {
+    max-width: calc(100vw - 24px);
+  }
+}

@@ -17,6 +17,8 @@ export function PlannerActionForm({
   currentDate,
   initialGoalId = null,
   initialTitle = null,
+  initialDate = null,
+  initialParentActionId = null,
   lockGoal = false,
 }: {
   readonly goals: readonly PlannerOption[];
@@ -25,10 +27,16 @@ export function PlannerActionForm({
   readonly currentDate: string;
   readonly initialGoalId?: string | null;
   readonly initialTitle?: string | null;
+  readonly initialDate?: string | null;
+  readonly initialParentActionId?: string | null;
   readonly lockGoal?: boolean;
 }) {
   const planning = usePlanning();
-  const [draft, setDraft] = useState(() => emptyActionDraft(initialGoalId, initialTitle));
+  const [draft, setDraft] = useState(() => ({
+    ...emptyActionDraft(initialGoalId, initialTitle),
+    date: initialDate ?? '',
+    parentActionId: initialParentActionId ?? '',
+  }));
   const [busy, setBusy] = useState(false);
   const saving = useRef(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,10 +68,13 @@ export function PlannerActionForm({
     >
       <header>
         <p className="planner-eyebrow">Действие</p>
-        <h1>Новое действие</h1>
+        <h1>{initialParentActionId ? 'Новое поддействие' : 'Новое действие'}</h1>
         <p className="planner-muted">Достаточно названия. Всё остальное — по желанию.</p>
       </header>
       <fieldset disabled={busy}>
+        {initialParentActionId && (
+          <input type="hidden" name="parentActionId" value={initialParentActionId} />
+        )}
         <VoiceField>
           <span>Название</span>
           <VoiceTextInput

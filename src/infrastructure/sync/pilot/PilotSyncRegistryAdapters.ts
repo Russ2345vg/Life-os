@@ -97,6 +97,7 @@ function mapped<TDomain, TRecord extends object>(
               'completionGeneration',
               'completedOn',
               'expectedContributions',
+              'parentActionId',
             ].filter((field) => !Object.hasOwn(isRecord(value) ? value : {}, field))
           : []),
       ]),
@@ -207,7 +208,10 @@ const PILOT_BINDINGS: Readonly<Record<PilotEntityType, PilotAdapterBinding>> = O
       ...optional(record, 'sphereId', 'sphere'),
     ],
   },
-  day: mapped(DayRecordMapper, (record) => optional(record, 'sphereId', 'sphere')),
+  day: balanceMapped(DayRecordMapper, ['mainDirectionId'], (record) => [
+    ...optional(record, 'sphereId', 'sphere'),
+    ...optional(record, 'mainDirectionId', 'direction'),
+  ]),
   decision: mapped(DecisionRecordMapper, (record) => [
     ...optional(record, 'projectId', 'project'),
     ...optional(record, 'sphereId', 'sphere'),
@@ -218,6 +222,7 @@ const PILOT_BINDINGS: Readonly<Record<PilotEntityType, PilotAdapterBinding>> = O
       ...optional(record, 'decisionId', 'decision'),
       ...optional(record, 'sphereId', 'sphere'),
       ...optional(record, 'goalId', 'goal'),
+      ...optional(record, 'parentActionId', 'life_action'),
       ...(isRecord(record.occurrence)
         ? optional(record.occurrence, 'ruleId', 'recurrence_rule')
         : []),
@@ -310,8 +315,10 @@ export function buildPilotRuntimeRegistry(
   const ordered: PilotRuntimeRegistration[] = [];
   while (remaining.length > 0) {
     const readyIndex = remaining.findIndex(({ registration }) =>
-      registration.dependencies.every((dependency) =>
-        ordered.some(({ registration: applied }) => applied.entityType === dependency),
+      registration.dependencies.every(
+        (dependency) =>
+          dependency === registration.entityType ||
+          ordered.some(({ registration: applied }) => applied.entityType === dependency),
       ),
     );
     if (readyIndex < 0) throw new Error('Sync Registry contains a dependency cycle.');
@@ -434,7 +441,7 @@ function normalizeGoalWireRecord(value: unknown): Readonly<Record<string, unknow
   return isRecord(value)
     ? withoutFields(
         { ...withoutFields(asRecord(value), ['coverImage', 'version']), ...normalized },
-        ['sphereId', 'isMain', 'legacyProjectId', 'measurement', 'dueDate'].filter(
+        ['sphereId', 'isMain', 'legacyProjectId', 'measurement', 'dueDate', 'nextActionId'].filter(
           (field) => !Object.hasOwn(value, field),
         ),
       )

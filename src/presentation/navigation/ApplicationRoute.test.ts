@@ -11,8 +11,8 @@ import {
 describe('application routes', () => {
   it.each([
     ['#/v2/today', { view: 'today' }],
-    ['#/v2/goals/plans', { view: 'planning' }],
-    ['#/v2/planning', { view: 'planning' }],
+    ['#/v2/goals/plans', { view: 'goals', period: 'week' }],
+    ['#/v2/planning', { view: 'goals', period: 'week' }],
     ['#/v2/goals/new', { view: 'new-goal' }],
     ['#/v2/actions/new?goalId=goal%2F1', { view: 'new-action', goalId: 'goal/1', title: null }],
   ])('opens the planner route %s', (hash, route) => {

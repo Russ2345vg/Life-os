@@ -28,6 +28,7 @@ export class DayRecordMapper {
       completedAt: toNullableIsoDate(entity.completedAt),
       summary: entity.summary,
       sphereId: entity.sphereId?.toString() ?? null,
+      mainDirectionId: entity.mainDirectionId?.toString() ?? null,
       version: entity.version,
     };
   }
@@ -45,6 +46,7 @@ export class DayRecordMapper {
       completedAt: readNullableIsoDate(record, 'completedAt'),
       summary: readNullableString(record, 'summary'),
       sphereId: readOptionalNullableEntityId(record, 'sphereId'),
+      mainDirectionId: readOptionalNullableEntityId(record, 'mainDirectionId'),
       version: readNumber(record, 'version'),
     });
   }

@@ -87,6 +87,40 @@ describe('IndexedDbPilotDeleteRepository', () => {
     await expect(repository.delete('direction', 'direction-1')).resolves.toBe(false);
     expect(await read(database, LIFE_OS_STORE.directions, 'direction-1')).toBeDefined();
   });
+
+  it('keeps structural parents and allows tombstones with optional historical Journal references', async () => {
+    const indexedDb = new LifeOsIndexedDb(new IDBFactory());
+    const database = await indexedDb.open();
+    const seed = database.transaction(
+      [
+        LIFE_OS_STORE.spheres,
+        LIFE_OS_STORE.directions,
+        LIFE_OS_STORE.lifeActions,
+        LIFE_OS_STORE.journal,
+      ],
+      'readwrite',
+    );
+    seed.objectStore(LIFE_OS_STORE.spheres).put({ id: 'sphere-1' });
+    seed.objectStore(LIFE_OS_STORE.directions).put({ id: 'direction-1', sphereId: 'sphere-1' });
+    seed.objectStore(LIFE_OS_STORE.lifeActions).put({ id: 'parent' });
+    seed.objectStore(LIFE_OS_STORE.lifeActions).put({ id: 'child', parentActionId: 'parent' });
+    seed.objectStore(LIFE_OS_STORE.lifeActions).put({ id: 'historical' });
+    seed
+      .objectStore(LIFE_OS_STORE.journal)
+      .put({ id: 'event-1', subjectType: 'LifeAction', subjectId: 'historical' });
+    await done(seed);
+    const repository = new IndexedDbPilotDeleteRepository(
+      indexedDb,
+      new IndexedDbPilotMutationRecorder(),
+    );
+    expect(await repository.delete('sphere', 'sphere-1')).toBe(false);
+    expect(await repository.delete('life_action', 'parent')).toBe(false);
+    expect(await repository.delete('life_action', 'historical')).toBe(true);
+    expect(await read(database, LIFE_OS_STORE.lifeActions, 'child')).toBeDefined();
+    expect(await read(database, LIFE_OS_STORE.lifeActions, 'historical')).toBeUndefined();
+    expect(await read(database, LIFE_OS_STORE.journal, 'event-1')).toBeDefined();
+    indexedDb.close();
+  });
 });
 
 function settings(): SyncSettingsRecord {

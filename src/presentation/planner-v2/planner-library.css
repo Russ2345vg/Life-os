@@ -234,3 +234,15 @@
     padding-top: var(--space-4);
   }
 }
+.planner-period-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+  margin: 0 0 22px;
+}
+.planner-period-filter label {
+  display: grid;
+  gap: 5px;
+  min-width: min(220px, 100%);
+}

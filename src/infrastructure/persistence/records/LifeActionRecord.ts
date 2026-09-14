@@ -15,6 +15,7 @@ export interface LifeActionRecord {
   readonly decisionId: string | null;
   readonly sphereId?: string | null;
   readonly goalId?: string | null;
+  readonly parentActionId?: string | null;
   readonly isNext?: boolean;
   readonly plannedDate: string | null;
   readonly createdAt: string;

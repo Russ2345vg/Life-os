@@ -72,10 +72,10 @@ const EXPECTED_ENTITY_STORES = {
 } as const;
 
 describe('LIFE_OS_SYNC_REGISTRY', () => {
-  it('declares the future Goal dependency while retaining legacy action dependencies', () => {
+  it('declares Goal and parent Action dependencies alongside legacy action dependencies', () => {
     expect(registration('life_action')).toMatchObject({
       recordSchemaVersion: 1,
-      dependencies: ['decision', 'sphere', 'goal', 'recurrence_rule'],
+      dependencies: ['decision', 'sphere', 'goal', 'recurrence_rule', 'life_action'],
     });
   });
 

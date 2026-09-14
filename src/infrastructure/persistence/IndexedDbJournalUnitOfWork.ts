@@ -7,6 +7,7 @@ import type {
   JournalUnitOfWork,
 } from '../../application/ports/JournalUnitOfWork';
 import { DomainError } from '../../shared/errors/DomainError';
+import { assertActionHierarchy } from '../../domain/life-action/ActionHierarchy';
 import { LIFE_OS_STORE, LifeOsIndexedDb } from './indexed-db/LifeOsIndexedDb';
 import { ActionSessionRecordMapper } from './mappers/ActionSessionRecordMapper';
 import { DayRecordMapper } from './mappers/DayRecordMapper';
@@ -201,6 +202,18 @@ async function validateExpectedState(
     );
   }
   await Promise.all(checks);
+  if (input.lifeActions?.length) {
+    const stored = await observeRequest<LifeActionRecord[]>(
+      transaction.objectStore(LIFE_OS_STORE.lifeActions).getAll(),
+    );
+    const final = new Map(stored.map((record) => [record.id, record]));
+    for (const change of input.lifeActions)
+      final.set(
+        change.lifeAction.id.toString(),
+        LifeActionRecordMapper.toRecord(change.lifeAction),
+      );
+    assertActionHierarchy([...final.values()]);
+  }
 }
 
 async function validateMainActionSelection(

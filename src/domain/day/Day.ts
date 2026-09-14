@@ -41,6 +41,7 @@ export interface DayRehydrationData {
   readonly completedAt: Date | null;
   readonly summary: string | null;
   readonly sphereId?: EntityId | null;
+  readonly mainDirectionId?: EntityId | null;
   readonly version: number;
 }
 
@@ -55,6 +56,7 @@ export class Day extends Entity {
   #completedAt: Date | null;
   #summary: string | null;
   #sphereId: EntityId | null;
+  #mainDirectionId: EntityId | null;
   #version: number;
 
   private constructor(
@@ -76,6 +78,7 @@ export class Day extends Entity {
     this.#completedAt = null;
     this.#summary = null;
     this.#sphereId = null;
+    this.#mainDirectionId = null;
     this.#version = 1;
     this.#domainEvents = domainEvents;
   }
@@ -169,6 +172,7 @@ export class Day extends Entity {
     day.#completedAt = copyOptionalDate(data.completedAt);
     day.#summary = data.summary;
     day.#sphereId = data.sphereId ?? null;
+    day.#mainDirectionId = data.mainDirectionId ?? null;
     day.#version = data.version;
     return day;
   }
@@ -207,6 +211,21 @@ export class Day extends Entity {
 
   public get sphereId(): EntityId | null {
     return this.#sphereId;
+  }
+
+  public get mainDirectionId(): EntityId | null {
+    return this.#mainDirectionId;
+  }
+
+  public setMainDirection(directionId: EntityId | null): void {
+    if (this.#status === DAY_STATUS.completed)
+      throw new DomainError(
+        'day.completed_main_direction',
+        'Главное направление завершённого дня нельзя менять.',
+      );
+    if (sameOptionalEntityId(this.#mainDirectionId, directionId)) return;
+    this.#mainDirectionId = directionId;
+    this.#version += 1;
   }
 
   public get version(): number {

@@ -3,6 +3,14 @@ import type { PlanningServices } from '../../application/planner/PlanningService
 import { PlannerInbox } from '../../application/planner/PlannerInbox';
 import { PlannerFocus } from '../../application/planner/PlannerFocus';
 import { PlannerCatalog } from '../../application/planner/PlannerCatalog';
+import type { DailyDirection } from '../../application/planner/DailyDirection';
+import type { DeletePilotDirection } from '../../application/sync/pilot/DeletePilotDirection';
+import type { DeletePilotSphere } from '../../application/sync/pilot/DeletePilotSphere';
+import type { DeletePilotLifeAction } from '../../application/sync/pilot/DeletePilotLifeAction';
+import type { ArchiveLifeAction } from '../../application/commands/ArchiveLifeAction';
+import type { EditPlannerActionDraft } from '../../application/commands/EditPlannerActionDraft';
+import type { SetLifeActionParent } from '../../application/commands/SetLifeActionParent';
+import type { SelectGoalNextAction } from '../../application/commands/SelectGoalNextAction';
 import type {
   ActionSessionRepository,
   SyncApplication,
@@ -267,12 +275,16 @@ interface LifeOsApplicationServices {
   readonly completeActionSession: CompleteActionSession;
   readonly createLifeActionDraft: CreateLifeActionDraft;
   readonly setLifeActionGoal: SetLifeActionGoal;
+  readonly editPlannerActionDraft: EditPlannerActionDraft;
+  readonly setLifeActionParent: SetLifeActionParent;
+  readonly selectGoalNextAction: SelectGoalNextAction;
   readonly setLifeActionPlan: SetLifeActionPlan;
   readonly plannerInbox: PlannerInbox;
   readonly planning: PlanningServices;
   readonly balance: BalanceServices;
   readonly plannerFocus: PlannerFocus;
   readonly plannerCatalog: PlannerCatalog;
+  readonly dailyDirection: DailyDirection;
   readonly getPlannerToday: GetPlannerToday;
   readonly completeLifeAction: CompleteLifeAction;
   readonly verifyLifeActionResult: VerifyLifeActionResult;
@@ -371,6 +383,10 @@ interface LifeOsApplicationServices {
   readonly updateGoal: UpdateGoal;
   readonly archiveGoal: ArchiveGoal;
   readonly deletePilotGoal: DeletePilotGoal;
+  readonly deletePilotDirection: DeletePilotDirection;
+  readonly deletePilotSphere: DeletePilotSphere;
+  readonly deletePilotLifeAction: DeletePilotLifeAction;
+  readonly archiveLifeAction: ArchiveLifeAction;
   readonly getGoalById: GetGoalById;
   readonly getGoals: GetGoals;
   readonly closeDatabase: () => void;
@@ -457,12 +473,16 @@ export class LifeOsApplication {
   public readonly completeActionSession: CompleteActionSession;
   public readonly createLifeActionDraft: CreateLifeActionDraft;
   public readonly setLifeActionGoal: SetLifeActionGoal;
+  public readonly editPlannerActionDraft: EditPlannerActionDraft;
+  public readonly setLifeActionParent: SetLifeActionParent;
+  public readonly selectGoalNextAction: SelectGoalNextAction;
   public readonly setLifeActionPlan: SetLifeActionPlan;
   public readonly plannerInbox: PlannerInbox;
   public readonly planning: PlanningServices;
   public readonly balance: BalanceServices;
   public readonly plannerFocus: PlannerFocus;
   public readonly plannerCatalog: PlannerCatalog;
+  public readonly dailyDirection: DailyDirection;
   public readonly getPlannerToday: GetPlannerToday;
   public readonly completeLifeAction: CompleteLifeAction;
   public readonly verifyLifeActionResult: VerifyLifeActionResult;
@@ -561,6 +581,10 @@ export class LifeOsApplication {
   public readonly updateGoal: UpdateGoal;
   public readonly archiveGoal: ArchiveGoal;
   public readonly deletePilotGoal: DeletePilotGoal;
+  public readonly deletePilotDirection: DeletePilotDirection;
+  public readonly deletePilotSphere: DeletePilotSphere;
+  public readonly deletePilotLifeAction: DeletePilotLifeAction;
+  public readonly archiveLifeAction: ArchiveLifeAction;
   public readonly getGoalById: GetGoalById;
   public readonly getGoals: GetGoals;
 
@@ -653,6 +677,10 @@ export class LifeOsApplication {
     this.balance = services.balance;
     this.plannerFocus = services.plannerFocus;
     this.plannerCatalog = services.plannerCatalog;
+    this.editPlannerActionDraft = services.editPlannerActionDraft;
+    this.setLifeActionParent = services.setLifeActionParent;
+    this.selectGoalNextAction = services.selectGoalNextAction;
+    this.dailyDirection = services.dailyDirection;
     this.getPlannerToday = services.getPlannerToday;
     this.completeLifeAction = services.completeLifeAction;
     this.verifyLifeActionResult = services.verifyLifeActionResult;
@@ -751,6 +779,10 @@ export class LifeOsApplication {
     this.updateGoal = services.updateGoal;
     this.archiveGoal = services.archiveGoal;
     this.deletePilotGoal = services.deletePilotGoal;
+    this.deletePilotDirection = services.deletePilotDirection;
+    this.deletePilotSphere = services.deletePilotSphere;
+    this.deletePilotLifeAction = services.deletePilotLifeAction;
+    this.archiveLifeAction = services.archiveLifeAction;
     this.getGoalById = services.getGoalById;
     this.getGoals = services.getGoals;
     this.#closeDatabase = services.closeDatabase;

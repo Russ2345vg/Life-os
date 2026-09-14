@@ -102,7 +102,9 @@
   gap: 8px;
   margin-top: 50px;
 }
-.planner-sidebar nav a {
+.planner-sidebar nav a,
+.planner-sidebar nav .planner-nav-more,
+.planner-more-menu a {
   display: flex;
   align-items: center;
   gap: 13px;
@@ -110,6 +112,70 @@
   padding: 12px;
   border-radius: 7px;
   color: #a6a6a6;
+}
+.planner-sidebar nav .planner-nav-more {
+  display: none;
+  width: 100%;
+  border: 0;
+  text-align: left;
+  background: transparent;
+}
+.planner-more-menu {
+  display: none;
+}
+.planner-day-switch {
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  margin-bottom: 20px;
+  border: 1px solid #303030;
+  border-radius: 9px;
+}
+.planner-v2 .planner-day-switch button {
+  border: 0;
+  min-height: 44px;
+}
+.planner-v2 .planner-day-switch button[aria-pressed='true'] {
+  background: #0d1b10;
+  color: var(--planner-accent);
+}
+.planner-main-direction {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 24px;
+  padding: 18px;
+  border: 1px solid #27412c;
+  border-radius: 10px;
+  background: #0a140c;
+}
+.planner-main-direction label {
+  font-weight: 650;
+}
+.planner-v2 .planner-action-open {
+  padding: 0;
+  min-height: 0;
+  border: 0;
+  text-align: left;
+}
+.planner-tomorrow-choose {
+  margin: -20px 0 30px;
+}
+.planner-tomorrow-candidates {
+  max-height: 280px;
+  overflow-y: auto;
+}
+.planner-tomorrow-candidates ul {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+}
+.planner-tomorrow-candidates li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid #242424;
 }
 .planner-sidebar nav a[aria-current='page'] {
   color: var(--planner-accent);
@@ -437,6 +503,33 @@
     padding: 7px 10px calc(7px + env(safe-area-inset-bottom));
     border-top: 1px solid #272727;
     background: #070707;
+  }
+  .planner-sidebar nav .planner-nav-secondary {
+    display: none;
+  }
+  .planner-sidebar nav .planner-nav-more {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 7px 2px;
+    font-size: 10px;
+  }
+  .planner-more-menu {
+    display: grid;
+    position: fixed;
+    right: 8px;
+    bottom: calc(75px + env(safe-area-inset-bottom));
+    z-index: 21;
+    min-width: 170px;
+    padding: 8px;
+    border: 1px solid #303030;
+    border-radius: 12px;
+    background: #111;
+    box-shadow: 0 12px 30px #000a;
+  }
+  .planner-more-menu a {
+    padding: 10px 12px;
   }
   .planner-sidebar nav a {
     flex-direction: column;

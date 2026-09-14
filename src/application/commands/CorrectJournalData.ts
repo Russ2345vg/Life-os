@@ -363,6 +363,7 @@ function cloneLifeAction(lifeAction: LifeAction): LifeAction {
     decisionId: lifeAction.decisionId,
     sphereId: lifeAction.sphereId,
     goalId: lifeAction.goalId,
+    parentActionId: lifeAction.parentActionId,
     isNext: lifeAction.isNext,
     plannedDate: lifeAction.plannedDate,
     createdAt: lifeAction.createdAt,

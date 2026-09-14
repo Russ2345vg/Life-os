@@ -41,6 +41,7 @@ describe('V2 library rendering', () => {
   it('shows an unassigned Goal, one filter button, no fabricated progress', () => {
     const html = renderToStaticMarkup(
       createElement(PlannerGoalList, {
+        today: '2026-09-14',
         goals: [goal],
         actions: [action],
         directions: [],

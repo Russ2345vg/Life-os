@@ -21,6 +21,12 @@ const services: BalanceServices = {
   updateSphere: { execute: unexpected },
   createDirection: { execute: unexpected },
   updateDirection: { execute: unexpected },
+  archiveSphere: { execute: unexpected },
+  archiveDirection: { execute: unexpected },
+  restoreSphere: { execute: unexpected },
+  restoreDirection: { execute: unexpected },
+  deletePilotSphere: { execute: unexpected },
+  deletePilotDirection: { execute: unexpected },
   refreshSnapshots: unexpected,
 };
 function data(): BalanceState {
@@ -136,7 +142,7 @@ describe('balance screens and compact editors', () => {
       'Автоматически:',
       'Нет данных',
       '#/v2/goals?sphereId=s',
-      '#/v2/goals/plans?sphereId=s',
+      '#/v2/goals?sphereId=s&amp;period=week',
     ])
       expect(html).toContain(label);
     const detail = screen({ view: 'direction', id: 'd' });
@@ -178,7 +184,9 @@ describe('balance screens and compact editors', () => {
     });
     const html = screen({ view: 'direction', id: 'd' });
     expect(html).toContain('Источник недоступен');
-    expect(html).toContain('Цели без срока доступны ниже');
+    expect(html).toContain(
+      '<h2>Активные цели</h2><div class="balance-row"><a href="#/v2/goals/g">Без срока</a>',
+    );
     expect(html).toContain('Нет данных');
   });
   it('renders voice fields, lifecycle choices and only the selected indicator inputs', () => {

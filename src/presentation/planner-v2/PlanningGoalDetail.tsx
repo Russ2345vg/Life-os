@@ -1,5 +1,6 @@
 import type { Direction, Goal, LifeAction, Sphere } from '../../domain';
 import type { ProgressContribution } from '../../domain/planner/ProgressContribution';
+import type { RecurrenceRule } from '../../domain/planner/RecurrenceRule';
 import { usePlanning } from './PlanningContext';
 import { PlanningProgress } from './PlanningProgress';
 import { PlannerActionRow } from './PlannerActionList';
@@ -11,18 +12,22 @@ import {
   statusLabels,
 } from './plannerCatalogModel';
 import type { PlannerViewOperations } from './PlannerViewParts';
+import { GoalPeriodMembership } from './GoalPeriodMembership';
+import { EntityContextMenu, type EntityMenuAction } from './EntityContextMenu';
 
 export function PlanningGoalDetail({
   id,
   today,
   directions,
   spheres,
+  menuForGoal,
   ...operations
 }: {
   readonly id: string;
   readonly today: string;
   readonly directions: readonly Direction[];
   readonly spheres: readonly Sphere[];
+  readonly menuForGoal?: ((goal: Goal) => readonly EntityMenuAction[]) | undefined;
 } & PlannerViewOperations) {
   const context = usePlanning();
   if (context?.error) return <p role="alert">{context.error}</p>;
@@ -37,8 +42,10 @@ export function PlanningGoalDetail({
       directions={directions}
       spheres={spheres}
       facts={state.contributions.filter((fact) => fact.goalId === id)}
+      rules={state.rules}
       today={today}
       operations={operations}
+      menuForGoal={menuForGoal}
     />
   );
 }
@@ -49,19 +56,33 @@ export function GoalDetailContent({
   directions,
   spheres,
   facts,
+  rules = [],
   today,
   operations,
+  menuForGoal,
 }: {
   readonly goal: Goal;
   readonly actions: readonly LifeAction[];
   readonly directions: readonly Direction[];
   readonly spheres: readonly Sphere[];
   readonly facts: readonly ProgressContribution[];
+  readonly rules?: readonly RecurrenceRule[];
   readonly today: string;
   readonly operations: PlannerViewOperations;
+  readonly menuForGoal?: ((goal: Goal) => readonly EntityMenuAction[]) | undefined;
 }) {
   const { open, completed, next } = selectGoalCardActions(goal, actions);
   const id = goal.id.toString();
+  const recurrenceLabel = (action: LifeAction): string | null => {
+    const rule = rules.find((item) => item.id === action.occurrence?.ruleId);
+    if (rule?.schedule.kind !== 'count' || rule.maxCompletions === null) return null;
+    const done = new Set(
+      actions
+        .filter((item) => item.occurrence?.ruleId === rule.id && item.status === 'completed')
+        .map((item) => item.completionKey),
+    ).size;
+    return `Повтор · ${done}/${rule.maxCompletions}`;
+  };
   const newActionHref = `#/v2/actions/new?${new URLSearchParams({ goalId: id, returnToGoal: '1' })}`;
   const achieve = () => {
     void operations.onGoalStatus(goal, 'achieved');
@@ -69,9 +90,11 @@ export function GoalDetailContent({
   return (
     <section className="planning-workspace planner-goal-detail">
       <a href="#/v2/goals">← Все цели</a>
-      <header className="planner-page-heading">
-        <h1>{goal.title}</h1>
-      </header>
+      <EntityContextMenu title={goal.title} entityLabel="цель" actions={menuForGoal?.(goal) ?? []}>
+        <header className="planner-page-heading">
+          <h1>{goal.title}</h1>
+        </header>
+      </EntityContextMenu>
       <div className="planner-goal-context">
         <PlannerGoalContext goal={goal} directions={directions} spheres={spheres} />
         <span>{statusLabels[goal.status]}</span>
@@ -88,10 +111,18 @@ export function GoalDetailContent({
       ) : (
         <PlannerGoalProgress goal={goal} />
       )}
+      <GoalPeriodMembership goalId={id} today={today} />
       {next ? (
         <section className="planner-goal-next" aria-label="Следующее действие">
           <h2>Следующее действие</h2>
-          <PlannerActionRow action={next} goals={[goal]} {...operations} lazyDetails goalContext />
+          <PlannerActionRow
+            action={next}
+            goals={[goal]}
+            {...operations}
+            lazyDetails
+            goalContext
+            recurrenceLabel={recurrenceLabel(next)}
+          />
         </section>
       ) : (
         <a className="planner-text-link" href={newActionHref}>
@@ -115,7 +146,17 @@ export function GoalDetailContent({
                   {...operations}
                   lazyDetails
                   goalContext
+                  recurrenceLabel={recurrenceLabel(action)}
                 />
+                <button
+                  type="button"
+                  disabled={operations.busy}
+                  onClick={() => {
+                    void operations.onGoalNextAction(id, action.id.toString());
+                  }}
+                >
+                  Назначить следующим
+                </button>
               </li>
             ))}
         </ul>
@@ -125,14 +166,30 @@ export function GoalDetailContent({
         <ul className="planner-list">
           {completed.map((action) => (
             <li key={action.id.toString()}>
-              <a href={`#/v2/actions/${encodeURIComponent(action.id.toString())}`}>
-                {action.title.toString()}
-              </a>
+              <PlannerActionRow
+                action={action}
+                goals={[goal]}
+                {...operations}
+                lazyDetails
+                goalContext
+                recurrenceLabel={recurrenceLabel(action)}
+              />
               <span className="planner-muted">
                 {action.completedAt?.toLocaleDateString('ru-RU') ?? 'Дата неизвестна'}
               </span>
               {action.actualResult && (
                 <p className="planner-muted">{action.actualResult.toString()}</p>
+              )}
+              {operations.onReopen && (
+                <button
+                  type="button"
+                  disabled={operations.busy}
+                  onClick={() => {
+                    void operations.onReopen?.(action.id.toString());
+                  }}
+                >
+                  Вернуть в работу
+                </button>
               )}
             </li>
           ))}

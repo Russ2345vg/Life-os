@@ -11,7 +11,7 @@ import { PlannerViewSwitcher } from './PlannerViewSwitcher';
 describe('V2 preview routes', () => {
   it('roundtrips the four entries, focus and a converted action id', () => {
     for (const route of [
-      { view: 'planning' },
+      { view: 'goals', period: 'week' },
       { view: 'goal', id: 'goal / русский' },
       { view: 'goals' },
       { view: 'focus' },
@@ -23,26 +23,29 @@ describe('V2 preview routes', () => {
       { view: 'tree', section: 'actions' },
       { view: 'actions' },
       { view: 'spheres' },
+      { view: 'directions' },
+      { view: 'today', day: 'tomorrow' },
       { view: 'sphere', id: 'здоровье / дом' },
       { view: 'direction', id: 'сон' },
       { view: 'goals', sphereId: 'здоровье / дом' },
-      { view: 'planning', sphereId: 'здоровье / дом' },
+      { view: 'goals', sphereId: 'здоровье / дом', period: 'week' },
       { view: 'inbox' },
       { view: 'action', id: 'inbox-result:русский / id' },
+      { view: 'new-action', goalId: null, title: null, date: '2026-09-14' },
     ] as const)
       expect(parsePlannerV2Route(buildPlannerV2Route(route))).toEqual(route);
     expect(parsePlannerV2Route('#/v2/actions/%broken')).toBeNull();
-    expect(buildPlannerV2Route({ view: 'planning' })).toBe('#/v2/goals/plans');
-    expect(parsePlannerV2Route('#/v2/planning')).toEqual({ view: 'planning' });
+    expect(parsePlannerV2Route('#/v2/goals/plans')).toEqual({ view: 'goals', period: 'week' });
+    expect(parsePlannerV2Route('#/v2/planning')).toEqual({ view: 'goals', period: 'week' });
   });
-  it('offers Plans inside Goals and renders the existing planning screen with Goals active', () => {
+  it('keeps old planning links on the Goals list without a second Plans view', () => {
     const switcher = renderToStaticMarkup(
       createElement(PlannerViewSwitcher, {
         route: { view: 'goals' },
         onNavigate: vi.fn(),
       }),
     );
-    expect(switcher).toContain('<option value="#/v2/goals/plans">Планы</option>');
+    expect(switcher).not.toContain('Планы');
     expect(
       renderToStaticMarkup(
         createElement(PlannerViewSwitcher, {
@@ -54,7 +57,7 @@ describe('V2 preview routes', () => {
     const markup = renderToStaticMarkup(
       createElement(PlannerV2Workspace, {
         services: { planning: {} } as PlannerV2Services,
-        route: { view: 'planning' },
+        route: { view: 'goals', period: 'week' },
         currentDate: DayDate.create('2026-09-13'),
         onNavigate: vi.fn(),
         onExit: vi.fn(),
@@ -62,12 +65,12 @@ describe('V2 preview routes', () => {
     );
     const mainNav = markup.match(/<nav aria-label="Рабочий интерфейс">([\s\S]*?)<\/nav>/)?.[1];
     expect(mainNav).toBeDefined();
-    expect(mainNav?.match(/<a /g)).toHaveLength(5);
+    expect(mainNav?.match(/<a /g)).toHaveLength(6);
     expect(mainNav).toContain('Сферы');
+    expect(mainNav).toContain('Направления');
     expect(mainNav).not.toContain('Планирование');
     expect(mainNav).toMatch(/href="#\/v2\/goals" aria-current="page"/);
-    expect(markup).toContain('<option value="#/v2/goals/plans" selected="">Планы</option>');
-    expect(markup).toContain('Загружаем планирование…');
+    expect(markup).not.toContain('Планы');
   });
   it('roundtrips a Goal and its optional first step without losing the original id', () => {
     const route = { view: 'new-action', goalId: 'цель / 1', title: 'Первый шаг & ещё' } as const;

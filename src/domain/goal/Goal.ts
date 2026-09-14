@@ -71,6 +71,7 @@ export interface GoalRehydrationData {
   readonly sphereId?: EntityId | null;
   readonly isMain?: boolean;
   readonly legacyProjectId?: string | null;
+  readonly nextActionId?: EntityId | null;
   readonly id: EntityId;
   readonly directionId: EntityId | null;
   readonly title: string;
@@ -97,6 +98,7 @@ export class Goal extends Entity {
   public readonly sphereId: EntityId | null;
   public readonly isMain: boolean;
   public readonly legacyProjectId: string | null;
+  public readonly nextActionId: EntityId | null;
   public readonly directionId: EntityId | null;
   public readonly title: string;
   public readonly description: string | null;
@@ -124,6 +126,7 @@ export class Goal extends Entity {
     this.sphereId = data.sphereId ?? null;
     this.isMain = data.isMain ?? false;
     this.legacyProjectId = data.legacyProjectId ?? null;
+    this.nextActionId = data.nextActionId ?? null;
     if (typeof this.isMain !== 'boolean' || (this.isMain && data.status !== GOAL_STATUS.active)) {
       throw new DomainError('goal.invalid_main', 'Главной может быть только активная цель.');
     }
@@ -253,6 +256,19 @@ export class Goal extends Entity {
     });
   }
 
+  public selectNextAction(actionId: EntityId, updatedAt: Date): Goal {
+    if (this.status === GOAL_STATUS.archived) {
+      throw new DomainError('goal.archived_is_immutable', 'Архивную цель нельзя изменить.');
+    }
+    if (this.nextActionId?.equals(actionId)) return this;
+    return new Goal({
+      ...this.toRehydrationData(),
+      nextActionId: actionId,
+      updatedAt,
+      version: this.version + 1,
+    });
+  }
+
   public get createdAt(): Date {
     return new Date(this.#createdAt.getTime());
   }
@@ -272,6 +288,7 @@ export class Goal extends Entity {
       sphereId: this.sphereId,
       isMain: this.isMain,
       legacyProjectId: this.legacyProjectId,
+      nextActionId: this.nextActionId,
       id: this.id,
       directionId: this.directionId,
       title: this.title,

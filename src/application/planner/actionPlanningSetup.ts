@@ -30,13 +30,17 @@ export function actionPlanningSetup(
       })
     : null;
   if (rule) {
-    if (!action.plannedDate) action.setPlan(DayDate.create(rule.startDate), false);
+    if (!action.plannedDate && rule.schedule.kind !== 'count')
+      action.setPlan(DayDate.create(rule.startDate), false);
     const originalDate = action.plannedDate?.toString() ?? rule.startDate;
     action.setPlanningMetadata({
       priority: rule.priority,
       occurrence: {
         ruleId: rule.id,
-        slot: rule.schedule.kind === 'interval' ? 'first' : originalDate,
+        slot:
+          rule.schedule.kind === 'interval' || rule.schedule.kind === 'count'
+            ? 'first'
+            : originalDate,
         ruleRevision: 1,
         originalDate,
       },

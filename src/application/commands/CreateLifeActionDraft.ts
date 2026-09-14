@@ -31,6 +31,7 @@ export interface CreateLifeActionDraftInput {
   readonly decisionId?: EntityId;
   readonly sphereId?: EntityId | null;
   readonly goalId?: EntityId | null;
+  readonly parentActionId?: EntityId | null;
   readonly plannedDate?: DayDate | null;
   readonly isNext?: boolean;
 }
@@ -61,7 +62,7 @@ export class CreateLifeActionDraft {
     input: CreateLifeActionDraftInput,
   ): Promise<Result<LifeAction, DomainError>> {
     if (
-      (input.isNext || input.recurrence || input.contributions?.length) &&
+      (input.isNext || input.recurrence || input.contributions?.length || input.parentActionId) &&
       this.planning === undefined
     )
       return failure(
@@ -73,6 +74,20 @@ export class CreateLifeActionDraft {
         (await this.planning.goalRepository.findById(input.goalId)) === null)
     ) {
       return failure(new DomainError('goal.not_found', 'Цель не найдена.'));
+    }
+    if (input.parentActionId) {
+      const parent = await this.#lifeActionRepository.findById(input.parentActionId);
+      if (!parent || parent.isArchived())
+        return failure(
+          new DomainError('life_action.parent_missing', 'Родительское действие не найдено.'),
+        );
+      if (parent.parentActionId)
+        return failure(
+          new DomainError(
+            'life_action.hierarchy_depth',
+            'Поддействия поддерживают только один уровень.',
+          ),
+        );
     }
     let inheritedSphereId: EntityId | null = null;
     if (input.decisionId !== undefined) {
@@ -101,6 +116,7 @@ export class CreateLifeActionDraft {
         ...(input.decisionId === undefined ? {} : { decisionId: input.decisionId }),
         sphereId: input.sphereId === undefined ? inheritedSphereId : input.sphereId,
         goalId: input.goalId ?? null,
+        parentActionId: input.parentActionId ?? null,
         plannedDate: input.plannedDate ?? null,
         isNext: input.isNext ?? false,
         createdAt: this.#clock.now(),

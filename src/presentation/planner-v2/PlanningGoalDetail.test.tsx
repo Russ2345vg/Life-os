@@ -7,6 +7,7 @@ import {
   createReadyLifeAction,
 } from '../../test/helpers/LifeActionTestFactory';
 import { DayDate } from '../../domain';
+import { validateRule } from '../../domain/planner/RecurrenceRule';
 import { GoalDetailContent } from './PlanningGoalDetail';
 import { selectGoalCardActions } from './plannerCatalogModel';
 import type { PlannerViewOperations } from './PlannerViewParts';
@@ -44,9 +45,51 @@ const operations: PlannerViewOperations = {
   onLink: async () => {},
   onGoalStatus: async () => {},
   onGoalDirection: async () => {},
+  onGoalNextAction: async () => {},
 };
 
 describe('V2 Goal action centre', () => {
+  it('shows a count recurrence from completed occurrences inside the Goal Card', () => {
+    const current = action('Повторяемый шаг', goal.id);
+    current.setPlanningMetadata({
+      occurrence: {
+        ruleId: 'rule-count',
+        slot: 'after:previous',
+        ruleRevision: 1,
+        originalDate: '2026-09-14',
+      },
+    });
+    const rule = validateRule({
+      id: 'rule-count',
+      schemaVersion: 1,
+      version: 1,
+      updatedAt: now.toISOString(),
+      title: 'Повторяемый шаг',
+      goalId: goal.id.toString(),
+      priority: null,
+      startDate: '2026-09-14',
+      endDate: null,
+      maxCompletions: 66,
+      paused: false,
+      pauseUntil: null,
+      schedule: { kind: 'count' },
+      revision: 1,
+      effectiveFrom: '2026-09-14',
+    });
+    const html = renderToStaticMarkup(
+      createElement(GoalDetailContent, {
+        goal,
+        actions: [current],
+        directions: [],
+        spheres: [],
+        facts: [],
+        rules: [rule],
+        today: '2026-09-14',
+        operations,
+      }),
+    );
+    expect(html).toContain('Повтор · 0/66');
+  });
   it('creates one linked Action through the existing V2 form command and shows it on refresh', async () => {
     const created = action('Новое действие', goal.id);
     const execute = vi.fn(async (input: CreateLifeActionDraftInput) => {

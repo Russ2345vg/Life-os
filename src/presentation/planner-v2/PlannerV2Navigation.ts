@@ -1,11 +1,16 @@
 export type PlannerV2Route =
   | { readonly view: 'spheres' }
+  | { readonly view: 'directions' }
   | { readonly view: 'sphere'; readonly id: string }
   | { readonly view: 'direction'; readonly id: string }
   | { readonly view: 'goal'; readonly id: string }
   | { readonly view: 'planning'; readonly sphereId?: string }
-  | { readonly view: 'today' }
-  | { readonly view: 'goals'; readonly sphereId?: string }
+  | { readonly view: 'today'; readonly day?: 'tomorrow' }
+  | {
+      readonly view: 'goals';
+      readonly sphereId?: string;
+      readonly period?: 'year' | 'quarter' | 'thirty_days' | 'week' | 'none';
+    }
   | { readonly view: 'focus' }
   | { readonly view: 'actions' }
   | { readonly view: 'inbox' }
@@ -16,6 +21,8 @@ export type PlannerV2Route =
       readonly view: 'new-action';
       readonly goalId: string | null;
       readonly title: string | null;
+      readonly date?: string;
+      readonly parentActionId?: string;
       readonly returnToGoal?: boolean;
     };
 
@@ -25,6 +32,7 @@ export function parsePlannerV2Route(hash: string): PlannerV2Route | null {
   const sphereId = new URLSearchParams(query).get('sphereId')?.trim();
   const filter = sphereId ? { sphereId } : {};
   if (path === '#/v2/spheres') return { view: 'spheres' };
+  if (path === '#/v2/directions') return { view: 'directions' };
   for (const [prefix, detail] of [
     ['#/v2/spheres/', 'sphere'],
     ['#/v2/directions/', 'direction'],
@@ -44,9 +52,22 @@ export function parsePlannerV2Route(hash: string): PlannerV2Route | null {
   )
     return { view, section: path === '#/v2/goals' ? 'goals' : 'actions' };
   if (path === '#/v2/goals/plans' || path === '#/v2/planning')
-    return { view: 'planning', ...filter };
-  if (path === '#/v2/today') return { view: 'today' };
-  if (path === '#/v2/goals') return { view: 'goals', ...filter };
+    return { view: 'goals', ...filter, period: 'week' };
+  if (path === '#/v2/today')
+    return {
+      view: 'today',
+      ...(new URLSearchParams(query).get('day') === 'tomorrow' ? { day: 'tomorrow' as const } : {}),
+    };
+  if (path === '#/v2/goals') {
+    const period = new URLSearchParams(query).get('period');
+    return {
+      view: 'goals',
+      ...filter,
+      ...(period && ['year', 'quarter', 'thirty_days', 'week', 'none'].includes(period)
+        ? { period: period as 'year' | 'quarter' | 'thirty_days' | 'week' | 'none' }
+        : {}),
+    };
+  }
   if (path === '#/v2/goals/focus') return { view: 'focus' };
   if (path === '#/v2/actions') return { view: 'actions' };
   if (path === '#/v2/inbox') return { view: 'inbox' };
@@ -73,12 +94,15 @@ export function parsePlannerV2Route(hash: string): PlannerV2Route | null {
     view: 'new-action',
     goalId: params.get('goalId')?.trim() || null,
     title: params.get('title')?.trim() || null,
+    ...(params.get('date') ? { date: params.get('date')! } : {}),
+    ...(params.get('parentActionId') ? { parentActionId: params.get('parentActionId')! } : {}),
     ...(params.get('returnToGoal') === '1' ? { returnToGoal: true } : {}),
   };
 }
 
 export function buildPlannerV2Route(route: PlannerV2Route): string {
   if (route.view === 'spheres') return '#/v2/spheres';
+  if (route.view === 'directions') return '#/v2/directions';
   if (route.view === 'sphere') return `#/v2/spheres/${encodeURIComponent(route.id)}`;
   if (route.view === 'direction') return `#/v2/directions/${encodeURIComponent(route.id)}`;
   const filter =
@@ -86,10 +110,17 @@ export function buildPlannerV2Route(route: PlannerV2Route): string {
       ? `?${new URLSearchParams({ sphereId: route.sphereId })}`
       : '';
   if ('section' in route) return `#/v2/${route.section}?view=${route.view}`;
-  if (route.view === 'planning') return `#/v2/goals/plans${filter}`;
-  if (route.view === 'today') return '#/v2/today';
+  if (route.view === 'planning')
+    return `#/v2/goals${filter ? `${filter}&period=week` : '?period=week'}`;
+  if (route.view === 'today')
+    return route.day === 'tomorrow' ? '#/v2/today?day=tomorrow' : '#/v2/today';
   if (route.view === 'new-goal') return '#/v2/goals/new';
-  if (route.view === 'goals') return `#/v2/goals${filter}`;
+  if (route.view === 'goals') {
+    const params = new URLSearchParams();
+    if (route.sphereId) params.set('sphereId', route.sphereId);
+    if (route.period) params.set('period', route.period);
+    return `#/v2/goals${params.size ? `?${params}` : ''}`;
+  }
   if (route.view === 'focus') return '#/v2/goals/focus';
   if (route.view === 'inbox') return '#/v2/inbox';
   if (route.view === 'actions') return '#/v2/actions';
@@ -98,6 +129,8 @@ export function buildPlannerV2Route(route: PlannerV2Route): string {
   const params = new URLSearchParams();
   if (route.goalId) params.set('goalId', route.goalId);
   if (route.title) params.set('title', route.title);
+  if (route.date) params.set('date', route.date);
+  if (route.parentActionId) params.set('parentActionId', route.parentActionId);
   if (route.returnToGoal) params.set('returnToGoal', '1');
   return `#/v2/actions/new${params.size > 0 ? `?${params}` : ''}`;
 }

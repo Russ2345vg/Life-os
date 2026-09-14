@@ -806,12 +806,18 @@ function cloneDay(day: Day): Day {
     completedAt: day.completedAt,
     summary: day.summary,
     sphereId: day.sphereId,
+    mainDirectionId: day.mainDirectionId,
     version: day.version,
   });
 }
 
 function cloneLifeAction(lifeAction: LifeAction): LifeAction {
   return LifeAction.rehydrate({
+    priority: lifeAction.priority,
+    occurrence: lifeAction.occurrence,
+    completionGeneration: lifeAction.completionGeneration,
+    expectedContributions: lifeAction.expectedContributions,
+    completedOn: lifeAction.completedOn,
     id: lifeAction.id,
     title: lifeAction.title,
     description: lifeAction.description,
@@ -820,6 +826,9 @@ function cloneLifeAction(lifeAction: LifeAction): LifeAction {
     status: lifeAction.status,
     decisionId: lifeAction.decisionId,
     sphereId: lifeAction.sphereId,
+    goalId: lifeAction.goalId,
+    parentActionId: lifeAction.parentActionId,
+    isNext: lifeAction.isNext,
     plannedDate: lifeAction.plannedDate,
     createdAt: lifeAction.createdAt,
     readyAt: lifeAction.readyAt,

@@ -37,6 +37,7 @@ export class GoalRecordMapper {
       sphereId: goal.sphereId?.toString() ?? null,
       isMain: goal.isMain,
       legacyProjectId: goal.legacyProjectId,
+      nextActionId: goal.nextActionId?.toString() ?? null,
       id: goal.id.toString(),
       directionId: goal.directionId?.toString() ?? null,
       title: goal.title,
@@ -77,6 +78,7 @@ export class GoalRecordMapper {
       isMain: readOptionalMain(record),
       legacyProjectId:
         record.legacyProjectId === undefined ? null : readNullableString(record, 'legacyProjectId'),
+      nextActionId: readOptionalNullableEntityId(record, 'nextActionId'),
       id: readEntityId(record, 'id'),
       directionId: readOptionalNullableEntityId(record, 'directionId'),
       title: readString(record, 'title'),

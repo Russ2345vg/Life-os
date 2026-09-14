@@ -9,9 +9,16 @@ describe('Planner Today', () => {
     const html = renderToStaticMarkup(
       createElement(PlannerToday, {
         date: DayDate.create('2026-09-13'),
+        day: 'today',
         overview: { main: null, actions: [], unscheduled: [], completed: [] },
         goals: [],
+        availableActions: [],
+        mainDirectionId: null,
+        directionChoices: [],
         busy: false,
+        onSelectDay: vi.fn(),
+        onOpenAction: vi.fn(),
+        onMainDirection: vi.fn(),
         onComplete: vi.fn(),
         onPlan: vi.fn(),
         onQuickAdd: async () => {},

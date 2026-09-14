@@ -2,7 +2,6 @@ import type { BalanceServices } from '../../application/balance/BalanceServices'
 import { BalanceWorkspace } from './balance/BalanceWorkspace';
 import type { PlanningServices } from '../../application/planner/PlanningServices';
 import { PlanningProvider } from './PlanningContext';
-import { PlanningWorkspace } from './PlanningWorkspace';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   CreateGoal,
@@ -14,7 +13,9 @@ import type {
   PlannerTodayOverview,
   SetLifeActionPlan,
 } from '../../application';
-import type { DayDate, Goal } from '../../domain';
+import { DayDate, EntityId, type Goal, type LifeAction } from '../../domain';
+import { addDays } from '../../domain/planner/PlanningPeriod';
+import type { DailyDirection } from '../../application/planner/DailyDirection';
 import { AppIcon } from '../components/AppIcon';
 import { PlannerActionForm, type PlannerOption } from './PlannerActionForm';
 import { PlannerGoalForm } from './PlannerGoalForm';
@@ -26,7 +27,8 @@ import { useSyncContentChanged } from '../sync/SyncStatusContext';
 import { finishPlannerSubmission } from './plannerRouteSubmission';
 import './planner-v2.css';
 import { PlannerLibraryWorkspace, type PlannerLibraryServices } from './PlannerLibraryWorkspace';
-import { PlannerViewSwitcher } from './PlannerViewSwitcher';
+import type { EntityMenuAction } from './EntityContextMenu';
+import { DomainError } from '../../shared/errors/DomainError';
 
 export interface PlannerV2Services extends PlannerLibraryServices {
   readonly balance?: BalanceServices;
@@ -38,11 +40,15 @@ export interface PlannerV2Services extends PlannerLibraryServices {
   readonly getPlannerToday: Pick<GetPlannerToday, 'execute'>;
   readonly getGoals: Pick<GetGoals, 'execute'>;
   readonly getDirections: Pick<GetDirections, 'execute'>;
+  readonly dailyDirection: Pick<DailyDirection, 'get' | 'set'>;
 }
 interface PlannerData {
   readonly overview: PlannerTodayOverview;
   readonly goals: readonly PlannerOption[];
   readonly directions: readonly PlannerOption[];
+  readonly actions: readonly LifeAction[];
+  readonly mainDirectionId: string | null;
+  readonly directionChoices: readonly PlannerOption[];
 }
 
 export function PlannerV2Workspace({
@@ -64,10 +70,16 @@ export function PlannerV2Workspace({
   const working = useRef(false);
   const [createdGoal, setCreatedGoal] = useState<Goal | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
   const request = useRef(0);
   const routeGeneration = useRef(0);
   const mainContent = useRef<HTMLElement>(null);
   const routeKey = buildPlannerV2Route(route);
+  const selectedDate =
+    route.view === 'today' && route.day === 'tomorrow'
+      ? DayDate.create(addDays(currentDate.toString(), 1))
+      : currentDate;
+  const selectedDateKey = selectedDate.toString();
   const [renderedRoute, setRenderedRoute] = useState(routeKey);
   if (renderedRoute !== routeKey) {
     setRenderedRoute(routeKey);
@@ -75,14 +87,19 @@ export function PlannerV2Workspace({
     setCreatedGoal(null);
     setError(null);
   }
-  const load = useCallback(() => {
+  const load = useCallback(async () => {
     const sequence = ++request.current;
+    const date = DayDate.create(selectedDateKey);
+    if (services.planning) await services.planning.recurrence.materialize(selectedDateKey);
     return Promise.all([
-      services.getPlannerToday.execute(currentDate),
+      services.getPlannerToday.execute(date),
       services.getGoals.execute(),
       services.getDirections.execute(),
+      services.plannerCatalog.actions(),
+      services.dailyDirection.get(date),
+      services.getSpheres.execute(),
     ])
-      .then(([overview, goals, directions]) => {
+      .then(([overview, goals, directions, actions, day, spheres]) => {
         if (sequence !== request.current) return;
         setData({
           overview,
@@ -92,13 +109,21 @@ export function PlannerV2Workspace({
           directions: directions
             .filter((direction) => direction.status !== 'archived')
             .map((direction) => ({ id: direction.id.toString(), title: direction.name })),
+          actions,
+          mainDirectionId: day?.mainDirectionId?.toString() ?? null,
+          directionChoices: directions
+            .filter((direction) => direction.status === 'active')
+            .map((direction) => ({
+              id: direction.id.toString(),
+              title: `${spheres.active.find((sphere) => sphere.id.toString() === direction.sphereId?.toString())?.name ?? 'Без сферы'} → ${direction.name}`,
+            })),
         });
         setError(null);
       })
       .catch((reason: unknown) => {
         if (sequence === request.current) throw reason;
       });
-  }, [services, currentDate]);
+  }, [services, selectedDateKey]);
   const report = useCallback(
     (reason: unknown) =>
       setError(
@@ -111,7 +136,7 @@ export function PlannerV2Workspace({
   const refresh = useCallback(() => {
     void load().catch(report);
   }, [load, report]);
-  useSyncContentChanged('lifeActions|goals|directions', refresh);
+  useSyncContentChanged('lifeActions|goals|directions|days', refresh);
   useEffect(() => {
     routeGeneration.current += 1;
     void load().catch(report);
@@ -136,9 +161,58 @@ export function PlannerV2Workspace({
       setBusy(false);
     }
   };
+  const menuForAction = (action: LifeAction): EntityMenuAction[] => [
+    ...(action.status === 'draft' || action.status === 'ready'
+      ? [
+          {
+            label: 'Редактировать',
+            run: () => navigate({ view: 'action', id: action.id.toString() }),
+          },
+        ]
+      : []),
+    ...(action.status === 'completed' && services.planning
+      ? [
+          {
+            label: 'Вернуть в работу',
+            run: () =>
+              run(
+                () => services.planning!.progress.reopen(action.id.toString()),
+                'Действие возвращено в работу',
+              ),
+          },
+        ]
+      : []),
+    ...(!action.isArchived()
+      ? [
+          {
+            label: 'Архивировать',
+            run: () =>
+              run(async () => {
+                const result = await services.archiveLifeAction.execute({
+                  lifeActionId: action.id,
+                });
+                if (!result.ok) throw result.error;
+              }, 'Действие архивировано'),
+          },
+        ]
+      : []),
+    {
+      label: 'Удалить',
+      destructive: true,
+      run: () =>
+        run(async () => {
+          if (!(await services.deletePilotLifeAction.execute(action.id.toString())))
+            throw new DomainError(
+              'action.delete_blocked',
+              'Действие связано с историей, повторением или поддействиями. Сначала уберите связи либо архивируйте его.',
+            );
+        }, 'Действие удалено'),
+    },
+  ];
   const navigate = (target: PlannerV2Route) => {
     routeGeneration.current += 1;
     setNotice(null);
+    setMoreOpen(false);
     if (target.view === 'new-goal') setCreatedGoal(null);
     onNavigate(target);
   };
@@ -152,7 +226,8 @@ export function PlannerV2Workspace({
       href={buildPlannerV2Route(target)}
       aria-current={
         route.view === target.view ||
-        (target.view === 'spheres' && ['sphere', 'direction'].includes(route.view)) ||
+        (target.view === 'spheres' && route.view === 'sphere') ||
+        (target.view === 'directions' && route.view === 'direction') ||
         ('section' in route && route.section === target.view) ||
         (target.view === 'goals' &&
           ['focus', 'new-goal', 'goal', 'planning'].includes(route.view)) ||
@@ -201,11 +276,32 @@ export function PlannerV2Workspace({
           </a>
           <nav aria-label="Рабочий интерфейс">
             {navLink({ view: 'today' }, 'Сегодня', 'today')}
+            <span className="planner-nav-secondary">
+              {navLink({ view: 'spheres' }, 'Сферы', 'goals')}
+            </span>
+            {navLink({ view: 'directions' }, 'Направления', 'goals')}
             {navLink({ view: 'goals' }, 'Цели', 'goals')}
             {navLink({ view: 'actions' }, 'Действия', 'actions')}
-            {navLink({ view: 'inbox' }, 'Входящие', 'history')}
-            {navLink({ view: 'spheres' }, 'Сферы', 'goals')}
+            <span className="planner-nav-secondary">
+              {navLink({ view: 'inbox' }, 'Входящие', 'history')}
+            </span>
+            <button
+              className="planner-nav-more"
+              type="button"
+              aria-expanded={moreOpen}
+              aria-controls="planner-more-menu"
+              onClick={() => setMoreOpen((value) => !value)}
+            >
+              <AppIcon name="history" />
+              <span>Ещё</span>
+            </button>
           </nav>
+          {moreOpen && (
+            <div id="planner-more-menu" className="planner-more-menu">
+              {navLink({ view: 'spheres' }, 'Сферы', 'goals')}
+              {navLink({ view: 'inbox' }, 'Входящие', 'history')}
+            </div>
+          )}
           <button className="planner-rollback" type="button" onClick={onExit}>
             Старая версия
           </button>
@@ -234,7 +330,7 @@ export function PlannerV2Workspace({
               </button>
             </div>
           ) : null}
-          {['spheres', 'sphere', 'direction'].includes(route.view) ? (
+          {['spheres', 'sphere', 'directions', 'direction'].includes(route.view) ? (
             services.balance ? (
               <BalanceWorkspace
                 services={services.balance}
@@ -246,15 +342,16 @@ export function PlannerV2Workspace({
               <p role="alert">Сферы недоступны в этой сборке.</p>
             )
           ) : route.view === 'planning' ? (
-            <>
-              <PlannerViewSwitcher route={route} onNavigate={navigate} />
-              <PlanningWorkspace
-                sphereId={route.sphereId ?? null}
-                today={currentDate.toString()}
-                services={services}
-                onNavigate={navigate}
-              />
-            </>
+            <PlannerLibraryWorkspace
+              services={services}
+              route={{
+                view: 'goals',
+                ...(route.sphereId ? { sphereId: route.sphereId } : {}),
+                period: 'week',
+              }}
+              today={currentDate.toString()}
+              onNavigate={navigate}
+            />
           ) : [
               'goal',
               'goals',
@@ -277,11 +374,33 @@ export function PlannerV2Workspace({
             !error && <p role="status">Загружаем…</p>
           ) : route.view === 'today' ? (
             <PlannerToday
-              date={currentDate}
+              date={selectedDate}
+              day={route.day === 'tomorrow' ? 'tomorrow' : 'today'}
               overview={data.overview}
               goals={data.goals}
+              availableActions={data.actions}
+              mainDirectionId={data.mainDirectionId}
+              directionChoices={data.directionChoices}
               busy={busy}
-              onNewAction={() => onNavigate({ view: 'new-action', goalId: null, title: null })}
+              menuForAction={menuForAction}
+              onSelectDay={(day) =>
+                navigate(day === 'tomorrow' ? { view: 'today', day } : { view: 'today' })
+              }
+              onOpenAction={(id) => navigate({ view: 'action', id })}
+              onMainDirection={(id) => {
+                void run(
+                  () => services.dailyDirection.set(selectedDate, id ? EntityId.create(id) : null),
+                  'Главное направление сохранено',
+                );
+              }}
+              onNewAction={() =>
+                onNavigate({
+                  view: 'new-action',
+                  goalId: null,
+                  title: null,
+                  date: selectedDate.toString(),
+                })
+              }
               onComplete={(id) => {
                 void run(
                   () => completePlannerAction(services.completeLifeAction, id),
@@ -291,7 +410,12 @@ export function PlannerV2Workspace({
               onPlan={(id, main) => {
                 void run(
                   () =>
-                    planPlannerAction(services.setLifeActionPlan, id, currentDate.toString(), main),
+                    planPlannerAction(
+                      services.setLifeActionPlan,
+                      id,
+                      selectedDate.toString(),
+                      main,
+                    ),
                   main ? 'Главное действие выбрано' : 'План сохранён',
                 );
               }}
@@ -301,9 +425,13 @@ export function PlannerV2Workspace({
                   await submitPlannerAction(services.createLifeActionDraft, {
                     ...emptyActionDraft(),
                     title,
-                    date: currentDate.toString(),
+                    date: selectedDate.toString(),
                   });
-                  setNotice('Действие добавлено на сегодня');
+                  setNotice(
+                    route.day === 'tomorrow'
+                      ? 'Действие добавлено на завтра'
+                      : 'Действие добавлено на сегодня',
+                  );
                   await load().catch(report);
                 } finally {
                   setBusy(false);
@@ -317,6 +445,8 @@ export function PlannerV2Workspace({
               initialGoalId={route.goalId}
               lockGoal={route.returnToGoal === true}
               initialTitle={route.title}
+              initialDate={route.date ?? null}
+              initialParentActionId={route.parentActionId ?? null}
               currentDate={currentDate.toString()}
               onCancel={today}
               onSubmit={async (draft) => {
@@ -332,8 +462,16 @@ export function PlannerV2Workspace({
                           ? `Действие сохранено на ${draft.date}`
                           : 'Действие сохранено в блоке «Без даты»',
                     );
-                    if (route.returnToGoal && route.goalId && route.goalId === draft.goalId) {
+                    if (route.parentActionId) {
+                      onNavigate({ view: 'action', id: route.parentActionId });
+                    } else if (
+                      route.returnToGoal &&
+                      route.goalId &&
+                      route.goalId === draft.goalId
+                    ) {
                       onNavigate({ view: 'goal', id: route.goalId });
+                    } else if (route.date === addDays(currentDate.toString(), 1)) {
+                      onNavigate({ view: 'today', day: 'tomorrow' });
                     } else {
                       today();
                     }
@@ -368,7 +506,7 @@ export function PlannerV2Workspace({
                 >
                   Добавить действие
                 </button>
-                <a href={`#/goals/${encodeURIComponent(createdGoal.id.toString())}`}>
+                <a href={`#/v2/goals/${encodeURIComponent(createdGoal.id.toString())}`}>
                   Открыть цель
                 </a>
               </div>

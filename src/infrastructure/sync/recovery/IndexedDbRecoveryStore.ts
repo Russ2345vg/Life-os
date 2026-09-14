@@ -9,6 +9,7 @@ import { normalizeGoalRecoveryState } from './normalizeGoalRecoveryState';
 import type { DurableAttachment } from '../../../application/sync/attachments/AttachmentContracts';
 import { attachmentReference } from '../../../application/sync/attachments/AttachmentContracts';
 import type { PilotEntityType } from '../../../application/sync/pilot';
+import { assertActionHierarchy } from '../../../domain/life-action/ActionHierarchy';
 import {
   LIFE_OS_SYNC_STORE,
   type LifeOsIndexedDb,
@@ -201,6 +202,15 @@ export class IndexedDbRecoveryStore implements RecoveryDataStore {
             ...current.items.filter((item) => !state.items.some((next) => same(item, next))),
             ...state.items,
           ];
+      assertActionHierarchy(
+        intended
+          .filter((item) => item.entityType === 'life_action')
+          .map((item) => ({
+            id: String(item.record.id),
+            parentActionId:
+              typeof item.record.parentActionId === 'string' ? item.record.parentActionId : null,
+          })),
+      );
       if (
         intended.filter(
           (i) => i.entityType === 'walk' && ['running', 'paused'].includes(String(i.record.status)),

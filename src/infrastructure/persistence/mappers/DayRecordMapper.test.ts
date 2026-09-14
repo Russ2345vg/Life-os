@@ -24,6 +24,7 @@ describe('DayRecordMapper', () => {
       completedAt: '2026-08-02T14:00:00.000Z',
       summary: 'День завершён',
       sphereId: 'sphere-growth',
+      mainDirectionId: null,
       version: 3,
     });
     expect(day.getUncommittedEvents()).toHaveLength(eventCount);

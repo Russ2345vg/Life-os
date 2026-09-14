@@ -134,7 +134,14 @@ export function selectGoalCardActions(goal: Goal, actions: readonly LifeAction[]
   const completed = linked
     .filter((action) => action.status === 'completed')
     .sort((a, b) => (b.completedAt?.getTime() ?? 0) - (a.completedAt?.getTime() ?? 0));
-  return { open, completed, next: open.find((action) => action.isNext) ?? null };
+  return {
+    open,
+    completed,
+    next:
+      (goal.nextActionId ? open.find((action) => action.id.equals(goal.nextActionId!)) : null) ??
+      open.find((action) => action.isNext) ??
+      null,
+  };
 }
 export function comparePlannerGoalActions(a: LifeAction, b: LifeAction): number {
   return (

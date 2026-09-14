@@ -46,6 +46,7 @@ function cloneDay(day: Day): Day {
     completedAt: day.completedAt,
     summary: day.summary,
     sphereId: day.sphereId,
+    mainDirectionId: day.mainDirectionId,
     version: day.version,
   });
 }

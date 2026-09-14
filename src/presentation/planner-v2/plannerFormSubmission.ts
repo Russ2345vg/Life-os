@@ -7,6 +7,7 @@ import type { CreateGoal, CreateLifeActionDraft } from '../../application';
 export const emptyActionDraft = (goalId: string | null = null, title: string | null = null) => ({
   title: title ?? '',
   goalId: goalId ?? '',
+  parentActionId: '',
   date: '',
   description: '',
   isNext: false,
@@ -36,6 +37,7 @@ export async function submitPlannerAction(
     title: LifeActionTitle.create(draft.title),
     description: draft.description,
     goalId: draft.goalId ? EntityId.create(draft.goalId) : null,
+    parentActionId: draft.parentActionId ? EntityId.create(draft.parentActionId) : null,
     plannedDate: draft.date ? DayDate.create(draft.date) : null,
     isNext: draft.isNext,
     ...(draft.recurrence ? { recurrence: draft.recurrence } : {}),

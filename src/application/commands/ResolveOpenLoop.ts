@@ -458,6 +458,11 @@ function cloneDecision(item: Decision): Decision {
 
 function cloneLifeAction(item: LifeAction): LifeAction {
   return LifeAction.rehydrate({
+    priority: item.priority,
+    occurrence: item.occurrence,
+    completionGeneration: item.completionGeneration,
+    expectedContributions: item.expectedContributions,
+    completedOn: item.completedOn,
     id: item.id,
     title: item.title,
     description: item.description,
@@ -467,6 +472,7 @@ function cloneLifeAction(item: LifeAction): LifeAction {
     decisionId: item.decisionId,
     sphereId: item.sphereId,
     goalId: item.goalId,
+    parentActionId: item.parentActionId,
     isNext: item.isNext,
     plannedDate: item.plannedDate,
     createdAt: item.createdAt,

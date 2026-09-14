@@ -15,7 +15,6 @@ export function PlannerViewSwitcher({
     { label: 'Канбан', route: { view: 'kanban', section } },
     { label: 'Календарь', route: { view: 'calendar', section } },
     { label: 'Древо', route: { view: 'tree', section } },
-    ...(section === 'goals' ? [{ label: 'Планы', route: { view: 'planning' } as const }] : []),
   ];
   const routes = baseRoutes.map((item) => ({
     ...item,
@@ -30,7 +29,14 @@ export function PlannerViewSwitcher({
     <label className="planner-view-switcher">
       <span>Представление</span>
       <select
-        value={buildPlannerV2Route(route)}
+        value={buildPlannerV2Route(
+          route.view === 'goals'
+            ? {
+                view: 'goals',
+                ...('sphereId' in route && route.sphereId ? { sphereId: route.sphereId } : {}),
+              }
+            : route,
+        )}
         onChange={(event) => {
           const selected = routes.find((r) => buildPlannerV2Route(r.route) === event.target.value);
           if (selected) onNavigate(selected.route);

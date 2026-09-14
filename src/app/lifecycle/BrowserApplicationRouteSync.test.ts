@@ -6,7 +6,7 @@ import { ROUTINE_SECTION } from '../../presentation/routine/RoutineNavigation';
 import { startBrowserApplicationRouteSync } from './BrowserApplicationRouteSync';
 
 describe('startBrowserApplicationRouteSync', () => {
-  it('restores Plans and its legacy alias across back and forward navigation', () => {
+  it('restores the legacy Plans aliases as a Goals period filter across navigation', () => {
     const windowTarget = new EventTarget() as unknown as Window;
     const restore = vi.fn();
     let hash = '#/v2/goals/plans';
@@ -23,9 +23,9 @@ describe('startBrowserApplicationRouteSync', () => {
     hash = '#/v2/planning';
     windowTarget.dispatchEvent(new Event('popstate'));
     expect(restore.mock.calls.map(([route]) => route)).toEqual([
-      { section: APP_SECTION.today, route: { view: 'planning' } },
+      { section: APP_SECTION.today, route: { view: 'goals', period: 'week' } },
       { section: APP_SECTION.today, route: { view: 'goals' } },
-      { section: APP_SECTION.today, route: { view: 'planning' } },
+      { section: APP_SECTION.today, route: { view: 'goals', period: 'week' } },
     ]);
     stop();
   });

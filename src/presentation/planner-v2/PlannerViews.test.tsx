@@ -26,6 +26,7 @@ const operations = {
   onLink: async () => {},
   onGoalStatus: async () => {},
   onGoalDirection: async () => {},
+  onGoalNextAction: async () => {},
 };
 const data = buildPlannerViews({ goals: [goal], actions: [action], directions: [], spheres: [] });
 describe('V2 views rendering', () => {

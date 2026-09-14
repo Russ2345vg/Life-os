@@ -49,7 +49,7 @@ export const LIFE_OS_SYNC_REGISTRY = Object.freeze([
   }),
 
   registration('day', LIFE_OS_STORE.days, 'IndexedDbDayRepository', {
-    dependencies: ['sphere'],
+    dependencies: ['sphere', 'direction'],
   }),
   registration('decision', LIFE_OS_STORE.decisions, 'IndexedDbDecisionRepository', {
     deletionMode: 'soft_delete',
@@ -57,7 +57,7 @@ export const LIFE_OS_SYNC_REGISTRY = Object.freeze([
   }),
   registration('life_action', LIFE_OS_STORE.lifeActions, 'IndexedDbLifeActionRepository', {
     deletionMode: 'archive',
-    dependencies: ['decision', 'sphere', 'goal', 'recurrence_rule'],
+    dependencies: ['decision', 'sphere', 'goal', 'recurrence_rule', 'life_action'],
   }),
   registration('action_session', LIFE_OS_STORE.actionSessions, 'IndexedDbActionSessionRepository', {
     dependencies: ['life_action'],

@@ -28,6 +28,7 @@ export interface LifeActionDraftInput {
   readonly decisionId?: EntityId;
   readonly sphereId?: EntityId | null;
   readonly goalId?: EntityId | null;
+  readonly parentActionId?: EntityId | null;
   readonly plannedDate?: DayDate | null;
   readonly isNext?: boolean;
   readonly createdAt: Date;
@@ -66,6 +67,7 @@ export interface LifeActionRehydrationData {
   readonly decisionId: EntityId | null;
   readonly sphereId?: EntityId | null;
   readonly goalId?: EntityId | null;
+  readonly parentActionId?: EntityId | null;
   readonly isNext?: boolean;
   readonly plannedDate: DayDate | null;
   readonly createdAt: Date;
@@ -90,6 +92,7 @@ export class LifeAction extends Entity {
   readonly #decisionId: EntityId | null;
   #sphereId: EntityId | null;
   #goalId: EntityId | null;
+  #parentActionId: EntityId | null;
   #isNext: boolean;
   readonly #createdAt: Date;
   readonly #domainEvents: DomainEvent[];
@@ -136,6 +139,12 @@ export class LifeAction extends Entity {
     this.#decisionId = data.decisionId;
     this.#sphereId = data.sphereId ?? null;
     this.#goalId = data.goalId ?? null;
+    this.#parentActionId = data.parentActionId ?? null;
+    if (this.#parentActionId?.equals(data.id))
+      throw new DomainError(
+        'life_action.self_parent',
+        'Действие не может быть собственным поддействием.',
+      );
     this.#isNext = data.isNext ?? false;
     this.#plannedDate = data.plannedDate;
     this.#createdAt = copyDate(data.createdAt);
@@ -285,6 +294,7 @@ export class LifeAction extends Entity {
         decisionId: input.decisionId ?? null,
         sphereId: input.sphereId ?? null,
         goalId: input.goalId ?? null,
+        parentActionId: input.parentActionId ?? null,
         isNext: input.isNext ?? false,
         plannedDate: input.plannedDate ?? null,
         createdAt: input.createdAt,
@@ -348,6 +358,39 @@ export class LifeAction extends Entity {
 
   public get goalId(): EntityId | null {
     return this.#goalId;
+  }
+
+  public get parentActionId(): EntityId | null {
+    return this.#parentActionId;
+  }
+
+  public setParentAction(parentActionId: EntityId | null): boolean {
+    this.assertNotArchived();
+    if (parentActionId?.equals(this.id))
+      throw new DomainError(
+        'life_action.self_parent',
+        'Действие не может быть собственным поддействием.',
+      );
+    if (sameOptionalEntityId(this.#parentActionId, parentActionId)) return false;
+    this.#parentActionId = parentActionId;
+    this.#version += 1;
+    return true;
+  }
+
+  public updateDraftDetails(title: LifeActionTitle, description: string | null): boolean {
+    this.assertNotArchived();
+    if (this.#status !== LIFE_ACTION_STATUS.draft)
+      throw new DomainError(
+        'action.cannot_edit',
+        'Редактировать можно только открытый черновик действия.',
+      );
+    assertLifeActionTitle(title);
+    const normalized = normalizeOptionalDescription(description);
+    if (this.#title.equals(title) && this.#description === normalized) return false;
+    this.#title = title;
+    this.#description = normalized;
+    this.#version += 1;
+    return true;
   }
 
   public get isNext(): boolean {

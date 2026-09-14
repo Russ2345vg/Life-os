@@ -14,6 +14,7 @@ import {
 import type { PilotCryptoEnvelope } from '../../../application/sync/ports/SyncCryptoService';
 import type { PilotRemoteEvent } from '../../../application/sync/ports/PilotSyncTransport';
 import { DomainError } from '../../../shared/errors/DomainError';
+import { assertActionHierarchy } from '../../../domain/life-action/ActionHierarchy';
 import { LIFE_OS_SYNC_STORE, LifeOsIndexedDb } from '../../persistence/indexed-db/LifeOsIndexedDb';
 import type {
   SyncAppliedEventRecord,
@@ -847,6 +848,26 @@ async function assertRelationshipSafety(
           throw dependencyMissing('Structured parent has not arrived yet.');
         }
       }
+    }
+    if (payload.entityType === 'life_action') {
+      const store = transaction.objectStore(pilotStoreFor('life_action'));
+      const actions = await request<Readonly<Record<string, unknown>>[]>(store.getAll());
+      const existing = actions.find((action) => action.id === payload.objectId);
+      const prepared = prepareRemotePilotRecord('life_action', payload.record, existing);
+      assertActionHierarchy([
+        ...actions
+          .filter((action) => action.id !== payload.objectId)
+          .map((action) => ({
+            id: String(action.id),
+            parentActionId:
+              typeof action.parentActionId === 'string' ? action.parentActionId : null,
+          })),
+        {
+          id: payload.objectId,
+          parentActionId:
+            typeof prepared.parentActionId === 'string' ? prepared.parentActionId : null,
+        },
+      ]);
     }
   }
   if (payload.operation === 'tombstone') {

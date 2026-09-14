@@ -8,6 +8,14 @@ import { RecurringActions } from '../../application/planner/RecurringActions';
 import { PlannerInbox } from '../../application/planner/PlannerInbox';
 import { PlannerFocus } from '../../application/planner/PlannerFocus';
 import { PlannerCatalog } from '../../application/planner/PlannerCatalog';
+import { DailyDirection } from '../../application/planner/DailyDirection';
+import { DeletePilotDirection } from '../../application/sync/pilot/DeletePilotDirection';
+import { DeletePilotSphere } from '../../application/sync/pilot/DeletePilotSphere';
+import { DeletePilotLifeAction } from '../../application/sync/pilot/DeletePilotLifeAction';
+import { ArchiveLifeAction } from '../../application/commands/ArchiveLifeAction';
+import { EditPlannerActionDraft } from '../../application/commands/EditPlannerActionDraft';
+import { SetLifeActionParent } from '../../application/commands/SetLifeActionParent';
+import { SelectGoalNextAction } from '../../application/commands/SelectGoalNextAction';
 import { IndexedDbPlannerRepository } from '../../infrastructure/persistence/IndexedDbPlannerRepository';
 import type { Clock, CurrentDateProvider, IdGenerator } from '../../application';
 import {
@@ -555,6 +563,19 @@ export async function createLifeOsApplication(
       planning.periods,
     );
     const plannerCatalog = new PlannerCatalog(lifeActionRepository);
+    const editPlannerActionDraft = new EditPlannerActionDraft(
+      lifeActionRepository,
+      journalUnitOfWork,
+      clock,
+      idGenerator,
+    );
+    const setLifeActionParent = new SetLifeActionParent(
+      lifeActionRepository,
+      journalUnitOfWork,
+      clock,
+      idGenerator,
+    );
+    const dailyDirection = new DailyDirection(dayRepository, directionRepository, ensureCurrentDay);
     const setLifeActionPlan = new SetLifeActionPlan(
       lifeActionRepository,
       journalUnitOfWork,
@@ -855,6 +876,11 @@ export async function createLifeOsApplication(
     const getSpheres = new GetSpheres(sphereRepository);
     const createDirection = new CreateDirection(directionRepository, clock, idGenerator);
     const updateDirection = new UpdateDirection(directionRepository, projectRepository, clock);
+    const archiveDirection = new ArchiveDirection(directionRepository, clock);
+    const restoreDirection = new RestoreDirection(directionRepository, clock);
+    const pilotDeleteRepository = new IndexedDbPilotDeleteRepository(database, mutationRecorder);
+    const deletePilotDirection = new DeletePilotDirection(pilotDeleteRepository);
+    const deletePilotSphere = new DeletePilotSphere(pilotDeleteRepository);
     const balance = {
       read: new GetLifeBalance(balanceRepository),
       indicators: new BalanceIndicators(balanceRepository, clock),
@@ -862,12 +888,16 @@ export async function createLifeOsApplication(
       updateSphere,
       createDirection,
       updateDirection,
+      archiveSphere,
+      archiveDirection,
+      restoreSphere,
+      restoreDirection,
+      deletePilotSphere,
+      deletePilotDirection,
       refreshSnapshots: () => balanceRepository.refreshSnapshots(),
     };
     await balance.refreshSnapshots();
 
-    const archiveDirection = new ArchiveDirection(directionRepository, clock);
-    const restoreDirection = new RestoreDirection(directionRepository, clock);
     const makeDirectionMain = new MakeDirectionMain(directionRepository, clock);
     const getDirections = new GetDirections(directionRepository);
     const getDirectionsForSphere = new GetDirectionsForSphere(directionRepository);
@@ -926,9 +956,14 @@ export async function createLifeOsApplication(
       decisionRepository,
     );
     const archiveGoal = new ArchiveGoal(goalRepository, clock);
-    const deletePilotGoal = new DeletePilotGoal(
-      new IndexedDbPilotDeleteRepository(database, mutationRecorder),
+    const selectGoalNextAction = new SelectGoalNextAction(
+      goalRepository,
+      lifeActionRepository,
+      clock,
     );
+    const deletePilotGoal = new DeletePilotGoal(pilotDeleteRepository);
+    const deletePilotLifeAction = new DeletePilotLifeAction(pilotDeleteRepository);
+    const archiveLifeAction = new ArchiveLifeAction(lifeActionRepository, clock, idGenerator);
     const getGoalById = new GetGoalById(goalRepository);
     const getGoals = new GetGoals(goalRepository);
     const application = new LifeOsApplication({
@@ -1019,6 +1054,9 @@ export async function createLifeOsApplication(
       plannerInbox,
       plannerFocus,
       plannerCatalog,
+      editPlannerActionDraft,
+      setLifeActionParent,
+      dailyDirection,
       completeLifeAction,
       verifyLifeActionResult,
       confirmDecisionFromActions,
@@ -1115,7 +1153,12 @@ export async function createLifeOsApplication(
       createGoal,
       updateGoal,
       archiveGoal,
+      selectGoalNextAction,
       deletePilotGoal,
+      deletePilotDirection,
+      deletePilotSphere,
+      deletePilotLifeAction,
+      archiveLifeAction,
       getGoalById,
       getGoals,
       closeDatabase: () => database.close(),

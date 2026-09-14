@@ -10,6 +10,7 @@ export interface ActionOccurrence {
   readonly manualDate?: boolean;
 }
 export type RecurrenceSchedule =
+  | { readonly kind: 'count' }
   | { readonly kind: 'daily' }
   | { readonly kind: 'weekdays'; readonly weekdays: readonly number[] }
   | { readonly kind: 'interval'; readonly days: number }
@@ -47,7 +48,8 @@ export function validateRule(rule: RecurrenceRule): RecurrenceRule {
     (rule.maxCompletions !== null &&
       (!Number.isInteger(rule.maxCompletions) || rule.maxCompletions < 1)) ||
     !s ||
-    !['daily', 'weekdays', 'interval', 'monthly'].includes(s.kind) ||
+    !['daily', 'weekdays', 'interval', 'monthly', 'count'].includes(s.kind) ||
+    (s.kind === 'count' && rule.maxCompletions === null) ||
     (s.kind === 'weekdays' &&
       (!Array.isArray(s.weekdays) ||
         s.weekdays.length === 0 ||
@@ -68,7 +70,7 @@ export function occurrenceSlots(
   rule: RecurrenceRule,
   from: string,
   to: string,
-  completions: readonly { key: string; date: string }[],
+  completions: readonly { key: string; date: string; at?: string }[],
 ) {
   validateRule(rule);
   DayDate.create(from);
@@ -81,6 +83,25 @@ export function occurrenceSlots(
   )
     return [];
   if (rule.paused && rule.pauseUntil === null) return [];
+  if (rule.schedule.kind === 'count') {
+    if (rule.paused && rule.pauseUntil && from < rule.pauseUntil) return [];
+    const last = [...completions]
+      .sort((a, b) => (a.at ?? a.date).localeCompare(b.at ?? b.date) || a.key.localeCompare(b.key))
+      .at(-1);
+    const date = [
+      from,
+      rule.startDate,
+      rule.effectiveFrom,
+      ...(rule.paused && rule.pauseUntil ? [rule.pauseUntil] : []),
+    ]
+      .sort()
+      .at(-1)!;
+    if (date > to || (rule.endDate && date > rule.endDate)) return [];
+    const slot = last ? `after:${last.key}` : 'first';
+    return [
+      { id: `occurrence:${encodeURIComponent(rule.id)}:${encodeURIComponent(slot)}`, slot, date },
+    ];
+  }
   const start = [
     from,
     rule.startDate,

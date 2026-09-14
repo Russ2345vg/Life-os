@@ -23,21 +23,20 @@ export function GoalMeasurementFields({
         <label>
           <span>Тип измерения</span>
           <select
-            value={value?.mode ?? 'off'}
+            value={value?.mode === 'recurring' ? 'count' : (value?.mode ?? 'off')}
             onChange={(e) => {
               const mode = e.target.value;
               if (mode === 'off') onChange(null);
               else
                 change({
                   mode: mode as GoalMeasurement['mode'],
-                  cycle: mode === 'recurring' ? 'week' : null,
+                  cycle: null,
                 });
             }}
           >
             <option value="off">Выключено · качественная цель</option>
             <option value="numeric">Числовая цель</option>
             <option value="count">Количество выполнений</option>
-            <option value="recurring">Повторяющийся норматив</option>
           </select>
         </label>
         {value && (
@@ -91,19 +90,39 @@ export function GoalMeasurementFields({
                 </label>
               </>
             )}
-            {value.mode === 'recurring' && (
-              <label>
-                <span>Цикл</span>
-                <select
-                  value={value.cycle ?? 'week'}
-                  onChange={(e) => change({ cycle: e.target.value as 'week' | 'month' })}
-                >
-                  <option value="week">Неделя</option>
-                  <option value="month">Календарный месяц</option>
-                </select>
-                <small>Каждый цикл считается отдельно. Долг не переносится.</small>
+            <details className="planner-details">
+              <summary>Дополнительные настройки</summary>
+              <label className="planner-check-label">
+                <input
+                  type="checkbox"
+                  checked={value.mode === 'recurring'}
+                  onChange={(event) =>
+                    change({
+                      mode: event.target.checked ? 'recurring' : 'count',
+                      cycle: event.target.checked ? 'week' : null,
+                    })
+                  }
+                />
+                Повторяющаяся норма
               </label>
-            )}
+              <p className="planner-muted">
+                Используйте, если хотите достигать одного результата каждый период, например 3
+                тренировки в неделю.
+              </p>
+              {value.mode === 'recurring' && (
+                <label>
+                  <span>Цикл</span>
+                  <select
+                    value={value.cycle ?? 'week'}
+                    onChange={(e) => change({ cycle: e.target.value as 'week' | 'month' })}
+                  >
+                    <option value="week">Неделя</option>
+                    <option value="month">Календарный месяц</option>
+                  </select>
+                  <small>Каждый цикл считается отдельно. Долг не переносится.</small>
+                </label>
+              )}
+            </details>
           </>
         )}
       </div>

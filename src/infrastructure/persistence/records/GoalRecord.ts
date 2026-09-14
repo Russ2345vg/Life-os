@@ -22,6 +22,7 @@ export interface GoalRecord {
   readonly sphereId?: string | null;
   readonly isMain?: boolean;
   readonly legacyProjectId?: string | null;
+  readonly nextActionId?: string | null;
   readonly schemaVersion: 1;
   readonly id: string;
   readonly directionId: string | null;

@@ -8,6 +8,7 @@ import type { PlannerViews } from './plannerViewsModel';
 export interface PlannerViewOperations extends PlannerActionOperations {
   readonly onGoalStatus: (goal: Goal, status: GoalStatus) => Promise<void>;
   readonly onGoalDirection: (goal: Goal, directionId: string) => Promise<void>;
+  readonly onGoalNextAction: (goalId: string, actionId: string) => Promise<void>;
 }
 export function PlannerBatch<T>({
   items,

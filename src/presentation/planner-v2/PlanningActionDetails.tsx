@@ -60,8 +60,50 @@ export function PlanningActionDetails({
       p.actionId === action.id.toString() &&
       contributionIsEffective(p, new Map([[action.id.toString(), action]])),
   );
+  const completions = rule
+    ? new Set(
+        s.actions
+          .filter((item) => item.occurrence?.ruleId === rule.id && item.status === 'completed')
+          .map((item) => item.completionKey),
+      ).size
+    : 0;
+  const scheduleText =
+    rule?.schedule.kind === 'count'
+      ? 'Без расписания'
+      : rule?.schedule.kind === 'daily'
+        ? 'Каждый день'
+        : rule?.schedule.kind === 'weekdays'
+          ? rule.schedule.weekdays
+              .map((day) => ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'][day])
+              .join(', ')
+          : rule?.schedule.kind === 'monthly'
+            ? `${rule.schedule.day}-го числа каждого месяца`
+            : rule?.schedule.kind === 'interval'
+              ? `через ${rule.schedule.days} дней после выполнения`
+              : null;
   return (
     <>
+      {rule && (
+        <section className="planner-recurrence-summary" aria-label="Повторение">
+          <p>Повторение: {scheduleText}</p>
+          {rule.maxCompletions !== null && (
+            <p>
+              Цель: {rule.maxCompletions} выполнений · {completions} / {rule.maxCompletions}
+            </p>
+          )}
+        </section>
+      )}
+      {action.status === 'completed' && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            void run(() => c.services.progress.reopen(action.id.toString()));
+          }}
+        >
+          Вернуть в работу
+        </button>
+      )}
       <div className="planning-pending">
         {facts
           .filter((f) => f.amount === null)
@@ -82,15 +124,6 @@ export function PlanningActionDetails({
             <p className="planner-muted">
               Связь с целью сама по себе не добавляет прогресс. Вклад настраивается явно.
             </p>
-            {action.status === 'completed' && (
-              <button
-                onClick={() => {
-                  void run(() => c.services.progress.reopen(action.id.toString()));
-                }}
-              >
-                Отменить выполнение
-              </button>
-            )}
             {facts
               .filter((f) => f.amount !== null)
               .map((f) => (
@@ -139,15 +172,16 @@ export function PlanningActionDetails({
                   >
                     {rule.paused ? 'Возобновить' : 'Приостановить'}
                   </button>
-                  {!['completed', 'cancelled', 'archived'].includes(action.status) && (
-                    <button
-                      onClick={() => {
-                        void run(() => c.services.recurrence.skip(action.id.toString()));
-                      }}
-                    >
-                      Пропустить это повторение
-                    </button>
-                  )}
+                  {rule.schedule.kind !== 'count' &&
+                    !['completed', 'cancelled', 'archived'].includes(action.status) && (
+                      <button
+                        onClick={() => {
+                          void run(() => c.services.recurrence.skip(action.id.toString()));
+                        }}
+                      >
+                        Пропустить это повторение
+                      </button>
+                    )}
                 </>
               )}
             </details>

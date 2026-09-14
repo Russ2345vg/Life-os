@@ -1,11 +1,15 @@
 import type { PilotDeleteRepository } from '../../../application/sync/pilot/PilotDeleteRepository';
 import type { PilotEntityType } from '../../../application/sync/pilot/PilotSyncProtocol';
-import { LIFE_OS_STORE, type LifeOsIndexedDb } from '../../persistence/indexed-db/LifeOsIndexedDb';
+import { type LifeOsIndexedDb } from '../../persistence/indexed-db/LifeOsIndexedDb';
 import {
   IndexedDbPilotMutationRecorder,
   PILOT_MUTATION_STORES,
 } from './IndexedDbPilotMutationRecorder';
-import { pilotRelationshipReferences, pilotStoreFor } from './PilotSyncRegistryAdapters';
+import {
+  PILOT_RUNTIME_REGISTRY,
+  pilotRelationshipReferences,
+  pilotStoreFor,
+} from './PilotSyncRegistryAdapters';
 
 export class IndexedDbPilotDeleteRepository implements PilotDeleteRepository {
   public constructor(
@@ -15,24 +19,13 @@ export class IndexedDbPilotDeleteRepository implements PilotDeleteRepository {
 
   public async delete(entityType: PilotEntityType, objectId: string): Promise<boolean> {
     const database = await this.database.open();
-    const stores = new Set<string>([pilotStoreFor(entityType), ...PILOT_MUTATION_STORES]);
-    if (entityType === 'direction') {
-      stores.add(LIFE_OS_STORE.goals);
-    }
-    const goalDependants = [
-      'planning_period',
-      'period_membership',
-      'period_decision',
-      'contribution_link',
-      'progress_contribution',
-      'recurrence_rule',
-      'decision',
-      'journal_entry',
-      'walk',
-      'preparation_plan',
-      'evening_cycle',
-    ] as const;
-    if (entityType === 'goal') for (const type of goalDependants) stores.add(pilotStoreFor(type));
+    const stores = new Set<string>([
+      pilotStoreFor(entityType),
+      ...PILOT_MUTATION_STORES,
+      ...PILOT_RUNTIME_REGISTRY.filter(
+        (item) => item.registration.storageKind === 'indexed_db',
+      ).map((item) => item.registration.storeName),
+    ]);
     const transaction = database.transaction([...stores], 'readwrite');
     const domainStore = transaction.objectStore(pilotStoreFor(entityType));
     const existing = await request(domainStore.getKey(objectId));
@@ -41,27 +34,35 @@ export class IndexedDbPilotDeleteRepository implements PilotDeleteRepository {
       await afterAbort(transaction);
       return false;
     }
-    if (entityType === 'direction' && (await hasDirectionDependants(transaction, objectId))) {
-      transaction.abort();
-      await afterAbort(transaction);
-      return false;
-    }
-    if (entityType === 'goal') {
-      for (const type of goalDependants) {
+    for (const runtime of PILOT_RUNTIME_REGISTRY) {
+      if (runtime.registration.storageKind === 'indexed_db') {
+        const type = runtime.registration.entityType;
         const children = await request<Readonly<Record<string, unknown>>[]>(
           transaction.objectStore(pilotStoreFor(type)).getAll(),
         );
         if (
-          children.some((child) =>
-            pilotRelationshipReferences(type, child).some(
-              (ref) => ref.entityType === 'goal' && ref.objectId === objectId,
-            ),
+          children.some(
+            (child) =>
+              !(type === entityType && child.id === objectId) &&
+              pilotRelationshipReferences(type, child).some(
+                (ref) => ref.required && ref.entityType === entityType && ref.objectId === objectId,
+              ),
           )
         ) {
           transaction.abort();
           await afterAbort(transaction);
           return false;
         }
+      }
+    }
+    if (entityType === 'life_action') {
+      const rules = await request<Readonly<Record<string, unknown>>[]>(
+        transaction.objectStore(pilotStoreFor('recurrence_rule')).getAll(),
+      );
+      if (rules.some((rule) => rule.id === `recurrence:${objectId}`)) {
+        transaction.abort();
+        await afterAbort(transaction);
+        return false;
       }
     }
     const previous = await request<Readonly<Record<string, unknown>>>(domainStore.get(objectId));
@@ -78,15 +79,6 @@ export class IndexedDbPilotDeleteRepository implements PilotDeleteRepository {
   }
 }
 
-async function hasDirectionDependants(
-  transaction: IDBTransaction,
-  directionId: string,
-): Promise<boolean> {
-  const goals = await request<IDBValidKey[]>(
-    transaction.objectStore(LIFE_OS_STORE.goals).index('byDirectionId').getAllKeys(directionId, 1),
-  );
-  return goals.length > 0;
-}
 function request<T>(value: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
     value.onsuccess = () => resolve(value.result);

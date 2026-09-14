@@ -1,6 +1,12 @@
 import { PlanningProgress } from './PlanningProgress';
 import { usePlanning } from './PlanningContext';
 import { useState } from 'react';
+import {
+  currentGoalPeriod,
+  filterGoalsByPeriod,
+  type GoalPeriodFilter,
+} from './plannerPeriodFilter';
+import { EntityContextMenu, type EntityMenuAction } from './EntityContextMenu';
 import type { Direction, Goal, LifeAction, Sphere } from '../../domain';
 import { VoiceField } from '../voice-input/VoiceField';
 import { VoiceTextInput } from '../voice-input/VoiceTextInput';
@@ -22,6 +28,9 @@ export function PlannerGoalList({
   actions,
   focusIds,
   initialSphereId = '',
+  initialPeriod = 'all',
+  today,
+  menuForGoal,
 }: {
   readonly goals: readonly Goal[];
   readonly directions: readonly Direction[];
@@ -29,13 +38,33 @@ export function PlannerGoalList({
   readonly actions: readonly LifeAction[];
   readonly focusIds: readonly string[];
   readonly initialSphereId?: string;
+  readonly initialPeriod?: GoalPeriodFilter;
+  readonly today: string;
+  readonly menuForGoal?: (goal: Goal) => readonly EntityMenuAction[];
 }) {
+  const planning = usePlanning();
   const [filters, setFilters] = useState({ ...emptyGoalFilters(), sphereId: initialSphereId });
+  const [periodFilter, setPeriodFilter] = useState<GoalPeriodFilter>(initialPeriod);
+  const [periodError, setPeriodError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
   const change = <K extends keyof GoalFilters>(key: K, value: GoalFilters[K]) =>
     setFilters((f) => ({ ...f, [key]: value }));
-  const visible = filterPlannerGoals(goals, filters, search, directions, focusIds);
+  const selected = planning?.state
+    ? filterGoalsByPeriod(
+        goals,
+        periodFilter,
+        today,
+        planning.state.periods,
+        planning.state.memberships,
+      )
+    : periodFilter === 'all'
+      ? [...goals]
+      : [];
+  const visible = filterPlannerGoals(selected, filters, search, directions, focusIds);
+  const cycle = planning?.state
+    ? currentGoalPeriod('thirty_days', today, planning.state.periods)
+    : null;
   const active = Object.entries(filters).filter(([, v]) => Boolean(v));
   const label = (key: string, value: string | boolean) => {
     switch (key) {
@@ -78,6 +107,41 @@ export function PlannerGoalList({
           Фильтр{active.length ? ` · ${active.length}` : ''}
         </button>
       </div>
+      <div className="planner-period-filter">
+        <label>
+          <span>Период целей</span>
+          <select
+            value={periodFilter}
+            onChange={(event) => setPeriodFilter(event.target.value as GoalPeriodFilter)}
+          >
+            <option value="all">Все</option>
+            <option value="year">Год</option>
+            <option value="quarter">Квартал</option>
+            <option value="thirty_days">30 дней</option>
+            <option value="week">Неделя</option>
+            <option value="none">Без периода</option>
+          </select>
+        </label>
+        {periodFilter === 'thirty_days' && !cycle && planning?.state && (
+          <button
+            type="button"
+            onClick={() => {
+              void planning.services.periods
+                .startCycle(today)
+                .then(() => planning.refresh())
+                .catch((error: unknown) =>
+                  setPeriodError(
+                    error instanceof Error ? error.message : 'Не удалось начать цикл.',
+                  ),
+                );
+            }}
+          >
+            Начать 30-дневный цикл
+          </button>
+        )}
+      </div>
+      {periodError && <p role="alert">{periodError}</p>}
+      {periodFilter !== 'all' && !planning?.state && <p role="status">Загружаем периоды…</p>}
       {open && (
         <section id="goal-filters" className="planner-filter-panel" aria-label="Фильтры целей">
           <div className="planner-form-columns">
@@ -227,25 +291,31 @@ export function PlannerGoalList({
             key={goal.id.toString()}
             className={`planner-catalog-row${focusIds.includes(goal.id.toString()) ? ' planner-catalog-row--focus' : ''}`}
           >
-            <a
-              className="planner-goal-title"
-              href={`#/v2/goals/${encodeURIComponent(goal.id.toString())}`}
+            <EntityContextMenu
+              title={goal.title}
+              entityLabel="цель"
+              actions={menuForGoal?.(goal) ?? []}
             >
-              {goal.title}
-            </a>
-            <PlannerGoalContext goal={goal} directions={directions} spheres={spheres} />
-            <div className="planner-meta">
-              <span>{statusLabels[goal.status]}</span>
-              {goal.intentionLevel && <span>{importanceLabels[goal.intentionLevel]}</span>}
-              {goal.horizon && <span>{horizonLabels[goal.horizon]}</span>}
-            </div>
-            <PlannerGoalProgress goal={goal} />
-            {(goalActions(goal, actions)[0] || goal.nextProgress) && (
-              <p className="planner-muted">
-                Следующий шаг:{' '}
-                {goalActions(goal, actions)[0]?.title.toString() ?? goal.nextProgress}
-              </p>
-            )}
+              <a
+                className="planner-goal-title"
+                href={`#/v2/goals/${encodeURIComponent(goal.id.toString())}`}
+              >
+                {goal.title}
+              </a>
+              <PlannerGoalContext goal={goal} directions={directions} spheres={spheres} />
+              <div className="planner-meta">
+                <span>{statusLabels[goal.status]}</span>
+                {goal.intentionLevel && <span>{importanceLabels[goal.intentionLevel]}</span>}
+                {goal.horizon && <span>{horizonLabels[goal.horizon]}</span>}
+              </div>
+              <PlannerGoalProgress goal={goal} />
+              {(goalActions(goal, actions)[0] || goal.nextProgress) && (
+                <p className="planner-muted">
+                  Следующий шаг:{' '}
+                  {goalActions(goal, actions)[0]?.title.toString() ?? goal.nextProgress}
+                </p>
+              )}
+            </EntityContextMenu>
           </li>
         ))}
       </ul>

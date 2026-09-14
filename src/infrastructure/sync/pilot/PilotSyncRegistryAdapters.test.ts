@@ -98,6 +98,35 @@ describe('PilotSyncRegistryAdapters', () => {
     expect(pilotRelationshipReferences('life_action', { goalId: null })).toEqual([]);
   });
 
+  it('bridges optional Action parent and daily Direction fields without changing old wire records', () => {
+    const fixtures = structuredSyncFixtures();
+    const child = normalizePilotRecord('life_action', {
+      ...fixtures.life_action,
+      parentActionId: 'parent-1',
+    });
+    expect(child.parentActionId).toBe('parent-1');
+    expect(pilotRelationshipReferences('life_action', child)).toContainEqual({
+      entityType: 'life_action',
+      objectId: 'parent-1',
+      required: true,
+    });
+    const legacyChild: Record<string, unknown> = { ...fixtures.life_action };
+    delete legacyChild.parentActionId;
+    expect(normalizePilotRecord('life_action', legacyChild).parentActionId).toBeUndefined();
+    expect(prepareRemotePilotRecord('life_action', legacyChild).parentActionId).toBeNull();
+    const day = normalizePilotRecord('day', { ...fixtures.day, mainDirectionId: 'direction-1' });
+    expect(day.mainDirectionId).toBe('direction-1');
+    expect(pilotRelationshipReferences('day', day)).toContainEqual({
+      entityType: 'direction',
+      objectId: 'direction-1',
+      required: true,
+    });
+    const legacyDay: Record<string, unknown> = { ...fixtures.day };
+    delete legacyDay.mainDirectionId;
+    expect(normalizePilotRecord('day', legacyDay).mainDirectionId).toBeUndefined();
+    expect(prepareRemotePilotRecord('day', legacyDay).mainDirectionId).toBeNull();
+  });
+
   it.each([{ goalId: 'sync04-goal', isNext: true }, { goalId: null, isNext: false }, {}])(
     'preserves bridge and legacy action data through wire normalization and apply %j',
     async (fields) => {
@@ -187,6 +216,16 @@ describe('PilotSyncRegistryAdapters', () => {
     expect(await request<Record<string, unknown>>(read.get('goal-1'))).toMatchObject({
       coverImage: null,
     });
+  });
+
+  it('syncs a Goal next step and keeps it when an older wire record omits the field', () => {
+    const selected = normalizePilotRecord('goal', { ...goal, nextActionId: 'action-1' });
+    expect(selected.nextActionId).toBe('action-1');
+    const older = normalizePilotRecord('goal', goal);
+    expect(older).not.toHaveProperty('nextActionId');
+    expect(
+      prepareRemotePilotRecord('goal', older, { ...goal, nextActionId: 'action-1' }),
+    ).toMatchObject({ nextActionId: 'action-1' });
   });
 
   it('compares same-ID records by normalized semantic content, not local timestamps or version', () => {

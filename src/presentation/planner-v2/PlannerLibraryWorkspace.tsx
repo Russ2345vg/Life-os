@@ -34,6 +34,16 @@ import { PlannerTree } from './PlannerTree';
 import { PlannerViewSwitcher } from './PlannerViewSwitcher';
 import { changePlannerGoalStatus, linkPlannerGoalDirection } from './plannerGoalCommands';
 import type { PlannerViewOperations } from './PlannerViewParts';
+import type { DeletePilotGoal } from '../../application/sync/pilot/DeletePilotGoal';
+import type { DeletePilotLifeAction } from '../../application/sync/pilot/DeletePilotLifeAction';
+import type { ArchiveLifeAction } from '../../application/commands/ArchiveLifeAction';
+import type { EditPlannerActionDraft } from '../../application/commands/EditPlannerActionDraft';
+import type { SetLifeActionParent } from '../../application/commands/SetLifeActionParent';
+import type { SelectGoalNextAction } from '../../application/commands/SelectGoalNextAction';
+import type { UpdateLifeActionDetails } from '../../application/commands/UpdateLifeActionDetails';
+import type { PlanningServices } from '../../application/planner/PlanningServices';
+import { DomainError } from '../../shared/errors/DomainError';
+import type { EntityMenuAction } from './EntityContextMenu';
 
 export interface PlannerLibraryServices {
   readonly plannerInbox: Pick<InboxService, 'list' | 'capture' | 'convert' | 'archive'>;
@@ -47,6 +57,14 @@ export interface PlannerLibraryServices {
   readonly setLifeActionGoal: Pick<SetLifeActionGoal, 'execute'>;
   readonly updateGoal: Pick<UpdateGoal, 'execute'>;
   readonly archiveGoal: Pick<ArchiveGoal, 'execute'>;
+  readonly deletePilotGoal: Pick<DeletePilotGoal, 'execute'>;
+  readonly deletePilotLifeAction: Pick<DeletePilotLifeAction, 'execute'>;
+  readonly archiveLifeAction: Pick<ArchiveLifeAction, 'execute'>;
+  readonly editPlannerActionDraft: Pick<EditPlannerActionDraft, 'execute'>;
+  readonly setLifeActionParent: Pick<SetLifeActionParent, 'execute'>;
+  readonly selectGoalNextAction: Pick<SelectGoalNextAction, 'execute'>;
+  readonly updateLifeActionDetails: Pick<UpdateLifeActionDetails, 'execute'>;
+  readonly planning?: PlanningServices;
 }
 interface LibraryData {
   goals: readonly Goal[];
@@ -147,12 +165,93 @@ export function PlannerLibraryWorkspace({
   };
   const complete = (id: string) =>
     perform(() => completePlannerAction(services.completeLifeAction, id), 'Действие выполнено');
+  const menuForGoal = (goal: Goal): EntityMenuAction[] => [
+    {
+      label: 'Редактировать',
+      run: () => {
+        window.location.hash = `#/goals/${encodeURIComponent(goal.id.toString())}/edit`;
+      },
+    },
+    ...(goal.status === 'achieved'
+      ? [{ label: 'Вернуть в активные', run: () => operations.onGoalStatus(goal, 'active') }]
+      : []),
+    ...(goal.status !== 'archived'
+      ? [{ label: 'Архивировать', run: () => operations.onGoalStatus(goal, 'archived') }]
+      : []),
+    {
+      label: 'Удалить',
+      destructive: true,
+      run: async () => {
+        await run(async () => {
+          if (!(await services.deletePilotGoal.execute(goal.id.toString())))
+            throw new DomainError(
+              'goal.delete_blocked',
+              'Цель связана с историей или другими записями. Сначала уберите связи либо архивируйте её.',
+            );
+        }, 'Цель удалена');
+        if (route.view === 'goal') onNavigate({ view: 'goals' });
+      },
+    },
+  ];
+  const menuForAction = (action: LifeAction): EntityMenuAction[] => [
+    ...(action.status === 'draft' || action.status === 'ready'
+      ? [
+          {
+            label: 'Редактировать',
+            run: () => onNavigate({ view: 'action', id: action.id.toString() }),
+          },
+        ]
+      : []),
+    ...(action.status === 'completed' && services.planning
+      ? [
+          {
+            label: 'Вернуть в работу',
+            run: () =>
+              run(
+                () => services.planning!.progress.reopen(action.id.toString()),
+                'Действие возвращено в работу',
+              ),
+          },
+        ]
+      : []),
+    ...(!action.isArchived()
+      ? [
+          {
+            label: 'Архивировать',
+            run: () =>
+              run(async () => {
+                const result = await services.archiveLifeAction.execute({
+                  lifeActionId: action.id,
+                });
+                if (!result.ok) throw result.error;
+              }, 'Действие архивировано'),
+          },
+        ]
+      : []),
+    {
+      label: 'Удалить',
+      destructive: true,
+      run: async () => {
+        await run(async () => {
+          if (!(await services.deletePilotLifeAction.execute(action.id.toString())))
+            throw new DomainError(
+              'action.delete_blocked',
+              'Действие связано с историей, повторением или поддействиями. Сначала уберите связи либо архивируйте его.',
+            );
+        }, 'Действие удалено');
+        if (route.view === 'action') onNavigate({ view: 'actions' });
+      },
+    },
+  ];
   const views = useMemo(() => (data ? buildPlannerViews(data) : null), [data]);
   const operations: PlannerViewOperations = {
     busy,
     onComplete: complete,
-    onPlan: async (id, date) => {
-      await run(() => planPlannerAction(services.setLifeActionPlan, id, date), 'Дата сохранена');
+    onPlan: async (id, date, main) => {
+      await run(
+        () => planPlannerAction(services.setLifeActionPlan, id, date, main),
+        main ? 'Следующее действие выбрано' : 'Дата сохранена',
+      );
     },
     onLink: async (id, goalId) => {
       await run(async () => {
@@ -174,6 +273,48 @@ export function PlannerLibraryWorkspace({
         () => linkPlannerGoalDirection(services.updateGoal, goal, directionId),
         'Направление сохранено',
       );
+    },
+    onGoalNextAction: async (goalId, actionId) => {
+      await run(async () => {
+        const result = await services.selectGoalNextAction.execute({
+          goalId: EntityId.create(goalId),
+          actionId: EntityId.create(actionId),
+        });
+        if (!result.ok) throw result.error;
+      }, 'Следующее действие цели выбрано');
+    },
+    menuForAction,
+    onReopen: services.planning
+      ? async (id) => {
+          await run(() => services.planning!.progress.reopen(id), 'Действие возвращено в работу');
+        }
+      : undefined,
+    onEdit: async (action, title, description) => {
+      await run(async () => {
+        const result =
+          action.status === 'draft'
+            ? await services.editPlannerActionDraft.execute({
+                lifeActionId: action.id,
+                title,
+                description,
+              })
+            : await services.updateLifeActionDetails.execute({
+                lifeActionId: action.id,
+                title,
+                description,
+                expectedResult: action.expectedResult?.toString() ?? '',
+              });
+        if (!result.ok) throw result.error;
+      }, 'Действие изменено');
+    },
+    onUnlink: async (id) => {
+      await run(async () => {
+        const result = await services.setLifeActionParent.execute({
+          lifeActionId: EntityId.create(id),
+          parentActionId: null,
+        });
+        if (!result.ok) throw result.error;
+      }, 'Поддействие отделено');
     },
   };
   return (
@@ -206,6 +347,7 @@ export function PlannerLibraryWorkspace({
           today={today}
           directions={data.directions}
           spheres={data.spheres}
+          menuForGoal={menuForGoal}
           {...operations}
         />
       ) : 'section' in route && views ? (
@@ -289,6 +431,10 @@ export function PlannerLibraryWorkspace({
               if (!result.ok) throw result.error;
             }, 'Связь с целью сохранена');
           }}
+          menuForAction={menuForAction}
+          onEdit={operations.onEdit}
+          onUnlink={operations.onUnlink}
+          onReopen={operations.onReopen}
         />
       ) : (
         <section>
@@ -328,11 +474,14 @@ export function PlannerLibraryWorkspace({
           ) : (
             <PlannerGoalList
               initialSphereId={route.view === 'goals' ? (route.sphereId ?? '') : ''}
+              initialPeriod={route.view === 'goals' ? (route.period ?? 'all') : 'all'}
+              today={today}
               goals={data.goals}
               directions={data.directions}
               spheres={data.spheres}
               actions={data.actions}
               focusIds={activeFocusIds(data.goals, data.focus)}
+              menuForGoal={menuForGoal}
             />
           )}
         </section>

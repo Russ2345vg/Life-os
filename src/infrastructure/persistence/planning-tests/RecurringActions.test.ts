@@ -13,6 +13,11 @@ import {
   type RecurrenceInput,
 } from '../../../application/planner/RecurringActions';
 import { GoalContributions } from '../../../application/planner/GoalContributions';
+import { LifeActionRecordMapper } from '../mappers/LifeActionRecordMapper';
+import {
+  applyRemotePilotRecord,
+  normalizePilotRecord,
+} from '../../sync/pilot/PilotSyncRegistryAdapters';
 const input: RecurrenceInput = {
   title: 'Практика',
   goalId: null,
@@ -25,6 +30,135 @@ const input: RecurrenceInput = {
   schedule: { kind: 'daily' },
 };
 describe('bounded recurring actions', () => {
+  it('keeps a count occurrence paused until its real resume date and rejects skip without trapping it', async () => {
+    const db = new LifeOsIndexedDb(new IDBFactory());
+    const repo = new IndexedDbPlanningRepository(db);
+    const clock = new FakeClock(new Date('2026-09-14T10:00:00Z'));
+    const service = new RecurringActions(repo, clock, new FakeIdGenerator('pause-count'));
+    try {
+      const rule = await service.save({
+        ...input,
+        schedule: { kind: 'count' },
+        maxCompletions: 5,
+      });
+      await service.materialize('2026-09-14');
+      const first = (await repo.read()).actions.find(
+        (action) => action.occurrence?.ruleId === rule.id,
+      )!;
+      await expect(service.skip(first.id.toString())).rejects.toMatchObject({
+        code: 'recurrence.count_skip_unsupported',
+      });
+      await service.pause(rule.id, '2026-09-20');
+      await service.materialize('2026-09-19');
+      expect(
+        (await repo.read()).actions.filter((action) => action.status === 'draft'),
+      ).toHaveLength(0);
+      clock.setTime(new Date('2026-09-20T10:00:00Z'));
+      await service.materialize('2026-09-20');
+      const resumed = (await repo.read()).actions.filter(
+        (action) => action.occurrence?.ruleId === rule.id,
+      );
+      expect(resumed).toHaveLength(1);
+      expect(resumed[0]?.status).toBe('draft');
+      expect(resumed[0]?.id.toString()).toBe(first.id.toString());
+    } finally {
+      db.close();
+    }
+  });
+  it('keeps one count completion after reload and replaying the same synced occurrence', async () => {
+    const factory = new IDBFactory();
+    const db = new LifeOsIndexedDb(factory);
+    const repo = new IndexedDbPlanningRepository(db);
+    const clock = new FakeClock(new Date('2026-09-14T10:00:00Z'));
+    const ids = new FakeIdGenerator('count-replay');
+    const recurring = new RecurringActions(repo, clock, ids);
+    const complete = new CompleteLifeAction(
+      new IndexedDbLifeActionRepository(db),
+      clock,
+      ids,
+      new IndexedDbJournalUnitOfWork(db),
+    );
+    const rule = await recurring.save({
+      ...input,
+      schedule: { kind: 'count' },
+      maxCompletions: 66,
+    });
+    await recurring.materialize('2026-09-14');
+    const first = (await repo.read()).actions.find(
+      (action) => action.occurrence?.ruleId === rule.id,
+    )!;
+    expect((await complete.execute({ lifeActionId: first.id })).ok).toBe(true);
+    const completed = (await repo.read()).actions.find((action) => action.id.equals(first.id))!;
+    const wire = normalizePilotRecord('life_action', LifeActionRecordMapper.toRecord(completed));
+    const connection = await db.open();
+    await applyRemotePilotRecord(connection, 'life_action', wire);
+    await applyRemotePilotRecord(connection, 'life_action', wire);
+    expect(
+      (await repo.read()).actions.filter(
+        (action) => action.occurrence?.ruleId === rule.id && action.status === 'completed',
+      ),
+    ).toHaveLength(1);
+    db.close();
+    const reopened = new LifeOsIndexedDb(factory);
+    const restored = new IndexedDbPlanningRepository(reopened);
+    const service = new RecurringActions(restored, clock, ids);
+    await service.materialize('2026-09-14');
+    const occurrences = (await restored.read()).actions.filter(
+      (action) => action.occurrence?.ruleId === rule.id,
+    );
+    expect(occurrences.filter((action) => action.status === 'completed')).toHaveLength(1);
+    expect(occurrences.filter((action) => action.status === 'draft')).toHaveLength(1);
+    reopened.close();
+  });
+  it('keeps one undated occurrence, counts completion facts once, and stops after N', async () => {
+    const db = new LifeOsIndexedDb(new IDBFactory());
+    const repo = new IndexedDbPlanningRepository(db);
+    const clock = new FakeClock(new Date('2026-09-14T10:00:00Z'));
+    const ids = new FakeIdGenerator('count');
+    const recurring = new RecurringActions(repo, clock, ids);
+    const complete = new CompleteLifeAction(
+      new IndexedDbLifeActionRepository(db),
+      clock,
+      ids,
+      new IndexedDbJournalUnitOfWork(db),
+    );
+    const progress = new GoalContributions(repo, clock, ids);
+    try {
+      const rule = await recurring.save({
+        ...input,
+        schedule: { kind: 'count' },
+        maxCompletions: 5,
+      });
+      const finished: string[] = [];
+      for (let index = 0; index < 5; index += 1) {
+        await recurring.materialize('2026-09-14');
+        await recurring.materialize('2026-09-14');
+        const open = (await new IndexedDbPlanningRepository(db).read()).actions.filter(
+          (action) => action.occurrence?.ruleId === rule.id && action.status === 'draft',
+        );
+        expect(open).toHaveLength(1);
+        expect(open[0]?.plannedDate).toBeNull();
+        expect((await complete.execute({ lifeActionId: open[0]!.id })).ok).toBe(true);
+        finished.push(open[0]!.id.toString());
+        clock.setTime(new Date(clock.now().getTime() + 60_000));
+      }
+      await recurring.materialize('2026-09-14');
+      const stopped = (await repo.read()).actions.filter(
+        (action) => action.occurrence?.ruleId === rule.id,
+      );
+      expect(stopped).toHaveLength(5);
+      expect(stopped.filter((action) => action.status === 'completed')).toHaveLength(5);
+      await progress.reopen(finished[1]!);
+      await recurring.materialize('2026-09-14');
+      const corrected = (await repo.read()).actions.filter(
+        (action) => action.occurrence?.ruleId === rule.id,
+      );
+      expect(corrected.filter((action) => action.status === 'completed')).toHaveLength(4);
+      expect(corrected.filter((action) => action.status === 'draft')).toHaveLength(1);
+    } finally {
+      db.close();
+    }
+  });
   it('revises the same future interval occurrence again after its original date has passed', async () => {
     const db = new LifeOsIndexedDb(new IDBFactory()),
       repo = new IndexedDbPlanningRepository(db),

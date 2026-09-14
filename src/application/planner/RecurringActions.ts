@@ -50,7 +50,10 @@ export class RecurringActions {
           priority: input.priority,
           occurrence: {
             ruleId,
-            slot: input.schedule.kind === 'interval' ? 'first' : originalDate,
+            slot:
+              input.schedule.kind === 'interval' || input.schedule.kind === 'count'
+                ? 'first'
+                : originalDate,
             ruleRevision: rule.revision,
             originalDate,
           },
@@ -92,8 +95,21 @@ export class RecurringActions {
       let created = 0;
       const now = this.clock.now();
       for (const rule of s.rules) {
-        this.reconcileFuture(s, rule, from);
+        const windowFrom = rule.schedule.kind === 'count' ? localDate(now) : from;
+        const windowTo = rule.schedule.kind === 'count' ? addDays(windowFrom, 62) : to;
+        this.reconcileFuture(s, rule, windowFrom);
         const completions = this.completions(s, rule.id);
+        if (
+          rule.schedule.kind === 'count' &&
+          s.actions.some(
+            (a) =>
+              a.occurrence?.ruleId === rule.id &&
+              !a.isArchived() &&
+              a.status !== 'completed' &&
+              a.status !== 'cancelled',
+          )
+        )
+          continue;
         let capacity =
           rule.maxCompletions === null
             ? Infinity
@@ -109,7 +125,7 @@ export class RecurringActions {
         const existing = new Set(
           s.actions.filter((a) => a.occurrence?.ruleId === rule.id).map((a) => a.occurrence!.slot),
         );
-        for (const slot of occurrenceSlots(rule, from, to, completions)) {
+        for (const slot of occurrenceSlots(rule, windowFrom, windowTo, completions)) {
           if (existing.has(slot.slot) || capacity <= 0) continue;
           if (s.actions.some((a) => a.id.toString() === slot.id))
             throw new DomainError(
@@ -120,7 +136,7 @@ export class RecurringActions {
             id: EntityId.create(slot.id),
             title: LifeActionTitle.create(rule.title),
             goalId: rule.goalId ? EntityId.create(rule.goalId) : null,
-            plannedDate: DayDate.create(slot.date),
+            plannedDate: rule.schedule.kind === 'count' ? null : DayDate.create(slot.date),
             createdAt: now,
             eventId: EntityId.create(`create:${slot.id}`),
           });
@@ -147,6 +163,11 @@ export class RecurringActions {
       const action = requireAction(s, actionId);
       if (!action.occurrence)
         throw new DomainError('recurrence.not_occurrence', 'Это обычное действие.');
+      if (this.requireRule(s, action.occurrence.ruleId).schedule.kind === 'count')
+        throw new DomainError(
+          'recurrence.count_skip_unsupported',
+          'Повторение без расписания нельзя пропустить. Его можно приостановить.',
+        );
       if (action.status === 'cancelled') return;
       const now = this.clock.now();
       action.cancel(
@@ -168,6 +189,7 @@ export class RecurringActions {
       .map((a) => ({
         key: a.completionKey,
         date: a.completedOn ?? a.completedAt!.toISOString().slice(0, 10),
+        at: a.completedAt!.toISOString(),
       }));
   }
   private requireRule(s: PlanningState, id: string) {
@@ -176,6 +198,10 @@ export class RecurringActions {
     return r;
   }
   private reconcileFuture(s: PlanningState, rule: RecurrenceRule, date: string) {
+    if (rule.schedule.kind === 'count') {
+      this.reconcileCount(s, rule, date);
+      return;
+    }
     const occurrenceDate = (action: LifeAction) =>
       rule.schedule.kind === 'interval' && !action.occurrence!.manualDate
         ? (action.plannedDate?.toString() ?? action.occurrence!.originalDate)
@@ -261,5 +287,50 @@ export class RecurringActions {
         );
       }
     }
+  }
+
+  private reconcileCount(s: PlanningState, rule: RecurrenceRule, date: string) {
+    const desired = occurrenceSlots(rule, date, addDays(date, 62), this.completions(s, rule.id))[0]
+      ?.slot;
+    const open = s.actions
+      .filter(
+        (a) =>
+          a.occurrence?.ruleId === rule.id &&
+          !a.isArchived() &&
+          a.status !== 'completed' &&
+          a.status !== 'cancelled',
+      )
+      .sort(
+        (a, b) =>
+          a.createdAt.getTime() - b.createdAt.getTime() ||
+          a.id.toString().localeCompare(b.id.toString()),
+      );
+    for (const action of open.slice(desired ? 1 : 0)) {
+      const now = this.clock.now();
+      action.cancel(
+        now,
+        this.ids.generate(),
+        ActionCancelReason.create('Расписание временно недоступно'),
+      );
+      s.journal.push(
+        planningJournal(
+          this.ids.generate().toString(),
+          'LifeAction',
+          action.id.toString(),
+          'Повторение исключено из текущего расписания',
+          now,
+          { ruleId: rule.id, slot: action.occurrence!.slot },
+        ),
+      );
+    }
+    if (!desired || open.length) return;
+    const cancelled = s.actions.find(
+      (a) =>
+        a.occurrence?.ruleId === rule.id &&
+        a.occurrence.slot === desired &&
+        a.status === 'cancelled' &&
+        a.cancelReason?.toString() === 'Расписание временно недоступно',
+    );
+    cancelled?.restoreScheduledOccurrence();
   }
 }

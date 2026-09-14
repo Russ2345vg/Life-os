@@ -37,17 +37,20 @@ export function RecurrenceFields({
             const kind = e.target.value;
             change({
               schedule:
-                kind === 'weekdays'
-                  ? { kind, weekdays: [1] }
-                  : kind === 'interval'
-                    ? { kind, days: 7 }
-                    : kind === 'monthly'
-                      ? { kind, day: 1 }
-                      : { kind: 'daily' },
+                kind === 'count'
+                  ? { kind }
+                  : kind === 'weekdays'
+                    ? { kind, weekdays: [1] }
+                    : kind === 'interval'
+                      ? { kind, days: 7 }
+                      : kind === 'monthly'
+                        ? { kind, day: 1 }
+                        : { kind: 'daily' },
             });
           }}
         >
           <option value="daily">Каждый день</option>
+          <option value="count">До N выполнений без расписания</option>
           <option value="weekdays">Дни недели / еженедельно</option>
           <option value="interval">Интервал после выполнения</option>
           <option value="monthly">Ежемесячно</option>
@@ -106,14 +109,16 @@ export function RecurrenceFields({
           <small>Если такого числа нет, месяц пропускается.</small>
         </label>
       )}
-      <label>
-        Начало
-        <input
-          type="date"
-          value={value.startDate}
-          onChange={(e) => change({ startDate: e.target.value })}
-        />
-      </label>
+      {schedule.kind !== 'count' && (
+        <label>
+          Начало
+          <input
+            type="date"
+            value={value.startDate}
+            onChange={(e) => change({ startDate: e.target.value })}
+          />
+        </label>
+      )}
       <label>
         Окончание · необязательно
         <input
@@ -123,10 +128,11 @@ export function RecurrenceFields({
         />
       </label>
       <label>
-        Количество выполнений · необязательно
+        Количество выполнений {schedule.kind === 'count' ? '· обязательно' : '· необязательно'}
         <input
           type="number"
           min={1}
+          required={schedule.kind === 'count'}
           value={value.maxCompletions ?? ''}
           onChange={(e) =>
             change({ maxCompletions: e.target.value ? Number(e.target.value) : null })
