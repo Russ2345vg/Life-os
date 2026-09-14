@@ -10,6 +10,40 @@ import { IndexedDbPilotMutationRecorder } from './IndexedDbPilotMutationRecorder
 import { PilotBootstrapService } from './PilotBootstrapService';
 
 describe('PilotBootstrapService', () => {
+  it('expands a completed old bootstrap once, preserving the existing checkpoints', async () => {
+    const indexedDb = new LifeOsIndexedDb(new IDBFactory()),
+      db = await indexedDb.open(),
+      seed = db.transaction(LIFE_OS_SYNC_STORE.settings, 'readwrite');
+    seed.objectStore(LIFE_OS_SYNC_STORE.settings).put(settings());
+    seed
+      .objectStore(LIFE_OS_SYNC_STORE.settings)
+      .put({ id: 'structured-bootstrap', snapshotId: 'old', status: 'complete' });
+    seed
+      .objectStore(LIFE_OS_SYNC_STORE.settings)
+      .put({ id: 'structured-bootstrap:goal', status: 'complete', snapshotId: 'old' });
+    await done(seed);
+    const snapshots = {
+      createPreSyncSnapshot: vi.fn(async () => ({ snapshotId: 'expanded' })),
+      verifySnapshot: vi.fn(async () => ({ valid: true })),
+    };
+    const service = new PilotBootstrapService(
+      indexedDb,
+      snapshots as never,
+      new IndexedDbPilotMutationRecorder(),
+    );
+    expect((await service.run()).snapshotId).toBe('expanded');
+    await service.run();
+    expect(snapshots.createPreSyncSnapshot).toHaveBeenCalledOnce();
+    const checkpoint = await request<{ snapshotId: string }>(
+      db
+        .transaction(LIFE_OS_SYNC_STORE.settings)
+        .objectStore(LIFE_OS_SYNC_STORE.settings)
+        .get('structured-bootstrap:goal'),
+    );
+    expect(checkpoint.snapshotId).toBe('old');
+    indexedDb.close();
+  });
+
   it('bootstraps multiple bounded pages without skipping or repeating stable IDs', async () => {
     const indexedDb = new LifeOsIndexedDb(new IDBFactory());
     const database = await indexedDb.open();
@@ -246,6 +280,19 @@ describe('PilotBootstrapService', () => {
       updatedAt: '2026-09-07T00:00:00.000Z',
     });
     await done(seed);
+    const expanded = database.transaction(LIFE_OS_SYNC_STORE.settings, 'readwrite');
+    for (const type of [
+      'planning_period',
+      'period_membership',
+      'period_decision',
+      'contribution_link',
+      'progress_contribution',
+      'recurrence_rule',
+    ])
+      expanded
+        .objectStore(LIFE_OS_SYNC_STORE.settings)
+        .put({ id: `structured-bootstrap:${type}`, status: 'complete' });
+    await done(expanded);
     const settingsSync = { reconcile: vi.fn(async () => true) };
     const snapshots = {
       createPreSyncSnapshot: vi.fn(),

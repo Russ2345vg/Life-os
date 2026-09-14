@@ -104,7 +104,7 @@ describe('PilotSyncRegistryAdapters', () => {
   );
 
   it('uses the complete real dependency order and excludes Goal covers', () => {
-    expect(PILOT_DEPENDENCY_ORDER).toHaveLength(24);
+    expect(PILOT_DEPENDENCY_ORDER).toHaveLength(30);
     expect(PILOT_DEPENDENCY_ORDER.indexOf('sphere')).toBeLessThan(
       PILOT_DEPENDENCY_ORDER.indexOf('direction'),
     );
@@ -134,7 +134,7 @@ describe('PilotSyncRegistryAdapters', () => {
     expect(runtime.map(({ registration }) => registration.entityType)).toEqual(
       PILOT_DEPENDENCY_ORDER,
     );
-    expect(runtime).toHaveLength(24);
+    expect(runtime).toHaveLength(30);
   });
 
   it('preserves a local Goal cover while applying structured remote data without Outbox echo', async () => {

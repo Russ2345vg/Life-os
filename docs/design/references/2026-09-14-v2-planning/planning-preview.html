@@ -1,0 +1,568 @@
+<div id="lifeos-planning-preview">
+  <style>
+    #lifeos-planning-preview {
+      --p-bg: #000;
+      --p-text: #f5f5f5;
+      --p-muted: #aaa;
+      --p-line: #252525;
+      --p-accent: #48df65;
+      color: var(--p-text);
+      background: var(--p-bg);
+      color-scheme: dark;
+      font-family: Manrope, system-ui, sans-serif;
+    }
+    #lifeos-planning-preview * {
+      box-sizing: border-box;
+    }
+    #lifeos-planning-preview .p-shell {
+      display: grid;
+      grid-template-columns: 172px minmax(0, 1fr);
+    }
+    #lifeos-planning-preview .p-sidebar {
+      border-right: 1px solid var(--p-line);
+      padding: 32px 16px;
+    }
+    #lifeos-planning-preview .p-brand {
+      margin: 0 0 40px;
+    }
+    #lifeos-planning-preview .p-brand span {
+      color: var(--p-accent);
+    }
+    #lifeos-planning-preview .p-nav {
+      display: grid;
+      gap: 8px;
+    }
+    #lifeos-planning-preview .p-nav span {
+      padding: 12px 8px;
+      color: var(--p-muted);
+    }
+    #lifeos-planning-preview .p-nav .p-current {
+      color: var(--p-accent);
+      border-left: 2px solid var(--p-accent);
+    }
+    #lifeos-planning-preview main {
+      min-width: 0;
+      padding: 32px;
+    }
+    #lifeos-planning-preview h1,
+    #lifeos-planning-preview h2,
+    #lifeos-planning-preview h3 {
+      color: var(--p-text);
+      margin: 0;
+    }
+    #lifeos-planning-preview .p-heading,
+    #lifeos-planning-preview .p-rowhead {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    #lifeos-planning-preview .p-muted {
+      color: var(--p-muted);
+    }
+    #lifeos-planning-preview .p-lead {
+      margin: 8px 0 24px;
+    }
+    #lifeos-planning-preview button,
+    #lifeos-planning-preview select,
+    #lifeos-planning-preview input,
+    #lifeos-planning-preview textarea {
+      font: inherit;
+      color: var(--p-text);
+      background: #0c0c0c;
+      border: 1px solid #363636;
+      border-radius: 6px;
+      padding: 10px 12px;
+      min-height: 44px;
+      max-width: 100%;
+    }
+    #lifeos-planning-preview button {
+      cursor: pointer;
+    }
+    #lifeos-planning-preview button:hover {
+      background: #1b1b1b;
+    }
+    #lifeos-planning-preview button.p-primary {
+      background: var(--p-accent);
+      color: #061408;
+      border-color: var(--p-accent);
+    }
+    #lifeos-planning-preview .p-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--p-line);
+    }
+    #lifeos-planning-preview .p-tabs button {
+      border-color: transparent;
+      background: transparent;
+      padding: 8px 10px;
+    }
+    #lifeos-planning-preview .p-tabs button[aria-pressed='true'] {
+      color: var(--p-accent);
+      border-bottom-color: var(--p-accent);
+      border-radius: 0;
+    }
+    #lifeos-planning-preview .p-mobile-select {
+      display: none;
+    }
+    #lifeos-planning-preview .p-period {
+      margin: 24px 0;
+    }
+    #lifeos-planning-preview .p-outcome {
+      padding: 20px 0 24px;
+      border-bottom: 1px solid var(--p-line);
+    }
+    #lifeos-planning-preview .p-outcome p {
+      margin: 0 0 8px;
+    }
+    #lifeos-planning-preview .p-section {
+      margin-top: 28px;
+    }
+    #lifeos-planning-preview .p-goal {
+      border-bottom: 1px solid var(--p-line);
+      padding: 20px 0;
+    }
+    #lifeos-planning-preview .p-goal p {
+      margin: 6px 0;
+    }
+    #lifeos-planning-preview .p-focus-goal {
+      padding-left: 16px;
+      border-left: 2px solid var(--p-accent);
+      margin: 16px 0;
+    }
+    #lifeos-planning-preview .p-focus-goal .p-goal {
+      padding-top: 0;
+    }
+    #lifeos-planning-preview .p-role {
+      color: var(--p-accent);
+    }
+    #lifeos-planning-preview .p-meter {
+      width: 150px;
+      height: 4px;
+      background: #252525;
+      margin: 12px 0 8px;
+    }
+    #lifeos-planning-preview .p-meter span {
+      display: block;
+      height: 100%;
+      background: var(--p-accent);
+    }
+    #lifeos-planning-preview .p-actions {
+      margin-top: 20px;
+    }
+    #lifeos-planning-preview .p-action {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--p-line);
+    }
+    #lifeos-planning-preview .p-action label {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      flex: 1;
+      min-width: 0;
+    }
+    #lifeos-planning-preview .p-action input[type='checkbox'] {
+      appearance: auto;
+      width: 20px;
+      height: 20px;
+      min-height: 20px;
+      margin: 12px 0;
+      accent-color: var(--p-accent);
+      flex: none;
+    }
+    #lifeos-planning-preview .p-action .p-action-copy {
+      padding: 8px 0;
+      overflow-wrap: anywhere;
+    }
+    #lifeos-planning-preview .p-action small {
+      display: block;
+      color: var(--p-muted);
+      margin-top: 4px;
+    }
+    #lifeos-planning-preview .p-action .p-done {
+      text-decoration: line-through;
+      color: var(--p-muted);
+    }
+    #lifeos-planning-preview .p-day {
+      margin-top: 24px;
+    }
+    #lifeos-planning-preview .p-inline {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    #lifeos-planning-preview .p-filter {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      min-height: 44px;
+      margin: 16px 0;
+    }
+    #lifeos-planning-preview .p-filter input {
+      min-height: 20px;
+      width: 20px;
+      accent-color: var(--p-accent);
+    }
+    #lifeos-planning-preview .p-form {
+      display: grid;
+      gap: 20px;
+      padding: 24px 0;
+      max-width: 560px;
+    }
+    #lifeos-planning-preview .p-form label {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+    }
+    #lifeos-planning-preview .p-fields {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    #lifeos-planning-preview .p-notice {
+      margin-top: 16px;
+      color: var(--p-accent);
+    }
+    #lifeos-planning-preview .p-empty {
+      padding: 32px 0;
+    }
+    #lifeos-planning-preview .p-footnav {
+      display: none;
+    }
+    #lifeos-planning-preview [hidden] {
+      display: none !important;
+    }
+    @media (max-width: 700px) {
+      #lifeos-planning-preview .p-shell {
+        display: block;
+      }
+      #lifeos-planning-preview .p-sidebar {
+        display: none;
+      }
+      #lifeos-planning-preview main {
+        padding: 24px 16px;
+      }
+      #lifeos-planning-preview .p-tabs {
+        display: none;
+      }
+      #lifeos-planning-preview .p-mobile-select {
+        display: grid;
+        gap: 8px;
+      }
+      #lifeos-planning-preview .p-mobile-select select {
+        width: 100%;
+      }
+      #lifeos-planning-preview .p-footnav {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-around;
+        gap: 12px;
+        padding: 16px 8px;
+        border-top: 1px solid var(--p-line);
+        color: var(--p-muted);
+      }
+      #lifeos-planning-preview .p-footnav .p-current {
+        color: var(--p-accent);
+      }
+      #lifeos-planning-preview .p-fields {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+  <div class="p-shell">
+    <aside class="p-sidebar" aria-label="Оболочка LifeOS">
+      <h2 class="p-brand">LifeOS <span>V2</span></h2>
+      <div class="p-nav">
+        <span>Сегодня</span><span>Цели</span><span>Действия</span
+        ><span class="p-current">Планирование</span><span>Входящие</span>
+      </div>
+    </aside>
+    <main>
+      <div class="p-heading">
+        <h1>Планирование</h1>
+        <button type="button" class="p-primary" data-command="add">+ В план</button>
+      </div>
+      <p class="p-muted p-lead">Выберите, что хотите продвинуть.</p>
+      <div class="p-tabs" aria-label="Период">
+        <button type="button" data-period="year" aria-pressed="false">Год</button>
+        <button type="button" data-period="quarter" aria-pressed="false">Квартал</button>
+        <button type="button" data-period="cycle" aria-pressed="false">30 дней</button>
+        <button type="button" data-period="week" aria-pressed="true">Неделя</button>
+        <button type="button" data-period="next" aria-pressed="false">Следующие 7 дней</button>
+        <button type="button" data-period="none" aria-pressed="false">Без периода</button>
+      </div>
+      <label class="p-mobile-select"
+        >Период<select data-period-select>
+          <option value="year">Год</option>
+          <option value="quarter">Квартал</option>
+          <option value="cycle">30 дней</option>
+          <option value="week" selected>Неделя</option>
+          <option value="next">Следующие 7 дней</option>
+          <option value="none">Без периода</option>
+        </select></label
+      >
+      <div id="p-planning-content" aria-live="polite"></div>
+      <p class="p-notice" role="status" data-notice></p>
+    </main>
+  </div>
+  <div class="p-footnav" aria-label="Мобильная навигация">
+    <span>Сегодня</span><span>Цели</span><span>Действия</span><span class="p-current">Планы</span
+    ><span>Входящие</span>
+  </div>
+  <script>
+    (() => {
+      const root = document.getElementById('lifeos-planning-preview');
+      const content = root.querySelector('#p-planning-content');
+      const notice = root.querySelector('[data-notice]');
+      let period = 'week';
+      let cycleStarted = false;
+      let showRecurring = true;
+      const completed = new Set(['call']);
+      const labels = {
+        year: '2026 год',
+        quarter: 'III квартал 2026',
+        cycle: '14 сентября — 13 октября',
+        week: '14–20 сентября',
+        next: '14–20 сентября',
+        none: 'Без периода',
+      };
+      const action = (id, title, context, recurring = false) =>
+        `<div class="p-action" ${recurring ? 'data-recurring' : ''}><label><input type="checkbox" data-complete="${id}" ${completed.has(id) ? 'checked' : ''}><span class="p-action-copy"><span class="${completed.has(id) ? 'p-done' : ''}">${title}</span><small>${context}</small></span></label>${recurring ? '<button type="button" data-command="recurrence" aria-label="Настроить повторение">↻</button>' : ''}</div>`;
+      const goal = (title, path, role, progress = '', command = 'goal') =>
+        `<article class="p-goal"><div class="p-rowhead"><h3>${title}</h3><button type="button" data-command="${command}" aria-label="Открыть цель ${title}">Открыть</button></div><p class="p-muted">${path}</p><p><span class="p-role">${role}</span> · Активна</p>${progress}</article>`;
+      function render() {
+        notice.textContent = '';
+        root
+          .querySelectorAll('[data-period]')
+          .forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.period === period)));
+        root.querySelector('[data-period-select]').value = period;
+        root.querySelector('[data-command="add"]').hidden = period === 'next';
+        let html = `<header class="p-period"><h2>${labels[period]}</h2><p class="p-muted">${period === 'week' ? 'Понедельник — воскресенье' : period === 'next' ? 'Просмотр по датам · от сегодня на 7 дней' : period === 'none' ? 'Дата может быть назначена. Участие в плане необязательно.' : period === 'year' ? '1 января — 31 декабря' : period === 'quarter' ? '1 июля — 30 сентября' : 'Фиксированный цикл'}</p></header>`;
+        if (period === 'cycle' && !cycleStarted) {
+          html =
+            '<header class="p-period"><h2>30 дней</h2></header><div class="p-empty"><h3>Начните свой цикл</h3><p class="p-muted">Выберите дату старта. Границы плана сохранятся.</p><div class="p-form"><label>Дата начала<input type="date" value="2026-09-14" data-cycle-date></label><button type="button" class="p-primary" data-command="start-cycle">Начать 30 дней</button></div></div>';
+        } else if (period === 'none') {
+          html += goal(
+            'Прочитать «Атомные привычки»',
+            'Личное развитие · Образование',
+            'Без периода',
+          );
+          html +=
+            '<section class="p-section"><h3>Действия</h3>' +
+            action('dentist', 'Записаться к стоматологу', '18 сентября · Без цели') +
+            '</section>';
+        } else {
+          if (period !== 'next') {
+            html += `<section class="p-outcome"><p class="p-muted">Главный результат ${period === 'week' ? 'недели' : 'периода'}</p><h3>${period === 'year' ? 'Создать устойчивую основу для самостоятельной жизни' : period === 'quarter' ? 'Переехать и сохранить финансовый запас' : 'Договориться минимум об одном просмотре квартиры'}</h3><button type="button" data-command="outcome">Изменить результат</button></section>`;
+            html +=
+              '<section class="p-section"><div class="p-rowhead"><h3>В фокусе</h3><span class="p-muted">' +
+              (period === 'week'
+                ? '1 главная · 1 поддерживающая'
+                : period === 'year'
+                  ? '2 цели · ориентир 3–5'
+                  : period === 'quarter'
+                    ? '2 цели · ориентир 3–4'
+                    : '2 цели · ориентир 2–4') +
+              '</span></div>';
+            html +=
+              '<div class="p-focus-goal">' +
+              goal(
+                'Снять квартиру',
+                'Жильё · Самостоятельная жизнь',
+                'Главная',
+                '<p class="p-muted">Следующий шаг: выбрать три объявления</p>',
+              ) +
+              '</div>';
+            html +=
+              goal(
+                'Сделать 66 тренировок',
+                'Здоровье · Физическая форма',
+                'Поддерживающая',
+                '<div class="p-meter" aria-hidden="true"><span style="width:66.7%"></span></div><p>44 / 66 · 66,7% <span class="p-muted">· Осталось 22</span></p>',
+                'measurement',
+              ) + '</section>';
+          }
+          if (period === 'year' || period === 'quarter') {
+            html +=
+              '<section class="p-section"><h3>Остальной план</h3>' +
+              goal(
+                'Накопить 300 000 ₽',
+                'Финансы · Накопления',
+                'Не в фокусе',
+                '<p>90 000 / 300 000 ₽ · 30%</p>',
+                'measurement',
+              ) +
+              '</section>';
+            if (period === 'quarter')
+              html +=
+                '<section class="p-section"><p class="p-muted">Из годового плана</p><div class="p-rowhead"><span>Прочитать 12 книг</span><button type="button" data-command="suggest">Добавить в квартал</button></div></section>';
+          } else {
+            html +=
+              '<section class="p-section"><div class="p-rowhead"><h3>Действия</h3><button type="button" data-command="recurrence">+ Действие</button></div><label class="p-filter"><input type="checkbox" data-filter ' +
+              (showRecurring ? 'checked' : '') +
+              '>Показывать повторяющиеся</label>';
+            html +=
+              '<div class="p-day"><h3>Пн, 14 сентября</h3>' +
+              action('ads', 'Выбрать три объявления', 'Снять квартиру') +
+              (showRecurring
+                ? action(
+                    'workout',
+                    'Тренировка',
+                    'Повторяется Пн / Ср / Пт · +1 к двум целям',
+                    true,
+                  )
+                : '') +
+              '</div>';
+            if (showRecurring)
+              html +=
+                '<div class="p-day"><h3>Ср, 16 сентября</h3>' +
+                action('run', 'Пробежка', 'Повторяется · фактические километры', true) +
+                '</div><div class="p-day"><h3>Пт, 18 сентября</h3>' +
+                action('friday', 'Тренировка', 'Повторяется Пн / Ср / Пт', true) +
+                '</div>';
+            html += '<p class="p-muted">Вт, Чт, Сб и Вс — пока без действий</p>';
+            if (period !== 'next')
+              html +=
+                '<div class="p-day"><h3>Без конкретного дня</h3>' +
+                action('documents', 'Подготовить документы', 'В плане недели · Без цели') +
+                '</div>';
+            html +=
+              '<div class="p-day"><h3>Выполнено</h3>' +
+              action('call', 'Позвонить по объявлению', 'Снять квартиру · 14 сентября') +
+              '</div></section>';
+          }
+        }
+        content.innerHTML = html;
+      }
+      function form(title, fields) {
+        content.innerHTML = `<button type="button" data-command="back">← К плану</button><section class="p-section"><h2>${title}</h2><div class="p-form">${fields}<div class="p-inline"><button type="button" class="p-primary" data-command="save">Сохранить</button><button type="button" data-command="back">Отмена</button></div></div></section>`;
+      }
+      root.addEventListener('click', (event) => {
+        const button = event.target.closest('button');
+        if (!button) return;
+        if (button.dataset.period) {
+          period = button.dataset.period;
+          render();
+          return;
+        }
+        const command = button.dataset.command;
+        if (command === 'back') {
+          render();
+          return;
+        }
+        if (command === 'start-cycle') {
+          const value = root.querySelector('[data-cycle-date]').value;
+          if (!value) return;
+          const start = new Date(value + 'T12:00:00Z');
+          if (!Number.isFinite(start.getTime())) return;
+          const end = new Date(start);
+          end.setUTCDate(end.getUTCDate() + 29);
+          const fmt = (d) =>
+            d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', timeZone: 'UTC' });
+          labels.cycle = fmt(start) + ' — ' + fmt(end);
+          cycleStarted = true;
+          render();
+          return;
+        }
+        if (command === 'save' || command === 'suggest') {
+          render();
+          notice.textContent =
+            command === 'suggest'
+              ? 'Цель добавлена в план · пример'
+              : 'Изменения показаны в макете';
+          return;
+        }
+        if (command === 'add') {
+          form(
+            'Добавить в план',
+            '<label>Что добавить<select><option>Существующую цель</option><option>Существующее действие</option></select></label><label>Цель<select><option>Накопить 300 000 ₽</option><option>Прочитать 12 книг</option></select></label><label>Роль в периоде<select><option>В плане, без фокуса</option><option>Поддерживающая</option><option>Главная</option></select></label>',
+          );
+          return;
+        }
+        if (command === 'outcome') {
+          form(
+            'Главный результат',
+            '<label>Что хотите получить к концу периода?<textarea rows="3">Договориться минимум об одном просмотре квартиры</textarea></label><p class="p-muted">Необязательно. Голосовой ввод — через существующий Voice Input.</p>',
+          );
+          return;
+        }
+        if (command === 'goal' || command === 'measurement') {
+          form(
+            'Измерение прогресса',
+            '<label>Тип цели<select data-measure><option value="qualitative">Качественная</option><option value="numeric">Числовая цель</option><option value="count" selected>Количество выполнений</option><option value="recurring">Повторяющийся норматив</option></select></label><div data-measure-fields></div><p class="p-muted">Целевое значение достигнуто? Завершение цели остаётся вашим решением.</p>',
+          );
+          if (command === 'goal') root.querySelector('[data-measure]').value = 'qualitative';
+          updateMeasure();
+          return;
+        }
+        if (command === 'recurrence') {
+          form(
+            'Действие',
+            '<label>Название<input value="Тренировка"></label><label>Повторение<select data-rule><option value="off">Выключено</option><option value="calendar" selected>По календарю</option><option value="interval">После выполнения</option><option value="paused">На паузе</option></select></label><div data-rule-fields></div><details><summary>Вклад в цели · 2 связи</summary><p>66 тренировок → +1 выполнение</p><p>3 тренировки в неделю → +1 выполнение</p><label>Дополнительный вклад<select><option>Нет</option><option>Фактическое значение после выполнения</option></select></label></details>',
+          );
+          updateRule();
+          return;
+        }
+        if (command === 'later') {
+          render();
+          notice.textContent = 'Действие выполнено. Километры можно указать позже.';
+          return;
+        }
+      });
+      function updateMeasure() {
+        const value = root.querySelector('[data-measure]').value;
+        root.querySelector('[data-measure-fields]').innerHTML =
+          value === 'qualitative'
+            ? '<p class="p-muted">Состояние и следующий шаг без искусственного процента.</p>'
+            : `<div class="p-fields"><label>Целевое значение<input type="number" value="${value === 'recurring' ? 3 : value === 'numeric' ? 300000 : 66}"></label><label>Единица<input value="${value === 'numeric' ? '₽' : 'выполнений'}"></label></div>${value === 'recurring' ? '<label>Цикл<select><option>Неделя</option><option>Календарный месяц</option></select></label><p class="p-muted">Каждый цикл начинается с нуля. Долг не переносится.</p>' : value === 'numeric' ? '<label>Направление<select><option>Не меньше</option><option>Не больше</option><option>Точно</option></select></label>' : ''}`;
+      }
+      function updateRule() {
+        const value = root.querySelector('[data-rule]').value;
+        root.querySelector('[data-rule-fields]').innerHTML =
+          value === 'off'
+            ? '<p class="p-muted">Обычное действие без повторений.</p>'
+            : value === 'paused'
+              ? '<label>Приостановлено до<input type="date" value="2026-10-01"></label>'
+              : value === 'interval'
+                ? '<label>Дней после фактического выполнения<input type="number" value="30" min="1"></label>'
+                : '<label>Расписание<select><option>Пн / Ср / Пт</option><option>Каждый день</option><option>Каждую неделю</option></select></label><div class="p-fields"><label>Дата начала<input type="date" value="2026-09-14"></label><label>Дата окончания<input type="date"></label></div>';
+      }
+      root.addEventListener('change', (event) => {
+        const input = event.target;
+        if (input.matches('[data-period-select]')) {
+          period = input.value;
+          render();
+        }
+        if (input.matches('[data-measure]')) updateMeasure();
+        if (input.matches('[data-rule]')) updateRule();
+        if (input.matches('[data-filter]')) {
+          showRecurring = input.checked;
+          render();
+        }
+        if (input.matches('[data-complete]')) {
+          const id = input.dataset.complete;
+          input.checked ? completed.add(id) : completed.delete(id);
+          if (id === 'run' && input.checked) {
+            form(
+              'Пробежка выполнена',
+              '<label>Сколько пройдено?<input type="number" step="0.1" placeholder="7,4"></label><p class="p-muted">Километры · вклад в цель «50 км за месяц»</p><button type="button" data-command="later">Указать позже</button>',
+            );
+          } else {
+            render();
+            notice.textContent = input.checked
+              ? 'Действие выполнено · пример'
+              : 'Выполнение отменено · пример';
+          }
+        }
+      });
+      render();
+    })();
+  </script>
+</div>

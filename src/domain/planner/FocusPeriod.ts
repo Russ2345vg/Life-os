@@ -26,7 +26,6 @@ export function focusPeriod(value: FocusPeriod): FocusPeriod {
     value.startDate !== week.startDate ||
     value.endDate !== week.endDate ||
     !Array.isArray(value.goals) ||
-    value.goals.length > 5 ||
     value.goals.some(
       (g) =>
         !g ||
@@ -43,7 +42,7 @@ export function focusPeriod(value: FocusPeriod): FocusPeriod {
   )
     throw new DomainError(
       'focus.invalid_period',
-      'В фокусе может быть до пяти целей и одна главная.',
+      'В фокусе может быть одна главная цель; каждая цель участвует один раз.',
     );
   return Object.freeze({
     ...value,

@@ -1,3 +1,4 @@
+import { validateMeasurement, type GoalMeasurement } from '../../../domain/planner/GoalMeasurement';
 import {
   Goal,
   MAX_GOAL_COVER_IMAGE_BYTES,
@@ -30,6 +31,8 @@ import {
 export class GoalRecordMapper {
   public static toRecord(goal: Goal): GoalRecord {
     return {
+      measurement: goal.measurement,
+      dueDate: goal.dueDate,
       schemaVersion: 1,
       sphereId: goal.sphereId?.toString() ?? null,
       isMain: goal.isMain,
@@ -68,6 +71,8 @@ export class GoalRecordMapper {
     const progressType = readOptionalProgressType(record);
 
     return Goal.rehydrate({
+      measurement: validateMeasurement((record.measurement ?? null) as GoalMeasurement | null),
+      dueDate: record.dueDate === undefined ? null : readNullableString(record, 'dueDate'),
       sphereId: readOptionalNullableEntityId(record, 'sphereId'),
       isMain: readOptionalMain(record),
       legacyProjectId:

@@ -28,6 +28,7 @@ export function buildPlannerViews(data: PlannerViewData) {
   const sphereById = new Map(data.spheres.map((s) => [s.id.toString(), s]));
   const goalsByStatus = new Map<GoalStatus, Goal[]>();
   const actionsByColumn = new Map<ActionColumn, LifeAction[]>();
+  const goalsByDate = new Map<string, Goal[]>();
   const actionsByDate = new Map<string, LifeAction[]>();
   const actionsByGoal = new Map<string, LifeAction[]>();
   const directionsBySphere = new Map<string, Direction[]>();
@@ -41,6 +42,7 @@ export function buildPlannerViews(data: PlannerViewData) {
     add(directionsBySphere, sphereById.has(sphereId) ? sphereId : '', direction);
   }
   for (const goal of data.goals) {
+    if (goal.dueDate) add(goalsByDate, goal.dueDate, goal);
     add(goalsByStatus, goal.status, goal);
     const directionId = goal.directionId?.toString() ?? '';
     if (directionById.has(directionId)) add(goalsByDirection, directionId, goal);
@@ -79,14 +81,15 @@ export function buildPlannerViews(data: PlannerViewData) {
     goalsByStatus,
     actionsByColumn,
     actionsByDate,
+    goalsByDate,
     actionsByGoal,
     directionsBySphere,
     goalsByDirection,
     goalsWithoutDirectionBySphere,
     actionsWithoutGoal,
     undatedActions,
-    // The authoritative Goal contract has no exact deadline. Horizon is never a date.
-    undatedGoals: data.goals,
+    // Exact deadlines are independent of horizon and period participation.
+    undatedGoals: data.goals.filter((g) => !g.dueDate),
     nextActionByGoal,
   };
 }

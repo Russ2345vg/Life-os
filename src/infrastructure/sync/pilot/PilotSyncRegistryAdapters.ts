@@ -1,4 +1,12 @@
 import {
+  PlanningPeriodRecordMapper,
+  PeriodMembershipRecordMapper,
+  PeriodDecisionRecordMapper,
+  ContributionLinkRecordMapper,
+  ProgressContributionRecordMapper,
+  RecurrenceRuleRecordMapper,
+} from '../../persistence/PlanningRecordMappers';
+import {
   InboxIdeaRecordMapper,
   FocusPeriodRecordMapper,
 } from '../../persistence/PlannerRecordMappers';
@@ -67,17 +75,57 @@ interface Mapper<TDomain, TRecord extends object> {
 function mapped<TDomain, TRecord extends object>(
   mapper: Mapper<TDomain, TRecord>,
   references: PilotAdapterBinding['references'] = noReferences,
+  preserveUnknown = false,
 ): PilotAdapterBinding {
-  const roundTrip = (value: unknown): Readonly<Record<string, unknown>> =>
-    asRecord(mapper.toRecord(mapper.fromRecord(value as TRecord)));
+  const roundTrip = (value: unknown): Readonly<Record<string, unknown>> => ({
+    ...(preserveUnknown ? (isRecord(value) ? value : {}) : {}),
+    ...asRecord(mapper.toRecord(mapper.fromRecord(value as TRecord))),
+  });
   return {
-    normalize: (value) => withoutFields(roundTrip(withValidationVersion(value)), ['version']),
-    prepare: (value, existing) => roundTrip({ ...value, version: receiverVersion(existing) }),
+    normalize: (value) =>
+      withoutFields(roundTrip(withValidationVersion(value)), [
+        'version',
+        ...(preserveUnknown
+          ? [
+              'priority',
+              'occurrence',
+              'completionGeneration',
+              'completedOn',
+              'expectedContributions',
+            ].filter((field) => !Object.hasOwn(isRecord(value) ? value : {}, field))
+          : []),
+      ]),
+    prepare: (value, existing) =>
+      roundTrip({
+        ...(preserveUnknown ? existing : {}),
+        ...value,
+        version: receiverVersion(existing),
+      }),
     references,
   };
 }
 
 const PILOT_BINDINGS: Readonly<Record<PilotEntityType, PilotAdapterBinding>> = Object.freeze({
+  planning_period: mapped(PlanningPeriodRecordMapper, (r) => optional(r, 'primaryGoalId', 'goal')),
+  recurrence_rule: mapped(RecurrenceRuleRecordMapper, (r) => optional(r, 'goalId', 'goal')),
+  period_membership: mapped(PeriodMembershipRecordMapper, (r) => [
+    ...optional(r, 'periodId', 'planning_period'),
+    ...optional(r, 'entityId', r.entityType === 'goal' ? 'goal' : 'life_action'),
+  ]),
+  period_decision: mapped(PeriodDecisionRecordMapper, (r) => [
+    ...optional(r, 'periodId', 'planning_period'),
+    ...optional(r, 'targetPeriodId', 'planning_period'),
+    ...optional(r, 'entityId', r.entityType === 'goal' ? 'goal' : 'life_action'),
+  ]),
+  contribution_link: mapped(ContributionLinkRecordMapper, (r) => [
+    ...optional(r, 'goalId', 'goal'),
+    ...optional(r, 'sourceId', r.sourceType === 'rule' ? 'recurrence_rule' : 'life_action'),
+  ]),
+  progress_contribution: mapped(ProgressContributionRecordMapper, (r) => [
+    ...optional(r, 'goalId', 'goal'),
+    ...optional(r, 'actionId', 'life_action'),
+    ...optional(r, 'linkId', 'contribution_link'),
+  ]),
   sphere: mapped(SphereRecordMapper),
   direction: mapped(DirectionRecordMapper, (record) => optional(record, 'sphereId', 'sphere')),
   project: mapped(ProjectRecordMapper, (record) => [
@@ -96,16 +144,20 @@ const PILOT_BINDINGS: Readonly<Record<PilotEntityType, PilotAdapterBinding>> = O
           'goal.migration_id_collision',
           'Идентификатор перенесённой цели занят. Исходные данные сохранены.',
         );
-      return asRecord(
-        GoalRecordMapper.toRecord(
-          GoalRecordMapper.fromRecord({
-            ...existing,
-            ...value,
-            coverImage: existing?.coverImage ?? null,
-            version: receiverVersion(existing),
-          }),
+      return {
+        ...existing,
+        ...value,
+        ...asRecord(
+          GoalRecordMapper.toRecord(
+            GoalRecordMapper.fromRecord({
+              ...existing,
+              ...value,
+              coverImage: existing?.coverImage ?? null,
+              version: receiverVersion(existing),
+            }),
+          ),
         ),
-      );
+      };
     },
     references: (record) => [
       ...optional(record, 'directionId', 'direction'),
@@ -117,11 +169,18 @@ const PILOT_BINDINGS: Readonly<Record<PilotEntityType, PilotAdapterBinding>> = O
     ...optional(record, 'projectId', 'project'),
     ...optional(record, 'sphereId', 'sphere'),
   ]),
-  life_action: mapped(LifeActionRecordMapper, (record) => [
-    ...optional(record, 'decisionId', 'decision'),
-    ...optional(record, 'sphereId', 'sphere'),
-    ...optional(record, 'goalId', 'goal'),
-  ]),
+  life_action: mapped(
+    LifeActionRecordMapper,
+    (record) => [
+      ...optional(record, 'decisionId', 'decision'),
+      ...optional(record, 'sphereId', 'sphere'),
+      ...optional(record, 'goalId', 'goal'),
+      ...(isRecord(record.occurrence)
+        ? optional(record.occurrence, 'ruleId', 'recurrence_rule')
+        : []),
+    ],
+    true,
+  ),
   action_session: mapped(ActionSessionRecordMapper, (record) =>
     required(record, 'lifeActionId', 'life_action'),
   ),
@@ -331,8 +390,10 @@ function normalizeGoalWireRecord(value: unknown): Readonly<Record<string, unknow
   );
   return isRecord(value)
     ? withoutFields(
-        normalized,
-        ['sphereId', 'isMain', 'legacyProjectId'].filter((field) => !Object.hasOwn(value, field)),
+        { ...withoutFields(asRecord(value), ['coverImage', 'version']), ...normalized },
+        ['sphereId', 'isMain', 'legacyProjectId', 'measurement', 'dueDate'].filter(
+          (field) => !Object.hasOwn(value, field),
+        ),
       )
     : normalized;
 }
@@ -377,6 +438,8 @@ function subjectEntityType(value: string): PilotEntityType | null {
   if (normalized.includes('direction')) return 'direction';
   if (normalized.includes('project')) return 'project';
   if (normalized.includes('goal')) return 'goal';
+  if (normalized === 'planningperiod') return 'planning_period';
+  if (normalized === 'recurrencerule') return 'recurrence_rule';
   if (normalized.includes('routine')) return 'routine_block';
   return null;
 }

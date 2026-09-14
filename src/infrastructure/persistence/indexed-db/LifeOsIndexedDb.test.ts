@@ -163,6 +163,7 @@ describe('LifeOsIndexedDb', () => {
     expect(database.version).toBe(LIFE_OS_DATABASE_VERSION);
     expect([...database.objectStoreNames]).toEqual([
       LIFE_OS_STORE.actionSessions,
+      LIFE_OS_STORE.contributionLinks,
       LIFE_OS_STORE.days,
       LIFE_OS_STORE.decisions,
       LIFE_OS_STORE.directions,
@@ -176,10 +177,15 @@ describe('LifeOsIndexedDb', () => {
       LIFE_OS_STORE.journal,
       LIFE_OS_STORE.lifeActions,
       LIFE_OS_STORE.morningCycles,
+      LIFE_OS_STORE.periodDecisions,
+      LIFE_OS_STORE.periodMemberships,
+      LIFE_OS_STORE.planningPeriods,
       LIFE_OS_STORE.preparationPlans,
       LIFE_OS_STORE.preparationRules,
+      LIFE_OS_STORE.progressContributions,
       LIFE_OS_STORE.projects,
       LIFE_OS_STORE.recommendationApplications,
+      LIFE_OS_STORE.recurrenceRules,
       LIFE_OS_STORE.routineBlocks,
       LIFE_OS_STORE.routineOccurrenceExecutions,
       LIFE_OS_STORE.routineOccurrenceOverrides,
@@ -391,7 +397,7 @@ describe('LifeOsIndexedDb', () => {
     const secondConnection = await indexedDb.open();
 
     expect(secondConnection).not.toBe(firstConnection);
-    expect([...secondConnection.objectStoreNames]).toHaveLength(35);
+    expect([...secondConnection.objectStoreNames]).toHaveLength(41);
     indexedDb.close();
   });
 

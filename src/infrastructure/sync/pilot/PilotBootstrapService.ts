@@ -46,11 +46,28 @@ export class PilotBootstrapService {
     }
 
     let stage = await readStructuredBootstrap(database);
-    if (stage?.status === 'complete') {
+    const expansionReady = (
+      await Promise.all(
+        [
+          'planning_period',
+          'period_membership',
+          'period_decision',
+          'contribution_link',
+          'progress_contribution',
+          'recurrence_rule',
+        ].map((type) =>
+          hasTypeCheckpoint(
+            database,
+            type as import('../../../application/sync/pilot').PilotEntityType,
+          ),
+        ),
+      )
+    ).every(Boolean);
+    if (stage?.status === 'complete' && expansionReady) {
       const settingsQueued = (await this.settingsSync?.reconcile()) === true ? 1 : 0;
       return { snapshotId: stage.snapshotId, queued: settingsQueued };
     }
-    if (stage === null) {
+    if (stage === null || (stage.status === 'complete' && !expansionReady)) {
       const snapshot = await this.snapshots.createPreSyncSnapshot();
       const verification = await this.snapshots.verifySnapshot(snapshot.snapshotId);
       if (!verification.valid) throw new Error('Verified pre-sync snapshot is required.');

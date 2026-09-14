@@ -163,7 +163,8 @@ export class IndexedDbSnapshotService implements SnapshotService {
     }
     const payload = await this.readPayload(record);
     if (payload === null) return invalidVerification('invalid_format');
-    if (!hasCompleteStoreManifest(payload.stores)) return invalidVerification('incomplete');
+    if (!hasCompleteStoreManifest(payload.stores, payload.database.version))
+      return invalidVerification('incomplete');
     const recordCount = payload.stores.reduce((count, store) => count + store.records.length, 0);
     if (recordCount !== record.recordCount) return invalidVerification('incomplete');
     const canonicalPayload = await canonicalStringify(payload);
@@ -283,9 +284,22 @@ function parseSnapshotPayload(value: unknown): SnapshotPayload | null {
   }
 }
 
-function hasCompleteStoreManifest(stores: readonly SnapshotStorePayload[]): boolean {
+function hasCompleteStoreManifest(
+  stores: readonly SnapshotStorePayload[],
+  version: number,
+): boolean {
   const actual = stores.map(({ name }) => name).sort();
-  const expected = Object.values(LIFE_OS_STORE).sort();
+  const added = new Set<string>([
+    'planningPeriods',
+    'periodMemberships',
+    'periodDecisions',
+    'contributionLinks',
+    'progressContributions',
+    'recurrenceRules',
+  ]);
+  const expected = Object.values(LIFE_OS_STORE)
+    .filter((name) => version >= 24 || !added.has(name))
+    .sort();
   return (
     actual.length === expected.length && actual.every((name, index) => name === expected[index])
   );

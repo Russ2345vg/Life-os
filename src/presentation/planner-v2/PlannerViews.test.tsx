@@ -38,7 +38,7 @@ describe('V2 views rendering', () => {
     expect(html).toContain('data-goal-status="active"');
     expect(html).toContain('draggable="true"');
     expect(html).toContain('Изменить цель');
-    expect(html).toContain('#/goals/g');
+    expect(html).toContain('#/v2/goals/g');
     expect(html).toContain('На паузе');
     expect(html).not.toContain('<progress');
     expect(html).not.toContain('На проверке');

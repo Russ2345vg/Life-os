@@ -1,3 +1,4 @@
+import type { GoalMeasurement } from '../../domain/planner/GoalMeasurement';
 import {
   type EntityId,
   Goal,
@@ -18,6 +19,8 @@ import type { IdGenerator } from '../ports/IdGenerator';
 import { goalFailure, validateGoalDirection } from './goalCommandSupport';
 
 export interface CreateGoalInput {
+  readonly measurement?: GoalMeasurement | null;
+  readonly dueDate?: string | null;
   readonly sphereId?: EntityId | null;
   readonly directionId?: EntityId | null;
   readonly title: string;
@@ -56,6 +59,8 @@ export class CreateGoal {
             ? (input.sphereId ?? null)
             : ((await this.directionRepository.findById(directionId))?.sphereId ?? null),
         title: input.title,
+        measurement: input.measurement ?? null,
+        dueDate: input.dueDate ?? null,
         ...(input.description === undefined ? {} : { description: input.description }),
         ...(input.whyImportant === undefined ? {} : { whyImportant: input.whyImportant }),
         ...(input.whyNow === undefined ? {} : { whyNow: input.whyNow }),

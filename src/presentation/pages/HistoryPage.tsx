@@ -503,6 +503,12 @@ function JournalTimelineRow({
   readonly onNavigateToSource: (date: DayDate) => void;
 }) {
   const context = journalContext(item);
+  const supersededCompletion =
+    item.entry.type === JOURNAL_ENTRY_TYPE.actionCompleted &&
+    item.lifeAction !== null &&
+    item.lifeAction.completionGeneration > 0 &&
+    (item.lifeAction.status !== 'completed' ||
+      item.lifeAction.completedAt?.getTime() !== item.entry.occurredAt.getTime());
   return (
     <li className="journal-event" id={`journal-entry-${item.entry.id.toString()}`}>
       <time dateTime={item.entry.occurredAt.toISOString()}>
@@ -527,6 +533,13 @@ function JournalTimelineRow({
         )}
         {relatedEntityUnavailable(item) ? (
           <span className="journal-unavailable">Связанная сущность недоступна</span>
+        ) : null}
+        {supersededCompletion ? (
+          <p>
+            {item.lifeAction?.status === 'draft'
+              ? 'Позднее отменено · сейчас открыто'
+              : 'Это выполнение позднее отменено'}
+          </p>
         ) : null}
         {context === null ? null : <p>{context}</p>}
         {item.entry.correction === null ? null : (
@@ -757,6 +770,7 @@ function relatedEntityUnavailable(item: JournalTimelineItem): boolean {
 }
 
 const JOURNAL_EVENT_LABELS: Readonly<Record<JournalEntryType, string>> = {
+  [JOURNAL_ENTRY_TYPE.planningChanged]: 'Планирование и прогресс',
   [JOURNAL_ENTRY_TYPE.dayStarted]: 'Начало дня',
   [JOURNAL_ENTRY_TYPE.decisionCreated]: 'Решение создано',
   [JOURNAL_ENTRY_TYPE.workSessionStarted]: 'Действие начато',

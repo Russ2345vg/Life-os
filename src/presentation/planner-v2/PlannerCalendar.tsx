@@ -19,6 +19,7 @@ export function PlannerCalendar({
   const [selected, setSelected] = useState(today);
   const [undated, setUndated] = useState(false);
   const month = selected.slice(0, 7);
+  const goals = data.goalsByDate.get(selected) ?? [];
   const actions = data.actionsByDate.get(selected) ?? [];
   return (
     <section aria-label="Календарь">
@@ -52,19 +53,22 @@ export function PlannerCalendar({
             </span>
           ))}
           {calendarMonthDays(selected).map((date) => {
+            const deadlines = data.goalsByDate.get(date) ?? [];
             const items = data.actionsByDate.get(date) ?? [];
             return (
               <button
                 type="button"
                 key={date}
                 className={`planner-calendar-day${date.slice(0, 7) !== month ? ' planner-calendar-day--outside' : ''}`}
-                aria-label={`${plannerDateLabel(date)}: ${items.length} действий`}
+                aria-label={`${plannerDateLabel(date)}: ${items.length} действий${deadlines.length ? `, ${deadlines.length} целей` : ''}`}
                 aria-pressed={date === selected}
                 aria-current={date === today ? 'date' : undefined}
                 onClick={() => setSelected(date)}
               >
                 <span className="planner-day-number">{Number(date.slice(-2))}</span>
-                {items.length > 0 && <span className="planner-day-count">{items.length}</span>}
+                {items.length + deadlines.length > 0 && (
+                  <span className="planner-day-count">{items.length + deadlines.length}</span>
+                )}
                 <span className="planner-day-preview" aria-hidden="true">
                   {items.slice(0, 2).map((a) => (
                     <span
@@ -86,11 +90,14 @@ export function PlannerCalendar({
           <p className="planner-muted" role="status">
             Действий: {actions.length}
           </p>
-          {!actions.length && (
+          {!actions.length && !goals.length && (
             <p className="planner-empty">
               На этот день ничего не запланировано. Выберите дату у существующего действия.
             </p>
           )}
+          {goals.map((goal) => (
+            <PlannerGoalCard key={goal.id.toString()} goal={goal} data={data} {...operations} />
+          ))}
           <PlannerBatch
             key={selected}
             items={actions}

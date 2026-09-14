@@ -1,3 +1,6 @@
+import { initialGoalContribution } from '../../domain/planner/InitialGoalContribution';
+import { planningJournal } from '../../application/planner/planningSupport';
+import { JournalEntryRecordMapper } from './mappers/JournalEntryRecordMapper';
 import type { GoalRepository } from '../../application';
 import type { EntityId, Goal } from '../../domain';
 import { DomainError } from '../../shared/errors/DomainError';
@@ -52,13 +55,40 @@ export class IndexedDbGoalRepository implements GoalRepository {
   public async create(goal: Goal): Promise<boolean> {
     const database = await this.indexedDb.open();
     const transaction = database.transaction(
-      [LIFE_OS_STORE.goals, ...PILOT_MUTATION_STORES],
+      [
+        LIFE_OS_STORE.goals,
+        LIFE_OS_STORE.progressContributions,
+        LIFE_OS_STORE.journal,
+        ...PILOT_MUTATION_STORES,
+      ],
       'readwrite',
     );
     const completion = observeTransaction(transaction);
     try {
       const record = GoalRecordMapper.toRecord(goal);
       await observeRequest(transaction.objectStore(LIFE_OS_STORE.goals).add(record));
+      const fact = initialGoalContribution(goal);
+      if (fact) {
+        await observeRequest(
+          transaction.objectStore(LIFE_OS_STORE.progressContributions).add(fact),
+        );
+        await observeRequest(
+          transaction
+            .objectStore(LIFE_OS_STORE.journal)
+            .add(
+              JournalEntryRecordMapper.toRecord(
+                planningJournal(
+                  `journal:${fact.id}`,
+                  'Goal',
+                  fact.goalId,
+                  'Начальное значение прогресса',
+                  goal.createdAt,
+                  { amount: fact.amount },
+                ),
+              ),
+            ),
+        );
+      }
       const recorded = await this.mutationRecorder.recordUpsert(transaction, 'goal', record);
       await completion;
       this.mutationRecorder.notifyCommitted(recorded);
@@ -85,7 +115,7 @@ export class IndexedDbGoalRepository implements GoalRepository {
       await settleTransaction(completion);
       return false;
     }
-    const record = GoalRecordMapper.toRecord(goal);
+    const record = { ...stored, ...GoalRecordMapper.toRecord(goal) };
     await observeRequest(store.put(record));
     const recorded = await this.mutationRecorder.recordUpsert(transaction, 'goal', record);
     await completion;

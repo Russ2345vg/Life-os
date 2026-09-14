@@ -1,3 +1,7 @@
+import {
+  commitCompletionContributions,
+  COMPLETION_CONTRIBUTION_STORES,
+} from './commitCompletionContributions';
 import type {
   CommitJournalStateInput,
   JournalUnitOfWork,
@@ -48,6 +52,11 @@ export class IndexedDbJournalUnitOfWork implements JournalUnitOfWork {
 
     try {
       await validateExpectedState(transaction, input);
+      if (input.lifeActions?.length)
+        await commitCompletionContributions(
+          transaction,
+          input.lifeActions.map((c) => c.lifeAction),
+        );
       const writes: Promise<unknown>[] = [];
       for (const change of input.days ?? []) {
         writes.push(
@@ -66,11 +75,13 @@ export class IndexedDbJournalUnitOfWork implements JournalUnitOfWork {
         );
       }
       for (const change of input.lifeActions ?? []) {
+        const store = transaction.objectStore(LIFE_OS_STORE.lifeActions);
+        const previous = await observeRequest<LifeActionRecord | undefined>(
+          store.get(change.lifeAction.id.toString()),
+        );
         writes.push(
           observeRequest(
-            transaction
-              .objectStore(LIFE_OS_STORE.lifeActions)
-              .put(LifeActionRecordMapper.toRecord(change.lifeAction)),
+            store.put({ ...previous, ...LifeActionRecordMapper.toRecord(change.lifeAction) }),
           ),
         );
       }
@@ -105,7 +116,14 @@ export class IndexedDbJournalUnitOfWork implements JournalUnitOfWork {
       for (const entry of input.journalEntries) {
         writes.push(observeRequest(journalStore.add(JournalEntryRecordMapper.toRecord(entry))));
       }
+      for (const r of input.planningSetup?.rules ?? [])
+        writes.push(observeRequest(transaction.objectStore(LIFE_OS_STORE.recurrenceRules).add(r)));
+      for (const l of input.planningSetup?.links ?? [])
+        writes.push(
+          observeRequest(transaction.objectStore(LIFE_OS_STORE.contributionLinks).add(l)),
+        );
       await Promise.all(writes);
+
       await completion;
       this.#mutationRecorder.notifyCommitted(pilotMutationRecorded);
     } catch (error: unknown) {
@@ -253,6 +271,12 @@ async function validateNoUnfinishedSession(store: IDBObjectStore): Promise<void>
 
 function collectStores(input: CommitJournalStateInput): string[] {
   const stores = new Set<string>([LIFE_OS_STORE.journal]);
+  if (input.planningSetup) {
+    stores.add(LIFE_OS_STORE.recurrenceRules);
+    stores.add(LIFE_OS_STORE.contributionLinks);
+  }
+  if (input.lifeActions?.length)
+    for (const store of COMPLETION_CONTRIBUTION_STORES) stores.add(store);
   if ((input.days?.length ?? 0) > 0) stores.add(LIFE_OS_STORE.days);
   if ((input.decisions?.length ?? 0) > 0) stores.add(LIFE_OS_STORE.decisions);
   if ((input.lifeActions?.length ?? 0) > 0) stores.add(LIFE_OS_STORE.lifeActions);

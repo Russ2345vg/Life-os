@@ -21,6 +21,50 @@ interface SnapshotPayloadView {
 }
 
 describe('IndexedDbSnapshotService', () => {
+  it('verifies a schema 23 backup after the schema 24 expansion', async () => {
+    const { database, service } = await createService('schema23');
+    const created = await service.createPreSyncSnapshot(),
+      opened = await database.open(),
+      stored = (await readSnapshotRecord(opened, created.snapshotId))!;
+    const payload = stored.payload as SnapshotPayloadView;
+    const added = new Set([
+      'planningPeriods',
+      'periodMemberships',
+      'periodDecisions',
+      'contributionLinks',
+      'progressContributions',
+      'recurrenceRules',
+    ]);
+    const oldPayload = {
+      ...payload,
+      database: { ...payload.database, version: 23 },
+      stores: payload.stores.filter((s) => !added.has(s.name)),
+    };
+    type Node = { type: string; value?: string; entries?: [string, Node][]; items?: Node[] };
+    const canonical = JSON.parse(stored.serializedPayload!) as Node;
+    const field = (node: Node, key: string) => node.entries!.find(([name]) => name === key)![1];
+    field(field(canonical, 'database'), 'version').value = '23';
+    const stores = field(canonical, 'stores');
+    stores.items = stores.items!.filter((store) => !added.has(field(store, 'name').value!));
+    const serializedPayload = JSON.stringify(canonical);
+    const digest = await crypto.subtle.digest(
+      'SHA-256',
+      new TextEncoder().encode(serializedPayload),
+    );
+    const sha256 = [...new Uint8Array(digest)].map((v) => v.toString(16).padStart(2, '0')).join('');
+    await writeSnapshotRecord(opened, {
+      ...stored,
+      databaseVersion: 23,
+      payload: oldPayload,
+      serializedPayload,
+      sha256,
+    });
+    await expect(service.verifySnapshot(created.snapshotId)).resolves.toMatchObject({
+      valid: true,
+    });
+    database.close();
+  });
+
   it('keeps the recoverable snapshot payload encrypted at rest when secure storage is available', async () => {
     const database = new LifeOsIndexedDb(new IDBFactory());
     const payloads = new Map<string, string>();

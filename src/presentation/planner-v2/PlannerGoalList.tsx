@@ -1,3 +1,5 @@
+import { PlanningProgress } from './PlanningProgress';
+import { usePlanning } from './PlanningContext';
 import { useState } from 'react';
 import type { Direction, Goal, LifeAction, Sphere } from '../../domain';
 import { VoiceField } from '../voice-input/VoiceField';
@@ -225,7 +227,7 @@ export function PlannerGoalList({
           >
             <a
               className="planner-goal-title"
-              href={`#/goals/${encodeURIComponent(goal.id.toString())}`}
+              href={`#/v2/goals/${encodeURIComponent(goal.id.toString())}`}
             >
               {goal.title}
             </a>
@@ -265,6 +267,14 @@ export function PlannerGoalContext({
   return context ? <p className="planner-muted">{context}</p> : null;
 }
 export function PlannerGoalProgress({ goal }: { readonly goal: Goal }) {
+  const planning = usePlanning();
+  if (goal.measurement && planning)
+    return (
+      <PlanningProgress
+        goal={planning.state?.goals.find((g) => g.id.toString() === goal.id.toString()) ?? goal}
+        date={planning.today}
+      />
+    );
   const progress = measuredGoalProgress(goal);
   return progress ? (
     <div className="planner-measured-progress">

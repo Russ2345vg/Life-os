@@ -25,7 +25,7 @@ describe('planner invariants', () => {
     expect(() => inboxIdea(source)).toThrow();
     expect(() => inboxIdea({ ...source, title: 'Idea', status: 'converted' })).toThrow();
   });
-  it('limits focus to five unique references and allows removal/re-add', () => {
+  it('allows focus above the recommendation with unique references and removal/re-add', () => {
     const base = focusPeriod({
       ...focusWeek('2026-09-13'),
       goals: [],
@@ -36,7 +36,7 @@ describe('planner invariants', () => {
     let current = base;
     for (let i = 0; i < 5; i++)
       current = changeFocusRole(current, String(i), 'supporting', '2026-09-13');
-    expect(() => changeFocusRole(current, '6', 'primary', '2026-09-13')).toThrow();
+    expect(changeFocusRole(current, '6', 'primary', '2026-09-13').goals).toHaveLength(6);
     expect(changeFocusRole(current, '0', 'supporting', '2026-09-13')).toBe(current);
     current = changeFocusRole(current, '0', null, '2026-09-13');
     expect(changeFocusRole(current, '0', 'primary', '2026-09-13').goals).toHaveLength(5);

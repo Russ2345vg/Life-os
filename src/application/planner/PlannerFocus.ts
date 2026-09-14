@@ -1,3 +1,5 @@
+import type { PeriodPlanning } from './PeriodPlanning';
+import { automaticPeriod } from '../../domain/planner/PlanningPeriod';
 import { EntityId } from '../../domain';
 import {
   changeFocusRole,
@@ -15,11 +17,36 @@ export class PlannerFocus {
     readonly repository: PlannerRepository,
     readonly goals: GoalRepository,
     readonly clock: Clock,
+    readonly periods?: PeriodPlanning,
   ) {}
-  get(date: string) {
+  async get(date: string) {
+    if (this.periods) {
+      const state = await this.periods.load(),
+        key = automaticPeriod('week', date).id,
+        p = state.periods.find((v) => v.id === key);
+      if (!p) return null;
+      return {
+        id: focusWeek(date).id,
+        startDate: p.startDate,
+        endDate: p.endDate,
+        goals: state.memberships
+          .filter((m) => m.periodId === key && !m.removed && m.focused && m.entityType === 'goal')
+          .map((m) => ({
+            goalId: m.entityId,
+            role: (p.primaryGoalId === m.entityId ? 'primary' : 'supporting') as FocusRole,
+          })),
+        updatedAt: p.updatedAt,
+        version: p.version,
+        schemaVersion: 1 as const,
+      };
+    }
     return this.repository.getFocus(focusWeek(date).id);
   }
   async setRole(date: string, goalId: string, role: FocusRole | null) {
+    if (this.periods) {
+      await this.periods.setFocus('week', date, goalId, role);
+      return this.get(date);
+    }
     const goal = await this.goals.findById(EntityId.create(goalId));
     if (role !== null && goal?.status !== 'active')
       throw new DomainError('focus.inactive_goal', 'В фокус можно добавить только активную цель.');

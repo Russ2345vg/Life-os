@@ -4,6 +4,7 @@ import { copyDate } from '../shared/dateCopy';
 import { DomainError } from '../../shared/errors/DomainError';
 
 export const JOURNAL_ENTRY_TYPE = {
+  planningChanged: 'planningChanged',
   dayStarted: 'dayStarted',
   decisionCreated: 'decisionCreated',
   workSessionStarted: 'workSessionStarted',
@@ -23,6 +24,9 @@ export const JOURNAL_ENTRY_TYPE = {
 export type JournalEntryType = (typeof JOURNAL_ENTRY_TYPE)[keyof typeof JOURNAL_ENTRY_TYPE];
 
 export const JOURNAL_SUBJECT_TYPE = {
+  goal: 'Goal',
+  planningPeriod: 'PlanningPeriod',
+  recurrenceRule: 'RecurrenceRule',
   day: 'Day',
   decision: 'Decision',
   lifeAction: 'LifeAction',

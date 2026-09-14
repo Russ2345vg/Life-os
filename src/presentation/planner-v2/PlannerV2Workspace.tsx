@@ -1,3 +1,6 @@
+import type { PlanningServices } from '../../application/planner/PlanningServices';
+import { PlanningProvider } from './PlanningContext';
+import { PlanningWorkspace } from './PlanningWorkspace';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   CreateGoal,
@@ -23,6 +26,7 @@ import './planner-v2.css';
 import { PlannerLibraryWorkspace, type PlannerLibraryServices } from './PlannerLibraryWorkspace';
 
 export interface PlannerV2Services extends PlannerLibraryServices {
+  readonly planning?: PlanningServices;
   readonly createLifeActionDraft: Pick<CreateLifeActionDraft, 'execute'>;
   readonly createGoal: Pick<CreateGoal, 'execute'>;
   readonly completeLifeAction: Pick<CompleteLifeAction, 'execute'>;
@@ -145,7 +149,7 @@ export function PlannerV2Workspace({
       aria-current={
         route.view === target.view ||
         ('section' in route && route.section === target.view) ||
-        (target.view === 'goals' && ['focus', 'new-goal'].includes(route.view)) ||
+        (target.view === 'goals' && ['focus', 'new-goal', 'goal'].includes(route.view)) ||
         (target.view === 'actions' && ['action', 'new-action'].includes(route.view))
           ? 'page'
           : undefined
@@ -162,183 +166,206 @@ export function PlannerV2Workspace({
     </a>
   );
   return (
-    <div className="planner-v2">
-      <a
-        className="planner-skip"
-        href="#planner-main-content"
-        onClick={(event) => {
-          event.preventDefault();
-          mainContent.current?.focus();
-        }}
-      >
-        К содержимому
-      </a>
-      <aside className="planner-sidebar">
+    <PlanningProvider
+      services={services.planning}
+      refreshToken={data}
+      today={currentDate.toString()}
+    >
+      <div className="planner-v2">
         <a
-          className="planner-brand"
-          href="#/v2/today"
+          className="planner-skip"
+          href="#planner-main-content"
           onClick={(event) => {
             event.preventDefault();
-            today();
+            mainContent.current?.focus();
           }}
         >
-          LifeOS<span>V2</span>
+          К содержимому
         </a>
-        <nav aria-label="Рабочий интерфейс">
-          {navLink({ view: 'today' }, 'Сегодня', 'today')}
-          {navLink({ view: 'goals' }, 'Цели', 'goals')}
-          {navLink({ view: 'actions' }, 'Действия', 'actions')}
-          {navLink({ view: 'inbox' }, 'Входящие', 'history')}
-        </nav>
-        <button className="planner-rollback" type="button" onClick={onExit}>
-          Старая версия
-        </button>
-      </aside>
-      <main
-        ref={mainContent}
-        id="planner-main-content"
-        className={`planner-content${'section' in route ? ' planner-content--views' : ''}`}
-        tabIndex={-1}
-      >
-        {notice ? (
-          <p className="planner-notice" role="status">
-            {notice}
-          </p>
-        ) : null}
-        {error ? (
-          <div className="planner-error" role="alert">
-            <p>{error}</p>
-            <button
-              type="button"
-              onClick={() => {
-                void load().catch(report);
-              }}
-            >
-              Повторить загрузку
-            </button>
-          </div>
-        ) : null}
-        {['goals', 'focus', 'actions', 'action', 'inbox', 'kanban', 'calendar', 'tree'].includes(
-          route.view,
-        ) ? (
-          <PlannerLibraryWorkspace
-            key={buildPlannerV2Route(route)}
-            services={services}
-            route={route}
-            today={currentDate.toString()}
-            onNavigate={navigate}
-          />
-        ) : data === null ? (
-          !error && <p role="status">Загружаем…</p>
-        ) : route.view === 'today' ? (
-          <PlannerToday
-            date={currentDate}
-            overview={data.overview}
-            goals={data.goals}
-            busy={busy}
-            onNewAction={() => onNavigate({ view: 'new-action', goalId: null, title: null })}
-            onComplete={(id) => {
-              void run(
-                () => completePlannerAction(services.completeLifeAction, id),
-                'Действие выполнено',
-              );
+        <aside className="planner-sidebar">
+          <a
+            className="planner-brand"
+            href="#/v2/today"
+            onClick={(event) => {
+              event.preventDefault();
+              today();
             }}
-            onPlan={(id, main) => {
-              void run(
-                () =>
-                  planPlannerAction(services.setLifeActionPlan, id, currentDate.toString(), main),
-                main ? 'Главное действие выбрано' : 'План сохранён',
-              );
-            }}
-            onQuickAdd={async (title) => {
-              setBusy(true);
-              try {
-                await submitPlannerAction(services.createLifeActionDraft, {
-                  ...emptyActionDraft(),
-                  title,
-                  date: currentDate.toString(),
-                });
-                setNotice('Действие добавлено на сегодня');
-                await load().catch(report);
-              } finally {
-                setBusy(false);
-              }
-            }}
-          />
-        ) : route.view === 'new-action' ? (
-          <PlannerActionForm
-            key={buildPlannerV2Route(route)}
-            goals={data.goals}
-            initialGoalId={route.goalId}
-            initialTitle={route.title}
-            currentDate={currentDate.toString()}
-            onCancel={today}
-            onSubmit={async (draft) => {
-              const generation = routeGeneration.current;
-              await finishPlannerSubmission(
-                () => submitPlannerAction(services.createLifeActionDraft, draft),
-                () => generation === routeGeneration.current,
-                () => {
-                  setNotice(
-                    draft.date === currentDate.toString()
-                      ? 'Действие добавлено на сегодня'
-                      : draft.date
-                        ? `Действие сохранено на ${draft.date}`
-                        : 'Действие сохранено в блоке «Без даты»',
-                  );
-                  today();
-                },
-              );
-            }}
-          />
-        ) : createdGoal ? (
-          <section className="planner-goal-success">
-            <p className="planner-eyebrow" role="status">
-              Цель создана
+          >
+            LifeOS<span>V2</span>
+          </a>
+          <nav aria-label="Рабочий интерфейс">
+            {navLink({ view: 'today' }, 'Сегодня', 'today')}
+            {navLink({ view: 'goals' }, 'Цели', 'goals')}
+            {navLink({ view: 'actions' }, 'Действия', 'actions')}
+            {navLink({ view: 'planning' }, 'Планирование', 'today')}
+            {navLink({ view: 'inbox' }, 'Входящие', 'history')}
+          </nav>
+          <button className="planner-rollback" type="button" onClick={onExit}>
+            Старая версия
+          </button>
+        </aside>
+        <main
+          ref={mainContent}
+          id="planner-main-content"
+          className={`planner-content${'section' in route ? ' planner-content--views' : ''}`}
+          tabIndex={-1}
+        >
+          {notice ? (
+            <p className="planner-notice" role="status">
+              {notice}
             </p>
-            <h1>{createdGoal.title}</h1>
-            {createdGoal.achievementCriteria ? <p>{createdGoal.achievementCriteria}</p> : null}
-            <p className="planner-muted">
-              {createdGoal.directionId === null
-                ? 'Направление можно выбрать позже.'
-                : 'Направление сохранено.'}
-            </p>
-            {createdGoal.nextProgress ? <p>Первый шаг: {createdGoal.nextProgress}</p> : null}
-            <div className="planner-form-actions">
+          ) : null}
+          {error ? (
+            <div className="planner-error" role="alert">
+              <p>{error}</p>
               <button
-                className="planner-primary"
                 type="button"
-                onClick={() =>
-                  onNavigate({
-                    view: 'new-action',
-                    goalId: createdGoal.id.toString(),
-                    title: createdGoal.nextProgress,
-                  })
-                }
+                onClick={() => {
+                  void load().catch(report);
+                }}
               >
-                Добавить действие
+                Повторить загрузку
               </button>
-              <a href={`#/goals/${encodeURIComponent(createdGoal.id.toString())}`}>Открыть цель</a>
             </div>
-          </section>
-        ) : (
-          <PlannerGoalForm
-            directions={data.directions}
-            onCancel={today}
-            onSubmit={async (draft) => {
-              const generation = routeGeneration.current;
-              await finishPlannerSubmission(
-                () => submitPlannerGoal(services.createGoal, draft),
-                () => generation === routeGeneration.current,
-                (goal) => {
-                  setCreatedGoal(goal);
-                  setNotice(null);
-                },
-              );
-            }}
-          />
-        )}
-      </main>
-    </div>
+          ) : null}
+          {route.view === 'planning' ? (
+            <PlanningWorkspace
+              today={currentDate.toString()}
+              services={services}
+              onNavigate={navigate}
+            />
+          ) : [
+              'goal',
+              'goals',
+              'focus',
+              'actions',
+              'action',
+              'inbox',
+              'kanban',
+              'calendar',
+              'tree',
+            ].includes(route.view) ? (
+            <PlannerLibraryWorkspace
+              key={buildPlannerV2Route(route)}
+              services={services}
+              route={route}
+              today={currentDate.toString()}
+              onNavigate={navigate}
+            />
+          ) : data === null ? (
+            !error && <p role="status">Загружаем…</p>
+          ) : route.view === 'today' ? (
+            <PlannerToday
+              date={currentDate}
+              overview={data.overview}
+              goals={data.goals}
+              busy={busy}
+              onNewAction={() => onNavigate({ view: 'new-action', goalId: null, title: null })}
+              onComplete={(id) => {
+                void run(
+                  () => completePlannerAction(services.completeLifeAction, id),
+                  'Действие выполнено',
+                );
+              }}
+              onPlan={(id, main) => {
+                void run(
+                  () =>
+                    planPlannerAction(services.setLifeActionPlan, id, currentDate.toString(), main),
+                  main ? 'Главное действие выбрано' : 'План сохранён',
+                );
+              }}
+              onQuickAdd={async (title) => {
+                setBusy(true);
+                try {
+                  await submitPlannerAction(services.createLifeActionDraft, {
+                    ...emptyActionDraft(),
+                    title,
+                    date: currentDate.toString(),
+                  });
+                  setNotice('Действие добавлено на сегодня');
+                  await load().catch(report);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            />
+          ) : route.view === 'new-action' ? (
+            <PlannerActionForm
+              key={buildPlannerV2Route(route)}
+              goals={data.goals}
+              initialGoalId={route.goalId}
+              initialTitle={route.title}
+              currentDate={currentDate.toString()}
+              onCancel={today}
+              onSubmit={async (draft) => {
+                const generation = routeGeneration.current;
+                await finishPlannerSubmission(
+                  () => submitPlannerAction(services.createLifeActionDraft, draft),
+                  () => generation === routeGeneration.current,
+                  () => {
+                    setNotice(
+                      draft.date === currentDate.toString()
+                        ? 'Действие добавлено на сегодня'
+                        : draft.date
+                          ? `Действие сохранено на ${draft.date}`
+                          : 'Действие сохранено в блоке «Без даты»',
+                    );
+                    today();
+                  },
+                );
+              }}
+            />
+          ) : createdGoal ? (
+            <section className="planner-goal-success">
+              <p className="planner-eyebrow" role="status">
+                Цель создана
+              </p>
+              <h1>{createdGoal.title}</h1>
+              {createdGoal.achievementCriteria ? <p>{createdGoal.achievementCriteria}</p> : null}
+              <p className="planner-muted">
+                {createdGoal.directionId === null
+                  ? 'Направление можно выбрать позже.'
+                  : 'Направление сохранено.'}
+              </p>
+              {createdGoal.nextProgress ? <p>Первый шаг: {createdGoal.nextProgress}</p> : null}
+              <div className="planner-form-actions">
+                <button
+                  className="planner-primary"
+                  type="button"
+                  onClick={() =>
+                    onNavigate({
+                      view: 'new-action',
+                      goalId: createdGoal.id.toString(),
+                      title: createdGoal.nextProgress,
+                    })
+                  }
+                >
+                  Добавить действие
+                </button>
+                <a href={`#/goals/${encodeURIComponent(createdGoal.id.toString())}`}>
+                  Открыть цель
+                </a>
+              </div>
+            </section>
+          ) : (
+            <PlannerGoalForm
+              directions={data.directions}
+              onCancel={today}
+              onSubmit={async (draft) => {
+                const generation = routeGeneration.current;
+                await finishPlannerSubmission(
+                  () => submitPlannerGoal(services.createGoal, draft),
+                  () => generation === routeGeneration.current,
+                  (goal) => {
+                    setCreatedGoal(goal);
+                    setNotice(null);
+                  },
+                );
+              }}
+            />
+          )}
+        </main>
+      </div>
+    </PlanningProvider>
   );
 }

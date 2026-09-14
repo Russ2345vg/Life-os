@@ -9,10 +9,62 @@ import {
   JournalEntry,
 } from '../../domain';
 import type { JournalTimelineItem, JournalTimelineResult } from '../../application';
+import { GetJournalTimeline } from '../../application/queries/GetJournalTimeline';
+import {
+  completeLifeAction,
+  createReadyLifeAction,
+} from '../../test/helpers/LifeActionTestFactory';
+import {
+  TestDecisionRepository,
+  TestJournalRepository,
+  TestLifeActionRepository,
+  TestSphereRepository,
+} from '../../test/helpers/TestRepositories';
 import { groupJournalItems } from '../journalTimelineFilters';
 import { JournalTimelineContent } from './HistoryPage';
 
 describe('Journal timeline presentation', () => {
+  it('marks a historical completion as later reopened while retaining completion and correction events', async () => {
+    const date = DayDate.create('2026-08-01'),
+      completedAt = new Date('2026-08-01T09:00:00+09:00'),
+      reopenedAt = new Date('2026-08-01T10:00:00+09:00'),
+      action = completeLifeAction(createReadyLifeAction('action', date)),
+      journal = new TestJournalRepository();
+    action.reopen(reopenedAt);
+    await journal.appendMany([
+      JournalEntry.create({
+        id: EntityId.create('completion'),
+        type: JOURNAL_ENTRY_TYPE.actionCompleted,
+        occurredAt: completedAt,
+        effectiveDate: date,
+        subjectType: JOURNAL_SUBJECT_TYPE.lifeAction,
+        subjectId: action.id,
+        labelAtEvent: action.title.toString(),
+        createdAt: completedAt,
+      }),
+      JournalEntry.create({
+        id: EntityId.create('reopen'),
+        type: JOURNAL_ENTRY_TYPE.planningChanged,
+        occurredAt: reopenedAt,
+        effectiveDate: date,
+        subjectType: JOURNAL_SUBJECT_TYPE.lifeAction,
+        subjectId: action.id,
+        labelAtEvent: 'Выполнение отменено',
+        createdAt: reopenedAt,
+      }),
+    ]);
+    const timeline = await new GetJournalTimeline(
+      journal,
+      new TestDecisionRepository(),
+      new TestLifeActionRepository([action]),
+      new TestSphereRepository(),
+    ).execute({ startDate: date, endDate: date });
+    const markup = renderToStaticMarkup(createElement(JournalTimelineContent, { data: timeline }));
+    expect(timeline.items).toHaveLength(2);
+    expect(markup).toContain('Действие завершено');
+    expect(markup).toContain('Выполнение отменено');
+    expect(markup).toContain('Позднее отменено · сейчас открыто');
+  });
   it('groups dates newest first and events inside a day chronologically', () => {
     const items = [
       item('second-day', '2026-08-10', '2026-08-10T09:00:00.000+09:00'),

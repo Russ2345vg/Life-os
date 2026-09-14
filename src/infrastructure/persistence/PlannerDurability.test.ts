@@ -42,7 +42,8 @@ describe('planner durable transaction boundary', () => {
         payloads.find((p) => p.entityType === 'inbox_idea' && p.record?.status === 'converted')
           ?.record?.targetId,
       ).toBe(result.targetId);
-      expect(payloads.filter((p) => p.entityType === 'focus_period')).toHaveLength(1);
+      expect(payloads.filter((p) => p.entityType === 'planning_period')).toHaveLength(1);
+      expect(payloads.filter((p) => p.entityType === 'period_membership')).toHaveLength(1);
     } finally {
       database.close();
     }

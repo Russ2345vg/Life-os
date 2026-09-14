@@ -1,4 +1,10 @@
+import type { ActionPriority, ActionOccurrence } from '../../../domain/planner/RecurrenceRule';
 export interface LifeActionRecord {
+  readonly priority?: ActionPriority | null;
+  readonly occurrence?: ActionOccurrence | null;
+  readonly completionGeneration?: number;
+  readonly expectedContributions?: readonly { id: string; goalId: string }[] | null;
+  readonly completedOn?: string | null;
   readonly schemaVersion: 1;
   readonly id: string;
   readonly title: string;

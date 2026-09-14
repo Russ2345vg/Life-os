@@ -45,9 +45,15 @@ interface MutationCaptureConfiguration {
 }
 
 export const LIFE_OS_DATABASE_NAME = 'lifeos';
-export const LIFE_OS_DATABASE_VERSION = 23;
+export const LIFE_OS_DATABASE_VERSION = 24;
 
 export const LIFE_OS_DOMAIN_STORE = {
+  planningPeriods: 'planningPeriods',
+  periodMemberships: 'periodMemberships',
+  periodDecisions: 'periodDecisions',
+  contributionLinks: 'contributionLinks',
+  progressContributions: 'progressContributions',
+  recurrenceRules: 'recurrenceRules',
   days: 'days',
   decisions: 'decisions',
   lifeActions: 'lifeActions',
@@ -224,6 +230,19 @@ export class LifeOsIndexedDb {
           if (oldVersion < 21) createVersionTwentyOneSchema(request.transaction);
           if (oldVersion < 23) {
             for (const store of [LIFE_OS_STORE.inboxIdeas, LIFE_OS_STORE.focusPeriods]) {
+              if (!request.result.objectStoreNames.contains(store))
+                request.result.createObjectStore(store, { keyPath: 'id' });
+            }
+          }
+          if (oldVersion < 24) {
+            for (const store of [
+              LIFE_OS_STORE.planningPeriods,
+              LIFE_OS_STORE.periodMemberships,
+              LIFE_OS_STORE.periodDecisions,
+              LIFE_OS_STORE.contributionLinks,
+              LIFE_OS_STORE.progressContributions,
+              LIFE_OS_STORE.recurrenceRules,
+            ]) {
               if (!request.result.objectStoreNames.contains(store))
                 request.result.createObjectStore(store, { keyPath: 'id' });
             }

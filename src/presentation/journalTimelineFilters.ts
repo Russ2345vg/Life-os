@@ -179,6 +179,7 @@ export function journalItemState(item: JournalTimelineItem): JournalStateFilter 
 const JOURNAL_ENTRY_STATE: Readonly<
   Record<JournalEntryType, Exclude<JournalStateFilter, 'all' | 'interrupted'>>
 > = {
+  [JOURNAL_ENTRY_TYPE.planningChanged]: JOURNAL_STATE_FILTER.corrected,
   [JOURNAL_ENTRY_TYPE.dayStarted]: JOURNAL_STATE_FILTER.started,
   [JOURNAL_ENTRY_TYPE.decisionCreated]: JOURNAL_STATE_FILTER.created,
   [JOURNAL_ENTRY_TYPE.workSessionStarted]: JOURNAL_STATE_FILTER.started,

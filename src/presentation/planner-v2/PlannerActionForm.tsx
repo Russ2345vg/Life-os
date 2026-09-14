@@ -1,3 +1,5 @@
+import { defaultRecurrence, RecurrenceFields } from './RecurrenceFields';
+import { usePlanning } from './PlanningContext';
 import { useRef, useState } from 'react';
 import { VoiceField } from '../voice-input/VoiceField';
 import { VoiceTextInput } from '../voice-input/VoiceTextInput';
@@ -23,6 +25,7 @@ export function PlannerActionForm({
   readonly initialGoalId?: string | null;
   readonly initialTitle?: string | null;
 }) {
+  const planning = usePlanning();
   const [draft, setDraft] = useState(() => emptyActionDraft(initialGoalId, initialTitle));
   const [busy, setBusy] = useState(false);
   const saving = useRef(false);
@@ -129,6 +132,126 @@ export function PlannerActionForm({
             ) : null}
           </span>
         </label>
+        <details className="planner-details">
+          <summary>Повторение</summary>
+          <label>
+            <input
+              type="checkbox"
+              checked={draft.recurrence !== null}
+              onChange={(e) =>
+                change(
+                  'recurrence',
+                  e.target.checked
+                    ? defaultRecurrence(
+                        draft.title,
+                        draft.date || currentDate,
+                        draft.goalId || null,
+                      )
+                    : null,
+                )
+              }
+            />{' '}
+            Повторять действие
+          </label>
+          {draft.recurrence && (
+            <RecurrenceFields
+              value={draft.recurrence}
+              onChange={(value) => change('recurrence', value)}
+            />
+          )}
+        </details>
+        {planning && (
+          <details className="planner-details">
+            <summary>Вклад в цели</summary>
+            <p className="planner-muted">
+              Добавьте явные связи. Обычная связь с целью не меняет прогресс.
+            </p>
+            {draft.contributions.map((link, index) => (
+              <div className="planner-form-columns" key={index}>
+                <label>
+                  Измеримая цель
+                  <select
+                    value={link.goalId}
+                    onChange={(e) =>
+                      change(
+                        'contributions',
+                        draft.contributions.map((v, i) =>
+                          i === index ? { ...v, goalId: e.target.value } : v,
+                        ),
+                      )
+                    }
+                  >
+                    <option value="">Выберите цель</option>
+                    {planning.state?.goals
+                      .filter((g) => g.measurement && g.status !== 'archived')
+                      .map((g) => (
+                        <option key={g.id.toString()} value={g.id.toString()}>
+                          {g.title}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <label>
+                  Вклад
+                  <select
+                    value={link.mode}
+                    onChange={(e) =>
+                      change(
+                        'contributions',
+                        draft.contributions.map((v, i) =>
+                          i === index ? { ...v, mode: e.target.value as 'fixed' | 'actual' } : v,
+                        ),
+                      )
+                    }
+                  >
+                    <option value="fixed">Фиксированный</option>
+                    <option value="actual">По факту</option>
+                  </select>
+                </label>
+                {link.mode === 'fixed' && (
+                  <label>
+                    Величина
+                    <input
+                      type="number"
+                      step="any"
+                      value={link.amount}
+                      onChange={(e) =>
+                        change(
+                          'contributions',
+                          draft.contributions.map((v, i) =>
+                            i === index ? { ...v, amount: Number(e.target.value) } : v,
+                          ),
+                        )
+                      }
+                    />
+                  </label>
+                )}
+                <button
+                  type="button"
+                  onClick={() =>
+                    change(
+                      'contributions',
+                      draft.contributions.filter((_, i) => i !== index),
+                    )
+                  }
+                >
+                  Убрать
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() =>
+                change('contributions', [
+                  ...draft.contributions,
+                  { goalId: '', mode: 'fixed', amount: 1 },
+                ])
+              }
+            >
+              Добавить связь с целью
+            </button>
+          </details>
+        )}
         <details className="planner-details">
           <summary>Дополнительно</summary>
           <div className="planner-details-body">

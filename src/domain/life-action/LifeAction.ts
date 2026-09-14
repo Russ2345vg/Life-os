@@ -1,3 +1,4 @@
+import type { ActionPriority, ActionOccurrence } from '../planner/RecurrenceRule';
 import { DomainError } from '../../shared/errors/DomainError';
 import { DayDate } from '../day/DayDate';
 import type { DomainEvent } from '../shared/DomainEvent';
@@ -51,6 +52,11 @@ export interface LifeActionDetailsUpdateInput {
 }
 
 export interface LifeActionRehydrationData {
+  readonly priority?: ActionPriority | null;
+  readonly occurrence?: ActionOccurrence | null;
+  readonly completionGeneration?: number;
+  readonly expectedContributions?: readonly { id: string; goalId: string }[] | null;
+  readonly completedOn?: string | null;
   readonly id: EntityId;
   readonly title: LifeActionTitle;
   readonly description: string | null;
@@ -74,6 +80,11 @@ export interface LifeActionRehydrationData {
 }
 
 export class LifeAction extends Entity {
+  #priority: ActionPriority | null;
+  #occurrence: ActionOccurrence | null;
+  #completionGeneration: number;
+  #expectedContributions: readonly { id: string; goalId: string }[] | null;
+  #completedOn: string | null;
   #title: LifeActionTitle;
   #description: string | null;
   readonly #decisionId: EntityId | null;
@@ -97,6 +108,26 @@ export class LifeAction extends Entity {
 
   private constructor(data: LifeActionRehydrationData, domainEvents: DomainEvent[]) {
     super(data.id);
+    this.#expectedContributions = data.expectedContributions ?? null;
+    if (
+      this.#expectedContributions !== null &&
+      (!Array.isArray(this.#expectedContributions) ||
+        this.#expectedContributions.some(
+          (v) =>
+            !v || typeof v.id !== 'string' || !v.id || typeof v.goalId !== 'string' || !v.goalId,
+        ))
+    )
+      throw new DomainError('progress.invalid_manifest', 'Неверный список ожидаемых вкладов.');
+    this.#completedOn = data.completedOn ?? data.completedAt?.toISOString().slice(0, 10) ?? null;
+    if (this.#completedOn !== null) DayDate.create(this.#completedOn);
+    this.#priority = null;
+    this.#occurrence = null;
+    this.#completionGeneration = data.completionGeneration ?? 0;
+    if (!Number.isInteger(this.#completionGeneration) || this.#completionGeneration < 0)
+      throw new DomainError('life_action.invalid_generation', 'Неверное поколение выполнения.');
+    this.validatePlanningMetadata(data.priority ?? null, data.occurrence ?? null);
+    this.#priority = data.priority ?? null;
+    this.#occurrence = data.occurrence ? Object.freeze({ ...data.occurrence }) : null;
     this.#title = data.title;
     this.#description = normalizeOptionalDescription(data.description);
     this.#expectedResult = data.expectedResult;
@@ -117,6 +148,121 @@ export class LifeAction extends Entity {
     this.#rescheduleCount = data.rescheduleCount;
     this.#version = data.version;
     this.#domainEvents = domainEvents;
+  }
+
+  public get expectedContributions() {
+    return this.#expectedContributions;
+  }
+  public recordContributionManifest(values: readonly { id: string; goalId: string }[]): void {
+    if (
+      this.#status !== 'completed' ||
+      (values.length === 0 && this.#expectedContributions === null)
+    )
+      return;
+    const entries = new Map(
+      [...(this.#expectedContributions ?? []), ...values].map((v) => [v.id, v]),
+    );
+    const next = [...entries.values()].sort((a, b) => a.id.localeCompare(b.id));
+    if (JSON.stringify(next) === JSON.stringify(this.#expectedContributions)) return;
+    this.#expectedContributions = Object.freeze(next.map((v) => Object.freeze({ ...v })));
+    this.#version++;
+  }
+  public reviseRecurrence(
+    title: LifeActionTitle,
+    goalId: EntityId | null,
+    priority: ActionPriority | null,
+    date: DayDate,
+    revision: number,
+  ): void {
+    if (!this.#occurrence || this.#status !== LIFE_ACTION_STATUS.draft) return;
+    assertLifeActionTitle(title);
+    assertDayDate(date);
+    this.#title = title;
+    this.setGoal(goalId);
+    if (!this.#occurrence.manualDate) this.setPlan(date, this.#isNext);
+    this.setPlanningMetadata({
+      priority,
+      occurrence: { ...this.#occurrence, ruleRevision: revision },
+    });
+    this.#version++;
+  }
+  public get completedOn(): string | null {
+    return this.#completedOn;
+  }
+  public get priority(): ActionPriority | null {
+    return this.#priority;
+  }
+  public get occurrence(): ActionOccurrence | null {
+    return this.#occurrence;
+  }
+  public get completionGeneration(): number {
+    return this.#completionGeneration;
+  }
+  public get completionKey(): string {
+    return `${this.id.toString()}:completion:${this.#completionGeneration}`;
+  }
+  public setPlanningMetadata(input: {
+    priority?: ActionPriority | null;
+    occurrence?: ActionOccurrence | null;
+  }): void {
+    this.assertNotArchived();
+    const priority = input.priority === undefined ? this.#priority : input.priority;
+    const occurrence = input.occurrence === undefined ? this.#occurrence : input.occurrence;
+    this.validatePlanningMetadata(priority, occurrence);
+    if (
+      priority === this.#priority &&
+      JSON.stringify(occurrence) === JSON.stringify(this.#occurrence)
+    )
+      return;
+    this.#priority = priority;
+    this.#occurrence = occurrence ? Object.freeze({ ...occurrence }) : null;
+    this.#version += 1;
+  }
+  private validatePlanningMetadata(
+    priority: ActionPriority | null,
+    occurrence: ActionOccurrence | null,
+  ): void {
+    if (priority !== null && !['high', 'normal', 'low'].includes(priority))
+      throw new DomainError('life_action.invalid_priority', 'Неверный приоритет.');
+    if (occurrence !== null) {
+      if (
+        !occurrence.ruleId ||
+        !occurrence.slot ||
+        !Number.isInteger(occurrence.ruleRevision) ||
+        occurrence.ruleRevision < 1
+      )
+        throw new DomainError('life_action.invalid_occurrence', 'Неверное повторение.');
+      DayDate.create(occurrence.originalDate);
+    }
+  }
+  public restoreScheduledOccurrence(): void {
+    if (
+      !this.#occurrence ||
+      this.#status !== 'cancelled' ||
+      this.#cancelReason?.toString() !== 'Расписание временно недоступно'
+    )
+      return;
+    this.#status = LIFE_ACTION_STATUS.draft;
+    this.#cancelledAt = null;
+    this.#cancelReason = null;
+    this.#readyAt = null;
+    this.#expectedResult = null;
+    this.#startedAt = null;
+    this.#version++;
+  }
+  public reopen(occurredAt: Date): void {
+    this.assertNotArchived();
+    assertValidDate(occurredAt, 'Время повторного открытия');
+    if (this.#status !== LIFE_ACTION_STATUS.completed) return;
+    this.#status = LIFE_ACTION_STATUS.draft;
+    this.#actualResult = null;
+    this.#completedAt = null;
+    this.#completedOn = null;
+    this.#startedAt = null;
+    this.#readyAt = null;
+    this.#completionGeneration += 1;
+    this.#expectedContributions = null;
+    this.#version += 1;
   }
 
   public static createDraft(input: LifeActionDraftInput): LifeAction {
@@ -449,6 +595,11 @@ export class LifeAction extends Entity {
     this.#status = LIFE_ACTION_STATUS.completed;
     this.#actualResult = actualResult;
     this.#completedAt = copyDate(occurredAt);
+    this.#completedOn = DayDate.fromParts(
+      occurredAt.getFullYear(),
+      occurredAt.getMonth() + 1,
+      occurredAt.getDate(),
+    ).toString();
     this.#version += 1;
     this.#domainEvents.push(new LifeActionCompleted(eventId, this.id, actualResult, occurredAt));
   }

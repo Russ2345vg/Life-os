@@ -1,3 +1,6 @@
+import { actionPlanningSetup, type ActionContributionInput } from '../planner/actionPlanningSetup';
+import type { RecurrenceInput } from '../planner/RecurringActions';
+import { EntityId as PlanningEntityId } from '../../domain';
 import {
   DECISION_STATUS,
   LifeAction,
@@ -21,6 +24,8 @@ import {
 } from './lifeActionCommandResult';
 
 export interface CreateLifeActionDraftInput {
+  readonly recurrence?: RecurrenceInput | null;
+  readonly contributions?: readonly ActionContributionInput[];
   readonly title: LifeActionTitle;
   readonly description?: string;
   readonly decisionId?: EntityId;
@@ -55,7 +60,10 @@ export class CreateLifeActionDraft {
   public async execute(
     input: CreateLifeActionDraftInput,
   ): Promise<Result<LifeAction, DomainError>> {
-    if (input.isNext && this.planning === undefined)
+    if (
+      (input.isNext || input.recurrence || input.contributions?.length) &&
+      this.planning === undefined
+    )
       return failure(
         new DomainError('life_action.planning_unavailable', 'Выбор главного действия недоступен.'),
       );
@@ -99,6 +107,22 @@ export class CreateLifeActionDraft {
         eventId: this.#idGenerator.generate(),
       });
 
+      for (const link of input.contributions ?? []) {
+        const goal = await this.planning?.goalRepository.findById(
+          PlanningEntityId.create(link.goalId),
+        );
+        if (!goal?.measurement)
+          throw new DomainError(
+            'progress.measurement_required',
+            'Выберите измеримую цель для вклада.',
+          );
+      }
+      const setup = actionPlanningSetup(
+        lifeAction,
+        input.recurrence ?? null,
+        input.contributions ?? [],
+        this.#clock.now(),
+      );
       if (this.planning === undefined) {
         await this.#lifeActionRepository.save(lifeAction);
       } else {
@@ -116,6 +140,7 @@ export class CreateLifeActionDraft {
             : {}),
           lifeActions: [...previous, { lifeAction, expectedVersion: null }],
           journalEntries: [],
+          planningSetup: setup,
         });
       }
       return success(lifeAction);

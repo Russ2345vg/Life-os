@@ -135,7 +135,7 @@ export function PlannerFocus({
           <div className="planner-inline-actions">
             <a
               className="planner-text-link"
-              href={`#/goals/${encodeURIComponent(goal.id.toString())}`}
+              href={`#/v2/goals/${encodeURIComponent(goal.id.toString())}`}
             >
               Полная карточка цели
             </a>
@@ -170,7 +170,7 @@ export function PlannerFocus({
               <div className="planner-inline-actions">
                 <button
                   type="button"
-                  disabled={busy || (period?.goals.length ?? 0) >= 5}
+                  disabled={busy}
                   onClick={() =>
                     onRole(g.id.toString(), links.length === 0 ? 'primary' : 'supporting')
                   }
@@ -179,7 +179,7 @@ export function PlannerFocus({
                 </button>
                 <a
                   className="planner-text-link"
-                  href={`#/goals/${encodeURIComponent(g.id.toString())}`}
+                  href={`#/v2/goals/${encodeURIComponent(g.id.toString())}`}
                 >
                   Открыть
                 </a>
@@ -188,9 +188,9 @@ export function PlannerFocus({
           ))}
         </ul>
         {outside.length === 0 && <p className="planner-empty">Других активных целей нет.</p>}
-        {(period?.goals.length ?? 0) >= 5 && (
+        {(period?.goals.length ?? 0) > 4 && (
           <p className="planner-muted">
-            В фокусе уже пять целей. Уберите одну, чтобы добавить другую.
+            Рекомендуется одна главная и до трёх поддерживающих целей. Вы можете оставить больше.
           </p>
         )}
         {stale.map((l) => (

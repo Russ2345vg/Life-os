@@ -2,6 +2,34 @@ import type { SyncEntityRegistration, SyncRegistry } from '../../application/syn
 import { LIFE_OS_STORE } from '../persistence/indexed-db/LifeOsIndexedDb';
 
 export const LIFE_OS_SYNC_REGISTRY = Object.freeze([
+  registration('planning_period', LIFE_OS_STORE.planningPeriods, 'IndexedDbPlanningRepository', {
+    dependencies: ['goal'],
+  }),
+  registration(
+    'period_membership',
+    LIFE_OS_STORE.periodMemberships,
+    'IndexedDbPlanningRepository',
+    { dependencies: ['planning_period', 'goal', 'life_action'] },
+  ),
+  registration('period_decision', LIFE_OS_STORE.periodDecisions, 'IndexedDbPlanningRepository', {
+    dependencies: ['planning_period', 'goal', 'life_action'],
+  }),
+  registration(
+    'contribution_link',
+    LIFE_OS_STORE.contributionLinks,
+    'IndexedDbPlanningRepository',
+    { dependencies: ['goal', 'life_action', 'recurrence_rule'] },
+  ),
+  registration(
+    'progress_contribution',
+    LIFE_OS_STORE.progressContributions,
+    'IndexedDbPlanningRepository',
+    { dependencies: ['goal', 'life_action', 'contribution_link'] },
+  ),
+  registration('recurrence_rule', LIFE_OS_STORE.recurrenceRules, 'IndexedDbPlanningRepository', {
+    dependencies: ['goal'],
+  }),
+
   registration('day', LIFE_OS_STORE.days, 'IndexedDbDayRepository', {
     dependencies: ['sphere'],
   }),
@@ -11,7 +39,7 @@ export const LIFE_OS_SYNC_REGISTRY = Object.freeze([
   }),
   registration('life_action', LIFE_OS_STORE.lifeActions, 'IndexedDbLifeActionRepository', {
     deletionMode: 'archive',
-    dependencies: ['decision', 'sphere', 'goal'],
+    dependencies: ['decision', 'sphere', 'goal', 'recurrence_rule'],
   }),
   registration('action_session', LIFE_OS_STORE.actionSessions, 'IndexedDbActionSessionRepository', {
     dependencies: ['life_action'],

@@ -1,0 +1,162 @@
+.planning-workspace {
+  max-width: 1120px;
+  margin-inline: auto;
+}
+.planning-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 24px 0;
+}
+.planning-tabs button[aria-pressed='true'] {
+  color: var(--planner-accent);
+  border-color: var(--planner-accent);
+  background: color-mix(in srgb, var(--planner-accent) 8%, #000);
+}
+.planning-date {
+  max-width: 230px;
+}
+.planning-period {
+  border-block: 1px solid var(--border-soft);
+  padding: 22px 0;
+  margin: 18px 0;
+}
+.planning-outcome {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+}
+.planning-outcome > label {
+  flex: 1;
+  min-width: 0;
+}
+.planning-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 28px;
+  margin-top: 28px;
+}
+.planning-columns h2 {
+  font-size: 18px;
+  font-weight: 500;
+}
+.planning-row {
+  border-top: 1px solid var(--border-soft);
+  padding: 20px 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.planning-row h3 {
+  font-size: 17px;
+  margin: 0 0 12px;
+}
+.planning-row-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.planning-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 0;
+}
+.planning-inline label {
+  max-width: 220px;
+}
+.planning-progress {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0;
+}
+.planning-progress progress {
+  width: 100%;
+  height: 5px;
+  accent-color: var(--planner-accent);
+}
+.planning-row details {
+  margin: 14px 0;
+}
+.planning-row fieldset {
+  border: 0;
+  padding: 0;
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+}
+.planning-measurement {
+  display: grid;
+  gap: 12px;
+}
+.planning-contribution {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+.planning-weekdays {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.planning-weekdays label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.planning-weekdays input {
+  width: auto;
+}
+.planning-workspace input,
+.planning-workspace select {
+  min-width: 0;
+  max-width: 100%;
+}
+.planning-workspace .planner-toolbar {
+  flex-wrap: wrap;
+}
+.planning-workspace .planner-toolbar label {
+  flex: 1;
+  min-width: 160px;
+}
+.planning-pending {
+  border-left: 2px solid var(--planner-accent);
+  padding-left: 12px;
+}
+.planning-workspace button {
+  white-space: normal;
+}
+.planning-progress details {
+  margin-top: 12px;
+}
+@media (max-width: 700px) {
+  .planning-columns {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+  .planning-tabs {
+    gap: 4px;
+  }
+  .planning-tabs button {
+    font-size: 13px;
+    padding: 9px;
+  }
+  .planning-outcome {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .planning-row-heading {
+    flex-wrap: wrap;
+  }
+  .planning-workspace .planner-page-heading {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .planning-workspace .planner-toolbar {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .planning-workspace .planner-toolbar label {
+    min-width: 0;
+  }
+}

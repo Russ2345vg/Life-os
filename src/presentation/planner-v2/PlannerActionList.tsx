@@ -1,3 +1,4 @@
+import { PlanningActionDetails } from './PlanningActionDetails';
 import { editPlannerField, plannerFieldState, type PlannerFieldDraft } from './plannerActionDraft';
 import { useState, type ReactNode } from 'react';
 import type { Goal, LifeAction } from '../../domain';
@@ -46,6 +47,7 @@ export function PlannerActionList({
           <>
             <h1 className="planner-detail-title">{selected.title.toString()}</h1>
             <PlannerActionRow action={selected} goals={goals} {...operations} expanded />
+            <PlanningActionDetails action={selected} today={today} />
           </>
         ) : (
           <p className="planner-empty">Действие не найдено или находится в архиве.</p>

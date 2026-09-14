@@ -75,12 +75,17 @@ export class IndexedDbLifeActionRepository
     const database = await this.#indexedDb.open();
     const record = LifeActionRecordMapper.toRecord(lifeAction);
 
-    await executeIndexedDbRequest<IDBValidKey>(
-      database,
-      LIFE_OS_STORE.lifeActions,
-      'readwrite',
-      (store) => store.put(record),
-    );
+    await new Promise<void>((resolve, reject) => {
+      const tx = database.transaction(LIFE_OS_STORE.lifeActions, 'readwrite'),
+        store = tx.objectStore(LIFE_OS_STORE.lifeActions);
+      tx.oncomplete = () => resolve();
+      tx.onabort = () => reject(tx.error);
+      tx.onerror = () => reject(tx.error);
+      const get = store.get(record.id);
+      get.onsuccess = () => {
+        store.put({ ...get.result, ...record });
+      };
+    });
   }
 
   private async findByIndex(indexName: string, key: string): Promise<readonly LifeAction[]> {

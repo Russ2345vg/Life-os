@@ -1,3 +1,7 @@
+import { IndexedDbPlanningRepository } from '../../infrastructure/persistence/IndexedDbPlanningRepository';
+import { PeriodPlanning } from '../../application/planner/PeriodPlanning';
+import { GoalContributions } from '../../application/planner/GoalContributions';
+import { RecurringActions } from '../../application/planner/RecurringActions';
 import { PlannerInbox } from '../../application/planner/PlannerInbox';
 import { PlannerFocus } from '../../application/planner/PlannerFocus';
 import { PlannerCatalog } from '../../application/planner/PlannerCatalog';
@@ -534,7 +538,18 @@ export async function createLifeOsApplication(
     const getPlannerToday = new GetPlannerToday(lifeActionRepository);
     const plannerRepository = new IndexedDbPlannerRepository(database, mutationRecorder);
     const plannerInbox = new PlannerInbox(plannerRepository, clock, idGenerator);
-    const plannerFocus = new PlannerFocus(plannerRepository, goalRepository, clock);
+    const planningRepository = new IndexedDbPlanningRepository(database, mutationRecorder);
+    const planning = {
+      periods: new PeriodPlanning(planningRepository, clock, idGenerator),
+      progress: new GoalContributions(planningRepository, clock, idGenerator),
+      recurrence: new RecurringActions(planningRepository, clock, idGenerator),
+    };
+    const plannerFocus = new PlannerFocus(
+      plannerRepository,
+      goalRepository,
+      clock,
+      planning.periods,
+    );
     const plannerCatalog = new PlannerCatalog(lifeActionRepository);
     const setLifeActionPlan = new SetLifeActionPlan(
       lifeActionRepository,
@@ -984,6 +999,7 @@ export async function createLifeOsApplication(
       setLifeActionGoal,
       setLifeActionPlan,
       getPlannerToday,
+      planning,
       plannerInbox,
       plannerFocus,
       plannerCatalog,

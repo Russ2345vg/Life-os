@@ -2,6 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { LIFE_OS_SYNC_REGISTRY } from './LifeOsSyncRegistry';
 
 const EXPECTED_ENTITY_TYPES = [
+  'contribution_link',
+  'period_decision',
+  'period_membership',
+  'planning_period',
+  'progress_contribution',
+  'recurrence_rule',
   'action_session',
   'day',
   'decision',
@@ -29,6 +35,12 @@ const EXPECTED_ENTITY_TYPES = [
 ] as const;
 
 const EXPECTED_ENTITY_STORES = {
+  contribution_link: 'contributionLinks',
+  period_decision: 'periodDecisions',
+  period_membership: 'periodMemberships',
+  planning_period: 'planningPeriods',
+  progress_contribution: 'progressContributions',
+  recurrence_rule: 'recurrenceRules',
   action_session: 'actionSessions',
   day: 'days',
   decision: 'decisions',
@@ -59,13 +71,13 @@ describe('LIFE_OS_SYNC_REGISTRY', () => {
   it('declares the future Goal dependency while retaining legacy action dependencies', () => {
     expect(registration('life_action')).toMatchObject({
       recordSchemaVersion: 1,
-      dependencies: ['decision', 'sphere', 'goal'],
+      dependencies: ['decision', 'sphere', 'goal', 'recurrence_rule'],
     });
   });
 
   it('registers exactly the durable entity families discovered in the current database', () => {
     expect(LIFE_OS_SYNC_REGISTRY.map(({ entityType }) => entityType).sort()).toEqual(
-      EXPECTED_ENTITY_TYPES,
+      [...EXPECTED_ENTITY_TYPES].sort(),
     );
     expect(
       Object.fromEntries(
@@ -82,7 +94,7 @@ describe('LIFE_OS_SYNC_REGISTRY', () => {
       LIFE_OS_SYNC_REGISTRY.filter(({ storageKind }) => storageKind === 'indexed_db').map(
         ({ storeName }) => storeName,
       ),
-    ).toHaveLength(23);
+    ).toHaveLength(29);
     expect(LIFE_OS_SYNC_REGISTRY.every(({ readiness }) => readiness === 'sync_ready')).toBe(true);
   });
 

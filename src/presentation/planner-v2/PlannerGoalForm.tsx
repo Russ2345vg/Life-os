@@ -1,3 +1,4 @@
+import { GoalMeasurementFields } from './GoalMeasurementFields';
 import { useRef, useState } from 'react';
 import { GOAL_HORIZON, type GoalHorizon } from '../../domain';
 import { VoiceField } from '../voice-input/VoiceField';
@@ -120,6 +121,21 @@ export function PlannerGoalForm({
             placeholder="С чего можно начать?"
           />
         </VoiceField>
+        <details className="planner-details">
+          <summary>Измерение и точный срок</summary>
+          <GoalMeasurementFields
+            value={draft.measurement}
+            onChange={(value) => change('measurement', value)}
+          />
+          <label>
+            Точный срок · необязательно
+            <input
+              type="date"
+              value={draft.dueDate}
+              onChange={(e) => change('dueDate', e.target.value)}
+            />
+          </label>
+        </details>
         <details className="planner-details">
           <summary>Дополнительно</summary>
           <div className="planner-details-body">

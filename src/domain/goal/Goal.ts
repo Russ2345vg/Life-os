@@ -1,3 +1,5 @@
+import { DayDate } from '../day/DayDate';
+import { validateMeasurement, type GoalMeasurement } from '../planner/GoalMeasurement';
 import { DomainError } from '../../shared/errors/DomainError';
 import { Entity } from '../shared/Entity';
 import type { EntityId } from '../shared/EntityId';
@@ -24,6 +26,8 @@ export type GoalCreationStatus = typeof GOAL_STATUS.active | typeof GOAL_STATUS.
 export type GoalEditableStatus = Exclude<GoalStatus, typeof GOAL_STATUS.archived>;
 
 export interface GoalCreationData {
+  readonly measurement?: GoalMeasurement | null;
+  readonly dueDate?: string | null;
   readonly sphereId?: EntityId | null;
   readonly id: EntityId;
   readonly directionId?: EntityId | null;
@@ -43,6 +47,8 @@ export interface GoalCreationData {
 }
 
 export interface GoalDetails {
+  readonly measurement?: GoalMeasurement | null;
+  readonly dueDate?: string | null;
   readonly sphereId?: EntityId | null;
   readonly directionId?: EntityId | null;
   readonly title: string;
@@ -60,6 +66,8 @@ export interface GoalDetails {
 }
 
 export interface GoalRehydrationData {
+  readonly measurement?: GoalMeasurement | null;
+  readonly dueDate?: string | null;
   readonly sphereId?: EntityId | null;
   readonly isMain?: boolean;
   readonly legacyProjectId?: string | null;
@@ -84,6 +92,8 @@ export interface GoalRehydrationData {
 }
 
 export class Goal extends Entity {
+  public readonly measurement: GoalMeasurement | null;
+  public readonly dueDate: string | null;
   public readonly sphereId: EntityId | null;
   public readonly isMain: boolean;
   public readonly legacyProjectId: string | null;
@@ -108,6 +118,9 @@ export class Goal extends Entity {
 
   private constructor(data: GoalRehydrationData) {
     super(data.id);
+    this.measurement = validateMeasurement(data.measurement ?? null);
+    this.dueDate = data.dueDate ?? null;
+    if (this.dueDate !== null) DayDate.create(this.dueDate);
     this.sphereId = data.sphereId ?? null;
     this.isMain = data.isMain ?? false;
     this.legacyProjectId = data.legacyProjectId ?? null;
@@ -163,6 +176,8 @@ export class Goal extends Entity {
     const stage: unknown = data.stage === undefined ? GOAL_STAGE.idea : data.stage;
     assertStage(stage);
     return new Goal({
+      measurement: data.measurement ?? null,
+      dueDate: data.dueDate ?? null,
       id: data.id,
       sphereId: data.sphereId ?? null,
       directionId: data.directionId ?? null,
@@ -203,6 +218,8 @@ export class Goal extends Entity {
           details.directionId?.toString() === this.directionId?.toString())
           ? this.isMain
           : false,
+      measurement: details.measurement === undefined ? this.measurement : details.measurement,
+      dueDate: details.dueDate === undefined ? this.dueDate : details.dueDate,
       title: details.title,
       description: details.description === undefined ? this.description : details.description,
       whyImportant: details.whyImportant === undefined ? this.whyImportant : details.whyImportant,
@@ -250,6 +267,8 @@ export class Goal extends Entity {
 
   private toRehydrationData(): GoalRehydrationData {
     return {
+      measurement: this.measurement,
+      dueDate: this.dueDate,
       sphereId: this.sphereId,
       isMain: this.isMain,
       legacyProjectId: this.legacyProjectId,

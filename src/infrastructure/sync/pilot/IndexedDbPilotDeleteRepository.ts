@@ -20,6 +20,12 @@ export class IndexedDbPilotDeleteRepository implements PilotDeleteRepository {
       stores.add(LIFE_OS_STORE.goals);
     }
     const goalDependants = [
+      'planning_period',
+      'period_membership',
+      'period_decision',
+      'contribution_link',
+      'progress_contribution',
+      'recurrence_rule',
       'decision',
       'journal_entry',
       'walk',

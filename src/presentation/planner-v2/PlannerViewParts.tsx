@@ -72,7 +72,10 @@ export function PlannerGoalSummary({
   const next = data.nextActionByGoal.get(goal.id.toString());
   return (
     <>
-      <a className="planner-goal-title" href={`#/goals/${encodeURIComponent(goal.id.toString())}`}>
+      <a
+        className="planner-goal-title"
+        href={`#/v2/goals/${encodeURIComponent(goal.id.toString())}`}
+      >
         {goal.title}
       </a>
       <p className="planner-muted">

@@ -1,3 +1,6 @@
+import type { GoalMeasurement } from '../../domain/planner/GoalMeasurement';
+import type { RecurrenceInput } from '../../application/planner/RecurringActions';
+import type { ActionContributionInput } from '../../application/planner/actionPlanningSetup';
 import { DayDate, EntityId, LifeActionTitle, type GoalHorizon } from '../../domain';
 import type { CreateGoal, CreateLifeActionDraft } from '../../application';
 
@@ -7,6 +10,8 @@ export const emptyActionDraft = (goalId: string | null = null, title: string | n
   date: '',
   description: '',
   isNext: false,
+  recurrence: null as RecurrenceInput | null,
+  contributions: [] as ActionContributionInput[],
 });
 export type PlannerActionDraft = ReturnType<typeof emptyActionDraft>;
 export const emptyGoalDraft = () => ({
@@ -15,6 +20,8 @@ export const emptyGoalDraft = () => ({
   directionId: '',
   horizon: '' as GoalHorizon | '',
   firstStep: '',
+  measurement: null as GoalMeasurement | null,
+  dueDate: '',
   description: '',
   whyImportant: '',
   whyNow: '',
@@ -31,6 +38,8 @@ export async function submitPlannerAction(
     goalId: draft.goalId ? EntityId.create(draft.goalId) : null,
     plannedDate: draft.date ? DayDate.create(draft.date) : null,
     isNext: draft.isNext,
+    ...(draft.recurrence ? { recurrence: draft.recurrence } : {}),
+    ...(draft.contributions.length ? { contributions: draft.contributions } : {}),
   });
   if (!result.ok) throw result.error;
   return result.value;
@@ -50,6 +59,8 @@ export async function submitPlannerGoal(
     description: draft.description,
     whyImportant: draft.whyImportant,
     whyNow: draft.whyNow,
+    ...(draft.measurement ? { measurement: draft.measurement } : {}),
+    ...(draft.dueDate ? { dueDate: draft.dueDate } : {}),
   });
   if (!result.ok) throw result.error;
   return result.value;

@@ -1,3 +1,4 @@
+import { planningJournal } from '../planner/planningSupport';
 import { LIFE_ACTION_STATUS, type DayDate, type EntityId, type LifeAction } from '../../domain';
 import { DomainError } from '../../shared/errors/DomainError';
 import { success, type Result } from '../../shared/result/Result';
@@ -28,6 +29,7 @@ export class SetLifeActionPlan {
     if (action === null) return lifeActionNotFound();
     try {
       const expectedVersion = action.version;
+      const previousDate = action.plannedDate?.toString() ?? null;
       const completed = action.status === LIFE_ACTION_STATUS.completed;
       const isNext = input.isNext ?? (input.plannedDate === null ? false : action.isNext);
       if (
@@ -48,6 +50,8 @@ export class SetLifeActionPlan {
         action.reschedule(input.plannedDate, this.clock.now(), this.ids.generate());
       }
       action.setPlan(input.plannedDate, isNext);
+      if (action.occurrence && previousDate !== (input.plannedDate?.toString() ?? null))
+        action.setPlanningMetadata({ occurrence: { ...action.occurrence, manualDate: true } });
       const previous =
         !completed && isNext && input.plannedDate !== null
           ? await clearPreviousMainActions(this.repository, input.plannedDate, action)
@@ -58,7 +62,26 @@ export class SetLifeActionPlan {
           ? { mainActionDate: input.plannedDate }
           : {}),
         lifeActions: [...previous, { lifeAction: action, expectedVersion }],
-        journalEntries: createLifeActionJournalEntries(action),
+        journalEntries: [
+          ...createLifeActionJournalEntries(action),
+          ...(action.occurrence && previousDate !== (action.plannedDate?.toString() ?? null)
+            ? [
+                planningJournal(
+                  this.ids.generate().toString(),
+                  'LifeAction',
+                  action.id.toString(),
+                  'Дата повторения изменена',
+                  this.clock.now(),
+                  {
+                    ruleId: action.occurrence.ruleId,
+                    slot: action.occurrence.slot,
+                    previousDate,
+                    nextDate: action.plannedDate?.toString() ?? null,
+                  },
+                ),
+              ]
+            : []),
+        ],
       });
       return success(action);
     } catch (error: unknown) {

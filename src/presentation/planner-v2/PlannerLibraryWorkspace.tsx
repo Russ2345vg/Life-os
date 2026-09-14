@@ -1,3 +1,5 @@
+import { PlanningGoalDetail } from './PlanningGoalDetail';
+import { usePlanning } from './PlanningContext';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { EntityId, type Direction, type Goal, type LifeAction, type Sphere } from '../../domain';
 import type {
@@ -65,6 +67,7 @@ export function PlannerLibraryWorkspace({
   readonly today: string;
   readonly onNavigate: (route: PlannerV2Route) => void;
 }) {
+  const planningContext = usePlanning();
   const [data, setData] = useState<LibraryData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -117,7 +120,10 @@ export function PlannerLibraryWorkspace({
   const refresh = useCallback(() => {
     void load().catch(report);
   }, [load, report]);
-  useSyncContentChanged('goals|lifeActions|directions|spheres|inboxIdeas|focusPeriods', refresh);
+  useSyncContentChanged(
+    'goals|lifeActions|directions|spheres|inboxIdeas|focusPeriods|planningPeriods|periodMemberships|progressContributions',
+    refresh,
+  );
   const run = async (work: () => Promise<unknown>, message: string) => {
     if (working.current) return;
     working.current = true;
@@ -126,6 +132,7 @@ export function PlannerLibraryWorkspace({
     try {
       await work();
       setNotice(message);
+      await planningContext?.refresh();
       await load().catch(report);
     } catch (reason: unknown) {
       report(reason);
@@ -193,6 +200,8 @@ export function PlannerLibraryWorkspace({
             Загружаем…
           </div>
         )
+      ) : route.view === 'goal' ? (
+        <PlanningGoalDetail id={route.id} today={today} {...operations} />
       ) : 'section' in route && views ? (
         <section>
           <header className="planner-page-heading">

@@ -1,3 +1,4 @@
+import type { GoalMeasurement } from '../../../domain/planner/GoalMeasurement';
 export type GoalProgressRecord =
   | {
       readonly type: 'metric';
@@ -16,6 +17,8 @@ export type GoalProgressRecord =
     };
 
 export interface GoalRecord {
+  readonly measurement?: GoalMeasurement | null;
+  readonly dueDate?: string | null;
   readonly sphereId?: string | null;
   readonly isMain?: boolean;
   readonly legacyProjectId?: string | null;

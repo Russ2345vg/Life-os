@@ -27,6 +27,11 @@ import {
 export class LifeActionRecordMapper {
   public static toRecord(entity: LifeAction): LifeActionRecord {
     return {
+      expectedContributions: entity.expectedContributions,
+      completedOn: entity.completedOn,
+      priority: entity.priority,
+      occurrence: entity.occurrence,
+      completionGeneration: entity.completionGeneration,
       schemaVersion: 1,
       id: entity.id.toString(),
       title: entity.title.toString(),
@@ -54,6 +59,11 @@ export class LifeActionRecordMapper {
   public static fromRecord(record: LifeActionRecord): LifeAction {
     assertRecordAndSchemaVersion(record);
     return LifeAction.rehydrate({
+      expectedContributions: record.expectedContributions ?? null,
+      ...(record.completedOn === undefined ? {} : { completedOn: record.completedOn }),
+      priority: record.priority ?? null,
+      occurrence: record.occurrence ?? null,
+      completionGeneration: record.completionGeneration ?? 0,
       id: readEntityId(record, 'id'),
       title: createValueObject(record, 'title', LifeActionTitle.create),
       description: readNullableString(record, 'description'),

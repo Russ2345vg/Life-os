@@ -1,3 +1,5 @@
+import type { RecurrenceRule } from '../../domain/planner/RecurrenceRule';
+import type { ContributionLink } from '../../domain/planner/ProgressContribution';
 import type {
   ActionSession,
   Day,
@@ -40,6 +42,10 @@ export interface JournalProjectChange {
 }
 
 export interface CommitJournalStateInput {
+  readonly planningSetup?: {
+    readonly rules: readonly RecurrenceRule[];
+    readonly links: readonly ContributionLink[];
+  };
   /** Validate the final main-action selection inside the same write transaction. */
   readonly mainActionDate?: DayDate;
   readonly days?: readonly JournalDayChange[];

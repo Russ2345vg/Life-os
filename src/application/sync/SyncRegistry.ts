@@ -1,4 +1,10 @@
 export type SyncEntityType =
+  | 'planning_period'
+  | 'period_membership'
+  | 'period_decision'
+  | 'contribution_link'
+  | 'progress_contribution'
+  | 'recurrence_rule'
   | 'day'
   | 'decision'
   | 'life_action'
@@ -25,6 +31,12 @@ export type SyncEntityType =
   | 'user_settings';
 
 export const SYNC_ENTITY_TYPES: readonly SyncEntityType[] = Object.freeze([
+  'planning_period',
+  'period_membership',
+  'period_decision',
+  'contribution_link',
+  'progress_contribution',
+  'recurrence_rule',
   'day',
   'decision',
   'life_action',

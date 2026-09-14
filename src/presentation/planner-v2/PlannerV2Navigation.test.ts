@@ -10,6 +10,8 @@ import { PlannerV2Workspace, type PlannerV2Services } from './PlannerV2Workspace
 describe('V2 preview routes', () => {
   it('roundtrips the four entries, focus and a converted action id', () => {
     for (const route of [
+      { view: 'planning' },
+      { view: 'goal', id: 'goal / русский' },
       { view: 'goals' },
       { view: 'focus' },
       { view: 'kanban', section: 'goals' },

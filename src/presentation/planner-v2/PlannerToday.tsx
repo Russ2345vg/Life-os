@@ -1,3 +1,4 @@
+import { PlanningActionDetails } from './PlanningActionDetails';
 import { useRef, useState } from 'react';
 import type { PlannerTodayOverview } from '../../application';
 import type { DayDate, LifeAction } from '../../domain';
@@ -47,6 +48,9 @@ export function PlannerToday({
         <div className="planner-action-copy">
           <span className="planner-action-title">{action.title.toString()}</span>
           {goal ? <span className="planner-muted">{goal.title}</span> : null}
+          {mode === 'completed' && (
+            <PlanningActionDetails action={action} today={date.toString()} />
+          )}
           {action.description ? <p className="planner-action-note">{action.description}</p> : null}
           {action.actualResult ? (
             <p className="planner-action-note">{action.actualResult.toString()}</p>

@@ -1,3 +1,4 @@
+import type { PlanningServices } from '../../application/planner/PlanningServices';
 import { PlannerInbox } from '../../application/planner/PlannerInbox';
 import { PlannerFocus } from '../../application/planner/PlannerFocus';
 import { PlannerCatalog } from '../../application/planner/PlannerCatalog';
@@ -267,6 +268,7 @@ interface LifeOsApplicationServices {
   readonly setLifeActionGoal: SetLifeActionGoal;
   readonly setLifeActionPlan: SetLifeActionPlan;
   readonly plannerInbox: PlannerInbox;
+  readonly planning: PlanningServices;
   readonly plannerFocus: PlannerFocus;
   readonly plannerCatalog: PlannerCatalog;
   readonly getPlannerToday: GetPlannerToday;
@@ -455,6 +457,7 @@ export class LifeOsApplication {
   public readonly setLifeActionGoal: SetLifeActionGoal;
   public readonly setLifeActionPlan: SetLifeActionPlan;
   public readonly plannerInbox: PlannerInbox;
+  public readonly planning: PlanningServices;
   public readonly plannerFocus: PlannerFocus;
   public readonly plannerCatalog: PlannerCatalog;
   public readonly getPlannerToday: GetPlannerToday;
@@ -643,6 +646,7 @@ export class LifeOsApplication {
     this.setLifeActionGoal = services.setLifeActionGoal;
     this.setLifeActionPlan = services.setLifeActionPlan;
     this.plannerInbox = services.plannerInbox;
+    this.planning = services.planning;
     this.plannerFocus = services.plannerFocus;
     this.plannerCatalog = services.plannerCatalog;
     this.getPlannerToday = services.getPlannerToday;
