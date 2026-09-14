@@ -1,3 +1,6 @@
+import { IndexedDbBalanceRepository } from '../../infrastructure/persistence/IndexedDbBalanceRepository';
+import { BalanceIndicators } from '../../application/balance/BalanceIndicators';
+import { GetLifeBalance } from '../../application/balance/GetLifeBalance';
 import { IndexedDbPlanningRepository } from '../../infrastructure/persistence/IndexedDbPlanningRepository';
 import { PeriodPlanning } from '../../application/planner/PeriodPlanning';
 import { GoalContributions } from '../../application/planner/GoalContributions';
@@ -245,6 +248,7 @@ export async function createLifeOsApplication(
       'goal',
     ]);
 
+    const balanceRepository = new IndexedDbBalanceRepository(database, clock, currentDateProvider);
     const dayRepository = new IndexedDbDayRepository(database);
     const decisionRepository = new IndexedDbDecisionRepository(database);
     const lifeActionRepository = new IndexedDbLifeActionRepository(database);
@@ -851,6 +855,17 @@ export async function createLifeOsApplication(
     const getSpheres = new GetSpheres(sphereRepository);
     const createDirection = new CreateDirection(directionRepository, clock, idGenerator);
     const updateDirection = new UpdateDirection(directionRepository, projectRepository, clock);
+    const balance = {
+      read: new GetLifeBalance(balanceRepository),
+      indicators: new BalanceIndicators(balanceRepository, clock),
+      createSphere,
+      updateSphere,
+      createDirection,
+      updateDirection,
+      refreshSnapshots: () => balanceRepository.refreshSnapshots(),
+    };
+    await balance.refreshSnapshots();
+
     const archiveDirection = new ArchiveDirection(directionRepository, clock);
     const restoreDirection = new RestoreDirection(directionRepository, clock);
     const makeDirectionMain = new MakeDirectionMain(directionRepository, clock);
@@ -1000,6 +1015,7 @@ export async function createLifeOsApplication(
       setLifeActionPlan,
       getPlannerToday,
       planning,
+      balance,
       plannerInbox,
       plannerFocus,
       plannerCatalog,

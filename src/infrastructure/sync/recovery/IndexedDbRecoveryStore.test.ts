@@ -1,4 +1,6 @@
 import { IDBFactory } from 'fake-indexeddb';
+import { DayDate } from '../../../domain';
+import { IndexedDbBalanceRepository } from '../../persistence/IndexedDbBalanceRepository';
 import { describe, expect, it } from 'vitest';
 import { LifeOsIndexedDb, LIFE_OS_SYNC_STORE } from '../../persistence/indexed-db/LifeOsIndexedDb';
 import {
@@ -46,6 +48,59 @@ async function fixture() {
   return { db, connection, recorder, goal, store: new IndexedDbRecoveryStore(db, recorder) };
 }
 describe('IndexedDB recovery transactions', () => {
+  it('restores an indicator together with current snapshots and queues the new history', async () => {
+    const f = await fixture(),
+      records = structuredSyncFixtures(),
+      now = new Date('2026-09-14T12:00:00Z');
+    const balance = new IndexedDbBalanceRepository(
+      f.db,
+      { now: () => now },
+      { getCurrentDate: () => DayDate.create('2026-09-14') },
+    );
+    try {
+      const seed = f.connection.transaction(
+        ['spheres', 'directions', 'directionIndicators'],
+        'readwrite',
+      );
+      seed.objectStore('spheres').put(records.sphere);
+      seed.objectStore('directions').put(records.direction);
+      seed.objectStore('directionIndicators').put(records.direction_indicator);
+      await done(seed);
+      await balance.refreshSnapshots();
+      const current = await f.store.readState();
+      await f.store.apply(
+        {
+          schemaVersion: 1,
+          items: [
+            {
+              entityType: 'direction_indicator',
+              record: { ...records.direction_indicator, value: 9 },
+            },
+          ],
+        },
+        JSON.stringify(current),
+        false,
+      );
+      expect((await balance.read()).snapshots.filter((s) => s.effectiveScore === 9)).toHaveLength(
+        2,
+      );
+      const queued = await request<SyncOutboxRecord[]>(
+        f.connection
+          .transaction(LIFE_OS_SYNC_STORE.outbox)
+          .objectStore(LIFE_OS_SYNC_STORE.outbox)
+          .getAll(),
+      );
+      expect(
+        queued
+          .map((r) => parsePilotSyncPayload(r.serializedPayload))
+          .filter(
+            (p) => p.entityType === 'balance_monthly_snapshot' && p.record?.effectiveScore === 9,
+          ),
+      ).toHaveLength(2);
+    } finally {
+      f.db.close();
+    }
+  });
   it('rejects restoring a second active walk without changing state', async () => {
     const f = await fixture();
     const walk = {
@@ -211,7 +266,7 @@ describe('IndexedDB recovery transactions', () => {
         );
       await completion;
       const state = await f.store.readState();
-      expect(new Set(state.items.map((item) => item.entityType)).size).toBe(28);
+      expect(new Set(state.items.map((item) => item.entityType)).size).toBe(30);
       expect(state.items.find((item) => item.entityType === 'life_action')?.record).toMatchObject(
         expectedFields,
       );

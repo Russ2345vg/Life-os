@@ -1,4 +1,6 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { sphereForGoal } from '../../application/balance/GetLifeBalance';
+import type { BalanceState } from '../../application/ports/BalanceRepository';
 import type { Goal, LifeAction } from '../../domain';
 import {
   automaticPeriod,
@@ -31,12 +33,30 @@ export function PlanningWorkspace({
   today,
   services,
   onNavigate,
+  sphereId = null,
 }: {
   readonly today: string;
   readonly services: PlannerV2Services;
   readonly onNavigate: (route: PlannerV2Route) => void;
+  readonly sphereId?: string | null;
 }) {
   const context = usePlanning();
+  const [balanceState, setBalanceState] = useState<BalanceState | null>(null);
+  useEffect(() => {
+    let active = true;
+    if (sphereId && services.balance)
+      void services.balance.read
+        .execute()
+        .then((s) => {
+          if (active) setBalanceState(s);
+        })
+        .catch(() => {
+          if (active) setBalanceState(null);
+        });
+    return () => {
+      active = false;
+    };
+  }, [services.balance, sphereId, context?.state]);
   const [view, setView] = useState<View>('week'),
     [anchor, setAnchor] = useState(today),
     [search, setSearch] = useState(''),
@@ -68,6 +88,11 @@ export function PlanningWorkspace({
       <p role={context.error ? 'alert' : 'status'}>{context.error ?? 'Загружаем планирование…'}</p>
     );
   const s = context.state;
+  const acceptsGoal = (id: string) =>
+    !sphereId || Boolean(balanceState && sphereForGoal(balanceState, id) === sphereId);
+  const acceptsAction = (a: LifeAction) =>
+    !sphereId ||
+    (a.goalId ? acceptsGoal(a.goalId.toString()) : a.sphereId?.toString() === sphereId);
   const candidate =
     view === 'year' || view === 'quarter' || view === 'week' ? automaticPeriod(view, anchor) : null;
   const period = historyId
@@ -102,12 +127,14 @@ export function PlanningWorkspace({
             ));
   const goals = s.goals.filter(
     (g) =>
+      acceptsGoal(g.id.toString()) &&
       (g.status !== 'archived' || Boolean(period && period.endDate < today)) &&
       matches('goal', g.id.toString(), g.dueDate) &&
       g.title.toLocaleLowerCase().includes(search.toLocaleLowerCase()),
   );
   const actions = s.actions.filter(
     (a) =>
+      acceptsAction(a) &&
       (!a.isArchived() || Boolean(period && period.endDate < today)) &&
       matches(
         'action',
@@ -144,10 +171,10 @@ export function PlanningWorkspace({
   );
   const pickables = [
     ...s.goals
-      .filter((g) => g.status !== 'archived')
+      .filter((g) => g.status !== 'archived' && acceptsGoal(g.id.toString()))
       .map((g) => ({ key: `goal:${g.id.toString()}`, title: g.title })),
     ...s.actions
-      .filter((a) => !['completed', 'cancelled', 'archived'].includes(a.status))
+      .filter((a) => !['completed', 'cancelled', 'archived'].includes(a.status) && acceptsAction(a))
       .map((a) => ({ key: `action:${a.id.toString()}`, title: a.title.toString() })),
   ]
     .filter((v) => !members.some((m) => `${m.entityType}:${m.entityId}` === v.key))
@@ -340,6 +367,13 @@ export function PlanningWorkspace({
         </div>
         <button onClick={() => onNavigate({ view: 'new-goal' })}>Новая цель</button>
       </header>
+      {sphereId && (
+        <p>
+          Сфера:{' '}
+          {balanceState?.spheres.find((s) => s.id.toString() === sphereId)?.name ?? 'Загружаем…'}{' '}
+          <button onClick={() => onNavigate({ view: 'planning' })}>Все сферы</button>
+        </p>
+      )}
       <nav className="planning-tabs" aria-label="Период планирования">
         {Object.entries(views).map(([key, title]) => (
           <button

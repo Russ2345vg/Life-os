@@ -300,6 +300,18 @@ export class IndexedDbRecoveryStore implements RecoveryDataStore {
             tx.objectStore(registration.storeName).delete(id.localObjectId);
           }
         }
+      const snapshots = tx.objectStore('balanceMonthlySnapshots');
+      const beforeBalance = await request<Readonly<Record<string, unknown>>[]>(snapshots.getAll());
+      await this.db.refreshBalanceSnapshots(tx);
+      const afterBalance = await request<Readonly<Record<string, unknown>>[]>(snapshots.getAll());
+      for (const snapshot of afterBalance) {
+        const previous = beforeBalance.find((old) => old.id === snapshot.id);
+        if (
+          JSON.stringify(previous) !== JSON.stringify(snapshot) &&
+          !(await this.recorder.recordUpsert(tx, 'balance_monthly_snapshot', snapshot))
+        )
+          throw new Error('Balance history restore mutation not recorded.');
+      }
       if (history?.kind === 'conflicts') {
         const conflict = await request<SyncConflictRecord | undefined>(
           tx.objectStore(LIFE_OS_SYNC_STORE.conflicts).get(history.id),

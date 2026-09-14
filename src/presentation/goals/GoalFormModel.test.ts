@@ -52,6 +52,16 @@ function draft(overrides: Partial<GoalFormDraft> = {}): GoalFormDraft {
 }
 
 describe('GoalFormModel', () => {
+  it('retains the selected paused direction in an existing goal form', () => {
+    const paused = Direction.create({
+      id: EntityId.create('paused'),
+      name: 'Сон',
+      now: NOW,
+    }).update({ name: 'Сон', status: 'paused' }, NOW);
+    expect(
+      buildGoalDirectionOptionGroups([paused], { active: [], archived: [] }, 'paused')[0]?.options,
+    ).toEqual([{ id: 'paused', name: 'Сон', archived: false }]);
+  });
   it('creates the approved initial draft and maps stages to statuses', () => {
     expect(createEmptyGoalFormDraft()).toMatchObject({
       title: '',

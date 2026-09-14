@@ -690,6 +690,7 @@ export class IndexedDbPilotSyncStore {
         updatedAt: this.now().toISOString(),
       } satisfies SyncCursorRecord);
       await this.mergeClock(transaction, payload.hlc);
+      if (incomingWins) await this.indexedDb.refreshBalanceSnapshots(transaction);
       await completion;
       if (registration.storageKind === 'local_storage' && incomingWins) {
         if (!(await this.settingsSync?.materializeRemote())) {

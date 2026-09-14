@@ -61,7 +61,13 @@ export function PlannerTree({
             <details className="planner-structure-card">
               <summary>Карточка направления</summary>
               <h3>{direction.name}</h3>
-              <p>{direction.status === 'archived' ? 'В архиве' : 'Активно'}</p>
+              <p>
+                {direction.status === 'archived'
+                  ? 'В архиве'
+                  : direction.status === 'paused'
+                    ? 'На паузе'
+                    : 'Активно'}
+              </p>
               {direction.description && <p>{direction.description}</p>}
               {direction.strategicIntent && <p>Замысел: {direction.strategicIntent}</p>}
               {direction.desiredState && <p>Желаемое состояние: {direction.desiredState}</p>}

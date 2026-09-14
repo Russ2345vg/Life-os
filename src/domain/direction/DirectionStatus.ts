@@ -1,5 +1,6 @@
 export const DIRECTION_STATUS = {
   active: 'active',
+  paused: 'paused',
   archived: 'archived',
 } as const;
 

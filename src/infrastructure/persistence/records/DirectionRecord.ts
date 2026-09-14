@@ -1,4 +1,5 @@
-export interface DirectionRecord {
+import type { DirectionBalanceSettings } from '../../../domain/balance/BalanceImportance';
+export interface DirectionRecord extends DirectionBalanceSettings {
   readonly schemaVersion: 1;
   readonly id: string;
   readonly sphereId: string | null;

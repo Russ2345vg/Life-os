@@ -1,4 +1,6 @@
 import type { Direction, EntityId } from '../../domain';
+import type { DirectionBalanceSettings } from '../../domain/balance/BalanceImportance';
+import type { DirectionStatus } from '../../domain/direction/DirectionStatus';
 import { DomainError } from '../../shared/errors/DomainError';
 import { failure, type Result } from '../../shared/result/Result';
 import type { Clock } from '../ports/Clock';
@@ -6,7 +8,8 @@ import type { DirectionRepository } from '../ports/DirectionRepository';
 import type { ProjectRepository } from '../ports/ProjectRepository';
 import { changeDirection } from './directionCommandSupport';
 
-export interface UpdateDirectionInput {
+export interface UpdateDirectionInput extends DirectionBalanceSettings {
+  readonly status?: DirectionStatus;
   readonly id: EntityId;
   readonly expectedVersion: number;
   readonly sphereId?: EntityId | null;
@@ -46,6 +49,7 @@ export class UpdateDirection {
     return changeDirection(this.repository, this.clock, input, (direction, now) =>
       direction.update(
         {
+          ...input,
           name: input.name,
           ...(input.sphereId === undefined ? {} : { sphereId: input.sphereId }),
           ...(input.description === undefined ? {} : { description: input.description }),

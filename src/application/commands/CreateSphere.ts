@@ -1,4 +1,5 @@
 import { Sphere } from '../../domain';
+import type { SphereBalanceSettings } from '../../domain/balance/BalanceImportance';
 import { DomainError } from '../../shared/errors/DomainError';
 import { failure, success, type Result } from '../../shared/result/Result';
 import type { Clock } from '../ports/Clock';
@@ -6,7 +7,7 @@ import type { IdGenerator } from '../ports/IdGenerator';
 import type { SphereRepository } from '../ports/SphereRepository';
 import { sphereFailure, sphereNameConflict } from './sphereCommandSupport';
 
-export interface CreateSphereInput {
+export interface CreateSphereInput extends SphereBalanceSettings {
   readonly name: string;
   readonly description?: string | null;
   readonly icon?: string | null;
@@ -23,6 +24,7 @@ export class CreateSphere {
   public async execute(input: CreateSphereInput): Promise<Result<Sphere, DomainError>> {
     try {
       const sphere = Sphere.create({
+        ...input,
         id: this.idGenerator.generate(),
         name: input.name,
         ...(input.description === undefined ? {} : { description: input.description }),

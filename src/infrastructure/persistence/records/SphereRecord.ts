@@ -1,4 +1,5 @@
-export interface SphereRecord {
+import type { SphereBalanceSettings } from '../../../domain/balance/BalanceImportance';
+export interface SphereRecord extends SphereBalanceSettings {
   readonly schemaVersion: 1;
   readonly id: string;
   readonly name: string;

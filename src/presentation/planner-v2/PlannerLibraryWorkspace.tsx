@@ -321,6 +321,7 @@ export function PlannerLibraryWorkspace({
             />
           ) : (
             <PlannerGoalList
+              initialSphereId={route.view === 'goals' ? (route.sphereId ?? '') : ''}
               goals={data.goals}
               directions={data.directions}
               spheres={data.spheres}

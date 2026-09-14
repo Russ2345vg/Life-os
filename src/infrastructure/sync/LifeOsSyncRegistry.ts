@@ -2,6 +2,24 @@ import type { SyncEntityRegistration, SyncRegistry } from '../../application/syn
 import { LIFE_OS_STORE } from '../persistence/indexed-db/LifeOsIndexedDb';
 
 export const LIFE_OS_SYNC_REGISTRY = Object.freeze([
+  registration(
+    'direction_indicator',
+    LIFE_OS_STORE.directionIndicators,
+    'IndexedDbBalanceRepository',
+    {
+      dependencies: ['direction', 'goal'],
+      deletionMode: 'soft_delete',
+    },
+  ),
+  registration(
+    'balance_monthly_snapshot',
+    LIFE_OS_STORE.balanceMonthlySnapshots,
+    'IndexedDbBalanceRepository',
+    {
+      dependencies: ['sphere', 'direction'],
+      idSource: 'deterministic_recommendation_id',
+    },
+  ),
   registration('planning_period', LIFE_OS_STORE.planningPeriods, 'IndexedDbPlanningRepository', {
     dependencies: ['goal'],
   }),

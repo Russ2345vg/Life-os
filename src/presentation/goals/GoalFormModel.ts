@@ -256,7 +256,7 @@ export function buildGoalDirectionOptionGroups(
     const id = direction.id.toString();
     const isCurrentArchived =
       direction.status === DIRECTION_STATUS.archived && id === currentDirectionId;
-    if (direction.status !== DIRECTION_STATUS.active && !isCurrentArchived) continue;
+    if (direction.status !== DIRECTION_STATUS.active && id !== currentDirectionId) continue;
     const sphereId = direction.sphereId?.toString() ?? null;
     const sphere = sphereId === null ? undefined : spheresById.get(sphereId);
     const groupId = sphere?.id.toString() ?? '__without-sphere__';

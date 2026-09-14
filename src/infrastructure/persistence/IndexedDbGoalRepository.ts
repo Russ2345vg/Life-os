@@ -55,12 +55,12 @@ export class IndexedDbGoalRepository implements GoalRepository {
   public async create(goal: Goal): Promise<boolean> {
     const database = await this.indexedDb.open();
     const transaction = database.transaction(
-      [
+      this.indexedDb.balanceTransactionStores([
         LIFE_OS_STORE.goals,
         LIFE_OS_STORE.progressContributions,
         LIFE_OS_STORE.journal,
         ...PILOT_MUTATION_STORES,
-      ],
+      ]),
       'readwrite',
     );
     const completion = observeTransaction(transaction);
@@ -90,6 +90,7 @@ export class IndexedDbGoalRepository implements GoalRepository {
         );
       }
       const recorded = await this.mutationRecorder.recordUpsert(transaction, 'goal', record);
+      await this.indexedDb.refreshBalanceSnapshots(transaction, completion);
       await completion;
       this.mutationRecorder.notifyCommitted(recorded);
       return true;
@@ -104,7 +105,7 @@ export class IndexedDbGoalRepository implements GoalRepository {
   public async updateIfVersionMatches(goal: Goal, expectedVersion: number): Promise<boolean> {
     const database = await this.indexedDb.open();
     const transaction = database.transaction(
-      [LIFE_OS_STORE.goals, ...PILOT_MUTATION_STORES],
+      this.indexedDb.balanceTransactionStores([LIFE_OS_STORE.goals, ...PILOT_MUTATION_STORES]),
       'readwrite',
     );
     const store = transaction.objectStore(LIFE_OS_STORE.goals);
@@ -118,6 +119,7 @@ export class IndexedDbGoalRepository implements GoalRepository {
     const record = { ...stored, ...GoalRecordMapper.toRecord(goal) };
     await observeRequest(store.put(record));
     const recorded = await this.mutationRecorder.recordUpsert(transaction, 'goal', record);
+    await this.indexedDb.refreshBalanceSnapshots(transaction, completion);
     await completion;
     this.mutationRecorder.notifyCommitted(recorded);
     return true;

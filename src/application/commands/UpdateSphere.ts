@@ -1,4 +1,5 @@
 import type { EntityId, Sphere } from '../../domain';
+import type { SphereBalanceSettings } from '../../domain/balance/BalanceImportance';
 import { DomainError } from '../../shared/errors/DomainError';
 import { failure, success, type Result } from '../../shared/result/Result';
 import type { Clock } from '../ports/Clock';
@@ -11,7 +12,7 @@ import {
   validSphereExpectedVersion,
 } from './sphereCommandSupport';
 
-export interface UpdateSphereInput {
+export interface UpdateSphereInput extends SphereBalanceSettings {
   readonly id: EntityId;
   readonly expectedVersion: number;
   readonly name: string;
@@ -39,6 +40,7 @@ export class UpdateSphere {
     try {
       const updated = stored.update(
         {
+          ...input,
           name: input.name,
           ...(input.description === undefined ? {} : { description: input.description }),
           ...(input.icon === undefined ? {} : { icon: input.icon }),

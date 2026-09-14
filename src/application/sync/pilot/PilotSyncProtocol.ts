@@ -101,7 +101,7 @@ function isSyncEntityType(value: string): value is PilotEntityType {
   return (SYNC_ENTITY_TYPES as readonly string[]).includes(value);
 }
 
-function sortJsonValue(value: unknown): unknown {
+export function sortJsonValue(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(sortJsonValue);
   if (!isRecord(value)) return value;
   return Object.fromEntries(

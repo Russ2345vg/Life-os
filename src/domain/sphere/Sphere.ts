@@ -1,5 +1,11 @@
 import { DomainError } from '../../shared/errors/DomainError';
 import { Entity } from '../shared/Entity';
+import {
+  balanceImportance,
+  balanceScore,
+  type BalanceImportance,
+  type SphereBalanceSettings,
+} from '../balance/BalanceImportance';
 import type { EntityId } from '../shared/EntityId';
 import { isSphereStatus, SPHERE_STATUS, type SphereStatus } from './SphereStatus';
 
@@ -7,7 +13,7 @@ export const MAX_SPHERE_NAME_LENGTH = 120;
 export const MAX_SPHERE_DESCRIPTION_LENGTH = 500;
 export const MAX_SPHERE_ICON_LENGTH = 16;
 
-export interface SphereCreationData {
+export interface SphereCreationData extends SphereBalanceSettings {
   readonly id: EntityId;
   readonly name: string;
   readonly description?: string | null;
@@ -16,14 +22,14 @@ export interface SphereCreationData {
   readonly now: Date;
 }
 
-export interface SphereDetails {
+export interface SphereDetails extends SphereBalanceSettings {
   readonly name: string;
   readonly description?: string | null;
   readonly icon?: string | null;
   readonly color?: string | null;
 }
 
-export interface SphereRehydrationData {
+export interface SphereRehydrationData extends SphereBalanceSettings {
   readonly id: EntityId;
   readonly name: string;
   readonly description: string | null;
@@ -36,6 +42,10 @@ export interface SphereRehydrationData {
 }
 
 export class Sphere extends Entity {
+  public readonly importance: BalanceImportance;
+  public readonly manualScore: number | null;
+  public readonly desiredLevel: number | null;
+  public readonly includeInBalanceWheel: boolean;
   public readonly name: string;
   public readonly description: string | null;
   public readonly icon: string | null;
@@ -47,6 +57,12 @@ export class Sphere extends Entity {
 
   private constructor(data: SphereRehydrationData) {
     super(data.id);
+    this.importance = balanceImportance(data.importance);
+    this.manualScore = balanceScore(data.manualScore);
+    this.desiredLevel = balanceScore(data.desiredLevel);
+    this.includeInBalanceWheel = data.includeInBalanceWheel ?? false;
+    if (typeof this.includeInBalanceWheel !== 'boolean')
+      throw new DomainError('sphere.invalid_wheel_setting', 'Выберите участие в колесе.');
     this.name = normalizeSphereName(data.name);
     this.description = normalizeOptionalText(
       data.description,
@@ -81,6 +97,7 @@ export class Sphere extends Entity {
 
   public static create(data: SphereCreationData): Sphere {
     return new Sphere({
+      ...data,
       id: data.id,
       name: data.name,
       description: data.description ?? null,
@@ -100,10 +117,14 @@ export class Sphere extends Entity {
   public update(details: SphereDetails, updatedAt: Date): Sphere {
     return new Sphere({
       ...this.toRehydrationData(),
+      importance: details.importance ?? this.importance,
+      manualScore: details.manualScore === undefined ? this.manualScore : details.manualScore,
+      desiredLevel: details.desiredLevel === undefined ? this.desiredLevel : details.desiredLevel,
+      includeInBalanceWheel: details.includeInBalanceWheel ?? this.includeInBalanceWheel,
       name: details.name,
-      description: details.description ?? null,
-      icon: details.icon ?? null,
-      color: details.color ?? null,
+      description: details.description === undefined ? this.description : details.description,
+      icon: details.icon === undefined ? this.icon : details.icon,
+      color: details.color === undefined ? this.color : details.color,
       updatedAt,
       version: this.version + 1,
     });
@@ -131,6 +152,10 @@ export class Sphere extends Entity {
 
   private toRehydrationData(): SphereRehydrationData {
     return {
+      importance: this.importance,
+      manualScore: this.manualScore,
+      desiredLevel: this.desiredLevel,
+      includeInBalanceWheel: this.includeInBalanceWheel,
       id: this.id,
       name: this.name,
       description: this.description,

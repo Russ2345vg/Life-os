@@ -40,6 +40,37 @@ export function structuredSyncFixtures(): Readonly<
   const id = (type: string) => EntityId.create(`sync04-${type}`);
   const common = { now, occurredAt: now, createdAt: now };
   return {
+    direction_indicator: {
+      id: 'indicator:sync04-direction:0',
+      directionId: 'sync04-direction',
+      name: 'Состояние',
+      type: 'rating',
+      value: 7,
+      target: null,
+      importance: 'high',
+      sourceType: 'manual',
+      sourceGoalId: null,
+      removed: false,
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+      version: 1,
+      schemaVersion: 1,
+    },
+    balance_monthly_snapshot: {
+      id: 'monthly:sphere:sync04-sphere:2026-09',
+      entityId: 'sync04-sphere',
+      entityType: 'sphere',
+      month: '2026-09',
+      automaticScore: 7,
+      manualScore: null,
+      effectiveScore: 7,
+      desiredLevel: 8,
+      attentionNeed: 2,
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+      version: 1,
+      schemaVersion: 1,
+    },
     planning_period: {
       id: 'week:2026-09-07',
       kind: 'week',

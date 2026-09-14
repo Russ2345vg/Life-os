@@ -44,7 +44,10 @@ export class IndexedDbJournalUnitOfWork implements JournalUnitOfWork {
     const stores = collectStores(input);
     let transaction: IDBTransaction;
     try {
-      transaction = database.transaction(stores, 'readwrite');
+      transaction = database.transaction(
+        this.#indexedDb.balanceTransactionStores(stores),
+        'readwrite',
+      );
     } catch (error: unknown) {
       throw transactionFailed(error);
     }
@@ -96,7 +99,10 @@ export class IndexedDbJournalUnitOfWork implements JournalUnitOfWork {
       }
       let pilotMutationRecorded = false;
       for (const change of input.directions ?? []) {
-        const record = DirectionRecordMapper.toRecord(change.direction);
+        const previous = await observeRequest<Readonly<Record<string, unknown>> | undefined>(
+          transaction.objectStore(LIFE_OS_STORE.directions).get(change.direction.id.toString()),
+        );
+        const record = { ...previous, ...DirectionRecordMapper.toRecord(change.direction) };
         writes.push(observeRequest(transaction.objectStore(LIFE_OS_STORE.directions).put(record)));
         pilotMutationRecorded =
           (await this.#mutationRecorder.recordUpsert(transaction, 'direction', record)) ||
@@ -123,6 +129,7 @@ export class IndexedDbJournalUnitOfWork implements JournalUnitOfWork {
           observeRequest(transaction.objectStore(LIFE_OS_STORE.contributionLinks).add(l)),
         );
       await Promise.all(writes);
+      await this.#indexedDb.refreshBalanceSnapshots(transaction);
 
       await completion;
       this.#mutationRecorder.notifyCommitted(pilotMutationRecorded);

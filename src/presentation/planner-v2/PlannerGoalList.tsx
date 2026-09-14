@@ -21,14 +21,16 @@ export function PlannerGoalList({
   spheres,
   actions,
   focusIds,
+  initialSphereId = '',
 }: {
   readonly goals: readonly Goal[];
   readonly directions: readonly Direction[];
   readonly spheres: readonly Sphere[];
   readonly actions: readonly LifeAction[];
   readonly focusIds: readonly string[];
+  readonly initialSphereId?: string;
 }) {
-  const [filters, setFilters] = useState(emptyGoalFilters);
+  const [filters, setFilters] = useState({ ...emptyGoalFilters(), sphereId: initialSphereId });
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
   const change = <K extends keyof GoalFilters>(key: K, value: GoalFilters[K]) =>

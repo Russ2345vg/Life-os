@@ -1,5 +1,13 @@
 import { DomainError } from '../../shared/errors/DomainError';
 import { Entity } from '../shared/Entity';
+import {
+  balanceImportance,
+  balanceScore,
+  directionMode,
+  type BalanceImportance,
+  type DirectionMode,
+  type DirectionBalanceSettings,
+} from '../balance/BalanceImportance';
 import type { EntityId } from '../shared/EntityId';
 import { DIRECTION_STATUS, isDirectionStatus, type DirectionStatus } from './DirectionStatus';
 
@@ -7,7 +15,7 @@ export const MAX_DIRECTION_NAME_LENGTH = 160;
 export const MAX_DIRECTION_DESCRIPTION_LENGTH = 2_000;
 export const MAX_DIRECTION_STRATEGIC_TEXT_LENGTH = 4_000;
 
-export interface DirectionCreationData {
+export interface DirectionCreationData extends DirectionBalanceSettings {
   readonly id: EntityId;
   readonly sphereId?: EntityId | null;
   readonly name: string;
@@ -20,7 +28,8 @@ export interface DirectionCreationData {
   readonly now: Date;
 }
 
-export interface DirectionDetails {
+export interface DirectionDetails extends DirectionBalanceSettings {
+  readonly status?: DirectionStatus;
   readonly sphereId?: EntityId | null;
   readonly name: string;
   readonly description?: string | null;
@@ -30,7 +39,7 @@ export interface DirectionDetails {
   readonly outOfScope?: string | null;
 }
 
-export interface DirectionRehydrationData {
+export interface DirectionRehydrationData extends DirectionBalanceSettings {
   readonly id: EntityId;
   readonly sphereId: EntityId | null;
   readonly name: string;
@@ -47,6 +56,10 @@ export interface DirectionRehydrationData {
 }
 
 export class Direction extends Entity {
+  public readonly importance: BalanceImportance;
+  public readonly manualScore: number | null;
+  public readonly currentStateText: string | null;
+  public readonly mode: DirectionMode;
   public readonly sphereId: EntityId | null;
   public readonly name: string;
   public readonly description: string | null;
@@ -62,6 +75,13 @@ export class Direction extends Entity {
 
   private constructor(data: DirectionRehydrationData) {
     super(data.id);
+    this.importance = balanceImportance(data.importance);
+    this.manualScore = balanceScore(data.manualScore);
+    this.mode = directionMode(data.mode);
+    this.currentStateText = normalizeStrategicText(
+      data.currentStateText ?? null,
+      'direction.current_state_too_long',
+    );
     this.sphereId = data.sphereId;
     this.name = normalizeRequiredText(
       data.name,
@@ -93,7 +113,7 @@ export class Direction extends Entity {
         'Признак главного направления указан неверно.',
       );
     }
-    if (data.status === DIRECTION_STATUS.archived && data.isMain) {
+    if (data.status !== DIRECTION_STATUS.active && data.isMain) {
       throw new DomainError(
         'direction.archived_cannot_be_main',
         'Архивное направление не может быть главным.',
@@ -109,6 +129,7 @@ export class Direction extends Entity {
 
   public static create(data: DirectionCreationData): Direction {
     return new Direction({
+      ...data,
       id: data.id,
       sphereId: data.sphereId ?? null,
       name: data.name,
@@ -132,6 +153,13 @@ export class Direction extends Entity {
   public update(details: DirectionDetails, updatedAt: Date): Direction {
     return new Direction({
       ...this.toRehydrationData(),
+      importance: details.importance ?? this.importance,
+      manualScore: details.manualScore === undefined ? this.manualScore : details.manualScore,
+      mode: details.mode ?? this.mode,
+      currentStateText:
+        details.currentStateText === undefined ? this.currentStateText : details.currentStateText,
+      status: details.status ?? this.status,
+      isMain: (details.status ?? this.status) === 'active' && this.isMain,
       sphereId: details.sphereId === undefined ? this.sphereId : details.sphereId,
       name: details.name,
       description: details.description === undefined ? this.description : details.description,
@@ -196,6 +224,10 @@ export class Direction extends Entity {
 
   private toRehydrationData(): DirectionRehydrationData {
     return {
+      importance: this.importance,
+      manualScore: this.manualScore,
+      currentStateText: this.currentStateText,
+      mode: this.mode,
       id: this.id,
       sphereId: this.sphereId,
       name: this.name,

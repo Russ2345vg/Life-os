@@ -203,6 +203,7 @@ export function ApplicationShell() {
       const nextDate = application.currentDateProvider.getCurrentDate();
       if (!nextDate.equals(currentDate)) {
         const nextDay = await application.ensureCurrentDay.execute();
+        await application.balance.refreshSnapshots();
         if (!active) return;
         setCurrentDate(nextDate);
         setCurrentDay(nextDay);

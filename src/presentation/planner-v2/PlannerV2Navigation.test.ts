@@ -22,6 +22,11 @@ describe('V2 preview routes', () => {
       { view: 'tree', section: 'goals' },
       { view: 'tree', section: 'actions' },
       { view: 'actions' },
+      { view: 'spheres' },
+      { view: 'sphere', id: 'здоровье / дом' },
+      { view: 'direction', id: 'сон' },
+      { view: 'goals', sphereId: 'здоровье / дом' },
+      { view: 'planning', sphereId: 'здоровье / дом' },
       { view: 'inbox' },
       { view: 'action', id: 'inbox-result:русский / id' },
     ] as const)
@@ -57,7 +62,8 @@ describe('V2 preview routes', () => {
     );
     const mainNav = markup.match(/<nav aria-label="Рабочий интерфейс">([\s\S]*?)<\/nav>/)?.[1];
     expect(mainNav).toBeDefined();
-    expect(mainNav?.match(/<a /g)).toHaveLength(4);
+    expect(mainNav?.match(/<a /g)).toHaveLength(5);
+    expect(mainNav).toContain('Сферы');
     expect(mainNav).not.toContain('Планирование');
     expect(mainNav).toMatch(/href="#\/v2\/goals" aria-current="page"/);
     expect(markup).toContain('<option value="#/v2/goals/plans" selected="">Планы</option>');

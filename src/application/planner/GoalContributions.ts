@@ -18,7 +18,9 @@ import { DomainError } from '../../shared/errors/DomainError';
 import { requireGoal, requireAction, put, planningJournal, localDate } from './planningSupport';
 
 /** Builds indexes once per loaded state; React reads only the selected goal's contributions. */
-export function createGoalProgressReader(state: PlanningState) {
+export function createGoalProgressReader(
+  state: Pick<PlanningState, 'actions' | 'goals' | 'contributions'>,
+) {
   const actions = new Map(state.actions.map((a) => [a.id.toString(), a]));
   const goals = new Map(state.goals.map((g) => [g.id.toString(), g]));
   const byGoal = new Map<string, ProgressContribution[]>();

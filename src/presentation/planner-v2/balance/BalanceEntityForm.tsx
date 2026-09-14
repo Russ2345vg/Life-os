@@ -1,0 +1,173 @@
+import { useState } from 'react';
+import { EntityId, type Sphere, type Direction } from '../../../domain';
+import type { BalanceServices } from '../../../application/balance/BalanceServices';
+import type { BalanceImportance, DirectionMode } from '../../../domain/balance/BalanceImportance';
+import type { DirectionStatus } from '../../../domain/direction/DirectionStatus';
+import { VoiceField } from '../../voice-input/VoiceField';
+import { VoiceTextInput } from '../../voice-input/VoiceTextInput';
+import { VoiceTextArea } from '../../voice-input/VoiceTextArea';
+import { BalanceForm, ImportanceField, ScoreField } from './BalanceFormParts';
+
+export function BalanceEntityForm({
+  kind,
+  entity,
+  sphereId,
+  spheres,
+  services,
+  onSaved,
+  onCancel,
+}: {
+  readonly kind: 'sphere' | 'direction';
+  readonly entity: Sphere | Direction | null;
+  readonly sphereId: string | null;
+  readonly spheres: readonly Sphere[];
+  readonly services: BalanceServices;
+  readonly onSaved: () => Promise<void>;
+  readonly onCancel: () => void;
+}) {
+  const direction = entity && 'mode' in entity ? entity : null,
+    sphere = entity && 'desiredLevel' in entity ? entity : null;
+  const [name, setName] = useState(entity?.name ?? ''),
+    [importance, setImportance] = useState<BalanceImportance>(entity?.importance ?? 'normal'),
+    [manual, setManual] = useState(entity?.manualScore?.toString() ?? ''),
+    [desired, setDesired] = useState(sphere?.desiredLevel?.toString() ?? ''),
+    [include, setInclude] = useState(sphere?.includeInBalanceWheel ?? false),
+    [owner, setOwner] = useState(direction?.sphereId?.toString() ?? sphereId ?? ''),
+    [current, setCurrent] = useState(direction?.currentStateText ?? ''),
+    [future, setFuture] = useState(direction?.desiredState ?? ''),
+    [mode, setMode] = useState<DirectionMode>(direction?.mode ?? 'develop'),
+    [status, setStatus] = useState<DirectionStatus>(direction?.status ?? 'active');
+  const save = async () => {
+    const common = { name, importance, manualScore: manual === '' ? null : Number(manual) };
+    const result =
+      kind === 'sphere'
+        ? sphere
+          ? await services.updateSphere.execute({
+              ...common,
+              id: sphere.id,
+              expectedVersion: sphere.version,
+              desiredLevel: desired === '' ? null : Number(desired),
+              includeInBalanceWheel: include,
+            })
+          : await services.createSphere.execute({
+              ...common,
+              desiredLevel: desired === '' ? null : Number(desired),
+              includeInBalanceWheel: include,
+            })
+        : direction
+          ? await services.updateDirection.execute({
+              ...common,
+              id: direction.id,
+              expectedVersion: direction.version,
+              sphereId: owner ? EntityId.create(owner) : null,
+              currentStateText: current,
+              desiredState: future,
+              mode,
+              status,
+            })
+          : await services.createDirection.execute({
+              ...common,
+              sphereId: owner ? EntityId.create(owner) : null,
+              currentStateText: current,
+              desiredState: future,
+              mode,
+            });
+    if (!result.ok) throw result.error;
+    await onSaved();
+  };
+  return (
+    <BalanceForm
+      title={entity ? 'Редактирование' : kind === 'sphere' ? 'Новая сфера' : 'Новое направление'}
+      onSave={save}
+      onCancel={onCancel}
+    >
+      <VoiceField>
+        <span>Название</span>
+        <VoiceTextInput
+          id="balance-entity-name"
+          value={name}
+          onValueChange={setName}
+          required
+          maxLength={120}
+          autoFocus
+        />
+      </VoiceField>
+      {kind === 'direction' && (
+        <label>
+          <span>Сфера</span>
+          <select value={owner} onChange={(e) => setOwner(e.target.value)}>
+            <option value="">Без сферы</option>
+            {spheres.map((s) => (
+              <option value={s.id.toString()} key={s.id.toString()}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      <details open={entity !== null}>
+        <summary>Состояние и настройки</summary>
+        <div className="balance-fields">
+          {kind === 'direction' && (
+            <>
+              <VoiceField>
+                <span>Текущее состояние</span>
+                <VoiceTextArea
+                  id="balance-current-state"
+                  value={current}
+                  onValueChange={setCurrent}
+                  maxLength={2000}
+                />
+              </VoiceField>
+              <VoiceField>
+                <span>Желаемое состояние</span>
+                <VoiceTextArea
+                  id="balance-desired-state"
+                  value={future}
+                  onValueChange={setFuture}
+                  maxLength={2000}
+                />
+              </VoiceField>
+              <label>
+                <span>Режим</span>
+                <select value={mode} onChange={(e) => setMode(e.target.value as DirectionMode)}>
+                  <option value="develop">Развиваю</option>
+                  <option value="maintain">Поддерживаю</option>
+                </select>
+              </label>
+              {direction && (
+                <label>
+                  <span>Статус</span>
+                  <select
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value as DirectionStatus)}
+                  >
+                    <option value="active">Активно</option>
+                    <option value="paused">На паузе</option>
+                    <option value="archived">В архиве</option>
+                  </select>
+                </label>
+              )}
+            </>
+          )}
+          <ImportanceField value={importance} onChange={setImportance} />
+          <ScoreField label="Ручная оценка · 0–10" value={manual} onChange={setManual} />
+          <p className="planner-muted">Пустая ручная оценка включает автоматический расчёт.</p>
+          {kind === 'sphere' && (
+            <>
+              <ScoreField label="Желаемый уровень · 0–10" value={desired} onChange={setDesired} />
+              <label className="balance-check">
+                <input
+                  type="checkbox"
+                  checked={include}
+                  onChange={(e) => setInclude(e.target.checked)}
+                />
+                Включить в колесо
+              </label>
+            </>
+          )}
+        </div>
+      </details>
+    </BalanceForm>
+  );
+}

@@ -1,4 +1,5 @@
 import { Direction, type EntityId } from '../../domain';
+import type { DirectionBalanceSettings } from '../../domain/balance/BalanceImportance';
 import { DomainError } from '../../shared/errors/DomainError';
 import { failure, success, type Result } from '../../shared/result/Result';
 import type { Clock } from '../ports/Clock';
@@ -6,7 +7,7 @@ import type { DirectionRepository } from '../ports/DirectionRepository';
 import type { IdGenerator } from '../ports/IdGenerator';
 import { directionFailure } from './directionCommandSupport';
 
-export interface CreateDirectionInput {
+export interface CreateDirectionInput extends DirectionBalanceSettings {
   readonly sphereId?: EntityId | null;
   readonly name: string;
   readonly description?: string | null;
@@ -26,6 +27,7 @@ export class CreateDirection {
   public async execute(input: CreateDirectionInput): Promise<Result<Direction, DomainError>> {
     try {
       const direction = Direction.create({
+        ...input,
         id: this.idGenerator.generate(),
         ...(input.sphereId === undefined ? {} : { sphereId: input.sphereId }),
         name: input.name,

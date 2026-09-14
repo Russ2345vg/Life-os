@@ -1,4 +1,8 @@
 import {
+  DirectionIndicatorRecordMapper,
+  BalanceMonthlySnapshotRecordMapper,
+} from '../../persistence/BalanceRecordMappers';
+import {
   PlanningPeriodRecordMapper,
   PeriodMembershipRecordMapper,
   PeriodDecisionRecordMapper,
@@ -14,6 +18,7 @@ import { DomainError } from '../../../shared/errors/DomainError';
 import { normalizeLegacyGoalLinks } from '../../../shared/legacyGoalIdentity';
 import { parseEveningRitualSettings } from '../../../application/evening-settings';
 import type { PilotEntityType } from '../../../application/sync/pilot';
+import { sortJsonValue } from '../../../application/sync/pilot/PilotSyncProtocol';
 import type { SyncEntityRegistration } from '../../../application/sync/SyncRegistry';
 import {
   ActionSessionRecordMapper,
@@ -105,7 +110,36 @@ function mapped<TDomain, TRecord extends object>(
   };
 }
 
+function balanceMapped<TDomain, TRecord extends object>(
+  mapper: Mapper<TDomain, TRecord>,
+  fields: readonly string[],
+  references: PilotAdapterBinding['references'] = noReferences,
+): PilotAdapterBinding {
+  const binding = mapped(mapper, references, true);
+  return {
+    ...binding,
+    normalize: (value) =>
+      withoutFields(
+        binding.normalize(value),
+        fields.filter((field) => !Object.hasOwn(isRecord(value) ? value : {}, field)),
+      ),
+  };
+}
+
 const PILOT_BINDINGS: Readonly<Record<PilotEntityType, PilotAdapterBinding>> = Object.freeze({
+  direction_indicator: mapped(
+    DirectionIndicatorRecordMapper,
+    (r) => [
+      ...required(r, 'directionId', 'direction'),
+      ...(r.sourceGoalId === null ? [] : orphanSafe(r, 'sourceGoalId', 'goal')),
+    ],
+    true,
+  ),
+  balance_monthly_snapshot: mapped(
+    BalanceMonthlySnapshotRecordMapper,
+    (r) => orphanSafe(r, 'entityId', r.entityType === 'sphere' ? 'sphere' : 'direction'),
+    true,
+  ),
   planning_period: mapped(PlanningPeriodRecordMapper, (r) => optional(r, 'primaryGoalId', 'goal')),
   recurrence_rule: mapped(RecurrenceRuleRecordMapper, (r) => optional(r, 'goalId', 'goal')),
   period_membership: mapped(PeriodMembershipRecordMapper, (r) => [
@@ -126,8 +160,17 @@ const PILOT_BINDINGS: Readonly<Record<PilotEntityType, PilotAdapterBinding>> = O
     ...optional(r, 'actionId', 'life_action'),
     ...optional(r, 'linkId', 'contribution_link'),
   ]),
-  sphere: mapped(SphereRecordMapper),
-  direction: mapped(DirectionRecordMapper, (record) => optional(record, 'sphereId', 'sphere')),
+  sphere: balanceMapped(SphereRecordMapper, [
+    'importance',
+    'manualScore',
+    'desiredLevel',
+    'includeInBalanceWheel',
+  ]),
+  direction: balanceMapped(
+    DirectionRecordMapper,
+    ['importance', 'manualScore', 'mode', 'currentStateText'],
+    (record) => optional(record, 'sphereId', 'sphere'),
+  ),
   project: mapped(ProjectRecordMapper, (record) => [
     ...optional(record, 'sphereId', 'sphere'),
     ...optional(record, 'directionId', 'direction'),
@@ -313,8 +356,8 @@ export function haveSamePilotSemanticContent(
   incoming: unknown,
 ): boolean {
   return (
-    JSON.stringify(semanticContent(normalizePilotRecord(entityType, local))) ===
-    JSON.stringify(semanticContent(normalizePilotRecord(entityType, incoming)))
+    JSON.stringify(sortJsonValue(semanticContent(normalizePilotRecord(entityType, local)))) ===
+    JSON.stringify(sortJsonValue(semanticContent(normalizePilotRecord(entityType, incoming))))
   );
 }
 

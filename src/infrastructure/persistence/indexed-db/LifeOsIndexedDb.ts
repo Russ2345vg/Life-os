@@ -45,9 +45,11 @@ interface MutationCaptureConfiguration {
 }
 
 export const LIFE_OS_DATABASE_NAME = 'lifeos';
-export const LIFE_OS_DATABASE_VERSION = 24;
+export const LIFE_OS_DATABASE_VERSION = 25;
 
 export const LIFE_OS_DOMAIN_STORE = {
+  directionIndicators: 'directionIndicators',
+  balanceMonthlySnapshots: 'balanceMonthlySnapshots',
   planningPeriods: 'planningPeriods',
   periodMemberships: 'periodMemberships',
   periodDecisions: 'periodDecisions',
@@ -95,6 +97,35 @@ export const LIFE_OS_SYNC_STORE = {
 } as const;
 
 export class LifeOsIndexedDb {
+  #balanceStores: readonly string[] = [];
+  #balanceRefresh: ((tx: IDBTransaction) => Promise<void>) | null = null;
+  public configureBalanceSnapshots(
+    stores: readonly string[],
+    refresh: (tx: IDBTransaction) => Promise<void>,
+  ): void {
+    this.#balanceStores = stores;
+    this.#balanceRefresh = refresh;
+  }
+  public balanceTransactionStores(stores: readonly string[]): string[] {
+    return [...new Set([...stores, ...this.#balanceStores])];
+  }
+  public async refreshBalanceSnapshots(
+    tx: IDBTransaction,
+    completion?: Promise<void>,
+  ): Promise<void> {
+    const settled = completion?.catch(() => undefined);
+    try {
+      await this.#balanceRefresh?.(tx);
+    } catch (error: unknown) {
+      try {
+        tx.abort();
+      } catch {
+        /* Transaction already settled. */
+      }
+      await settled;
+      throw error;
+    }
+  }
   readonly #indexedDb: IDBFactory | undefined;
   #database: IDBDatabase | null = null;
   #exposedDatabase: IDBDatabase | null = null;
@@ -246,6 +277,14 @@ export class LifeOsIndexedDb {
               if (!request.result.objectStoreNames.contains(store))
                 request.result.createObjectStore(store, { keyPath: 'id' });
             }
+          }
+          if (oldVersion < 25) {
+            for (const name of [
+              LIFE_OS_STORE.directionIndicators,
+              LIFE_OS_STORE.balanceMonthlySnapshots,
+            ])
+              if (!request.result.objectStoreNames.contains(name))
+                request.result.createObjectStore(name, { keyPath: 'id' });
           }
           if (oldVersion < 22 && request.transaction)
             upgradeLegacyProjects(request.result, request.transaction);

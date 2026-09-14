@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { LIFE_OS_SYNC_REGISTRY } from './LifeOsSyncRegistry';
 
 const EXPECTED_ENTITY_TYPES = [
+  'direction_indicator',
+  'balance_monthly_snapshot',
   'contribution_link',
   'period_decision',
   'period_membership',
@@ -35,6 +37,8 @@ const EXPECTED_ENTITY_TYPES = [
 ] as const;
 
 const EXPECTED_ENTITY_STORES = {
+  direction_indicator: 'directionIndicators',
+  balance_monthly_snapshot: 'balanceMonthlySnapshots',
   contribution_link: 'contributionLinks',
   period_decision: 'periodDecisions',
   period_membership: 'periodMemberships',
@@ -94,7 +98,7 @@ describe('LIFE_OS_SYNC_REGISTRY', () => {
       LIFE_OS_SYNC_REGISTRY.filter(({ storageKind }) => storageKind === 'indexed_db').map(
         ({ storeName }) => storeName,
       ),
-    ).toHaveLength(29);
+    ).toHaveLength(31);
     expect(LIFE_OS_SYNC_REGISTRY.every(({ readiness }) => readiness === 'sync_ready')).toBe(true);
   });
 

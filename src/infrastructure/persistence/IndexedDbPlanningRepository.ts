@@ -46,11 +46,11 @@ export class IndexedDbPlanningRepository implements PlanningRepository {
   private async run<T>(mode: IDBTransactionMode, work: (state: PlanningState) => T): Promise<T> {
     const db = await this.database.open();
     const tx = db.transaction(
-      [
+      this.database.balanceTransactionStores([
         ...Object.values(bindings).map((b) => b.store),
         LIFE_OS_STORE.journal,
         ...(mode === 'readwrite' ? PILOT_MUTATION_STORES : []),
-      ],
+      ]),
       mode,
     );
     const done = new Promise<void>((resolve, reject) => {
@@ -110,6 +110,7 @@ export class IndexedDbPlanningRepository implements PlanningRepository {
             tx.objectStore(LIFE_OS_STORE.journal).add(JournalEntryRecordMapper.toRecord(entry)),
           );
       }
+      if (mode === 'readwrite') await this.database.refreshBalanceSnapshots(tx);
       await done;
       if (changed || state.journal.length) this.recorder.notifyCommitted(true);
       return result;

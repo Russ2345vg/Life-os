@@ -1,4 +1,5 @@
 import { Sphere, isSphereStatus, sphereNameKey } from '../../../domain';
+import { balanceImportance, balanceScore } from '../../../domain/balance/BalanceImportance';
 import {
   assertRecordAndSchemaVersion,
   invalidRecord,
@@ -14,6 +15,10 @@ import type { SphereRecord } from '../records/SphereRecord';
 export class SphereRecordMapper {
   public static toRecord(sphere: Sphere): SphereRecord {
     return {
+      importance: sphere.importance,
+      manualScore: sphere.manualScore,
+      desiredLevel: sphere.desiredLevel,
+      includeInBalanceWheel: sphere.includeInBalanceWheel,
       schemaVersion: 1,
       id: sphere.id.toString(),
       name: sphere.name,
@@ -42,6 +47,10 @@ export class SphereRecordMapper {
     }
 
     return Sphere.rehydrate({
+      importance: balanceImportance(record.importance),
+      manualScore: balanceScore(record.manualScore),
+      desiredLevel: balanceScore(record.desiredLevel),
+      includeInBalanceWheel: readWheelSetting(record.includeInBalanceWheel),
       id: readEntityId(record, 'id'),
       name,
       description: readNullableString(record, 'description'),
@@ -53,4 +62,10 @@ export class SphereRecordMapper {
       version: readNumber(record, 'version'),
     });
   }
+}
+
+function readWheelSetting(value: unknown): boolean {
+  if (value === undefined) return false;
+  if (typeof value !== 'boolean') throw invalidRecord('Участие в колесе должно быть логическим.');
+  return value;
 }

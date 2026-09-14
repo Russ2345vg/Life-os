@@ -36,7 +36,10 @@ export class IndexedDbSphereRepository implements SphereRepository {
 
   public async createIfNameAvailable(sphere: Sphere): Promise<CreateSpherePersistenceResult> {
     const database = await this.indexedDb.open();
-    const transaction = database.transaction(LIFE_OS_STORE.spheres, 'readwrite');
+    const transaction = database.transaction(
+      this.indexedDb.balanceTransactionStores([LIFE_OS_STORE.spheres]),
+      'readwrite',
+    );
     const store = transaction.objectStore(LIFE_OS_STORE.spheres);
     const completion = observeTransaction(transaction);
     try {
@@ -49,6 +52,7 @@ export class IndexedDbSphereRepository implements SphereRepository {
       );
       if (existingName !== undefined) return abortWith(transaction, completion, 'nameConflict');
       await observeRequest(store.add(SphereRecordMapper.toRecord(sphere)));
+      await this.indexedDb.refreshBalanceSnapshots(transaction);
       await completion;
       return 'saved';
     } catch (error: unknown) {
@@ -63,7 +67,10 @@ export class IndexedDbSphereRepository implements SphereRepository {
     expectedVersion: number,
   ): Promise<UpdateSpherePersistenceResult> {
     const database = await this.indexedDb.open();
-    const transaction = database.transaction(LIFE_OS_STORE.spheres, 'readwrite');
+    const transaction = database.transaction(
+      this.indexedDb.balanceTransactionStores([LIFE_OS_STORE.spheres]),
+      'readwrite',
+    );
     const store = transaction.objectStore(LIFE_OS_STORE.spheres);
     const completion = observeTransaction(transaction);
     try {
@@ -79,7 +86,8 @@ export class IndexedDbSphereRepository implements SphereRepository {
       if (sameName !== undefined && sameName.id !== sphere.id.toString()) {
         return abortWith(transaction, completion, 'nameConflict');
       }
-      await observeRequest(store.put(SphereRecordMapper.toRecord(sphere)));
+      await observeRequest(store.put({ ...stored, ...SphereRecordMapper.toRecord(sphere) }));
+      await this.indexedDb.refreshBalanceSnapshots(transaction);
       await completion;
       return 'saved';
     } catch (error: unknown) {

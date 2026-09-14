@@ -282,6 +282,8 @@ describe('PilotBootstrapService', () => {
     await done(seed);
     const expanded = database.transaction(LIFE_OS_SYNC_STORE.settings, 'readwrite');
     for (const type of [
+      'direction_indicator',
+      'balance_monthly_snapshot',
       'planning_period',
       'period_membership',
       'period_decision',

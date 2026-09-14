@@ -76,14 +76,27 @@ export class IndexedDbLifeActionRepository
     const record = LifeActionRecordMapper.toRecord(lifeAction);
 
     await new Promise<void>((resolve, reject) => {
-      const tx = database.transaction(LIFE_OS_STORE.lifeActions, 'readwrite'),
+      const tx = database.transaction(
+          this.#indexedDb.balanceTransactionStores([LIFE_OS_STORE.lifeActions]),
+          'readwrite',
+        ),
         store = tx.objectStore(LIFE_OS_STORE.lifeActions);
       tx.oncomplete = () => resolve();
       tx.onabort = () => reject(tx.error);
       tx.onerror = () => reject(tx.error);
       const get = store.get(record.id);
       get.onsuccess = () => {
-        store.put({ ...get.result, ...record });
+        const put = store.put({ ...get.result, ...record });
+        put.onsuccess = () => {
+          void this.#indexedDb.refreshBalanceSnapshots(tx).catch((error: unknown) => {
+            try {
+              tx.abort();
+            } catch {
+              /* Refresh already aborted the transaction. */
+            }
+            reject(error);
+          });
+        };
       };
     });
   }

@@ -163,9 +163,11 @@ describe('LifeOsIndexedDb', () => {
     expect(database.version).toBe(LIFE_OS_DATABASE_VERSION);
     expect([...database.objectStoreNames]).toEqual([
       LIFE_OS_STORE.actionSessions,
+      LIFE_OS_STORE.balanceMonthlySnapshots,
       LIFE_OS_STORE.contributionLinks,
       LIFE_OS_STORE.days,
       LIFE_OS_STORE.decisions,
+      LIFE_OS_STORE.directionIndicators,
       LIFE_OS_STORE.directions,
       LIFE_OS_STORE.eveningCycles,
       LIFE_OS_STORE.exerciseDefinitions,
@@ -397,7 +399,7 @@ describe('LifeOsIndexedDb', () => {
     const secondConnection = await indexedDb.open();
 
     expect(secondConnection).not.toBe(firstConnection);
-    expect([...secondConnection.objectStoreNames]).toHaveLength(41);
+    expect([...secondConnection.objectStoreNames]).toHaveLength(43);
     indexedDb.close();
   });
 

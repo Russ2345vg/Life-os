@@ -38,7 +38,7 @@ export class IndexedDbDirectionRepository implements DirectionRepository {
   public async create(direction: Direction): Promise<boolean> {
     const database = await this.indexedDb.open();
     const transaction = database.transaction(
-      [LIFE_OS_STORE.directions, ...PILOT_MUTATION_STORES],
+      this.indexedDb.balanceTransactionStores([LIFE_OS_STORE.directions, ...PILOT_MUTATION_STORES]),
       'readwrite',
     );
     const completion = observeTransaction(transaction);
@@ -46,6 +46,7 @@ export class IndexedDbDirectionRepository implements DirectionRepository {
       const record = DirectionRecordMapper.toRecord(direction);
       await observeRequest(transaction.objectStore(LIFE_OS_STORE.directions).add(record));
       const recorded = await this.mutationRecorder.recordUpsert(transaction, 'direction', record);
+      await this.indexedDb.refreshBalanceSnapshots(transaction, completion);
       await completion;
       this.mutationRecorder.notifyCommitted(recorded);
       return true;
@@ -63,7 +64,7 @@ export class IndexedDbDirectionRepository implements DirectionRepository {
   ): Promise<boolean> {
     const database = await this.indexedDb.open();
     const transaction = database.transaction(
-      [LIFE_OS_STORE.directions, ...PILOT_MUTATION_STORES],
+      this.indexedDb.balanceTransactionStores([LIFE_OS_STORE.directions, ...PILOT_MUTATION_STORES]),
       'readwrite',
     );
     const store = transaction.objectStore(LIFE_OS_STORE.directions);
@@ -76,9 +77,10 @@ export class IndexedDbDirectionRepository implements DirectionRepository {
       await settleTransaction(completion);
       return false;
     }
-    const record = DirectionRecordMapper.toRecord(direction);
+    const record = { ...stored, ...DirectionRecordMapper.toRecord(direction) };
     await observeRequest(store.put(record));
     const recorded = await this.mutationRecorder.recordUpsert(transaction, 'direction', record);
+    await this.indexedDb.refreshBalanceSnapshots(transaction, completion);
     await completion;
     this.mutationRecorder.notifyCommitted(recorded);
     return true;
@@ -90,7 +92,7 @@ export class IndexedDbDirectionRepository implements DirectionRepository {
     if (updates.length === 0) return true;
     const database = await this.indexedDb.open();
     const transaction = database.transaction(
-      [LIFE_OS_STORE.directions, ...PILOT_MUTATION_STORES],
+      this.indexedDb.balanceTransactionStores([LIFE_OS_STORE.directions, ...PILOT_MUTATION_STORES]),
       'readwrite',
     );
     const store = transaction.objectStore(LIFE_OS_STORE.directions);
@@ -107,11 +109,13 @@ export class IndexedDbDirectionRepository implements DirectionRepository {
     }
     let recorded = false;
     for (const { direction } of updates) {
-      const record = DirectionRecordMapper.toRecord(direction);
+      const stored = await observeRequest<DirectionRecord>(store.get(direction.id.toString()));
+      const record = { ...stored, ...DirectionRecordMapper.toRecord(direction) };
       await observeRequest(store.put(record));
       recorded =
         (await this.mutationRecorder.recordUpsert(transaction, 'direction', record)) || recorded;
     }
+    await this.indexedDb.refreshBalanceSnapshots(transaction, completion);
     await completion;
     this.mutationRecorder.notifyCommitted(recorded);
     return true;

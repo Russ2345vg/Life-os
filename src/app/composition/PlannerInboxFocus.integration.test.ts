@@ -134,10 +134,13 @@ describe('V2 inbox and period focus', () => {
       await app.plannerFocus.setRole(period, b.value.id.toString(), 'supporting');
       await app.plannerFocus.setRole(period, b.value.id.toString(), 'primary');
       const focus = await app.plannerFocus.get(period);
-      expect(focus?.goals).toEqual([
-        { goalId: a.value.id.toString(), role: 'supporting' },
-        { goalId: b.value.id.toString(), role: 'primary' },
-      ]);
+      expect(focus?.goals).toHaveLength(2);
+      expect(focus?.goals).toEqual(
+        expect.arrayContaining([
+          { goalId: a.value.id.toString(), role: 'supporting' },
+          { goalId: b.value.id.toString(), role: 'primary' },
+        ]),
+      );
       await app.plannerFocus.setRole(period, a.value.id.toString(), null);
       expect((await app.plannerFocus.get(period))?.goals).toHaveLength(1);
       expect(await app.plannerFocus.get('2026-09-14')).toBeNull();

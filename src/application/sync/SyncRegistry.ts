@@ -1,4 +1,6 @@
 export type SyncEntityType =
+  | 'direction_indicator'
+  | 'balance_monthly_snapshot'
   | 'planning_period'
   | 'period_membership'
   | 'period_decision'
@@ -31,6 +33,8 @@ export type SyncEntityType =
   | 'user_settings';
 
 export const SYNC_ENTITY_TYPES: readonly SyncEntityType[] = Object.freeze([
+  'direction_indicator',
+  'balance_monthly_snapshot',
   'planning_period',
   'period_membership',
   'period_decision',

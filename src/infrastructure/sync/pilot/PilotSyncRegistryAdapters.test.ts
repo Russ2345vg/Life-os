@@ -37,6 +37,34 @@ const goal = {
 };
 
 describe('PilotSyncRegistryAdapters', () => {
+  it.each(['sphere', 'direction'] as const)(
+    'compares %s residual objects independently of key order while preserving array order',
+    (type) => {
+      const local = {
+        ...structuredSyncFixtures()[type],
+        futureFields: { score: 8, nested: { first: 1, second: 2 }, sequence: [1, 2] },
+      };
+      const incoming = Object.fromEntries(
+        Object.entries({
+          ...local,
+          futureFields: { sequence: [1, 2], nested: { second: 2, first: 1 }, score: 8 },
+        }).reverse(),
+      );
+      expect(haveSamePilotSemanticContent(type, local, incoming)).toBe(true);
+      expect(
+        haveSamePilotSemanticContent(type, local, {
+          ...incoming,
+          futureFields: { ...local.futureFields, score: 9 },
+        }),
+      ).toBe(false);
+      expect(
+        haveSamePilotSemanticContent(type, local, {
+          ...incoming,
+          futureFields: { ...local.futureFields, sequence: [2, 1] },
+        }),
+      ).toBe(false);
+    },
+  );
   it('reads focus and conversion relationships from normalized wire records without version', () => {
     const fixtures = structuredSyncFixtures();
     const wire = normalizePilotRecord('focus_period', fixtures.focus_period);
@@ -104,7 +132,7 @@ describe('PilotSyncRegistryAdapters', () => {
   );
 
   it('uses the complete real dependency order and excludes Goal covers', () => {
-    expect(PILOT_DEPENDENCY_ORDER).toHaveLength(30);
+    expect(PILOT_DEPENDENCY_ORDER).toHaveLength(32);
     expect(PILOT_DEPENDENCY_ORDER.indexOf('sphere')).toBeLessThan(
       PILOT_DEPENDENCY_ORDER.indexOf('direction'),
     );
@@ -134,7 +162,7 @@ describe('PilotSyncRegistryAdapters', () => {
     expect(runtime.map(({ registration }) => registration.entityType)).toEqual(
       PILOT_DEPENDENCY_ORDER,
     );
-    expect(runtime).toHaveLength(30);
+    expect(runtime).toHaveLength(32);
   });
 
   it('preserves a local Goal cover while applying structured remote data without Outbox echo', async () => {

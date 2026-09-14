@@ -299,6 +299,10 @@ function hasCompleteStoreManifest(
   ]);
   const expected = Object.values(LIFE_OS_STORE)
     .filter((name) => version >= 24 || !added.has(name))
+    .filter(
+      (name) =>
+        version >= 25 || (name !== 'directionIndicators' && name !== 'balanceMonthlySnapshots'),
+    )
     .sort();
   return (
     actual.length === expected.length && actual.every((name, index) => name === expected[index])

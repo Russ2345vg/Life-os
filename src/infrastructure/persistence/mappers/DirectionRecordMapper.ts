@@ -1,4 +1,9 @@
 import { Direction, isDirectionStatus } from '../../../domain';
+import {
+  balanceImportance,
+  balanceScore,
+  directionMode,
+} from '../../../domain/balance/BalanceImportance';
 import type { DirectionRecord } from '../records/DirectionRecord';
 import {
   assertRecordAndSchemaVersion,
@@ -16,6 +21,10 @@ import {
 export class DirectionRecordMapper {
   public static toRecord(direction: Direction): DirectionRecord {
     return {
+      importance: direction.importance,
+      manualScore: direction.manualScore,
+      mode: direction.mode,
+      currentStateText: direction.currentStateText,
       schemaVersion: 1,
       id: direction.id.toString(),
       sphereId: direction.sphereId?.toString() ?? null,
@@ -39,6 +48,10 @@ export class DirectionRecordMapper {
     const status = readString(record, 'status');
     if (!isDirectionStatus(status)) throw invalidRecord('Неизвестный статус направления.');
     return Direction.rehydrate({
+      importance: balanceImportance(record.importance),
+      manualScore: balanceScore(record.manualScore),
+      mode: directionMode(record.mode),
+      currentStateText: readOptionalNullableString(record, 'currentStateText'),
       id: readEntityId(record, 'id'),
       sphereId: readNullableEntityId(record, 'sphereId'),
       name: readString(record, 'name'),

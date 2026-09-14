@@ -47,6 +47,7 @@ export class IndexedDbProjectRepository implements ProjectRepository {
       const record = ProjectRecordMapper.toRecord(project);
       await observeRequest(transaction.objectStore(LIFE_OS_STORE.goals).add(record));
       const recorded = await this.mutationRecorder.recordUpsert(transaction, 'goal', record);
+      await this.indexedDb.refreshBalanceSnapshots(transaction, completion);
       await completion;
       this.mutationRecorder.notifyCommitted(recorded);
       return true;
@@ -83,6 +84,7 @@ export class IndexedDbProjectRepository implements ProjectRepository {
       await observeRequest(store.add(record));
       recorded =
         (await this.mutationRecorder.recordUpsert(transaction, 'goal', record)) || recorded;
+      await this.indexedDb.refreshBalanceSnapshots(transaction, completion);
       await completion;
       this.mutationRecorder.notifyCommitted(recorded);
       return true;
@@ -114,6 +116,7 @@ export class IndexedDbProjectRepository implements ProjectRepository {
     const record = ProjectRecordMapper.toRecord(project, stored);
     await observeRequest(store.put(record));
     const recorded = await this.mutationRecorder.recordUpsert(transaction, 'goal', record);
+    await this.indexedDb.refreshBalanceSnapshots(transaction, completion);
     await completion;
     this.mutationRecorder.notifyCommitted(recorded);
     return true;
@@ -145,6 +148,7 @@ export class IndexedDbProjectRepository implements ProjectRepository {
     const record = ProjectRecordMapper.toRecord(project, stored);
     await observeRequest(store.put(record));
     recorded = (await this.mutationRecorder.recordUpsert(transaction, 'goal', record)) || recorded;
+    await this.indexedDb.refreshBalanceSnapshots(transaction, completion);
     await completion;
     this.mutationRecorder.notifyCommitted(recorded);
     return true;
@@ -175,7 +179,10 @@ export class IndexedDbProjectRepository implements ProjectRepository {
   }
 
   private writeTransaction(database: IDBDatabase): IDBTransaction {
-    return database.transaction([LIFE_OS_STORE.goals, ...PILOT_MUTATION_STORES], 'readwrite');
+    return database.transaction(
+      this.indexedDb.balanceTransactionStores([LIFE_OS_STORE.goals, ...PILOT_MUTATION_STORES]),
+      'readwrite',
+    );
   }
 
   private async projectFromGoalRecord(value: unknown): Promise<Project> {

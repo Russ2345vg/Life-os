@@ -55,6 +55,8 @@ export class PilotBootstrapService {
           'contribution_link',
           'progress_contribution',
           'recurrence_rule',
+          'direction_indicator',
+          'balance_monthly_snapshot',
         ].map((type) =>
           hasTypeCheckpoint(
             database,

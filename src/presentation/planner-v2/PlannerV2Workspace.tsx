@@ -1,3 +1,5 @@
+import type { BalanceServices } from '../../application/balance/BalanceServices';
+import { BalanceWorkspace } from './balance/BalanceWorkspace';
 import type { PlanningServices } from '../../application/planner/PlanningServices';
 import { PlanningProvider } from './PlanningContext';
 import { PlanningWorkspace } from './PlanningWorkspace';
@@ -27,6 +29,7 @@ import { PlannerLibraryWorkspace, type PlannerLibraryServices } from './PlannerL
 import { PlannerViewSwitcher } from './PlannerViewSwitcher';
 
 export interface PlannerV2Services extends PlannerLibraryServices {
+  readonly balance?: BalanceServices;
   readonly planning?: PlanningServices;
   readonly createLifeActionDraft: Pick<CreateLifeActionDraft, 'execute'>;
   readonly createGoal: Pick<CreateGoal, 'execute'>;
@@ -149,6 +152,7 @@ export function PlannerV2Workspace({
       href={buildPlannerV2Route(target)}
       aria-current={
         route.view === target.view ||
+        (target.view === 'spheres' && ['sphere', 'direction'].includes(route.view)) ||
         ('section' in route && route.section === target.view) ||
         (target.view === 'goals' &&
           ['focus', 'new-goal', 'goal', 'planning'].includes(route.view)) ||
@@ -200,6 +204,7 @@ export function PlannerV2Workspace({
             {navLink({ view: 'goals' }, 'Цели', 'goals')}
             {navLink({ view: 'actions' }, 'Действия', 'actions')}
             {navLink({ view: 'inbox' }, 'Входящие', 'history')}
+            {navLink({ view: 'spheres' }, 'Сферы', 'goals')}
           </nav>
           <button className="planner-rollback" type="button" onClick={onExit}>
             Старая версия
@@ -229,10 +234,22 @@ export function PlannerV2Workspace({
               </button>
             </div>
           ) : null}
-          {route.view === 'planning' ? (
+          {['spheres', 'sphere', 'direction'].includes(route.view) ? (
+            services.balance ? (
+              <BalanceWorkspace
+                services={services.balance}
+                route={route}
+                today={currentDate.toString()}
+                onNavigate={navigate}
+              />
+            ) : (
+              <p role="alert">Сферы недоступны в этой сборке.</p>
+            )
+          ) : route.view === 'planning' ? (
             <>
               <PlannerViewSwitcher route={route} onNavigate={navigate} />
               <PlanningWorkspace
+                sphereId={route.sphereId ?? null}
                 today={currentDate.toString()}
                 services={services}
                 onNavigate={navigate}
