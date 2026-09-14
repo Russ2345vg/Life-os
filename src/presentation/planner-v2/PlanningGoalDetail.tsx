@@ -14,6 +14,8 @@ import {
 import type { PlannerViewOperations } from './PlannerViewParts';
 import { GoalPeriodMembership } from './GoalPeriodMembership';
 import { EntityContextMenu, type EntityMenuAction } from './EntityContextMenu';
+import type { PlanningPeriod, PeriodMembership } from '../../domain/planner/PlanningPeriod';
+import './planning.css';
 
 export function PlanningGoalDetail({
   id,
@@ -43,6 +45,8 @@ export function PlanningGoalDetail({
       spheres={spheres}
       facts={state.contributions.filter((fact) => fact.goalId === id)}
       rules={state.rules}
+      periods={state.periods}
+      memberships={state.memberships}
       today={today}
       operations={operations}
       menuForGoal={menuForGoal}
@@ -60,6 +64,8 @@ export function GoalDetailContent({
   today,
   operations,
   menuForGoal,
+  periods = [],
+  memberships = [],
 }: {
   readonly goal: Goal;
   readonly actions: readonly LifeAction[];
@@ -67,6 +73,8 @@ export function GoalDetailContent({
   readonly spheres: readonly Sphere[];
   readonly facts: readonly ProgressContribution[];
   readonly rules?: readonly RecurrenceRule[];
+  readonly periods?: readonly PlanningPeriod[];
+  readonly memberships?: readonly PeriodMembership[];
   readonly today: string;
   readonly operations: PlannerViewOperations;
   readonly menuForGoal?: ((goal: Goal) => readonly EntityMenuAction[]) | undefined;
@@ -97,10 +105,16 @@ export function GoalDetailContent({
       </EntityContextMenu>
       <div className="planner-goal-context">
         <PlannerGoalContext goal={goal} directions={directions} spheres={spheres} />
-        <span>{statusLabels[goal.status]}</span>
-        {goal.intentionLevel && <span>{importanceLabels[goal.intentionLevel]}</span>}
-        {goal.horizon && <span>{horizonLabels[goal.horizon]}</span>}
-        {goal.dueDate && <span>До {goal.dueDate}</span>}
+        <span>
+          {[
+            statusLabels[goal.status],
+            goal.intentionLevel && importanceLabels[goal.intentionLevel],
+            goal.horizon && horizonLabels[goal.horizon],
+            goal.dueDate && `До ${goal.dueDate}`,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        </span>
       </div>
       <section className="planner-goal-result" aria-label="Желаемый результат">
         <p className="planner-eyebrow">Желаемый результат</p>
@@ -111,7 +125,7 @@ export function GoalDetailContent({
       ) : (
         <PlannerGoalProgress goal={goal} />
       )}
-      <GoalPeriodMembership goalId={id} today={today} />
+      <GoalPeriodMembership goalId={id} today={today} periods={periods} memberships={memberships} />
       {next ? (
         <section className="planner-goal-next" aria-label="Следующее действие">
           <h2>Следующее действие</h2>
@@ -134,7 +148,11 @@ export function GoalDetailContent({
           <h2>Действия цели</h2>
           <a href={newActionHref}>+ Добавить действие</a>
         </div>
-        {open.length === 0 && <p className="planner-empty">Пока нет открытых действий.</p>}
+        {open.length === 0 && (
+          <p className="planner-empty">
+            {completed.length === 0 ? 'Пока нет действий' : 'Все действия выполнены'}
+          </p>
+        )}
         <ul className="planner-list">
           {open
             .filter((action) => action !== next)
@@ -195,6 +213,14 @@ export function GoalDetailContent({
           ))}
         </ul>
       </details>
+      <details className="planner-goal-details">
+        <summary>Детали</summary>
+        <p>{goal.description || 'Описание пока не добавлено.'}</p>
+        {goal.whyImportant && <p>Почему важно: {goal.whyImportant}</p>}
+        {goal.whyNow && <p>Почему сейчас: {goal.whyNow}</p>}
+        {goal.nextProgress && <p>Первый шаг: {goal.nextProgress}</p>}
+        <a href={`#/goals/${encodeURIComponent(id)}`}>Изменить свойства цели</a>
+      </details>
       <details className="planner-goal-history">
         <summary>История · {facts.length}</summary>
         {[...facts]
@@ -215,7 +241,6 @@ export function GoalDetailContent({
             </div>
           ))}
       </details>
-      <a href={`#/goals/${encodeURIComponent(id)}`}>Описание и остальные свойства цели</a>
     </section>
   );
 }

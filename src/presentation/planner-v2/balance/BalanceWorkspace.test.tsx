@@ -27,6 +27,7 @@ const services: BalanceServices = {
   restoreDirection: { execute: unexpected },
   deletePilotSphere: { execute: unexpected },
   deletePilotDirection: { execute: unexpected },
+  removeDirectionSafely: { inspect: unexpected, execute: unexpected },
   refreshSnapshots: unexpected,
 };
 function data(): BalanceState {

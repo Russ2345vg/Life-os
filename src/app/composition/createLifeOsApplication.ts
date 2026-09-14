@@ -10,6 +10,8 @@ import { PlannerFocus } from '../../application/planner/PlannerFocus';
 import { PlannerCatalog } from '../../application/planner/PlannerCatalog';
 import { DailyDirection } from '../../application/planner/DailyDirection';
 import { DeletePilotDirection } from '../../application/sync/pilot/DeletePilotDirection';
+import { RemoveDirectionSafely } from '../../application/commands/RemoveDirectionSafely';
+import { IndexedDbDirectionDeletionRepository } from '../../infrastructure/sync/pilot/IndexedDbDirectionDeletionRepository';
 import { DeletePilotSphere } from '../../application/sync/pilot/DeletePilotSphere';
 import { DeletePilotLifeAction } from '../../application/sync/pilot/DeletePilotLifeAction';
 import { ArchiveLifeAction } from '../../application/commands/ArchiveLifeAction';
@@ -880,6 +882,11 @@ export async function createLifeOsApplication(
     const restoreDirection = new RestoreDirection(directionRepository, clock);
     const pilotDeleteRepository = new IndexedDbPilotDeleteRepository(database, mutationRecorder);
     const deletePilotDirection = new DeletePilotDirection(pilotDeleteRepository);
+    const removeDirectionSafely = new RemoveDirectionSafely(
+      new IndexedDbDirectionDeletionRepository(database, mutationRecorder),
+      clock,
+      currentDateProvider,
+    );
     const deletePilotSphere = new DeletePilotSphere(pilotDeleteRepository);
     const balance = {
       read: new GetLifeBalance(balanceRepository),
@@ -894,6 +901,7 @@ export async function createLifeOsApplication(
       restoreDirection,
       deletePilotSphere,
       deletePilotDirection,
+      removeDirectionSafely,
       refreshSnapshots: () => balanceRepository.refreshSnapshots(),
     };
     await balance.refreshSnapshots();

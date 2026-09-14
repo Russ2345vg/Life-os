@@ -1,7 +1,11 @@
 import { useState } from 'react';
 import { currentGoalPeriod } from './plannerPeriodFilter';
 import { usePlanning } from './PlanningContext';
-import type { PeriodKind } from '../../domain/planner/PlanningPeriod';
+import type {
+  PeriodKind,
+  PlanningPeriod,
+  PeriodMembership,
+} from '../../domain/planner/PlanningPeriod';
 
 const labels: Record<PeriodKind, string> = {
   year: 'Год',
@@ -13,14 +17,39 @@ const labels: Record<PeriodKind, string> = {
 export function GoalPeriodMembership({
   goalId,
   today,
+  periods = [],
+  memberships = [],
 }: {
   readonly goalId: string;
   readonly today: string;
+  readonly periods?: readonly PlanningPeriod[];
+  readonly memberships?: readonly PeriodMembership[];
 }) {
   const context = usePlanning();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  if (!context?.state) return null;
+  const linkedPeriods = new Set(
+    memberships
+      .filter((item) => item.entityType === 'goal' && item.entityId === goalId && !item.removed)
+      .map((item) => item.periodId),
+  );
+  const kinds = new Set(
+    (Object.keys(labels) as PeriodKind[]).filter((kind) => {
+      const period = currentGoalPeriod(kind, today, periods);
+      return period !== null && linkedPeriods.has(period.id);
+    }),
+  );
+  const metadata =
+    Object.entries(labels)
+      .filter(([kind]) => kinds.has(kind as PeriodKind))
+      .map(([, label]) => label)
+      .join(' · ') || 'Без периода';
+  if (!context?.state)
+    return (
+      <p className="planner-muted" aria-label="Периоды цели">
+        {metadata}
+      </p>
+    );
   const state = context.state;
   const run = async (work: () => Promise<unknown>) => {
     setBusy(true);
@@ -36,7 +65,7 @@ export function GoalPeriodMembership({
   };
   return (
     <details className="planner-goal-periods">
-      <summary>Периоды цели</summary>
+      <summary>Периоды цели: {metadata}</summary>
       <p className="planner-muted">
         Цель может входить в несколько периодов. Удаление связи не удаляет цель.
       </p>

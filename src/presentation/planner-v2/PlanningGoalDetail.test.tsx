@@ -8,6 +8,7 @@ import {
 } from '../../test/helpers/LifeActionTestFactory';
 import { DayDate } from '../../domain';
 import { validateRule } from '../../domain/planner/RecurrenceRule';
+import { automaticPeriod, type PeriodMembership } from '../../domain/planner/PlanningPeriod';
 import { GoalDetailContent } from './PlanningGoalDetail';
 import { selectGoalCardActions } from './plannerCatalogModel';
 import type { PlannerViewOperations } from './PlannerViewParts';
@@ -49,6 +50,80 @@ const operations: PlannerViewOperations = {
 };
 
 describe('V2 Goal action centre', () => {
+  it('separates status and horizon, shows an empty action state and collapsed details before history', () => {
+    const annual = Goal.create({
+      id: EntityId.create('annual'),
+      title: 'Годовая цель',
+      status: 'active',
+      horizon: '<1y',
+      now,
+    });
+    const html = renderToStaticMarkup(
+      createElement(GoalDetailContent, {
+        goal: annual,
+        actions: [],
+        directions: [],
+        spheres: [],
+        facts: [],
+        today: '2026-09-14',
+        operations,
+      }),
+    );
+    expect(html).toContain('Активна · В течение года');
+    expect(html).toContain('Пока нет действий');
+    expect(html).toContain('+ Добавить действие');
+    expect(html).toContain('<details class="planner-goal-details">');
+    expect(html.indexOf('Детали')).toBeLessThan(html.indexOf('История'));
+    expect(html).toContain('Без периода');
+  });
+  it('shows current Goal memberships as compact metadata', () => {
+    const periods = [
+      automaticPeriod('year', '2026-09-14'),
+      automaticPeriod('quarter', '2026-09-14'),
+      automaticPeriod('week', '2026-09-14'),
+    ];
+    const memberships: PeriodMembership[] = periods.map((period) => ({
+      id: `membership:${period.id}`,
+      periodId: period.id,
+      entityType: 'goal',
+      entityId: goal.id.toString(),
+      focused: false,
+      removed: false,
+      version: 1,
+      schemaVersion: 1,
+      updatedAt: now.toISOString(),
+    }));
+    const html = renderToStaticMarkup(
+      createElement(GoalDetailContent, {
+        goal,
+        actions: [],
+        directions: [],
+        spheres: [],
+        facts: [],
+        today: '2026-09-14',
+        operations,
+        periods,
+        memberships,
+      }),
+    );
+    expect(html).toContain('Год · Квартал · Неделя');
+    expect(html).not.toContain('Без периода');
+    const previousYear = automaticPeriod('year', '2025-09-14');
+    const oldOnly = renderToStaticMarkup(
+      createElement(GoalDetailContent, {
+        goal,
+        actions: [],
+        directions: [],
+        spheres: [],
+        facts: [],
+        today: '2026-09-14',
+        operations,
+        periods: [previousYear],
+        memberships: [{ ...memberships[0]!, id: 'old-membership', periodId: previousYear.id }],
+      }),
+    );
+    expect(oldOnly).toContain('Без периода');
+  });
   it('shows a count recurrence from completed occurrences inside the Goal Card', () => {
     const current = action('Повторяемый шаг', goal.id);
     current.setPlanningMetadata({

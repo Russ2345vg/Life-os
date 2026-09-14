@@ -187,11 +187,13 @@
   padding: 0;
 }
 .planner-goal-completed,
+.planner-goal-details,
 .planner-goal-history {
   border-top: 1px solid var(--border-soft);
   padding-top: var(--space-2);
 }
 .planner-goal-completed summary,
+.planner-goal-details summary,
 .planner-goal-history summary {
   min-height: 44px;
   display: flex;

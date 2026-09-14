@@ -6,6 +6,11 @@ export interface EntityMenuAction {
   readonly label: string;
   readonly run: () => Promise<void> | void;
   readonly destructive?: boolean;
+  readonly prepare?: () => Promise<{
+    readonly message: string;
+    readonly confirmLabel?: string;
+    readonly alternative?: { readonly label: string; readonly run: () => Promise<void> | void };
+  }>;
 }
 
 export function EntityContextMenu({
@@ -21,7 +26,12 @@ export function EntityContextMenu({
 }) {
   const [open, setOpen] = useState(false);
   const [above, setAbove] = useState(false);
-  const [confirm, setConfirm] = useState<EntityMenuAction | null>(null);
+  const [confirm, setConfirm] = useState<{
+    action: EntityMenuAction;
+    message: string;
+    confirmLabel: string;
+    alternative?: { readonly label: string; readonly run: () => Promise<void> | void };
+  } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const root = useRef<HTMLDivElement>(null);
@@ -67,8 +77,22 @@ export function EntityContextMenu({
   }, [confirm]);
   const run = async (action: EntityMenuAction) => {
     if (action.destructive) {
-      setConfirm(action);
       setOpen(false);
+      setBusy(true);
+      setError(null);
+      try {
+        const prepared = await action.prepare?.();
+        setConfirm({
+          action,
+          message: prepared?.message ?? `${action.label} ${entityLabel} «${title}»?`,
+          confirmLabel: prepared?.confirmLabel ?? action.label,
+          ...(prepared?.alternative ? { alternative: prepared.alternative } : {}),
+        });
+      } catch (reason: unknown) {
+        setError(reason instanceof Error ? reason.message : 'Не удалось проверить связи.');
+      } finally {
+        setBusy(false);
+      }
       return;
     }
     setBusy(true);
@@ -158,7 +182,7 @@ export function EntityContextMenu({
           className="planner-entity-confirm"
           role="alertdialog"
           aria-modal="true"
-          aria-label={`Подтвердить: ${confirm.label}`}
+          aria-label={`Подтвердить: ${confirm.action.label}`}
           onKeyDown={(event) => {
             if (event.key !== 'Tab') return;
             if (event.shiftKey && document.activeElement === cancelButton.current) {
@@ -170,9 +194,7 @@ export function EntityContextMenu({
             }
           }}
         >
-          <p>
-            {confirm.label} {entityLabel} «{title}»?
-          </p>
+          <p>{confirm.message}</p>
           <div>
             <button
               ref={cancelButton}
@@ -194,7 +216,9 @@ export function EntityContextMenu({
                 setBusy(true);
                 setError(null);
                 void Promise.resolve()
-                  .then(() => confirm.run())
+                  .then(() =>
+                    confirm.alternative ? confirm.alternative.run() : confirm.action.run(),
+                  )
                   .then(() => setConfirm(null))
                   .catch((reason: unknown) =>
                     setError(
@@ -204,7 +228,7 @@ export function EntityContextMenu({
                   .finally(() => setBusy(false));
               }}
             >
-              {confirm.label}
+              {confirm.alternative?.label ?? confirm.confirmLabel}
             </button>
           </div>
         </div>

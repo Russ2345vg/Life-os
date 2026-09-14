@@ -10,6 +10,7 @@ import type { RestoreSphere } from '../commands/RestoreSphere';
 import type { RestoreDirection } from '../commands/RestoreDirection';
 import type { DeletePilotSphere } from '../sync/pilot/DeletePilotSphere';
 import type { DeletePilotDirection } from '../sync/pilot/DeletePilotDirection';
+import type { RemoveDirectionSafely } from '../commands/RemoveDirectionSafely';
 export interface BalanceServices {
   readonly read: Pick<GetLifeBalance, 'execute'>;
   readonly indicators: Pick<BalanceIndicators, 'save' | 'remove'>;
@@ -23,5 +24,6 @@ export interface BalanceServices {
   readonly restoreDirection: Pick<RestoreDirection, 'execute'>;
   readonly deletePilotSphere: Pick<DeletePilotSphere, 'execute'>;
   readonly deletePilotDirection: Pick<DeletePilotDirection, 'execute'>;
+  readonly removeDirectionSafely: Pick<RemoveDirectionSafely, 'inspect' | 'execute'>;
   refreshSnapshots(): Promise<void>;
 }

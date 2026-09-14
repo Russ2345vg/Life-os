@@ -4,6 +4,7 @@ import type { Goal } from '../../../domain';
 import { DomainError } from '../../../shared/errors/DomainError';
 import type { BalanceServices } from '../../../application/balance/BalanceServices';
 import type { BalanceState } from '../../../application/ports/BalanceRepository';
+import type { DirectionDependency } from '../../../application/ports/DirectionDeletionRepository';
 import {
   projectLifeBalance,
   balancePeriodContext,
@@ -78,8 +79,9 @@ export function BalanceWorkspace({
     setBusy(true);
     setError(null);
     try {
-      await work();
+      const outcome = await work();
       await saved();
+      if (typeof outcome === 'string') setNotice(outcome);
     } catch (e: unknown) {
       report(e);
     } finally {
@@ -215,13 +217,59 @@ export function BalanceWorkspace({
     {
       label: 'Удалить',
       destructive: true,
+      prepare: async () => {
+        const preview = await services.removeDirectionSafely.inspect(d.direction.id);
+        if (preview.kind === 'not_found')
+          throw new Error('Направление уже удалено. Обновите список.');
+        if (preview.live.length)
+          return {
+            message: `Направление «${d.direction.name}» используется: ${describeDirectionDependencies(preview.live)}. Можно архивировать его, сохранив цели и историю.`,
+            alternative: {
+              label: 'Архивировать',
+              run: () =>
+                run(async () => {
+                  const result = await services.archiveDirection.execute({
+                    id: d.direction.id,
+                    expectedVersion: d.direction.version,
+                  });
+                  if (!result.ok) throw result.error;
+                  return 'Направление убрано из активных. История сохранена.';
+                }),
+            },
+          };
+        return {
+          message: preview.historical.length
+            ? `Направление «${d.direction.name}» связано с историей: ${describeDirectionDependencies(preview.historical)}. Оно будет сохранено в архиве.`
+            : `Удалить направление «${d.direction.name}»?`,
+          confirmLabel: preview.historical.length ? 'Убрать из активных' : 'Удалить',
+        };
+      },
       run: () =>
         run(async () => {
-          if (!(await services.deletePilotDirection.execute(d.direction.id.toString())))
+          const result = await services.removeDirectionSafely.execute({
+            id: d.direction.id,
+            expectedVersion: d.direction.version,
+          });
+          if (result.kind === 'blocked')
             throw new DomainError(
               'direction.delete_blocked',
-              'Направление связано с историей или другими записями. Сначала уберите связи либо архивируйте его.',
+              `Направление используется: ${describeDirectionDependencies(result.live)}. Архивируйте направление или уберите эти связи.`,
             );
+          if (result.kind === 'version_conflict')
+            throw new DomainError(
+              'direction.version_conflict',
+              'Направление уже изменилось. Обновите данные.',
+            );
+          if (result.kind === 'not_found')
+            throw new DomainError(
+              'direction.not_found',
+              'Направление уже удалено. Обновите список.',
+            );
+          if (result.kind === 'deleted' && route.view === 'direction')
+            navigate({ view: 'directions' });
+          return result.kind === 'archived'
+            ? 'Направление убрано из активных. История сохранена.'
+            : 'Направление удалено.';
         }),
     },
   ];
@@ -758,6 +806,27 @@ export function BalanceWorkspace({
       )}
     </section>
   );
+}
+function describeDirectionDependencies(items: readonly DirectionDependency[]): string {
+  const names: Record<string, string> = {
+    goal: 'целей',
+    project: 'проектов',
+    direction_indicator: 'показателей',
+    day: 'дней',
+    tomorrow_plan: 'планов на завтра',
+  };
+  const groups = new Map<string, DirectionDependency[]>();
+  for (const item of items)
+    groups.set(item.entityType, [...(groups.get(item.entityType) ?? []), item]);
+  return [...groups]
+    .map(
+      ([type, entries]) =>
+        `${entries.length} ${names[type] ?? 'связанных записей'} (${entries
+          .slice(0, 3)
+          .map((item) => item.label)
+          .join(', ')}${entries.length > 3 ? '…' : ''})`,
+    )
+    .join('; ');
 }
 function BalanceEditor({
   editor,

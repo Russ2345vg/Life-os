@@ -33,15 +33,20 @@ export async function submitPlannerAction(
   command: Pick<CreateLifeActionDraft, 'execute'>,
   draft: PlannerActionDraft,
 ) {
+  const goalId = draft.goalId.trim();
+  const parentActionId = draft.parentActionId.trim();
+  const contributions = draft.contributions
+    .filter((link) => link.goalId.trim() !== '')
+    .map((link) => ({ ...link, goalId: link.goalId.trim() }));
   const result = await command.execute({
     title: LifeActionTitle.create(draft.title),
     description: draft.description,
-    goalId: draft.goalId ? EntityId.create(draft.goalId) : null,
-    parentActionId: draft.parentActionId ? EntityId.create(draft.parentActionId) : null,
+    goalId: goalId ? EntityId.create(goalId) : null,
+    parentActionId: parentActionId ? EntityId.create(parentActionId) : null,
     plannedDate: draft.date ? DayDate.create(draft.date) : null,
     isNext: draft.isNext,
     ...(draft.recurrence ? { recurrence: draft.recurrence } : {}),
-    ...(draft.contributions.length ? { contributions: draft.contributions } : {}),
+    ...(contributions.length ? { contributions } : {}),
   });
   if (!result.ok) throw result.error;
   return result.value;
