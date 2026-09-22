@@ -74,5 +74,13 @@ describe('safe encrypted recovery snapshots', () => {
     await service.runMaintenance();
     expect(snapshots.filter((s) => s.kind === 'daily')).toHaveLength(1);
     expect(snapshots.filter((s) => s.kind === 'weekly')).toHaveLength(1);
+
+    const signOut = await service.createSnapshot('pre-sign-out');
+    expect(Date.parse(signOut.retainedUntil!) - Date.parse(signOut.createdAt)).toBe(84 * 86400000);
+    await expect(service.ensureCloudVerified(signOut.snapshotId)).resolves.toMatchObject({
+      snapshotId: signOut.snapshotId,
+      verifiedAt: expect.any(String),
+      cloudVerifiedAt: expect.any(String),
+    });
   });
 });

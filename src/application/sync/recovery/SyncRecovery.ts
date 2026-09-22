@@ -1,7 +1,7 @@
 import type { PilotEntityType } from '../pilot';
 import type { DurableAttachment, SyncBinaryMetadata } from '../attachments/AttachmentContracts';
 
-export type RecoverySnapshotKind = 'manual' | 'daily' | 'weekly' | 'pre-restore';
+export type RecoverySnapshotKind = 'manual' | 'daily' | 'weekly' | 'pre-restore' | 'pre-sign-out';
 export interface RecoveryItem {
   readonly entityType: PilotEntityType;
   readonly record: Readonly<Record<string, unknown>>;
@@ -68,6 +68,7 @@ export interface SyncRecovery {
   restoreHistory(kind: 'conflicts' | 'deleted', id: string): Promise<void>;
   listSnapshots(): Promise<readonly RecoverySnapshot[]>;
   createSnapshot(kind?: RecoverySnapshotKind): Promise<RecoverySnapshot>;
+  ensureCloudVerified(snapshotId: string): Promise<RecoverySnapshot>;
   preview(snapshotId: string): Promise<RestorePreview>;
   restore(preview: RestorePreview): Promise<void>;
   listAttachments(): Promise<readonly DurableAttachment[]>;

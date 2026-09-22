@@ -312,6 +312,7 @@ function createFixture(initial: SyncInstallation) {
       spaceId: SPACE_ID,
       currentKeyEpoch: 4,
     })),
+    revokeCurrentDevice: vi.fn(async () => undefined),
   };
   const service = new AccountSyncService({
     auth,
@@ -320,6 +321,8 @@ function createFixture(initial: SyncInstallation) {
     sync,
     transport,
     crypto: { deleteDeviceSecrets: vi.fn(async () => undefined) },
+    recovery: {} as never,
+    localData: { purge: vi.fn(async () => undefined) },
     now: () => new Date(TIMESTAMP),
   });
   return { service, auth, installations, snapshots, sync, transport };

@@ -5,6 +5,7 @@ import type {
 } from '../attachments/AttachmentContracts';
 import { binaryPath } from '../attachments/AttachmentContracts';
 import { protect, sha256, unprotect } from '../attachments/ProtectedPayload';
+import { DomainError } from '../../../shared/errors/DomainError';
 import type {
   RecoveryDataStore,
   RecoverySnapshot,
@@ -101,7 +102,10 @@ export class SyncRecoveryService implements SyncRecovery {
       retainedUntil:
         kind === 'manual'
           ? null
-          : new Date(this.now().getTime() + (kind === 'weekly' ? 84 : 30) * 86400000).toISOString(),
+          : new Date(
+              this.now().getTime() +
+                (kind === 'weekly' || kind === 'pre-sign-out' ? 84 : 30) * 86400000,
+            ).toISOString(),
       nextAttemptAt: createdAt,
       retryCount: 0,
     };
@@ -207,6 +211,23 @@ export class SyncRecoveryService implements SyncRecovery {
     });
     return this.#maintenance;
   }
+  public async ensureCloudVerified(snapshotId: string): Promise<RecoverySnapshot> {
+    await this.runMaintenance();
+    const snapshot = (await this.store.snapshots()).find(
+      (candidate) => candidate.snapshotId === snapshotId,
+    );
+    if (
+      snapshot === undefined ||
+      snapshot.verifiedAt === null ||
+      snapshot.cloudVerifiedAt === null
+    ) {
+      throw new DomainError(
+        'sync.backup_not_verified',
+        'Облачная резервная копия ещё не подтверждена.',
+      );
+    }
+    return snapshot;
+  }
   private async maintain(): Promise<void> {
     await this.createSnapshot('daily');
     await this.createSnapshot('weekly');
@@ -268,7 +289,7 @@ export class SyncRecoveryService implements SyncRecovery {
         };
         this.store.validate(value.state);
         if (
-          !['manual', 'daily', 'weekly', 'pre-restore'].includes(value.kind) ||
+          !['manual', 'daily', 'weekly', 'pre-restore', 'pre-sign-out'].includes(value.kind) ||
           envelope.metadata.snapshotKind !== value.kind ||
           !Number.isFinite(Date.parse(value.createdAt))
         )

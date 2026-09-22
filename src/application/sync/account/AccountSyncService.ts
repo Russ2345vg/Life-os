@@ -1,6 +1,7 @@
 import { DomainError } from '../../../shared/errors/DomainError';
 import type { SnapshotService } from '../SnapshotService';
 import type { SyncApplication, SyncOverview } from '../SyncApplicationService';
+import type { SyncRecovery } from '../recovery/SyncRecovery';
 import type { CachedSyncDevice } from '../ports/SyncDeviceCacheRepository';
 import type { SyncCryptoService } from '../ports/SyncCryptoService';
 import type {
@@ -11,6 +12,7 @@ import type {
 import type { SyncTrustTransport } from '../ports/SyncTrustTransport';
 import type { PilotSyncRunResult } from '../pilot/PilotSyncCoordinator';
 import type { AccountAuth, AccountSession } from './AccountAuth';
+import type { AccountLocalData } from './AccountLocalData';
 
 export interface AccountOverview {
   readonly state: AccountSetupState;
@@ -43,8 +45,10 @@ export interface AccountSyncDependencies {
   readonly installations: SyncInstallationRepository;
   readonly snapshots: SnapshotService;
   readonly sync: SyncApplication;
-  readonly transport: Pick<SyncTrustTransport, 'adoptCurrentSpace'>;
+  readonly transport: Pick<SyncTrustTransport, 'adoptCurrentSpace' | 'revokeCurrentDevice'>;
   readonly crypto: Pick<SyncCryptoService, 'deleteDeviceSecrets'>;
+  readonly recovery: SyncRecovery;
+  readonly localData: AccountLocalData;
   readonly now?: () => Date;
 }
 
@@ -175,7 +179,59 @@ export class AccountSyncService implements AccountSync {
   }
 
   public async signOut(): Promise<void> {
+    let installation = await this.requireInstallation();
+    if (installation.spaceId === null || installation.snapshotId === null) {
+      throw invalidAccountState();
+    }
+    const spaceId = installation.spaceId;
+    if (installation.accountSetupState !== 'sign_out_pending') {
+      if (installation.accountSetupState !== 'ready') {
+        throw invalidTransition('Выход доступен только после завершения синхронизации.');
+      }
+      installation = {
+        ...installation,
+        accountSetupState: 'sign_out_pending',
+        accountMigrationSnapshotId: installation.snapshotId,
+        updatedAt: this.now().toISOString(),
+      };
+      await this.dependencies.installations.save(installation);
+    }
+
+    let backup = (await this.dependencies.recovery.listSnapshots()).find(
+      (snapshot) =>
+        snapshot.snapshotId === installation.accountMigrationSnapshotId &&
+        snapshot.kind === 'pre-sign-out',
+    );
+    if (backup === undefined) {
+      const report = await this.dependencies.sync.syncPilotNow();
+      if (report.pending !== 0 || report.quarantined !== 0) {
+        throw new DomainError(
+          'account.sign_out_blocked',
+          'Перед выходом нужно завершить отправку локальных изменений.',
+        );
+      }
+      backup = await this.dependencies.recovery.createSnapshot('pre-sign-out');
+      installation = {
+        ...installation,
+        accountMigrationSnapshotId: backup.snapshotId,
+        updatedAt: this.now().toISOString(),
+      };
+      await this.dependencies.installations.save(installation);
+    }
+    await this.dependencies.recovery.ensureCloudVerified(backup.snapshotId);
+
+    if (installation.membershipStatus !== 'revoked') {
+      await this.dependencies.transport.revokeCurrentDevice();
+      installation = {
+        ...installation,
+        membershipStatus: 'revoked',
+        updatedAt: this.now().toISOString(),
+      };
+      await this.dependencies.installations.save(installation);
+    }
     await this.dependencies.auth.signOutCurrent();
+    await this.dependencies.crypto.deleteDeviceSecrets(installation.deviceId, spaceId);
+    await this.dependencies.localData.purge();
   }
 
   private async resumeMigration(installation: SyncInstallation): Promise<AccountOverview> {

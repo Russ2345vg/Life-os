@@ -153,8 +153,10 @@ function recoveryFixture(initial: SyncInstallation) {
     installations,
     snapshots,
     sync,
-    transport: { adoptCurrentSpace: vi.fn() },
+    transport: { adoptCurrentSpace: vi.fn(), revokeCurrentDevice: vi.fn() },
     crypto,
+    recovery: {} as never,
+    localData: { purge: vi.fn(async () => undefined) },
     now: () => new Date(NOW),
   });
   return { service, installations, sync, crypto };
