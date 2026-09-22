@@ -3,6 +3,7 @@ import type {
   SyncOverview,
   SyncPairingInvitation,
 } from '../../application/sync/SyncApplicationService';
+import type { PilotSyncRunResult } from '../../application/sync/pilot/PilotSyncCoordinator';
 import { DomainError } from '../../shared/errors/DomainError';
 
 export class UnavailableSyncApplication implements SyncApplication {
@@ -64,7 +65,7 @@ export class UnavailableSyncApplication implements SyncApplication {
     listener(this.pilotStatus());
     return () => undefined;
   }
-  public syncPilotNow(): Promise<void> {
+  public syncPilotNow(): Promise<PilotSyncRunResult> {
     return this.reject();
   }
   public notifyPilotMutation(): void {}

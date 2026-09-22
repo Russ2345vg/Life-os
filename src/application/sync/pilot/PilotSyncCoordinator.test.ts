@@ -2,6 +2,26 @@ import { describe, expect, it, vi } from 'vitest';
 import { PilotSyncCoordinator } from './PilotSyncCoordinator';
 
 describe('PilotSyncCoordinator', () => {
+  it('reports durable convergence metrics and the cursor after pull', async () => {
+    const coordinator = new PilotSyncCoordinator({
+      bootstrap: { run: vi.fn(async () => undefined) },
+      push: { run: vi.fn(async () => ({ failed: 0 })) },
+      pull: { run: vi.fn(async () => ({ quarantined: 0 })) },
+      metrics: {
+        counts: vi.fn(async () => ({ pending: 0, conflicts: 1, quarantined: 0 })),
+        installation: vi.fn(async () => ({ spaceId: 'space-1' })),
+        cursor: vi.fn(async () => 12),
+      },
+    });
+
+    await expect(coordinator.runAndReport()).resolves.toEqual({
+      pending: 0,
+      conflicts: 1,
+      quarantined: 0,
+      lastSequence: 12,
+    });
+  });
+
   it('distinguishes a failed server operation from a confirmed offline connection', async () => {
     let online = true;
     const coordinator = new PilotSyncCoordinator({

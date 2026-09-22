@@ -7,6 +7,13 @@ export interface PilotSyncStatus {
   readonly lastSuccessfulSyncAt: string | null;
 }
 
+export interface PilotSyncRunResult {
+  readonly pending: number;
+  readonly conflicts: number;
+  readonly quarantined: number;
+  readonly lastSequence: number | null;
+}
+
 export interface PilotSyncCoordinatorDependencies {
   readonly isOnline?: () => boolean;
   readonly afterStructured?: () => void;
@@ -19,6 +26,8 @@ export interface PilotSyncCoordinatorDependencies {
       readonly conflicts: number;
       readonly quarantined: number;
     }>;
+    installation?(): Promise<{ readonly spaceId: string | null } | null>;
+    cursor?(spaceId: string): Promise<number>;
   };
   readonly hints?: {
     ensure(onHint: () => void): Promise<void>;
@@ -40,7 +49,7 @@ export class PilotSyncCoordinator {
     conflictCount: 0,
     lastSuccessfulSyncAt: null,
   };
-  #inFlight: Promise<void> | null = null;
+  #inFlight: Promise<PilotSyncRunResult> | null = null;
   #debounceTimer: ReturnType<typeof globalThis.setTimeout> | null = null;
   #closed = false;
   #rerun = false;
@@ -71,21 +80,27 @@ export class PilotSyncCoordinator {
   }
 
   public async run(): Promise<void> {
-    if (this.#closed) return;
+    await this.runAndReport();
+  }
+
+  public async runAndReport(): Promise<PilotSyncRunResult> {
+    if (this.#closed) return this.currentReport();
     if (this.#inFlight !== null) {
       this.#rerun = true;
       return this.#inFlight;
     }
     this.#inFlight = this.execute();
+    let result: PilotSyncRunResult;
     try {
-      await this.#inFlight;
+      result = await this.#inFlight;
     } finally {
       this.#inFlight = null;
       if (this.#rerun && !this.#closed) {
         this.#rerun = false;
-        await this.run();
+        await this.runAndReport();
       }
     }
+    return result;
   }
 
   public async close(): Promise<void> {
@@ -96,7 +111,7 @@ export class PilotSyncCoordinator {
     this.#listeners.clear();
   }
 
-  private async execute(): Promise<void> {
+  private async execute(): Promise<PilotSyncRunResult> {
     this.update({ ...this.#status, state: 'syncing' });
     try {
       await this.dependencies.bootstrap.run();
@@ -104,6 +119,11 @@ export class PilotSyncCoordinator {
       const push = await this.dependencies.push.run();
       const pull = await this.dependencies.pull.run();
       const counts = await this.dependencies.metrics.counts();
+      const installation = await this.dependencies.metrics.installation?.();
+      const lastSequence =
+        installation === undefined || installation === null || installation.spaceId === null
+          ? null
+          : ((await this.dependencies.metrics.cursor?.(installation.spaceId)) ?? null);
       this.update({
         state:
           pull.quarantined > 0 || counts.conflicts > 0 || counts.quarantined > 0
@@ -120,6 +140,12 @@ export class PilotSyncCoordinator {
             ? this.#now().toISOString()
             : this.#status.lastSuccessfulSyncAt,
       });
+      return {
+        pending: counts.pending,
+        conflicts: counts.conflicts,
+        quarantined: Math.max(counts.quarantined, pull.quarantined),
+        lastSequence,
+      };
     } catch {
       const counts = await this.dependencies.metrics.counts().catch(() => ({
         pending: 0,
@@ -132,9 +158,24 @@ export class PilotSyncCoordinator {
         pendingCount: counts.pending,
         conflictCount: counts.conflicts,
       });
+      return {
+        pending: counts.pending,
+        conflicts: counts.conflicts,
+        quarantined: counts.quarantined,
+        lastSequence: null,
+      };
     } finally {
       if (!this.#closed) this.dependencies.afterStructured?.();
     }
+  }
+
+  private currentReport(): PilotSyncRunResult {
+    return {
+      pending: this.#status.pendingCount,
+      conflicts: this.#status.conflictCount,
+      quarantined: 0,
+      lastSequence: null,
+    };
   }
 
   private update(status: PilotSyncStatus): void {

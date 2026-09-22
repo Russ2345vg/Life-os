@@ -19,6 +19,10 @@ import type { TauriInvoke } from '../supabase/TauriSupabaseAuthStorage';
 export class TauriSyncCryptoService implements SyncCryptoService {
   public constructor(private readonly invokeCommand: TauriInvoke = invoke) {}
 
+  public deleteDeviceSecrets(deviceId: string, spaceId: string): Promise<void> {
+    return this.invokeCommand('sync_delete_device_secrets', { deviceId, spaceId });
+  }
+
   public encryptBinary(
     metadata: SyncBinaryMetadata,
     plaintext: string,

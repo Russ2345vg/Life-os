@@ -2,12 +2,14 @@ import { DomainError } from '../../../shared/errors/DomainError';
 import type { SnapshotService } from '../SnapshotService';
 import type { SyncApplication, SyncOverview } from '../SyncApplicationService';
 import type { CachedSyncDevice } from '../ports/SyncDeviceCacheRepository';
+import type { SyncCryptoService } from '../ports/SyncCryptoService';
 import type {
   AccountSetupState,
   SyncInstallation,
   SyncInstallationRepository,
 } from '../ports/SyncInstallationRepository';
 import type { SyncTrustTransport } from '../ports/SyncTrustTransport';
+import type { PilotSyncRunResult } from '../pilot/PilotSyncCoordinator';
 import type { AccountAuth, AccountSession } from './AccountAuth';
 
 export interface AccountOverview {
@@ -42,6 +44,7 @@ export interface AccountSyncDependencies {
   readonly snapshots: SnapshotService;
   readonly sync: SyncApplication;
   readonly transport: Pick<SyncTrustTransport, 'adoptCurrentSpace'>;
+  readonly crypto: Pick<SyncCryptoService, 'deleteDeviceSecrets'>;
   readonly now?: () => Date;
 }
 
@@ -56,6 +59,13 @@ export class AccountSyncService implements AccountSync {
     const overview = await this.dependencies.sync.loadOverview();
     if (overview.installation.accountSetupState === 'account_migration_pending') {
       return this.resumeMigration(overview.installation);
+    }
+    if (
+      overview.installation.accountSetupState === 'recovery_confirmation_pending' &&
+      overview.installation.membershipStatus === 'active' &&
+      overview.installation.setupState === 'configured'
+    ) {
+      return this.finishRecoveryConvergence(overview);
     }
     return this.present(overview);
   }
@@ -135,8 +145,12 @@ export class AccountSyncService implements AccountSync {
     const installation = await this.requireInstallation('recovery_confirmation_pending');
     const session = requirePermanentSession(await this.requireCurrentSession(installation));
     const overview = await this.dependencies.sync.recover(recoveryMaterial);
-    const updated = await this.saveSession(overview.installation, session, 'ready');
-    return this.present({ ...overview, installation: updated });
+    const recovered = await this.saveSession(
+      overview.installation,
+      session,
+      'recovery_confirmation_pending',
+    );
+    return this.finishRecoveryConvergence({ ...overview, installation: recovered });
   }
 
   public async requestPasswordReset(email: string): Promise<void> {
@@ -190,7 +204,8 @@ export class AccountSyncService implements AccountSync {
       migrated = installation;
     }
 
-    await this.dependencies.sync.syncPilotNow();
+    const report = await this.dependencies.sync.syncPilotNow();
+    requireConverged(report);
     const accountSetupState =
       migrated.setupState === 'recovery_unconfirmed' ? 'recovery_confirmation_pending' : 'ready';
     const completed: SyncInstallation = {
@@ -204,7 +219,40 @@ export class AccountSyncService implements AccountSync {
     };
     await this.dependencies.installations.save(completed);
     const overview = await this.overviewWith(completed);
-    return this.present(overview, recoveryMaterial);
+    return this.present(overview, recoveryMaterial, report);
+  }
+
+  private async finishRecoveryConvergence(overview: SyncOverview): Promise<AccountOverview> {
+    const installation = overview.installation;
+    if (installation.spaceId === null || installation.currentKeyEpoch === null) {
+      throw invalidAccountState();
+    }
+    const report = await this.dependencies.sync.syncPilotNow();
+    try {
+      requireConverged(report);
+    } catch (error) {
+      await this.dependencies.crypto.deleteDeviceSecrets(
+        installation.deviceId,
+        installation.spaceId,
+      );
+      await this.dependencies.installations.save({
+        ...installation,
+        membershipStatus: 'pending',
+        recoveryConfirmedAt: null,
+        setupState: 'not_configured',
+        accountSetupState: 'recovery_confirmation_pending',
+        updatedAt: this.now().toISOString(),
+      });
+      throw error;
+    }
+    const ready: SyncInstallation = {
+      ...installation,
+      accountSetupState: 'ready',
+      accountMigrationSnapshotId: null,
+      updatedAt: this.now().toISOString(),
+    };
+    await this.dependencies.installations.save(ready);
+    return this.present({ ...overview, installation: ready }, null, report);
   }
 
   private async requireVerifiedSnapshot(snapshotId: string): Promise<void> {
@@ -263,15 +311,19 @@ export class AccountSyncService implements AccountSync {
     return { ...overview, installation };
   }
 
-  private present(overview: SyncOverview, recoveryMaterial: string | null = null): AccountOverview {
+  private present(
+    overview: SyncOverview,
+    recoveryMaterial: string | null = null,
+    report?: PilotSyncRunResult,
+  ): AccountOverview {
     const pilot = this.dependencies.sync.pilotStatus();
     return {
       state: overview.installation.accountSetupState,
       email: overview.installation.accountEmail,
       connection: overview.connection,
       recoveryMaterial,
-      pendingMutations: pilot.pendingCount,
-      conflicts: pilot.conflictCount,
+      pendingMutations: report?.pending ?? pilot.pendingCount,
+      conflicts: report?.conflicts ?? pilot.conflictCount,
       devices: overview.devices,
     };
   }
@@ -295,4 +347,13 @@ function invalidTransition(message: string): DomainError {
 
 function invalidAccountState(): DomainError {
   return new DomainError('account.state_invalid', 'Состояние аккаунта повреждено или устарело.');
+}
+
+function requireConverged(report: PilotSyncRunResult): void {
+  if (report.pending !== 0 || report.quarantined !== 0 || report.lastSequence === null) {
+    throw new DomainError(
+      'account.convergence_incomplete',
+      'Первичная синхронизация не завершена. Повторите попытку.',
+    );
+  }
 }

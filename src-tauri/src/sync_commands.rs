@@ -168,6 +168,24 @@ pub async fn sync_prepare_device_identity<R: tauri::Runtime>(
 }
 
 #[tauri::command]
+pub async fn sync_delete_device_secrets<R: tauri::Runtime>(
+    app: AppHandle<R>,
+    device_id: String,
+    space_id: String,
+) -> Result<(), String> {
+    let (device, space) = device_secret_ids(&device_id, &space_id)?;
+    secure_key_store::delete(&app, &device).await?;
+    secure_key_store::delete(&app, &space).await
+}
+
+fn device_secret_ids(device_id: &str, space_id: &str) -> Result<(SecretId, SecretId), String> {
+    Ok((
+        SecretId::device_private_key(device_id)?,
+        SecretId::space_key_ring(space_id)?,
+    ))
+}
+
+#[tauri::command]
 pub async fn sync_prepare_first_space<R: tauri::Runtime>(
     app: AppHandle<R>,
     device_id: String,
@@ -573,5 +591,24 @@ mod tests {
         assert!(svg.starts_with("<?xml"));
         assert!(svg.contains("<svg"));
         assert!(sync_render_pairing_qr(String::new()).is_err());
+    }
+
+    #[test]
+    fn sync_delete_device_secrets_scopes_validated_ids_without_auth_session() {
+        let (device, space) = device_secret_ids(
+            "10000000-0000-4000-8000-000000000001",
+            "20000000-0000-4000-8000-000000000001",
+        )
+        .expect("valid ids");
+        let auth = SecretId::auth_session("supabase-auth-session").expect("auth id");
+        assert_ne!(device.storage_name(), space.storage_name());
+        assert_ne!(device.storage_name(), auth.storage_name());
+        assert_ne!(space.storage_name(), auth.storage_name());
+    }
+
+    #[test]
+    fn sync_delete_device_secrets_rejects_malformed_ids() {
+        assert!(device_secret_ids("not-a-uuid", "20000000-0000-4000-8000-000000000001").is_err());
+        assert!(device_secret_ids("10000000-0000-4000-8000-000000000001", "bad-space").is_err());
     }
 }

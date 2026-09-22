@@ -237,4 +237,15 @@ mod tests {
         delete_path(&directory.join("slot")).expect("idempotent delete");
         fs::remove_dir_all(directory).expect("cleanup");
     }
+
+    #[test]
+    fn sync_delete_device_secrets_missing_slots_are_idempotent() {
+        let missing = std::env::temp_dir().join(format!(
+            "lifeos-missing-device-secret-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_file(&missing);
+        delete_path(&missing).expect("first missing delete");
+        delete_path(&missing).expect("repeated missing delete");
+    }
 }

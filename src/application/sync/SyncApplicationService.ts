@@ -22,7 +22,11 @@ import type {
   SyncPlatform,
 } from './ports/SyncInstallationRepository';
 import type { SyncTrustTransport } from './ports/SyncTrustTransport';
-import type { PilotSyncCoordinator, PilotSyncStatus } from './pilot/PilotSyncCoordinator';
+import type {
+  PilotSyncCoordinator,
+  PilotSyncRunResult,
+  PilotSyncStatus,
+} from './pilot/PilotSyncCoordinator';
 
 export type SyncConnectionState = 'local' | 'online' | 'offline';
 
@@ -61,7 +65,7 @@ export interface SyncApplication {
   updateDeviceName(deviceName: string): Promise<SyncOverview>;
   pilotStatus(): PilotSyncStatus;
   subscribePilotStatus(listener: (status: PilotSyncStatus) => void): () => void;
-  syncPilotNow(): Promise<void>;
+  syncPilotNow(): Promise<PilotSyncRunResult>;
   notifyPilotMutation(): void;
   close(): Promise<void>;
 }
@@ -373,10 +377,17 @@ export class SyncApplicationService implements SyncApplication {
   }
 
   public async recover(recoveryMaterial: string): Promise<SyncOverview> {
-    let installation = await this.ensureInstallation();
+    let installation = await this.ensureInstallationForRecovery();
     const authorization =
       await this.dependencies.crypto.prepareRecoveryAuthorization(recoveryMaterial);
-    if (installation.spaceId !== null || installation.membershipStatus !== null) {
+    const pendingRetry =
+      installation.accountSetupState === 'recovery_confirmation_pending' &&
+      installation.membershipStatus === 'pending' &&
+      installation.spaceId === authorization.spaceId;
+    if (
+      !pendingRetry &&
+      (installation.spaceId !== null || installation.membershipStatus !== null)
+    ) {
       if (
         installation.setupState !== 'configured' ||
         installation.spaceId === null ||
@@ -411,7 +422,22 @@ export class SyncApplicationService implements SyncApplication {
       };
       await this.dependencies.installationRepository.save(installation);
     } else {
-      requireNotConfigured(installation);
+      if (!pendingRetry) requireNotConfigured(installation);
+      if (!pendingRetry || installation.snapshotId === null) {
+        const snapshot = await this.dependencies.snapshotService.createPreSyncSnapshot();
+        const verification = await this.dependencies.snapshotService.verifySnapshot(
+          snapshot.snapshotId,
+        );
+        if (!verification.valid) {
+          throw new Error('Pre-sync local snapshot verification failed.');
+        }
+        installation = {
+          ...installation,
+          snapshotId: snapshot.snapshotId,
+          updatedAt: this.now().toISOString(),
+        };
+        await this.dependencies.installationRepository.save(installation);
+      }
     }
     await this.ensureAuthorized(installation);
     const identity = await this.dependencies.crypto.ensureDeviceIdentity(
@@ -425,34 +451,50 @@ export class SyncApplicationService implements SyncApplication {
       publicKey: identity.publicKey,
       platform: installation.platform,
     });
-    await this.dependencies.crypto.recoverAndStoreKeyRing({
-      recoveryMaterial,
-      envelope: challenge.recoveryEnvelope,
-    });
-    const encryptedName = await this.dependencies.crypto.encryptDeviceName({
-      spaceId: authorization.spaceId,
-      deviceId: installation.deviceId,
-      keyEpoch: challenge.currentKeyEpoch,
-      deviceName: installation.deviceName,
-    });
-    await this.dependencies.transport.completeRecovery({
-      deviceId: installation.deviceId,
-      authProof: authorization.authProof,
-      recoveryEnvelopeSha256Hex: await recoveryEnvelopeDigest(
-        challenge.recoveryEnvelope,
-        this.random,
-      ),
-      encryptedDeviceName: encryptedName.ciphertext,
-      encryptedDeviceNameNonce: encryptedName.nonce,
-    });
-    const updated: SyncInstallation = {
+    const pending: SyncInstallation = {
       ...installation,
       publicKey: identity.publicKey,
       spaceId: authorization.spaceId,
-      membershipStatus: 'active',
+      membershipStatus: 'pending',
       currentKeyEpoch: challenge.currentKeyEpoch,
+      recoveryConfirmedAt: null,
+      setupState: 'not_configured',
+      updatedAt: this.now().toISOString(),
+    };
+    await this.dependencies.installationRepository.save(pending);
+    try {
+      await this.dependencies.crypto.recoverAndStoreKeyRing({
+        recoveryMaterial,
+        envelope: challenge.recoveryEnvelope,
+      });
+      const encryptedName = await this.dependencies.crypto.encryptDeviceName({
+        spaceId: authorization.spaceId,
+        deviceId: installation.deviceId,
+        keyEpoch: challenge.currentKeyEpoch,
+        deviceName: installation.deviceName,
+      });
+      await this.dependencies.transport.completeRecovery({
+        deviceId: installation.deviceId,
+        authProof: authorization.authProof,
+        recoveryEnvelopeSha256Hex: await recoveryEnvelopeDigest(
+          challenge.recoveryEnvelope,
+          this.random,
+        ),
+        encryptedDeviceName: encryptedName.ciphertext,
+        encryptedDeviceNameNonce: encryptedName.nonce,
+      });
+    } catch (error) {
+      await this.dependencies.crypto.deleteDeviceSecrets(
+        installation.deviceId,
+        authorization.spaceId,
+      );
+      throw error;
+    }
+    const updated: SyncInstallation = {
+      ...pending,
+      publicKey: identity.publicKey,
+      membershipStatus: 'active',
       recoveryConfirmedAt: this.now().toISOString(),
-      snapshotId: installation.snapshotId,
       setupState: 'configured',
       updatedAt: this.now().toISOString(),
     };
@@ -506,8 +548,15 @@ export class SyncApplicationService implements SyncApplication {
     return this.dependencies.pilotCoordinator.subscribe(listener);
   }
 
-  public async syncPilotNow(): Promise<void> {
-    await this.dependencies.pilotCoordinator?.run();
+  public async syncPilotNow(): Promise<PilotSyncRunResult> {
+    return (
+      (await this.dependencies.pilotCoordinator?.runAndReport()) ?? {
+        pending: 0,
+        conflicts: 0,
+        quarantined: 0,
+        lastSequence: null,
+      }
+    );
   }
 
   public notifyPilotMutation(): void {
@@ -593,6 +642,26 @@ export class SyncApplicationService implements SyncApplication {
     };
     await this.dependencies.installationRepository.save(installation);
     return installation;
+  }
+
+  private async ensureInstallationForRecovery(): Promise<SyncInstallation> {
+    const current = await this.dependencies.installationRepository.find();
+    if (
+      current === null ||
+      current.accountSetupState !== 'recovery_confirmation_pending' ||
+      current.membershipStatus !== 'pending'
+    ) {
+      return this.ensureInstallation();
+    }
+    const identity = await this.dependencies.crypto.ensureDeviceIdentity(current.deviceId, true);
+    if (identity.publicKey === current.publicKey) return current;
+    const updated = {
+      ...current,
+      publicKey: identity.publicKey,
+      updatedAt: this.now().toISOString(),
+    };
+    await this.dependencies.installationRepository.save(updated);
+    return updated;
   }
 
   private async requireInstallation(): Promise<SyncInstallation> {

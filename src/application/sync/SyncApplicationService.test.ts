@@ -300,6 +300,34 @@ describe('SyncApplicationService', () => {
       accountEmail: 'person@example.com',
     });
   });
+
+  it('keeps failed account recovery pending and deletes only its scoped native secrets', async () => {
+    const fixture = createFixture({
+      ...baseInstallation(),
+      accountSetupState: 'recovery_confirmation_pending',
+      accountUserId: ACCOUNT_USER_ID,
+      accountSessionId: ACCOUNT_SESSION_ID,
+      accountEmail: 'person@example.com',
+    });
+    vi.mocked(fixture.auth.current).mockResolvedValue(accountSession());
+    vi.mocked(fixture.crypto.recoverAndStoreKeyRing).mockRejectedValue(
+      new Error('Recovery material is invalid.'),
+    );
+    const service = new SyncApplicationService(fixture.dependencies);
+
+    await expect(service.recover('LIFEOS-RECOVERY-V1:wrong')).rejects.toThrow(
+      'Recovery material is invalid.',
+    );
+
+    expect(fixture.crypto.deleteDeviceSecrets).toHaveBeenCalledWith(DEVICE_ID, SPACE_ID);
+    expect(fixture.installation.value).toMatchObject({
+      spaceId: SPACE_ID,
+      membershipStatus: 'pending',
+      setupState: 'not_configured',
+      snapshotId: 'snapshot-1',
+      accountSetupState: 'recovery_confirmation_pending',
+    });
+  });
 });
 
 function createFixture(initial: SyncInstallation | null = null) {
@@ -325,6 +353,7 @@ function createFixture(initial: SyncInstallation | null = null) {
     close: vi.fn(async () => undefined),
   };
   const crypto: SyncCryptoService = {
+    deleteDeviceSecrets: vi.fn(async () => undefined),
     ensureDeviceIdentity: vi.fn(async () => ({ publicKey: encoded(32, 1) })),
     prepareFirstSpace: vi.fn(async () => ({
       publicKey: encoded(32, 1),

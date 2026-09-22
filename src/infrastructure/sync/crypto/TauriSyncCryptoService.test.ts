@@ -50,4 +50,28 @@ describe('TauriSyncCryptoService', () => {
     ]);
     expect(JSON.stringify(calls)).not.toMatch(/privateKey|spaceKey|recoveryRoot/);
   });
+
+  it('deletes only the requested device and space secrets through one native command', async () => {
+    const calls: Array<readonly [string, Record<string, unknown> | undefined]> = [];
+    const invoke: TauriInvoke = async <T>(command: string, args?: Record<string, unknown>) => {
+      calls.push([command, args]);
+      return undefined as T;
+    };
+    const service = new TauriSyncCryptoService(invoke);
+
+    await service.deleteDeviceSecrets(
+      '10000000-0000-4000-8000-000000000001',
+      '20000000-0000-4000-8000-000000000001',
+    );
+
+    expect(calls).toEqual([
+      [
+        'sync_delete_device_secrets',
+        {
+          deviceId: '10000000-0000-4000-8000-000000000001',
+          spaceId: '20000000-0000-4000-8000-000000000001',
+        },
+      ],
+    ]);
+  });
 });

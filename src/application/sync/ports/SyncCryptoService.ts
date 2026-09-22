@@ -69,6 +69,7 @@ export interface RecoveryAuthorization {
 }
 
 export interface SyncCryptoService extends SnapshotPayloadCrypto {
+  deleteDeviceSecrets(deviceId: string, spaceId: string): Promise<void>;
   ensureDeviceIdentity(
     deviceId: string,
     allowCreate: boolean,

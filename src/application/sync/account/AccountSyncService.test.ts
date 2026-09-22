@@ -298,7 +298,12 @@ function createFixture(initial: SyncInstallation) {
       lastSuccessfulSyncAt: null,
     })),
     subscribePilotStatus: vi.fn(() => () => undefined),
-    syncPilotNow: vi.fn(async () => undefined),
+    syncPilotNow: vi.fn(async () => ({
+      pending: 0,
+      conflicts: 0,
+      quarantined: 0,
+      lastSequence: 0,
+    })),
     notifyPilotMutation: vi.fn(),
     close: vi.fn(async () => undefined),
   } satisfies SyncApplication;
@@ -314,6 +319,7 @@ function createFixture(initial: SyncInstallation) {
     snapshots,
     sync,
     transport,
+    crypto: { deleteDeviceSecrets: vi.fn(async () => undefined) },
     now: () => new Date(TIMESTAMP),
   });
   return { service, auth, installations, snapshots, sync, transport };
