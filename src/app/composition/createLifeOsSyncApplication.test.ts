@@ -49,7 +49,9 @@ describe('createLifeOsSyncApplication', () => {
       email: null,
       connection: 'local',
     });
-    await expect(applications.accountSync.beginRegistration('person@example.com')).rejects.toMatchObject({
+    await expect(
+      applications.accountSync.beginRegistration('person@example.com'),
+    ).rejects.toMatchObject({
       code: 'account.unavailable',
       message: 'Синхронизация доступна только в приложении LifeOS.',
     });

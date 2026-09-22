@@ -21,9 +21,20 @@ test('starts in the current workspace and replaces removed routes with Today', a
 
 test('opens every primary current route directly and survives reload', async ({ page }) => {
   const issues = observeRuntimeIssues(page);
-  for (const path of ['today', 'spheres', 'directions', 'goals', 'actions', 'inbox'] as const) {
+  for (const path of [
+    'today',
+    'spheres',
+    'directions',
+    'goals',
+    'actions',
+    'inbox',
+    'account',
+  ] as const) {
     await page.goto(`/#/v2/${path}`);
     await expect(page.locator('#planner-main-content').getByRole('heading').first()).toBeVisible();
+    if (path === 'account') {
+      await expect(page.getByText('Данные хранятся только на этом устройстве')).toBeVisible();
+    }
     await page.reload();
     await expect(page).toHaveURL(new RegExp(`#\\/v2\\/${path}$`));
     await expect(page.locator('#planner-main-content').getByRole('heading').first()).toBeVisible();
