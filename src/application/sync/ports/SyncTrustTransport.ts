@@ -27,6 +27,11 @@ export interface RevocationResult {
 }
 
 export interface SyncTrustTransport {
+  adoptCurrentSpace(deviceId: string): Promise<{
+    readonly spaceId: string;
+    readonly currentKeyEpoch: number;
+  }>;
+  revokeCurrentDevice(): Promise<void>;
   createFirstSpace(input: {
     readonly spaceId: string;
     readonly deviceId: string;

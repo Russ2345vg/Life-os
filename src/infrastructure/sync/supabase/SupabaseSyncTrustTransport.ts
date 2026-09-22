@@ -14,6 +14,20 @@ import { DomainError } from '../../../shared/errors/DomainError';
 export class SupabaseSyncTrustTransport implements SyncTrustTransport {
   public constructor(private readonly client: SupabaseClient) {}
 
+  public async adoptCurrentSpace(deviceId: string) {
+    const row = firstRow(
+      await this.rpc('lifeos_sync_adopt_current_space', { p_device_id: deviceId }),
+    );
+    return {
+      spaceId: readUuid(row, 'space_id'),
+      currentKeyEpoch: readPositiveInteger(row, 'current_key_epoch'),
+    };
+  }
+
+  public async revokeCurrentDevice(): Promise<void> {
+    await this.rpc('lifeos_sync_revoke_current_device', {});
+  }
+
   public async createFirstSpace(input: Parameters<SyncTrustTransport['createFirstSpace']>[0]) {
     const row = firstRow(
       await this.rpc('lifeos_sync_create_first_space', {
@@ -242,9 +256,6 @@ export class SupabaseSyncTrustTransport implements SyncTrustTransport {
       throw new DomainError(
         'sync.remote_operation_failed',
         'Операция доверия устройств не выполнена.',
-        {
-          cause: response.error,
-        },
       );
     }
     return response.data as unknown;
@@ -265,6 +276,14 @@ function firstRow(value: unknown): Record<string, unknown> {
 function readString(row: Record<string, unknown>, key: string): string {
   const value = row[key];
   if (typeof value !== 'string' || value.length === 0) throw invalidResponse();
+  return value;
+}
+
+function readUuid(row: Record<string, unknown>, key: string): string {
+  const value = readString(row, key);
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
+    throw invalidResponse();
+  }
   return value;
 }
 

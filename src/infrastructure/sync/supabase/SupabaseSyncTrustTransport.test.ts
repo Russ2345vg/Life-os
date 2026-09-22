@@ -3,6 +3,70 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { SupabaseSyncTrustTransport } from './SupabaseSyncTrustTransport';
 
 describe('SupabaseSyncTrustTransport', () => {
+  it('adopts the current space with only the device id from the client', async () => {
+    const rpc = vi.fn(async () => ({
+      data: [
+        {
+          space_id: '20000000-0000-4000-8000-000000000001',
+          current_key_epoch: 3,
+        },
+      ],
+      error: null,
+    }));
+    const transport = new SupabaseSyncTrustTransport({ rpc } as unknown as SupabaseClient);
+
+    await expect(
+      transport.adoptCurrentSpace('30000000-0000-4000-8000-000000000001'),
+    ).resolves.toEqual({
+      spaceId: '20000000-0000-4000-8000-000000000001',
+      currentKeyEpoch: 3,
+    });
+    expect(rpc).toHaveBeenCalledWith('lifeos_sync_adopt_current_space', {
+      p_device_id: '30000000-0000-4000-8000-000000000001',
+    });
+    expect(JSON.stringify(rpc.mock.calls)).not.toMatch(/session|user|token/i);
+  });
+
+  it('revokes only the server-validated current device', async () => {
+    const rpc = vi.fn(async () => ({ data: null, error: null }));
+    const transport = new SupabaseSyncTrustTransport({ rpc } as unknown as SupabaseClient);
+
+    await expect(transport.revokeCurrentDevice()).resolves.toBeUndefined();
+    expect(rpc).toHaveBeenCalledWith('lifeos_sync_revoke_current_device', {});
+  });
+
+  it.each([
+    [{ space_id: 'not-a-uuid', current_key_epoch: 1 }],
+    [{ space_id: '20000000-0000-4000-8000-000000000001', current_key_epoch: 0 }],
+  ])('rejects malformed adoption responses %#', async (row) => {
+    const transport = new SupabaseSyncTrustTransport({
+      rpc: vi.fn(async () => ({ data: [row], error: null })),
+    } as unknown as SupabaseClient);
+
+    await expect(
+      transport.adoptCurrentSpace('30000000-0000-4000-8000-000000000001'),
+    ).rejects.toMatchObject({ code: 'sync.remote_response_invalid' });
+  });
+
+  it('maps adoption SQL failures to the stable public error without preserving server details', async () => {
+    const transport = new SupabaseSyncTrustTransport({
+      rpc: vi.fn(async () => ({
+        data: null,
+        error: { code: '42501', message: 'sensitive SQL policy detail' },
+      })),
+    } as unknown as SupabaseClient);
+
+    const error = await transport
+      .adoptCurrentSpace('30000000-0000-4000-8000-000000000001')
+      .catch((reason: unknown) => reason);
+
+    expect(error).toMatchObject({
+      code: 'sync.remote_operation_failed',
+      message: 'Операция доверия устройств не выполнена.',
+    });
+    expect(error).not.toHaveProperty('cause');
+  });
+
   it('uses a narrow RPC and sends only public/ciphertext first-space fields', async () => {
     const rpc = vi.fn(async () => ({
       data: [{ current_key_epoch: 1 }],

@@ -30,15 +30,19 @@ describe('SupabasePilotSyncTransport', () => {
     }));
     const transport = new SupabasePilotSyncTransport({ rpc } as unknown as SupabaseClient);
     await expect(transport.push(envelope)).resolves.toEqual({ sequence: 7, isCurrentWinner: true });
-    expect(rpc).toHaveBeenCalledWith(
-      'lifeos_sync_push_pilot_event',
-      expect.objectContaining({
-        p_event_id: 'event-1',
-        p_object_id: 'object-1',
-        p_origin_device_id: 'device-1',
-        p_operation: 'upsert',
-      }),
-    );
+    expect(rpc).toHaveBeenCalledWith('lifeos_sync_push_pilot_event', {
+      p_event_id: 'event-1',
+      p_object_id: 'object-1',
+      p_origin_device_id: 'device-1',
+      p_base_revision: 0,
+      p_revision: 1,
+      p_key_epoch: 3,
+      p_operation: 'upsert',
+      p_hlc_wall_time: 100,
+      p_hlc_logical: 0,
+      p_ciphertext_hex: '01'.repeat(32),
+      p_nonce_hex: '02'.repeat(24),
+    });
     expect(JSON.stringify(rpc.mock.calls)).not.toMatch(
       /entityType|title|description|plaintext|service.role/i,
     );
@@ -75,6 +79,16 @@ describe('SupabasePilotSyncTransport', () => {
       p_after_sequence: 7,
       p_limit: 100,
     });
+  });
+
+  it('acknowledges the same public cursor payload without account or session fields', async () => {
+    const rpc = vi.fn(async () => ({ data: null, error: null }));
+    const transport = new SupabasePilotSyncTransport({ rpc } as unknown as SupabaseClient);
+
+    await transport.acknowledge(8);
+
+    expect(rpc).toHaveBeenCalledWith('lifeos_sync_ack_pilot_cursor', { p_last_sequence: 8 });
+    expect(JSON.stringify(rpc.mock.calls)).not.toMatch(/session|user|token/i);
   });
 
   it('uses a private epoch-scoped Realtime channel only as a wake-up hint', async () => {

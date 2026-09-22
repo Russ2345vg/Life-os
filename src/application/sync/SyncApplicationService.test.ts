@@ -356,6 +356,8 @@ function createFixture(initial: SyncInstallation | null = null) {
     async () => null,
   );
   const transport: SyncTrustTransport = {
+    adoptCurrentSpace: vi.fn(async () => ({ spaceId: SPACE_ID, currentKeyEpoch: 1 })),
+    revokeCurrentDevice: vi.fn(async () => undefined),
     createFirstSpace: vi.fn(async () => ({ currentKeyEpoch: 1 as const })),
     createPairingInvite: vi.fn(async () => ({
       inviteId: INVITE_ID,
