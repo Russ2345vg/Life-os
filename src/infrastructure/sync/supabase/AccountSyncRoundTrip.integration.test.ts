@@ -78,9 +78,9 @@ describe.skipIf(!runLocalRoundTrip)('local Supabase account sync round trip', ()
         { type: 'goal', id: crypto.randomUUID(), title: 'Синхронная цель' },
         { type: 'action', id: crypto.randomUUID(), title: 'Первое действие' },
       ];
-      for (const [index, record] of records.entries()) {
+      for (const record of records) {
         await pilotA.push(
-          encryptedEvent(spaceId, deviceA, record.id, index + 1, encrypt(record, contentKey)),
+          encryptedEvent(spaceId, deviceA, record.id, 1, encrypt(record, contentKey)),
         );
       }
       const attachment = JSON.stringify({
@@ -122,11 +122,12 @@ describe.skipIf(!runLocalRoundTrip)('local Supabase account sync round trip', ()
       expect(await blobsB.download('lifeos-attachments', attachmentPath)).toBe(attachment);
 
       const offlineEdit = { type: 'goal', id: records[0]!.id, title: 'Изменено офлайн' };
-      expect(await pilotA.pull(2, 100)).toEqual([]);
+      const cursor = Math.max(...pulled.map((event) => event.sequence));
+      expect(await pilotA.pull(cursor, 100)).toEqual([]);
       await pilotB.push(
         encryptedEvent(spaceId, deviceB, offlineEdit.id, 2, encrypt(offlineEdit, contentKey), 1),
       );
-      const converged = await pilotA.pull(2, 100);
+      const converged = await pilotA.pull(cursor, 100);
       expect(decrypt(converged[0]!.ciphertext, contentKey)).toEqual(offlineEdit);
 
       await trustB.revokeCurrentDevice();

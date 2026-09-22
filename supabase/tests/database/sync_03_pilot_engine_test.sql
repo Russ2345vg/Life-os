@@ -344,20 +344,5 @@ select throws_ok(
   '42501', 'Active LifeOS device is required', 'a revoked device loses future pilot access'
 );
 
-do $$
-declare
-  line text;
-  diagnostics text := '';
-begin
-  for line in select * from extensions.finish() loop
-    if line like 'not ok%' or line like '#%' or line ~ '^1\.\.0([[:space:]]|$)' then
-      diagnostics := diagnostics || E'\n' || line;
-    end if;
-  end loop;
-  if diagnostics <> '' then
-    raise exception 'pgTAP failed:%', diagnostics;
-  end if;
-end;
-$$;
-select 'All pgTAP assertions PASS' as result;
+select * from extensions.finish();
 rollback;

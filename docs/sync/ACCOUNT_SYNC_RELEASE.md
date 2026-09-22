@@ -16,15 +16,16 @@ Production-флаг `VITE_LIFEOS_ACCOUNT_SYNC_ENABLED` по умолчанию �
 
 ## Проверки текущего дерева
 
-| Проверка                   | Результат   | Доказательство                                                                     |
-| -------------------------- | ----------- | ---------------------------------------------------------------------------------- |
-| Account/application target | PASS        | 8 тестов; локальный Supabase round-trip корректно SKIP без локального backend      |
-| TypeScript                 | PASS        | `npm run typecheck`, exit 0                                                        |
-| Account desktop/mobile E2E | PASS        | 4 сценария: 1440×900, 390×844 и 360×800; keyboard, overflow, live regions, console |
-| Реальный route smoke       | PASS        | `#/v2/account` открывается и переживает reload в local-only состоянии              |
-| Native Rust sync tests     | PASS        | `cargo test ... sync_`: 12 passed                                                  |
-| pgTAP/RLS                  | UNCONFIRMED | `ECONNREFUSED 127.0.0.1:54322`; local Supabase/Docker не запущен                   |
-| Полный R9/R10 gate         | PASS        | 1350 unit/integration, 55 infra, 1 alpha, build/format/diff и 68 E2E               |
+| Проверка                   | Результат | Доказательство                                                                     |
+| -------------------------- | --------- | ---------------------------------------------------------------------------------- |
+| Account/application target | PASS      | 8 тестов без локального backend                                                    |
+| Local Supabase round-trip  | PASS      | 1 реальный auth/RPC/Storage-сценарий с двумя `session_id`                          |
+| TypeScript                 | PASS      | `npm run typecheck`, exit 0                                                        |
+| Account desktop/mobile E2E | PASS      | 4 сценария: 1440×900, 390×844 и 360×800; keyboard, overflow, live regions, console |
+| Реальный route smoke       | PASS      | `#/v2/account` открывается и переживает reload в local-only состоянии              |
+| Native Rust sync tests     | PASS      | `cargo test ... sync_`: 12 passed                                                  |
+| pgTAP/RLS                  | PASS      | 6 файлов, 155 тестов после чистого `supabase db reset`                             |
+| Полный R9/R10 gate         | PASS      | 1351 unit/integration, 55 infra, 1 alpha, build/format/diff и 68 E2E               |
 
 Детерминированный Playwright fixture вызывает настоящий `AccountSync` application-контракт и не
 изменяет DOM напрямую. Local Supabase integration test принимает только loopback URL, создаёт
@@ -98,9 +99,9 @@ account-owned spaces backend migration нельзя откатывать destruc
 5. безопасный выход удаляет читаемые локальные данные только текущего устройства;
 6. первое устройство остаётся активным после выхода или отзыва второго.
 
-Пока локальный/тестовый Supabase не поднят и production-флаг выключен, физическая установка может
-подтвердить обновление, сохранность прежних локальных данных и запуск приложения, но не полный
-двухустройственный account flow.
+Локальный Supabase подтвердил RLS и двухсессионный зашифрованный round-trip. Production-флаг в
+установленных клиентах выключен, поэтому физическая установка подтверждает обновление, сохранение
+профиля и запуск приложения, но не hosted двухустройственный account flow.
 
 Текущие Windows- и Android-установки подтверждают upgrade и запуск без команды очистки профиля.
 Полный account flow остаётся ручным gate тестового backend.

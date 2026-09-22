@@ -5,9 +5,9 @@ set local search_path = public, extensions;
 
 select plan(24);
 
-select has_column('public', 'sync_spaces', 'owner_user_id');
-select has_column('public', 'devices', 'account_user_id');
-select has_column('public', 'devices', 'auth_session_id');
+select has_column('public', 'sync_spaces', 'owner_user_id', 'sync spaces bind to account owners');
+select has_column('public', 'devices', 'account_user_id', 'devices bind to account users');
+select has_column('public', 'devices', 'auth_session_id', 'devices bind to auth sessions');
 
 select ok(
   to_regclass('public.sync_spaces_owner_unique') is not null

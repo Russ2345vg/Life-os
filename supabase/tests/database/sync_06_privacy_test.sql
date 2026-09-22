@@ -1,6 +1,7 @@
 -- Read-only acceptance of stored envelopes and paths. No payloads/secrets are returned.
 begin;
 set transaction read only;
+select '1..1' as tap;
 do $$
 begin
   if exists (select 1 from public.sync_events where octet_length(ciphertext) < 16
@@ -20,9 +21,5 @@ begin
     then raise exception 'Nonopaque Storage path'; end if;
 end;
 $$;
-select 'Ciphertext envelope / schema / private bucket / opaque path assertions PASS' as result,
-  (select count(*) from public.sync_events) as encrypted_events,
-  (select count(*) from public.sync_objects) as encrypted_objects,
-  (select count(*) from storage.objects where bucket_id = 'lifeos-attachments') as attachment_blobs,
-  (select count(*) from storage.objects where bucket_id = 'lifeos-snapshots') as snapshot_blobs;
+select 'ok 1 - ciphertext envelope / schema / private bucket / opaque path assertions' as tap;
 rollback;

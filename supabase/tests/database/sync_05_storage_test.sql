@@ -1,5 +1,6 @@
 -- Synthetic authorization contract; transaction always rolls back, no Storage object manipulation.
 begin;
+select '1..1' as tap;
 do $$
 begin
   if (select count(*) from storage.buckets where id in ('lifeos-attachments','lifeos-snapshots') and not public) <> 2 then
@@ -40,5 +41,5 @@ begin
   execute 'select ' || policy || ' from (select ''lifeos-attachments''::text as bucket_id, ''25000000-0000-4000-8000-000000000001/secret-filename.jpg/1''::text as name) objects' into allowed;
   if coalesce(allowed,false) then raise exception 'SYNC05 plaintext path accepted'; end if;
 end $$;
-select 'SYNC05 private / active / pending / revoked / foreign / opaque paths PASS' as result;
+select 'ok 1 - SYNC05 private / active / pending / revoked / foreign / opaque paths' as tap;
 rollback;
