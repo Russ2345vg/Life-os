@@ -4,5 +4,8 @@ project_id = "lifeos-sync"
 enabled = true
 enable_anonymous_sign_ins = true
 
+[auth.email]
+enable_confirmations = true
+
 [storage]
 enabled = true
