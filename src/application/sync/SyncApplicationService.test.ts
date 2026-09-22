@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { SnapshotService } from './SnapshotService';
 import { SyncApplicationService, type SyncApplicationDependencies } from './SyncApplicationService';
+import type { AccountAuth } from './account/AccountAuth';
 import type {
   CachedSyncDevice,
   SyncDeviceCacheRepository,
@@ -10,13 +11,14 @@ import type {
   SyncInstallation,
   SyncInstallationRepository,
 } from './ports/SyncInstallationRepository';
-import type { TechnicalSyncAuth } from './ports/TechnicalSyncAuth';
 import type { SyncTrustTransport } from './ports/SyncTrustTransport';
 
 const DEVICE_ID = '10000000-0000-4000-8000-000000000001';
 const SECOND_DEVICE_ID = '10000000-0000-4000-8000-000000000002';
 const SPACE_ID = '20000000-0000-4000-8000-000000000001';
 const INVITE_ID = '30000000-0000-4000-8000-000000000001';
+const ACCOUNT_USER_ID = '40000000-0000-4000-8000-000000000001';
+const ACCOUNT_SESSION_ID = '50000000-0000-4000-8000-000000000001';
 const TIMESTAMP = '2026-09-04T00:00:00.000Z';
 
 describe('SyncApplicationService', () => {
@@ -31,7 +33,7 @@ describe('SyncApplicationService', () => {
     expect(second.installation).toEqual(first.installation);
     expect(fixture.crypto.ensureDeviceIdentity).toHaveBeenNthCalledWith(1, DEVICE_ID, true);
     expect(fixture.crypto.ensureDeviceIdentity).toHaveBeenNthCalledWith(2, DEVICE_ID, false);
-    expect(fixture.auth.ensureIdentity).not.toHaveBeenCalled();
+    expect(fixture.auth.ensureAnonymous).not.toHaveBeenCalled();
     expect(fixture.transport.listDevices).not.toHaveBeenCalled();
   });
 
@@ -51,6 +53,26 @@ describe('SyncApplicationService', () => {
     expect(confirmed.installation.setupState).toBe('configured');
     expect(confirmed.installation.recoveryConfirmedAt).toBe(TIMESTAMP);
     expect(confirmed.installation.snapshotId).toBe('snapshot-1');
+  });
+
+  it('reuses the verified migration snapshot during account first-space setup', async () => {
+    const initial: SyncInstallation = {
+      ...baseInstallation(),
+      accountSetupState: 'account_migration_pending',
+      accountUserId: ACCOUNT_USER_ID,
+      accountSessionId: ACCOUNT_SESSION_ID,
+      accountEmail: 'person@example.com',
+      accountMigrationSnapshotId: 'snapshot-1',
+    };
+    const fixture = createFixture(initial);
+    vi.mocked(fixture.auth.current).mockResolvedValue(accountSession());
+    const service = new SyncApplicationService(fixture.dependencies);
+
+    await service.setupFirstSpace();
+
+    expect(fixture.snapshot.createPreSyncSnapshot).not.toHaveBeenCalled();
+    expect(fixture.snapshot.verifySnapshot).toHaveBeenCalledWith('snapshot-1');
+    expect(fixture.auth.ensureAnonymous).not.toHaveBeenCalled();
   });
 
   it('keeps a claimed device pending until local envelope decryption and acknowledgement', async () => {
@@ -209,7 +231,7 @@ describe('SyncApplicationService', () => {
 
     expect(fixture.snapshot.createPreSyncSnapshot).toHaveBeenCalledOnce();
     expect(fixture.snapshot.verifySnapshot).toHaveBeenCalledWith('snapshot-1');
-    expect(fixture.auth.replaceIdentity).toHaveBeenCalledOnce();
+    expect(fixture.auth.ensureAnonymous).toHaveBeenCalledOnce();
     expect(fixture.crypto.ensureDeviceIdentity).toHaveBeenCalledWith(SECOND_DEVICE_ID, true);
     expect(fixture.transport.beginRecovery).toHaveBeenCalledWith(
       expect.objectContaining({ deviceId: SECOND_DEVICE_ID, platform: 'android' }),
@@ -251,21 +273,55 @@ describe('SyncApplicationService', () => {
       'Pre-sync local snapshot verification failed.',
     );
 
-    expect(fixture.auth.replaceIdentity).not.toHaveBeenCalled();
+    expect(fixture.auth.ensureAnonymous).not.toHaveBeenCalled();
     expect(fixture.transport.beginRecovery).not.toHaveBeenCalled();
     expect(fixture.installation.value?.deviceId).toBe(DEVICE_ID);
+  });
+
+  it('keeps the signed-in account session while replacing only the recovered device identity', async () => {
+    const fixture = createFixture({
+      ...configuredInstallation(),
+      accountSetupState: 'recovery_confirmation_pending',
+      accountUserId: ACCOUNT_USER_ID,
+      accountSessionId: ACCOUNT_SESSION_ID,
+      accountEmail: 'person@example.com',
+    });
+    vi.mocked(fixture.auth.current).mockResolvedValue(accountSession());
+    const service = new SyncApplicationService(fixture.dependencies);
+
+    const overview = await service.recover('LIFEOS-RECOVERY-V1:synthetic');
+
+    expect(fixture.auth.current).toHaveBeenCalledOnce();
+    expect(fixture.auth.ensureAnonymous).not.toHaveBeenCalled();
+    expect(overview.installation).toMatchObject({
+      deviceId: SECOND_DEVICE_ID,
+      accountUserId: ACCOUNT_USER_ID,
+      accountSessionId: ACCOUNT_SESSION_ID,
+      accountEmail: 'person@example.com',
+    });
   });
 });
 
 function createFixture(initial: SyncInstallation | null = null) {
   const installation = new MemoryInstallationRepository(initial);
   const cache = new MemoryDeviceCacheRepository();
-  const auth: TechnicalSyncAuth = {
-    ensureIdentity: vi.fn(async () => ({ userId: DEVICE_ID, isAnonymous: true as const })),
-    replaceIdentity: vi.fn(async () => ({
-      userId: SECOND_DEVICE_ID,
-      isAnonymous: true as const,
+  const auth: AccountAuth = {
+    current: vi.fn(async () => null),
+    ensureAnonymous: vi.fn(async () => ({
+      userId: DEVICE_ID,
+      sessionId: INVITE_ID,
+      email: null,
+      emailVerified: false,
+      isAnonymous: true,
     })),
+    beginRegistration: vi.fn(),
+    resendVerification: vi.fn(),
+    verifyEmail: vi.fn(),
+    setPassword: vi.fn(),
+    signIn: vi.fn(),
+    requestPasswordReset: vi.fn(),
+    updatePassword: vi.fn(),
+    signOutCurrent: vi.fn(),
     close: vi.fn(async () => undefined),
   };
   const crypto: SyncCryptoService = {
@@ -484,6 +540,16 @@ function recoveryEnvelope(keyEpoch: number, purpose: 'recovery' | 'device_name' 
     ciphertext: encoded(32, 2),
     nonce: encoded(24, 3),
   };
+}
+
+function accountSession() {
+  return {
+    userId: ACCOUNT_USER_ID,
+    sessionId: ACCOUNT_SESSION_ID,
+    email: 'person@example.com',
+    emailVerified: true,
+    isAnonymous: false,
+  } as const;
 }
 
 function encoded(length: number, value: number): string {

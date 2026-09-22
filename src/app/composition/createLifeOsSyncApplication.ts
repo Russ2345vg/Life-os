@@ -30,7 +30,7 @@ import {
 } from '../../infrastructure/sync/supabase/SupabaseConfig';
 import { SupabaseSyncTrustTransport } from '../../infrastructure/sync/supabase/SupabaseSyncTrustTransport';
 import { SupabasePilotSyncTransport } from '../../infrastructure/sync/supabase/SupabasePilotSyncTransport';
-import { SupabaseTechnicalSyncAuth } from '../../infrastructure/sync/supabase/SupabaseTechnicalSyncAuth';
+import { SupabaseAccountAuth } from '../../infrastructure/sync/supabase/SupabaseAccountAuth';
 import { TauriSupabaseAuthStorage } from '../../infrastructure/sync/supabase/TauriSupabaseAuthStorage';
 import { createLifeOsSupabaseClient } from '../../infrastructure/sync/supabase/createLifeOsSupabaseClient';
 import type { LifeOsIndexedDb } from '../../infrastructure/persistence/indexed-db/LifeOsIndexedDb';
@@ -157,7 +157,7 @@ export function createLifeOsSyncApplication({
   return new SyncApplicationService({
     statusSource: new IndexedDbSyncStatusSource(database),
     recovery,
-    auth: new SupabaseTechnicalSyncAuth(client),
+    auth: new SupabaseAccountAuth(client),
     crypto,
     installationRepository: new IndexedDbSyncInstallationRepository(database),
     deviceCacheRepository: new IndexedDbSyncDeviceCacheRepository(database),

@@ -1,5 +1,6 @@
 import type { SnapshotService } from './SnapshotService';
 import type { SyncStatusSource } from './SyncStatus';
+import type { AccountAuth, AccountSession } from './account/AccountAuth';
 import type { SyncRecovery } from './recovery/SyncRecovery';
 import {
   createPairingSecret,
@@ -20,7 +21,6 @@ import type {
   SyncInstallationRepository,
   SyncPlatform,
 } from './ports/SyncInstallationRepository';
-import type { TechnicalSyncAuth } from './ports/TechnicalSyncAuth';
 import type { SyncTrustTransport } from './ports/SyncTrustTransport';
 import type { PilotSyncCoordinator, PilotSyncStatus } from './pilot/PilotSyncCoordinator';
 
@@ -69,7 +69,7 @@ export interface SyncApplication {
 export interface SyncApplicationDependencies {
   readonly statusSource?: SyncStatusSource;
   readonly recovery?: SyncRecovery;
-  readonly auth: TechnicalSyncAuth;
+  readonly auth: AccountAuth;
   readonly crypto: SyncCryptoService;
   readonly installationRepository: SyncInstallationRepository;
   readonly deviceCacheRepository: SyncDeviceCacheRepository;
@@ -109,7 +109,7 @@ export class SyncApplicationService implements SyncApplication {
     const spaceId = installation.spaceId;
     const localKeyEpoch = installation.currentKeyEpoch;
     try {
-      await this.dependencies.auth.ensureIdentity();
+      await this.ensureAuthorized(installation);
       const rotation = await this.dependencies.transport.fetchMyRotationEnvelope(localKeyEpoch);
       if (rotation !== null) {
         await this.dependencies.crypto.unwrapAndStoreKeyRing(
@@ -171,11 +171,13 @@ export class SyncApplicationService implements SyncApplication {
   public async setupFirstSpace() {
     const installation = await this.ensureInstallation();
     requireNotConfigured(installation);
-    await this.dependencies.auth.ensureIdentity();
-    const snapshot = await this.dependencies.snapshotService.createPreSyncSnapshot();
-    const verification = await this.dependencies.snapshotService.verifySnapshot(
-      snapshot.snapshotId,
-    );
+    await this.ensureAuthorized(installation);
+    const snapshotId =
+      installation.accountSetupState === 'account_migration_pending' &&
+      installation.accountMigrationSnapshotId !== null
+        ? installation.accountMigrationSnapshotId
+        : (await this.dependencies.snapshotService.createPreSyncSnapshot()).snapshotId;
+    const verification = await this.dependencies.snapshotService.verifySnapshot(snapshotId);
     if (!verification.valid) throw new Error('Pre-sync local snapshot verification failed.');
     const spaceId = this.dependencies.createId();
     const prepared = await this.dependencies.crypto.prepareFirstSpace({
@@ -199,7 +201,7 @@ export class SyncApplicationService implements SyncApplication {
       spaceId,
       membershipStatus: 'active',
       currentKeyEpoch: result.currentKeyEpoch,
-      snapshotId: snapshot.snapshotId,
+      snapshotId,
       setupState: 'recovery_unconfirmed',
       pendingRevokedDeviceId: null,
       updatedAt: this.now().toISOString(),
@@ -263,7 +265,7 @@ export class SyncApplicationService implements SyncApplication {
 
   public async createPairingInvitation(): Promise<SyncPairingInvitation> {
     const installation = await this.requireConfiguredInstallation();
-    await this.dependencies.auth.ensureIdentity();
+    await this.ensureAuthorized(installation);
     const secret = await createPairingSecret(this.random);
     const invitation = await this.dependencies.transport.createPairingInvite(secret.secretHashHex);
     const payload = serializePairingPayload({
@@ -282,13 +284,14 @@ export class SyncApplicationService implements SyncApplication {
   }
 
   public async cancelPairingInvitation(inviteId: string): Promise<void> {
-    await this.dependencies.auth.ensureIdentity();
+    const installation = await this.requireConfiguredInstallation();
+    await this.ensureAuthorized(installation);
     await this.dependencies.transport.cancelPairingInvite(inviteId);
   }
 
   public async fulfillPendingPairings(): Promise<number> {
     const installation = await this.requireConfiguredInstallation();
-    await this.dependencies.auth.ensureIdentity();
+    await this.ensureAuthorized(installation);
     const devices = await this.dependencies.transport.listPendingPairingDevices();
     for (const device of devices) {
       const envelope = await this.dependencies.crypto.wrapKeyRing({
@@ -308,7 +311,7 @@ export class SyncApplicationService implements SyncApplication {
     const invitation = parsePairingPayload(payload, this.dependencies.projectRef, this.now());
     const installation = await this.ensureInstallation();
     requireNotConfigured(installation);
-    await this.dependencies.auth.ensureIdentity();
+    await this.ensureAuthorized(installation);
     const identity = await this.dependencies.crypto.ensureDeviceIdentity(
       installation.deviceId,
       false,
@@ -342,7 +345,7 @@ export class SyncApplicationService implements SyncApplication {
     ) {
       throw new Error('This device is not waiting for a pairing envelope.');
     }
-    await this.dependencies.auth.ensureIdentity();
+    await this.ensureAuthorized(installation);
     const envelope = await this.dependencies.transport.fetchPendingEnvelope();
     if (envelope === null) return false;
     await this.dependencies.crypto.unwrapAndStoreKeyRing(installation.deviceId, envelope);
@@ -393,7 +396,6 @@ export class SyncApplicationService implements SyncApplication {
         replacementDeviceId,
         true,
       );
-      await this.dependencies.auth.replaceIdentity();
       installation = {
         ...installation,
         deviceId: replacementDeviceId,
@@ -410,8 +412,8 @@ export class SyncApplicationService implements SyncApplication {
       await this.dependencies.installationRepository.save(installation);
     } else {
       requireNotConfigured(installation);
-      await this.dependencies.auth.ensureIdentity();
     }
+    await this.ensureAuthorized(installation);
     const identity = await this.dependencies.crypto.ensureDeviceIdentity(
       installation.deviceId,
       false,
@@ -518,7 +520,7 @@ export class SyncApplicationService implements SyncApplication {
   ): Promise<SyncOverview> {
     if (installation.spaceId === null || installation.currentKeyEpoch === null)
       throw new Error('Sync space is not configured.');
-    await this.dependencies.auth.ensureIdentity();
+    await this.ensureAuthorized(installation);
     const expectedEpoch =
       installation.setupState === 'rotation_pending'
         ? installation.currentKeyEpoch - 1
@@ -617,6 +619,25 @@ export class SyncApplicationService implements SyncApplication {
     const installation = await this.requireActiveInstallation();
     if (installation.setupState !== 'configured') throw new Error('Sync setup is incomplete.');
     return installation;
+  }
+
+  private async ensureAuthorized(installation: SyncInstallation): Promise<AccountSession> {
+    if (installation.accountSetupState === 'local_anonymous') {
+      const session = await this.dependencies.auth.ensureAnonymous();
+      if (!session.isAnonymous) throw new Error('Anonymous Sync identity is unavailable.');
+      return session;
+    }
+    const session = await this.dependencies.auth.current();
+    if (
+      session === null ||
+      session.isAnonymous ||
+      session.userId !== installation.accountUserId ||
+      session.sessionId !== installation.accountSessionId ||
+      session.email !== installation.accountEmail
+    ) {
+      throw new Error('Account Sync session is unavailable.');
+    }
+    return session;
   }
 }
 

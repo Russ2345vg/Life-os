@@ -15,7 +15,7 @@ interface AuthSessionView {
 }
 
 interface AuthErrorView {
-  readonly code?: string;
+  readonly code?: string | undefined;
   readonly message: string;
 }
 

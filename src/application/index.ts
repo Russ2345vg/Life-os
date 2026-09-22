@@ -65,3 +65,9 @@ export {
   type SyncOverview,
   type SyncPairingInvitation,
 } from './sync/SyncApplicationService';
+export {
+  AccountSyncService,
+  type AccountOverview,
+  type AccountSync,
+  type AccountSyncDependencies,
+} from './sync/account/AccountSyncService';
