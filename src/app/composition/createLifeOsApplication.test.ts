@@ -18,6 +18,11 @@ describe('createLifeOsApplication', () => {
 
     expect(application.currentDate).toEqual(TODAY);
     expect(application.sync).toBeDefined();
+    expect(application.accountSync).toBeDefined();
+    await expect(application.accountSync.load()).resolves.toMatchObject({
+      state: 'local_anonymous',
+      connection: 'local',
+    });
     expect(application.balance).toBeDefined();
     expect(application.planning).toBeDefined();
     expect(application.plannerInbox).toBeDefined();

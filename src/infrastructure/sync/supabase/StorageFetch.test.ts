@@ -22,7 +22,11 @@ it('aborts a stalled SDK Storage upload and releases the request', async () => {
   try {
     let signal: AbortSignal | null = null;
     const client = createLifeOsSupabaseClient(
-      { url: 'https://example.supabase.co', publishableKey: 'sb_publishable_test' },
+      {
+        url: 'https://example.supabase.co',
+        publishableKey: 'sb_publishable_test',
+        accountSyncEnabled: false,
+      },
       {
         fetch: async (_input, init) =>
           new Promise<Response>((_resolve, reject) => {

@@ -10,6 +10,10 @@ import {
   type SyncApplication,
 } from '../../application/sync/SyncApplicationService';
 import {
+  AccountSyncService,
+  type AccountSync,
+} from '../../application/sync/account/AccountSyncService';
+import {
   PilotPullEngine,
   PilotPushEngine,
   PilotSyncCoordinator,
@@ -22,7 +26,11 @@ import { IndexedDbPilotSyncStore } from '../../infrastructure/sync/pilot/Indexed
 import { PilotBootstrapService } from '../../infrastructure/sync/pilot/PilotBootstrapService';
 import { IndexedDbSyncDeviceCacheRepository } from '../../infrastructure/sync/IndexedDbSyncDeviceCacheRepository';
 import { IndexedDbSyncInstallationRepository } from '../../infrastructure/sync/IndexedDbSyncInstallationRepository';
-import { UnavailableSyncApplication } from '../../infrastructure/sync/UnavailableSyncApplication';
+import {
+  UnavailableAccountSync,
+  UnavailableSyncApplication,
+} from '../../infrastructure/sync/UnavailableSyncApplication';
+import { IndexedDbAccountLocalData } from '../../infrastructure/sync/IndexedDbAccountLocalData';
 import { TauriSyncCryptoService } from '../../infrastructure/sync/crypto/TauriSyncCryptoService';
 import {
   readSupabasePublicConfig,
@@ -46,6 +54,11 @@ interface CreateLifeOsSyncApplicationInput {
   readonly environment?: SupabasePublicEnvironment;
 }
 
+export interface LifeOsSyncApplications {
+  readonly sync: SyncApplication;
+  readonly accountSync: AccountSync;
+}
+
 export function createLifeOsSyncApplication({
   database,
   clock,
@@ -53,22 +66,26 @@ export function createLifeOsSyncApplication({
   mutationRecorder = new IndexedDbPilotMutationRecorder(),
   meaningfulSettingsSync,
   environment = {},
-}: CreateLifeOsSyncApplicationInput): SyncApplication {
+}: CreateLifeOsSyncApplicationInput): LifeOsSyncApplications {
   let config;
   try {
     config = readSupabasePublicConfig(environment);
   } catch {
-    return new UnavailableSyncApplication('Публичная конфигурация синхронизации недопустима.');
+    return unavailableApplications('Публичная конфигурация синхронизации недопустима.');
   }
   if (config === null) {
-    return new UnavailableSyncApplication('Синхронизация ещё не настроена в этой сборке LifeOS.');
+    return unavailableApplications('Синхронизация ещё не настроена в этой сборке LifeOS.');
   }
   if (!isTauri()) {
-    return new UnavailableSyncApplication('Синхронизация доступна только в приложении LifeOS.');
+    return unavailableApplications('Синхронизация доступна только в приложении LifeOS.');
   }
   const authStorage = new TauriSupabaseAuthStorage(invoke);
   const client = createLifeOsSupabaseClient(config, { authStorage });
+  const auth = new SupabaseAccountAuth(client);
   const crypto = new TauriSyncCryptoService(invoke);
+  const installationRepository = new IndexedDbSyncInstallationRepository(database);
+  const statusSource = new IndexedDbSyncStatusSource(database);
+  const trustTransport = new SupabaseSyncTrustTransport(client);
   const snapshotService = new IndexedDbSnapshotService(
     database,
     clock,
@@ -154,19 +171,40 @@ export function createLifeOsSyncApplication({
   const pilotLifecycle = new PilotSyncLifecycle(pilotCoordinator);
   mutationRecorder.setNotify(() => pilotCoordinator.trigger());
   pilotLifecycle.start();
-  return new SyncApplicationService({
-    statusSource: new IndexedDbSyncStatusSource(database),
+  const sync = new SyncApplicationService({
+    statusSource,
     recovery,
-    auth: new SupabaseAccountAuth(client),
+    auth,
     crypto,
-    installationRepository: new IndexedDbSyncInstallationRepository(database),
+    installationRepository,
     deviceCacheRepository: new IndexedDbSyncDeviceCacheRepository(database),
     snapshotService,
-    transport: new SupabaseSyncTrustTransport(client),
+    transport: trustTransport,
     projectRef: new URL(config.url).hostname.split('.')[0] ?? '',
     createId: () => globalThis.crypto.randomUUID(),
     now: () => clock.now(),
     pilotCoordinator,
     pilotLifecycle,
   });
+  const accountSync = config.accountSyncEnabled
+    ? new AccountSyncService({
+        auth,
+        installations: installationRepository,
+        snapshots: snapshotService,
+        sync,
+        transport: trustTransport,
+        crypto,
+        recovery,
+        localData: new IndexedDbAccountLocalData(database),
+        now: () => clock.now(),
+      })
+    : new UnavailableAccountSync('Аккаунт и синхронизация отключены в этой сборке LifeOS.');
+  return { sync, accountSync };
+}
+
+function unavailableApplications(message: string): LifeOsSyncApplications {
+  return {
+    sync: new UnavailableSyncApplication(message),
+    accountSync: new UnavailableAccountSync(message),
+  };
 }

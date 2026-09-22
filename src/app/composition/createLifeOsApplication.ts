@@ -120,7 +120,7 @@ export async function createLifeOsApplication(
       mutationRecorder,
       localSettings,
     );
-    const sync = createLifeOsSyncApplication({
+    const { sync, accountSync } = createLifeOsSyncApplication({
       database,
       clock,
       idGenerator,
@@ -216,6 +216,7 @@ export async function createLifeOsApplication(
 
     const application: LifeOsApplication = {
       sync,
+      accountSync,
       clock,
       currentDateProvider,
       currentDate: currentDay.date,

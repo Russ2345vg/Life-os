@@ -4,6 +4,10 @@ import type {
   SyncPairingInvitation,
 } from '../../application/sync/SyncApplicationService';
 import type { PilotSyncRunResult } from '../../application/sync/pilot/PilotSyncCoordinator';
+import type {
+  AccountOverview,
+  AccountSync,
+} from '../../application/sync/account/AccountSyncService';
 import { DomainError } from '../../shared/errors/DomainError';
 
 export class UnavailableSyncApplication implements SyncApplication {
@@ -73,5 +77,61 @@ export class UnavailableSyncApplication implements SyncApplication {
 
   private reject<T>(): Promise<T> {
     return Promise.reject(new DomainError('sync.unavailable', this.message));
+  }
+}
+
+export class UnavailableAccountSync implements AccountSync {
+  public constructor(private readonly message: string) {}
+
+  public async load(): Promise<AccountOverview> {
+    return {
+      state: 'local_anonymous',
+      email: null,
+      connection: 'local',
+      recoveryMaterial: null,
+      pendingMutations: 0,
+      conflicts: 0,
+      devices: [],
+    };
+  }
+  public beginRegistration(): Promise<AccountOverview> {
+    return this.reject();
+  }
+  public resendVerification(): Promise<void> {
+    return this.reject();
+  }
+  public verifyEmail(): Promise<AccountOverview> {
+    return this.reject();
+  }
+  public setPasswordAndAdopt(): Promise<AccountOverview> {
+    return this.reject();
+  }
+  public confirmRecoverySaved(): Promise<AccountOverview> {
+    return this.reject();
+  }
+  public signIn(): Promise<AccountOverview> {
+    return this.reject();
+  }
+  public recoverDevice(): Promise<AccountOverview> {
+    return this.reject();
+  }
+  public requestPasswordReset(): Promise<void> {
+    return this.reject();
+  }
+  public updatePassword(): Promise<AccountOverview> {
+    return this.reject();
+  }
+  public syncNow(): Promise<AccountOverview> {
+    return this.reject();
+  }
+  public revokeDevice(): Promise<AccountOverview> {
+    return this.reject();
+  }
+  public signOut(): Promise<void> {
+    return this.reject();
+  }
+
+  private reject<T>(): Promise<T> {
+    return Promise.reject(new DomainError('account.unavailable', this.message));
   }
 }

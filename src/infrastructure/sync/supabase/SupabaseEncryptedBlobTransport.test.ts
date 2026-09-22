@@ -5,7 +5,11 @@ import { SupabaseEncryptedBlobTransport } from './SupabaseEncryptedBlobTransport
 it('retries an existing immutable ciphertext through the SDK without overwriting it', async () => {
   let stored: string | null = null;
   const client = createLifeOsSupabaseClient(
-    { url: 'https://example.supabase.co', publishableKey: 'sb_publishable_test' },
+    {
+      url: 'https://example.supabase.co',
+      publishableKey: 'sb_publishable_test',
+      accountSyncEnabled: false,
+    },
     {
       fetch: async (_input, init) => {
         if (init?.method === 'POST') {

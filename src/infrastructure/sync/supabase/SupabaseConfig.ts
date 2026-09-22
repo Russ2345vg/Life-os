@@ -3,11 +3,13 @@ import { DomainError } from '../../../shared/errors/DomainError';
 export interface SupabasePublicConfig {
   readonly url: string;
   readonly publishableKey: string;
+  readonly accountSyncEnabled: boolean;
 }
 
 export interface SupabasePublicEnvironment {
   readonly VITE_LIFEOS_SUPABASE_URL?: string | boolean;
   readonly VITE_LIFEOS_SUPABASE_PUBLISHABLE_KEY?: string | boolean;
+  readonly VITE_LIFEOS_ACCOUNT_SYNC_ENABLED?: string | boolean;
 }
 
 export function readSupabasePublicConfig(
@@ -31,6 +33,7 @@ export function readSupabasePublicConfig(
   return {
     url: url.toString().replace(/\/$/, ''),
     publishableKey: keyValue,
+    accountSyncEnabled: environment.VITE_LIFEOS_ACCOUNT_SYNC_ENABLED === 'true',
   };
 }
 

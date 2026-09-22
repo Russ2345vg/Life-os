@@ -29,6 +29,7 @@ describe('readSupabasePublicConfig', () => {
     ).toEqual({
       url: 'https://example.supabase.co',
       publishableKey: PUBLIC_KEY,
+      accountSyncEnabled: false,
     });
     expect(
       readSupabasePublicConfig({
@@ -38,6 +39,7 @@ describe('readSupabasePublicConfig', () => {
     ).toEqual({
       url: 'http://127.0.0.1:54321',
       publishableKey: PUBLIC_KEY,
+      accountSyncEnabled: false,
     });
     expectConfigError({
       VITE_LIFEOS_SUPABASE_URL: 'http://example.supabase.co',
@@ -47,6 +49,24 @@ describe('readSupabasePublicConfig', () => {
       VITE_LIFEOS_SUPABASE_URL: 'https://example.invalid',
       VITE_LIFEOS_SUPABASE_PUBLISHABLE_KEY: PUBLIC_KEY,
     });
+  });
+
+  it('enables account enrollment only for the literal string true', () => {
+    const base = {
+      VITE_LIFEOS_SUPABASE_URL: 'https://example.supabase.co',
+      VITE_LIFEOS_SUPABASE_PUBLISHABLE_KEY: PUBLIC_KEY,
+    };
+    expect(
+      readSupabasePublicConfig({ ...base, VITE_LIFEOS_ACCOUNT_SYNC_ENABLED: 'true' }),
+    ).toMatchObject({ accountSyncEnabled: true });
+    for (const value of [undefined, true, false, 'TRUE', ' true ', 'yes'] as const) {
+      expect(
+        readSupabasePublicConfig({
+          ...base,
+          ...(value === undefined ? {} : { VITE_LIFEOS_ACCOUNT_SYNC_ENABLED: value }),
+        }),
+      ).toMatchObject({ accountSyncEnabled: false });
+    }
   });
 
   it('rejects secret/service-role values and accepts only public key forms', () => {

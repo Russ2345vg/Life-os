@@ -18,6 +18,7 @@ describe('createLifeOsSupabaseClient', () => {
       {
         url: 'https://example.supabase.co',
         publishableKey: 'sb_publishable_public-test-value',
+        accountSyncEnabled: false,
       },
       { fetch: fetchSpy },
     );
