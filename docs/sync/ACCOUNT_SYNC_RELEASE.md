@@ -1,7 +1,7 @@
 # LifeOS Account Sync — release evidence
 
-- Дата проверки: 2026-09-22
-- Версия клиента: 1.0.4
+- Дата проверки: 2026-09-23
+- Версия клиента: 1.0.6
 - Пакет приложения: `com.lifeos.desktop`
 
 ## Объём выпуска
@@ -11,8 +11,23 @@
 возобновляемое подключение и безопасный выход. Local-only режим остаётся доступен без аккаунта и
 без Supabase.
 
-Production-флаг `VITE_LIFEOS_ACCOUNT_SYNC_ENABLED` по умолчанию выключен. Этот документ не
-разрешает публикацию клиента, применение миграции к hosted Supabase или изменение hosted Auth.
+Account-флаг `VITE_LIFEOS_ACCOUNT_SYNC_ENABLED=true` включён в собранных клиентах 1.0.6.
+Hosted-миграции применены к проекту `LifeOS Sync`; публикация неподписанного Windows installer
+по-прежнему не разрешена.
+
+## Hosted rollout
+
+- `20260922010000_sync_07_accounts.sql` и
+  `20260922020000_sync_07_1_pending_device_policy.sql` применены через Supabase CLI.
+- Повторный `supabase migration list --linked` подтвердил совпадение всех семи local/remote
+  миграций.
+- Публичный `GET /auth/v1/settings` подтвердил: signup разрешён, email provider включён,
+  подтверждение email обязательно (`mailer_autoconfirm=false`), anonymous bootstrap включён.
+- OpenAPI-каталог требует secret key, поэтому проверка наличия RPC опирается на применённые
+  миграции и локальный pgTAP. Потенциально изменяющие hosted RPC-вызовы без пользовательской
+  сессии не выполнялись.
+- Наличие custom SMTP и доставка реального письма не раскрываются публичным settings endpoint;
+  это проверяется первой пользовательской регистрацией.
 
 ## Проверки текущего дерева
 
@@ -25,7 +40,7 @@ Production-флаг `VITE_LIFEOS_ACCOUNT_SYNC_ENABLED` по умолчанию �
 | Реальный route smoke       | PASS      | `#/v2/account` открывается и переживает reload в local-only состоянии              |
 | Native Rust sync tests     | PASS      | `cargo test ... sync_`: 12 passed                                                  |
 | pgTAP/RLS                  | PASS      | 6 файлов, 155 тестов после чистого `supabase db reset`                             |
-| Полный R9/R10 gate         | PASS      | 1351 unit/integration, 55 infra, 1 alpha, build/format/diff и 68 E2E               |
+| Полный R9/R10 gate         | PASS      | 1351 passed + 1 skipped, 55 infra, 1 alpha, build/format/diff и 68 E2E             |
 
 Детерминированный Playwright fixture вызывает настоящий `AccountSync` application-контракт и не
 изменяет DOM напрямую. Local Supabase integration test принимает только loopback URL, создаёт
@@ -34,16 +49,19 @@ Production-флаг `VITE_LIFEOS_ACCOUNT_SYNC_ENABLED` по умолчанию �
 offline convergence и немедленную блокировку отозванной сессии. Тест удаляет пользователя и blob
 в teardown.
 
+Перед выпуском 1.0.6 нормализация email дополнена удалением недопустимых пробельных и невидимых
+formatting-символов, которые могут попасть в адрес при вставке и визуально не отображаются.
+
 ## Нативные артефакты
 
 ### Windows x64
 
-- NSIS: `src-tauri/target/release/bundle/nsis/LifeOS_1.0.4_x64-setup.exe`
-- Размер: 7 592 053 bytes
-- SHA-256: `F5DA5A67D988303ACDDE10DB36FF588B0C467833A276581B72EEC8CFFAC3B3A7`
+- NSIS: `src-tauri/target/release/bundle/nsis/LifeOS_1.0.6_x64-setup.exe`
+- Размер: 7 592 571 bytes
+- SHA-256: `2132FE2C3A34FC8283FB5930D067186321F4BE2191E42165D24482AAF243CCE5`
 - Authenticode: `NotSigned`. Updater artifact намеренно отключён для локальной сборки, потому что
   приватный updater key отсутствует; публикация этой сборки запрещена.
-- Установка: PASS, silent update exit 0 в `%LOCALAPPDATA%\LifeOS\LifeOS.exe`; file version 1.0.4,
+- Установка: PASS, silent update exit 0 в `%LOCALAPPDATA%\LifeOS\LifeOS.exe`; file version 1.0.6,
   процесс успешно запущен.
 - Installer не очищал каталог `%LOCALAPPDATA%\com.lifeos.desktop`; профиль
   WebView/IndexedDB остался на месте. Содержимое предметных данных требует визуальной проверки
@@ -52,30 +70,29 @@ offline convergence и немедленную блокировку отозва�
 ### Android universal
 
 - APK: `src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk`
-- Размер: 64 527 469 bytes
-- SHA-256: `56E37607EC1BC28CC9C55D4AAC39F2A7A68F4035FB8E11ABB2E1C7BD835A64B2`
-- Package/version: `com.lifeos.desktop`, versionName 1.0.4, versionCode 1000004, minSdk 24,
+- Размер: 64 527 949 bytes
+- SHA-256: `904455FD25E6D8DB2AB8685908317F6AE47695262ABF86281A9BF57EB4A40F57`
+- Package/version: `com.lifeos.desktop`, versionName 1.0.6, versionCode 1000006, minSdk 24,
   targetSdk 36.
 - ABI: `arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64`.
 - APK Signature Scheme v2: PASS. Signer:
   `CN=LifeOS, OU=LifeOS, O=LifeOS, L=Chita, ST=Zabaykalsky Krai, C=RU`; certificate SHA-256:
   `F3669CD0CA91CD17670E01A284D07493330BCAF32D4993CFBB88CA5099D92C69`.
-- Установка: PASS на Samsung SM-A235F. После повторного подключения `adb install -r` вернул
-  `Performing Streamed Install Success`; package до и после обновления — versionName 1.0.4,
-  versionCode 1000004. Удаление приложения и очистка данных не выполнялись. Запуск
+- Установка: PASS на Samsung SM-A235F. `adb install -r` вернул
+  `Performing Streamed Install Success`; установлен package versionName 1.0.6,
+  versionCode 1000006. Удаление приложения и очистка данных не выполнялись. Запуск
   `com.lifeos.desktop/.MainActivity` успешен, окно приложения подтверждено как текущее в фокусе.
 
 Сборка сама по себе не является публикацией.
 
-## Порядок rollout
+## Состояние rollout
 
-1. Применить additive backend migration до установки клиента с включённым account sync.
-2. В hosted Supabase настроить email confirmation, SMTP и шаблоны писем; проверить их на тестовом
-   проекте.
-3. Выполнить pgTAP/RLS и физический двухустройственный сценарий на тестовом проекте.
-4. Зафиксировать результат test-project gate в этом документе.
-5. Только после этого собрать production-клиент с
-   `VITE_LIFEOS_ACCOUNT_SYNC_ENABLED=true` и отдельно согласовать публикацию.
+1. Additive backend migrations: PASS.
+2. Hosted email confirmation, email provider и anonymous bootstrap: PASS по публичным settings.
+3. Локальные pgTAP/RLS и двухсессионный encrypted round-trip: PASS.
+4. Account-enabled Windows/Android 1.0.6 build и установка без очистки профиля: PASS.
+5. Реальная доставка email и физический двухустройственный recovery-flow: требуется ручная
+   приёмка пользователем.
 
 Legacy anonymous access остаётся включённым на измеряемое окно миграции, чтобы уже установленные
 клиенты не потеряли синхронизацию до принятия аккаунта.
@@ -99,14 +116,16 @@ account-owned spaces backend migration нельзя откатывать destruc
 5. безопасный выход удаляет читаемые локальные данные только текущего устройства;
 6. первое устройство остаётся активным после выхода или отзыва второго.
 
-Локальный Supabase подтвердил RLS и двухсессионный зашифрованный round-trip. Production-флаг в
-установленных клиентах выключен, поэтому физическая установка подтверждает обновление, сохранение
-профиля и запуск приложения, но не hosted двухустройственный account flow.
+Локальный Supabase подтвердил RLS и двухсессионный зашифрованный round-trip. Account-флаг в
+установленных клиентах включён. Физическая установка подтверждает обновление, сохранение профиля
+и запуск приложения; hosted двухустройственный flow требует пользовательского email, OTP и
+сохранения recovery key.
 
 Текущие Windows- и Android-установки подтверждают upgrade и запуск без команды очистки профиля.
 Полный account flow остаётся ручным gate тестового backend.
 
 ## Стоп-граница
 
-Production migration, hosted Auth configuration, публикация installers и включение флага требуют
-отдельного явного разрешения пользователя после просмотра этих доказательств.
+Production migrations и account-enabled локальные установки завершены по явному разрешению
+пользователя. Push и публичная публикация installer не выполнялись. Windows installer остаётся
+без Authenticode; до публичного распространения также нужно подтвердить реальную доставку email.

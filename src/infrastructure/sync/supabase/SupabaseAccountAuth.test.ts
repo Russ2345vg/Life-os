@@ -63,6 +63,21 @@ describe('SupabaseAccountAuth', () => {
     expect(updateUser).toHaveBeenCalledWith({ email: 'person@example.com' });
   });
 
+  it('removes invisible formatting and whitespace accidentally pasted into an email', async () => {
+    const anonymous = session({ anonymous: true, email: null });
+    const convertedUser = user({
+      anonymous: true,
+      email: 'person@example.com',
+      emailConfirmedAt: null,
+    });
+    const updateUser = vi.fn(async () => ({ data: { user: convertedUser }, error: null }));
+    const auth = new SupabaseAccountAuth(client({ session: anonymous, updateUser }));
+
+    await auth.beginRegistration(' person@\u00a0example.com\u200b ');
+
+    expect(updateUser).toHaveBeenCalledWith({ email: 'person@example.com' });
+  });
+
   it('keeps the anonymous session current when email identity conversion conflicts', async () => {
     const anonymous = session({ anonymous: true, email: null });
     const updateUser = vi.fn(async () => ({

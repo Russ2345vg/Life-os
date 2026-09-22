@@ -20,11 +20,15 @@ import { SphereRecordMapper } from '../../src/infrastructure/persistence/mappers
 async function seed(page: Page) {
   await page.goto('/#/v2/today');
   await expect(page.getByRole('heading', { name: 'Сегодня', exact: true })).toBeVisible();
-  const today = await page.evaluate(() => {
+  const clock = await page.evaluate(() => {
     const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    return {
+      today: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`,
+      now: now.toISOString(),
+    };
   });
-  const now = new Date(`${today}T10:00:00`);
+  const { today } = clock;
+  const now = new Date(clock.now);
   const sphere = Sphere.create({ id: EntityId.create('daily-sphere'), name: 'Здоровье QA', now });
   const directions = ['Тело', 'Сон'].map((name, index) =>
     Direction.create({
@@ -81,12 +85,12 @@ async function seed(page: Page) {
   );
   await page.reload();
   await expect(page.getByRole('button', { name: 'Прогулка', exact: true })).toBeVisible();
-  return { today, tomorrow: addDays(today, 1) };
+  return { today, tomorrow: addDays(today, 1), now: clock.now };
 }
 
 async function seedRecurringSeries(page: Page) {
-  const { today } = await seed(page);
-  const now = new Date(`${today}T10:00:00`);
+  const { today, now: nowIso } = await seed(page);
+  const now = new Date(nowIso);
   const rule = validateRule({
     id: 'recurrence:e2e-series',
     title: 'Повторяемая задача QA',

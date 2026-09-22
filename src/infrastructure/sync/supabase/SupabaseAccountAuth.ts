@@ -229,7 +229,7 @@ function decodeJwtPayload(accessToken: string): Record<string, unknown> {
 }
 
 function normalizeEmail(value: string): string {
-  const normalized = value.trim().toLowerCase();
+  const normalized = value.replace(/[\s\u200B-\u200D\u2060\uFEFF]/gu, '').toLowerCase();
   if (normalized.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
     throw new DomainError('account.email_invalid', 'Укажите корректный адрес электронной почты.');
   }
