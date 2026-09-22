@@ -442,6 +442,11 @@ function baseInstallation(): SyncInstallation {
     setupState: 'not_configured',
     pendingRevokedDeviceId: null,
     updatedAt: TIMESTAMP,
+    accountSetupState: 'local_anonymous',
+    accountUserId: null,
+    accountSessionId: null,
+    accountEmail: null,
+    accountMigrationSnapshotId: null,
   };
 }
 

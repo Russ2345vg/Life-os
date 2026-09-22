@@ -2,6 +2,7 @@ import type {
   SyncInstallation,
   SyncInstallationRepository,
 } from '../../application/sync/ports/SyncInstallationRepository';
+import { normalizeSyncAccountMetadata } from '../../application/sync/ports/SyncInstallationRepository';
 import type { SyncSettingsRecord } from '../persistence/records';
 import {
   LIFE_OS_SYNC_STORE,
@@ -55,6 +56,7 @@ function toInstallation(record: SyncSettingsRecord): SyncInstallation {
     setupState: record.setupState,
     pendingRevokedDeviceId: record.pendingRevokedDeviceId,
     updatedAt: record.updatedAt,
+    ...normalizeSyncAccountMetadata(record),
   };
   assertInstallation(installation);
   return installation;
@@ -72,6 +74,20 @@ function assertInstallation(value: SyncInstallation): void {
     (value.currentKeyEpoch !== null &&
       (!Number.isInteger(value.currentKeyEpoch) || value.currentKeyEpoch < 1))
   ) {
+    throw new Error('Invalid non-secret Sync installation metadata.');
+  }
+  try {
+    const normalized = normalizeSyncAccountMetadata(value);
+    if (
+      normalized.accountSetupState !== value.accountSetupState ||
+      normalized.accountUserId !== value.accountUserId ||
+      normalized.accountSessionId !== value.accountSessionId ||
+      normalized.accountEmail !== value.accountEmail ||
+      normalized.accountMigrationSnapshotId !== value.accountMigrationSnapshotId
+    ) {
+      throw new Error('mismatch');
+    }
+  } catch {
     throw new Error('Invalid non-secret Sync installation metadata.');
   }
 }

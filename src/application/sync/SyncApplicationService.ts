@@ -583,6 +583,11 @@ export class SyncApplicationService implements SyncApplication {
       setupState: 'not_configured',
       pendingRevokedDeviceId: null,
       updatedAt: timestamp,
+      accountSetupState: 'local_anonymous',
+      accountUserId: null,
+      accountSessionId: null,
+      accountEmail: null,
+      accountMigrationSnapshotId: null,
     };
     await this.dependencies.installationRepository.save(installation);
     return installation;

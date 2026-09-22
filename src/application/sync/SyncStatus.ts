@@ -1,4 +1,5 @@
 import type { AttachmentState } from './attachments/AttachmentContracts';
+import type { AccountSetupState } from './ports/SyncInstallationRepository';
 
 export interface SyncAttachmentStatus {
   readonly attachmentId: string;
@@ -10,6 +11,8 @@ export interface SyncAttachmentStatus {
 
 /** Metadata-only projection; never contains content, encrypted blobs or secrets. */
 export interface SyncStatusSnapshot {
+  readonly accountState: AccountSetupState;
+  readonly accountEmail: string | null;
   readonly cursor?: number | null;
   readonly setupIssue?: 'pending' | 'revoked' | 'rotation-pending' | null;
   readonly configured: boolean;

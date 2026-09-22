@@ -1,4 +1,5 @@
 import type { SyncStatusSnapshot, SyncStatusSource } from '../../application/sync/SyncStatus';
+import { normalizeSyncAccountMetadata } from '../../application/sync/ports/SyncInstallationRepository';
 import type { DurableAttachment } from '../../application/sync/attachments/AttachmentContracts';
 import type { RecoverySnapshot } from '../../application/sync/recovery/SyncRecovery';
 import {
@@ -13,7 +14,10 @@ import type {
   SyncCursorRecord,
 } from '../persistence/records/SyncStoreRecords';
 
-type Installation = Pick<SyncSettingsRecord, 'spaceId' | 'setupState' | 'membershipStatus'>;
+type Installation = Pick<SyncSettingsRecord, 'spaceId' | 'setupState' | 'membershipStatus'> & {
+  readonly accountSetupState: SyncStatusSnapshot['accountState'];
+  readonly accountEmail: string | null;
+};
 type Attachment = SyncStatusSnapshot['attachments'][number] & {
   spaceId: string;
   deletedAt: string | null;
@@ -75,13 +79,7 @@ export class IndexedDbSyncStatusSource implements SyncStatusSource {
               this.#installation =
                 (
                   await project<SyncSettingsRecord, Installation | null>(store, (i) =>
-                    i.id === 'sync'
-                      ? {
-                          spaceId: i.spaceId,
-                          setupState: i.setupState,
-                          membershipStatus: i.membershipStatus,
-                        }
-                      : null,
+                    i.id === 'sync' ? projectInstallation(i) : null,
                   )
                 ).find((i) => i !== null) ?? null;
             if (name === S.outbox)
@@ -131,6 +129,8 @@ export class IndexedDbSyncStatusSource implements SyncStatusSource {
       (s) => spaceId && s.spaceId === spaceId && !s.cloudVerifiedAt,
     );
     return {
+      accountState: this.#installation?.accountSetupState ?? 'local_anonymous',
+      accountEmail: this.#installation?.accountEmail ?? null,
       cursor: this.#cursors.find((c) => c.spaceId === spaceId)?.lastSequence ?? null,
       setupIssue:
         this.#installation?.setupState === 'rotation_pending'
@@ -167,6 +167,17 @@ export class IndexedDbSyncStatusSource implements SyncStatusSource {
       failedBackups: pendingBackups.filter((s) => s.retryCount > 0).length,
     };
   }
+}
+
+function projectInstallation(record: SyncSettingsRecord): Installation {
+  const account = normalizeSyncAccountMetadata(record);
+  return {
+    spaceId: record.spaceId,
+    setupState: record.setupState,
+    membershipStatus: record.membershipStatus,
+    accountSetupState: account.accountSetupState,
+    accountEmail: account.accountEmail,
+  };
 }
 
 // Cursor projection releases each large payload immediately instead of retaining all blobs in getAll arrays.

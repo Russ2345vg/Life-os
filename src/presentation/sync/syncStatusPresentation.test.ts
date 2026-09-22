@@ -3,6 +3,8 @@ import type { SyncStatusSnapshot } from '../../application/sync/SyncStatus';
 import { presentAttachment, presentSyncStatus } from './syncStatusPresentation';
 
 const data: SyncStatusSnapshot = {
+  accountState: 'ready',
+  accountEmail: 'person@example.com',
   configured: true,
   pending: 0,
   conflicts: 0,

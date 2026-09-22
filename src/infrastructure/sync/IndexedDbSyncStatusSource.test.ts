@@ -57,7 +57,11 @@ describe('Sync status projection', () => {
   it('filters foreign/deleted media and strips payloads from the UI projection', async () => {
     const database = new LifeOsIndexedDb(new IDBFactory());
     const source = new IndexedDbSyncStatusSource(database);
-    expect((await source.read()).configured).toBe(false);
+    expect(await source.read()).toMatchObject({
+      configured: false,
+      accountState: 'local_anonymous',
+      accountEmail: null,
+    });
     const db = await database.open();
     const tx = db.transaction(
       [
@@ -74,6 +78,11 @@ describe('Sync status projection', () => {
       spaceId: 'own',
       membershipStatus: 'active',
       setupState: 'configured',
+      accountSetupState: 'ready',
+      accountUserId: '30000000-0000-4000-8000-000000000001',
+      accountSessionId: '40000000-0000-4000-8000-000000000001',
+      accountEmail: 'person@example.com',
+      accountMigrationSnapshotId: null,
     });
     for (const [id, spaceId, deletedAt] of [
       ['own-file', 'own', null],
@@ -113,6 +122,8 @@ describe('Sync status projection', () => {
     const result = await source.read();
     expect(result).toMatchObject({
       configured: true,
+      accountState: 'ready',
+      accountEmail: 'person@example.com',
       pending: 1,
       deferred: 1,
       pendingBackups: 1,

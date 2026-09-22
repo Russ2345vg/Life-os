@@ -128,6 +128,17 @@ export interface SyncSettingsRecord {
     'not_configured' | 'recovery_unconfirmed' | 'configured' | 'rotation_pending';
   readonly pendingRevokedDeviceId: string | null;
   readonly updatedAt: string;
+  readonly accountSetupState?:
+    | 'local_anonymous'
+    | 'email_verification_pending'
+    | 'account_migration_pending'
+    | 'recovery_confirmation_pending'
+    | 'ready'
+    | 'sign_out_pending';
+  readonly accountUserId?: string | null;
+  readonly accountSessionId?: string | null;
+  readonly accountEmail?: string | null;
+  readonly accountMigrationSnapshotId?: string | null;
 }
 
 export interface SyncQuarantineRecord {
