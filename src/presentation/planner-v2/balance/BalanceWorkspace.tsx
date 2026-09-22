@@ -1,4 +1,5 @@
-import { useCallback, useState } from 'react';
+import { groupPlannerActions, isOpenAction } from '../plannerCatalogModel';
+import { useCallback, useEffect, useState } from 'react';
 import { useBalanceState } from './useBalanceState';
 import type { Goal } from '../../../domain';
 import { DomainError } from '../../../shared/errors/DomainError';
@@ -19,6 +20,7 @@ import { BalanceIndicatorForm } from './BalanceIndicatorForm';
 import { balanceImportanceLabels, scoreLabel } from './BalanceLabels';
 import { VoiceTextInput } from '../../voice-input/VoiceTextInput';
 import { EntityContextMenu, type EntityMenuAction } from '../EntityContextMenu';
+import { PlannerSheet } from '../PlannerSheet';
 import './balance.css';
 
 const periods: Record<PeriodKind, string> = {
@@ -50,10 +52,16 @@ export function BalanceWorkspace({
     [settings, setSettings] = useState(false),
     [kind, setKind] = useState<PeriodKind>('quarter'),
     [directionFilter, setDirectionFilter] = useState<
-      'all' | 'develop' | 'maintain' | 'paused' | 'without-goal'
+      'all' | 'develop' | 'maintain' | 'paused' | 'without-goal' | 'attention'
     >('all'),
     [directionSearch, setDirectionSearch] = useState(''),
+    [sphereFilter, setSphereFilter] = useState(''),
     [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(''), 3500);
+    return () => clearTimeout(timer);
+  }, [notice]);
   const visibleError = error ?? query.error;
   const routeKey = buildPlannerV2Route(route);
   const [renderedRoute, setRenderedRoute] = useState(routeKey);
@@ -74,7 +82,7 @@ export function BalanceWorkspace({
     setNotice('Сохранено');
     setError(null);
   };
-  const run = async (work: () => Promise<unknown>) => {
+  const run = async (work: () => Promise<unknown>, rethrow = false) => {
     if (busy) return;
     setBusy(true);
     setError(null);
@@ -84,6 +92,7 @@ export function BalanceWorkspace({
       if (typeof outcome === 'string') setNotice(outcome);
     } catch (e: unknown) {
       report(e);
+      if (rethrow) throw e;
     } finally {
       setBusy(false);
     }
@@ -109,8 +118,19 @@ export function BalanceWorkspace({
   if (!state)
     return (
       <div>
-        {visibleError ? <p role="alert">{visibleError}</p> : <p role="status">Загружаем сферы…</p>}
-        <button onClick={refresh}>Обновить</button>
+        {visibleError ? (
+          <>
+            <p role="alert">{visibleError}</p>
+            <button onClick={refresh}>Повторить загрузку</button>
+          </>
+        ) : (
+          <div className="planner-loading" role="status">
+            <span />
+            <span />
+            <span />
+            Загружаем сферы…
+          </div>
+        )}
       </div>
     );
   const projection = projectLifeBalance(state, today),
@@ -120,12 +140,19 @@ export function BalanceWorkspace({
   const context = balancePeriodContext(state, today, period, projection);
   const visibleDirections = projection.directions.filter((item) => {
     if (item.direction.status === 'archived') return false;
+    if (sphereFilter && item.direction.sphereId?.toString() !== sphereFilter) return false;
     if (
       !item.direction.name
         .toLocaleLowerCase('ru')
         .includes(directionSearch.trim().toLocaleLowerCase('ru'))
     )
       return false;
+    if (directionFilter === 'attention')
+      return (
+        item.direction.status === 'active' &&
+        item.effectiveScore !== null &&
+        item.effectiveScore < 5
+      );
     if (directionFilter === 'paused') return item.direction.status === 'paused';
     if (directionFilter === 'without-goal')
       return item.direction.status === 'active' && item.activeGoals.length === 0;
@@ -145,16 +172,18 @@ export function BalanceWorkspace({
   );
   const periodSelector = (
     <div className="balance-period">
-      <label>
-        <span>Контекст целей</span>
-        <select value={kind} onChange={(e) => setKind(e.target.value as PeriodKind)}>
-          {Object.entries(periods).map(([v, label]) => (
-            <option key={v} value={v}>
-              {label}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="planner-segments" role="group" aria-label="Контекст целей">
+        {(['week', 'thirty_days', 'quarter', 'year'] as const).map((value) => (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={kind === value}
+            onClick={() => setKind(value)}
+          >
+            {periods[value]}
+          </button>
+        ))}
+      </div>
       <span className="planner-muted">
         {period ? `${period.startDate} — ${period.endDate}` : 'Период 30 дней ещё не создан'}
       </span>
@@ -305,11 +334,8 @@ export function BalanceWorkspace({
       run: () =>
         run(async () => {
           if (!(await services.deletePilotSphere.execute(s.sphere.id.toString())))
-            throw new DomainError(
-              'sphere.delete_blocked',
-              'Сфера связана с историей или другими записями. Сначала уберите связи либо архивируйте её.',
-            );
-        }),
+            throw new DomainError('sphere.delete_blocked', 'Сфера уже удалена. Обновите список.');
+        }, true),
     },
   ];
   const directionRow = (d: LifeBalanceProjection['directions'][number]) => (
@@ -328,18 +354,12 @@ export function BalanceWorkspace({
             · {d.direction.mode === 'maintain' ? 'Поддерживаю' : 'Развиваю'} ·{' '}
             {lifecycle[d.direction.status]} · Активных целей: {d.activeGoals.length}
           </p>
-          {d.nextAction && (
-            <p>
-              Далее:{' '}
-              {link(
-                { view: 'action', id: d.nextAction.id.toString() },
-                d.nextAction.title.toString(),
-              )}
-            </p>
-          )}
+          {d.direction.description && <p className="planner-muted">{d.direction.description}</p>}
+          {d.activeGoals.length === 0 &&
+            link({ view: 'new-goal', directionId: d.direction.id.toString() }, '+ Добавить цель')}
         </div>
         <strong>
-          {scoreLabel(d.effectiveScore)}
+          {d.effectiveScore === null ? 'Состояние не оценено' : scoreLabel(d.effectiveScore)}
           {d.effectiveScore !== null && <small> / 10</small>}
         </strong>
       </article>
@@ -364,16 +384,28 @@ export function BalanceWorkspace({
           {visibleError} <button onClick={refresh}>Обновить</button>
         </p>
       )}
-      {editor ? (
-        <BalanceEditor
-          key={JSON.stringify(editor)}
-          editor={editor}
-          state={state}
-          services={services}
-          onSaved={saved}
-          onCancel={() => setEditor(null)}
-        />
-      ) : route.view === 'directions' ? (
+      {editor && (
+        <PlannerSheet
+          title={
+            editor.kind === 'sphere'
+              ? 'Сфера'
+              : editor.kind === 'direction'
+                ? 'Направление'
+                : 'Показатель'
+          }
+          onClose={() => setEditor(null)}
+        >
+          <BalanceEditor
+            key={JSON.stringify(editor)}
+            editor={editor}
+            state={state}
+            services={services}
+            onSaved={saved}
+            onCancel={() => setEditor(null)}
+          />
+        </PlannerSheet>
+      )}
+      {route.view === 'directions' ? (
         <>
           <header className="balance-header">
             <div>
@@ -389,6 +421,19 @@ export function BalanceWorkspace({
             </button>
           </header>
           <div className="balance-direction-filters">
+            <label>
+              <span>Сфера</span>
+              <select value={sphereFilter} onChange={(e) => setSphereFilter(e.target.value)}>
+                <option value="">Все сферы</option>
+                {state.spheres
+                  .filter((s) => s.status !== 'archived')
+                  .map((s) => (
+                    <option key={s.id.toString()} value={s.id.toString()}>
+                      {s.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
             <VoiceTextInput
               id="balance-direction-search"
               aria-label="Поиск направления"
@@ -403,6 +448,7 @@ export function BalanceWorkspace({
                 onChange={(e) => setDirectionFilter(e.target.value as typeof directionFilter)}
               >
                 <option value="all">Все</option>
+                <option value="attention">Требует внимания</option>
                 <option value="develop">Развиваю</option>
                 <option value="maintain">Поддерживаю</option>
                 <option value="paused">На паузе</option>
@@ -427,7 +473,7 @@ export function BalanceWorkspace({
                 return entries.length ? (
                   <section key={group.id ?? 'none'} aria-label={group.name}>
                     <h2>{group.name}</h2>
-                    {entries.map(directionRow)}
+                    <div className="balance-direction-cards">{entries.map(directionRow)}</div>
                   </section>
                 ) : null;
               })}
@@ -441,7 +487,7 @@ export function BalanceWorkspace({
           <header className="balance-header">
             <div>
               <p className="planner-eyebrow">Сферы</p>
-              <h1>Состояние жизни</h1>
+              <h1>Сферы жизни</h1>
               <p className="planner-muted">Что важно поддерживать. Куда направить внимание.</p>
             </div>
             <button onClick={() => setEditor({ kind: 'sphere', id: null, sphereId: null })}>
@@ -450,7 +496,13 @@ export function BalanceWorkspace({
           </header>
           {periodSelector}
           <div className="balance-overview">
-            <div>
+            <section className="balance-wheel-panel">
+              <div className="balance-section-heading">
+                <h2>Колесо жизни</h2>
+                <button aria-expanded={settings} onClick={() => setSettings(!settings)}>
+                  Настроить колесо
+                </button>
+              </div>
               <BalanceWheel
                 items={wheel.map((s) => ({
                   id: s.sphere.id.toString(),
@@ -464,21 +516,54 @@ export function BalanceWorkspace({
                 <span>┄ Желаемый уровень</span>
                 <span>— Нет данных</span>
               </p>
-            </div>
-            <div className="balance-wheel-key">
-              <h2>Колесо состояния жизни</h2>
-              <p className="planner-muted">Текущее состояние не зависит от выбранного периода.</p>
-              {wheel.map((s, i) => (
-                <div className="balance-key-row" key={s.sphere.id.toString()}>
-                  <span>{i + 1}</span>
-                  {link({ view: 'sphere', id: s.sphere.id.toString() }, s.sphere.name)}
-                  <strong>{scoreLabel(s.effectiveScore)}</strong>
-                </div>
-              ))}
-              <button aria-expanded={settings} onClick={() => setSettings(!settings)}>
-                Настроить колесо
-              </button>
-            </div>
+            </section>
+            <section className="balance-attention">
+              <h2>Требует внимания</h2>
+              <p className="planner-muted">Сферы с наибольшим дефицитом внимания.</p>
+              {projection.spheres
+                .filter(
+                  (s) =>
+                    s.sphere.status === 'active' &&
+                    s.effectiveScore !== null &&
+                    (s.attentionNeed ?? 0) > 0,
+                )
+                .sort((a, b) => (b.attentionNeed ?? 0) - (a.attentionNeed ?? 0))
+                .slice(0, 3)
+                .map((s) => (
+                  <div className="balance-attention-row" key={s.sphere.id.toString()}>
+                    {link({ view: 'sphere', id: s.sphere.id.toString() }, s.sphere.name)}
+                    <strong>
+                      {scoreLabel(s.effectiveScore)} <small>/ 10</small>
+                    </strong>
+                    <progress
+                      max={10}
+                      value={s.effectiveScore ?? 0}
+                      aria-label={`Оценка: ${s.sphere.name}`}
+                    />
+                    <span className="planner-muted">Дефицит {scoreLabel(s.attentionNeed)}</span>
+                  </div>
+                ))}
+              {!projection.spheres.some(
+                (s) =>
+                  s.sphere.status === 'active' &&
+                  s.effectiveScore !== null &&
+                  (s.attentionNeed ?? 0) > 0,
+              ) && (
+                <p className="planner-empty">
+                  Пока нет оценённых сфер с дефицитом. Оцените важные для вас сферы ниже.
+                </p>
+              )}
+              <a
+                className="planner-text-link"
+                href="#all-spheres"
+                onClick={(event) => {
+                  event.preventDefault();
+                  document.getElementById('all-spheres')?.scrollIntoView({ behavior: 'instant' });
+                }}
+              >
+                Посмотреть все сферы →
+              </a>
+            </section>
           </div>
           {settings && (
             <section className="balance-panel">
@@ -510,7 +595,7 @@ export function BalanceWorkspace({
             </section>
           )}
           <div className="balance-section-heading">
-            <h2>Сферы</h2>
+            <h2 id="all-spheres">Все сферы</h2>
             <span className="planner-muted">
               Рекомендации помогают выбрать фокус и не ограничивают план.
             </span>
@@ -518,53 +603,82 @@ export function BalanceWorkspace({
           {!state.spheres.length && (
             <p className="planner-empty">Пока нет сфер. Создайте первую важную часть жизни.</p>
           )}
-          {projection.spheres.map((s) => {
-            const c = context[s.sphere.id.toString()];
-            return (
-              <EntityContextMenu
-                key={s.sphere.id.toString()}
-                title={s.sphere.name}
-                entityLabel="сферу"
-                actions={sphereActions(s)}
-              >
-                <article className="balance-sphere-card">
-                  <div className="balance-row">
-                    <div>
-                      {link({ view: 'sphere', id: s.sphere.id.toString() }, s.sphere.name)}
-                      <p className="planner-muted">
-                        {s.sphere.status === 'archived'
-                          ? 'В архиве'
-                          : `Активных направлений: ${s.directions.filter((d) => d.direction.status === 'active').length}`}
-                      </p>
+          <div className="balance-sphere-grid">
+            {projection.spheres.map((s) => {
+              const c = context[s.sphere.id.toString()];
+              return (
+                <EntityContextMenu
+                  key={s.sphere.id.toString()}
+                  title={s.sphere.name}
+                  entityLabel="сферу"
+                  actions={sphereActions(s)}
+                >
+                  <article
+                    className={`balance-sphere-card${s.effectiveScore === null ? ' balance-sphere-card--unrated' : ''}`}
+                  >
+                    <div className="balance-row">
+                      <div>
+                        {link({ view: 'sphere', id: s.sphere.id.toString() }, s.sphere.name)}
+                        <p className="planner-muted">
+                          {s.sphere.status === 'archived'
+                            ? 'В архиве'
+                            : `Активных направлений: ${s.directions.filter((d) => d.direction.status === 'active').length}`}
+                        </p>
+                      </div>
+                      <strong>
+                        {s.effectiveScore === null ? 'Нет оценки' : scoreLabel(s.effectiveScore)}
+                        {s.effectiveScore !== null && <small> / 10</small>}
+                      </strong>
                     </div>
-                    <strong>
-                      {scoreLabel(s.effectiveScore)}
-                      {s.effectiveScore !== null && <small> / 10</small>}
-                    </strong>
-                  </div>
-                  <div className="balance-metrics">
-                    <span>
-                      Желаемый <b>{scoreLabel(s.sphere.desiredLevel)}</b>
-                    </span>
-                    <span>
-                      Дефицит внимания <b>{scoreLabel(s.attentionNeed)}</b>
-                    </span>
-                    <span>
-                      Прогресс целей{' '}
-                      <b>
-                        {c?.progress == null ? 'Нет данных' : `${Math.round(c.progress)}%`}
-                        {c?.incomplete ? ' · неполные данные' : ''}
-                      </b>
-                    </span>
-                    <span>
-                      Рекомендуемый фокус{' '}
-                      <b>{c?.recommended == null ? 'Нет данных' : `${c.recommended} целей`}</b>
-                    </span>
-                  </div>
-                </article>
-              </EntityContextMenu>
-            );
-          })}
+                    {s.effectiveScore !== null && (
+                      <progress
+                        max={10}
+                        value={s.effectiveScore}
+                        aria-label={`Оценка: ${s.sphere.name}`}
+                      />
+                    )}
+                    <p className="planner-muted">
+                      {s.directions.reduce((count, d) => count + d.activeGoals.length, 0)} активных
+                      целей
+                    </p>
+                    <div className="balance-metrics">
+                      {s.sphere.desiredLevel !== null && (
+                        <span>
+                          Желаемый <b>{scoreLabel(s.sphere.desiredLevel)}</b>
+                        </span>
+                      )}
+                      {s.attentionNeed !== null && (
+                        <span>
+                          Дефицит внимания <b>{scoreLabel(s.attentionNeed)}</b>
+                        </span>
+                      )}
+                      {c?.progress != null && (
+                        <span>
+                          Прогресс целей{' '}
+                          <b>
+                            {Math.round(c.progress)}%{c?.incomplete ? ' · неполные данные' : ''}
+                          </b>
+                        </span>
+                      )}
+                      {c?.recommended != null && (
+                        <span>
+                          Рекомендуемый фокус <b>{c.recommended} целей</b>
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setEditor({ kind: 'sphere', id: s.sphere.id.toString(), sphereId: null })
+                      }
+                    >
+                      {s.effectiveScore === null ? 'Оценить сферу' : 'Изменить оценку'} →
+                    </button>
+                  </article>
+                </EntityContextMenu>
+              );
+            })}
+          </div>
           {projection.directions.some((d) => d.direction.sphereId === null) && (
             <details>
               <summary>Направления без сферы</summary>
@@ -666,13 +780,57 @@ export function BalanceWorkspace({
             <div>
               <h2>Сейчас</h2>
               <p>{direction.direction.currentStateText || 'Текущее состояние пока не описано.'}</p>
+              <button
+                type="button"
+                onClick={() =>
+                  setEditor({
+                    kind: 'direction',
+                    id: direction.direction.id.toString(),
+                    sphereId: null,
+                  })
+                }
+              >
+                Описать
+              </button>
             </div>
             <div>
               <h2>Хочу</h2>
               <p>{direction.direction.desiredState || 'Желаемое состояние пока не описано.'}</p>
+              <button
+                type="button"
+                onClick={() =>
+                  setEditor({
+                    kind: 'direction',
+                    id: direction.direction.id.toString(),
+                    sphereId: null,
+                  })
+                }
+              >
+                Описать
+              </button>
             </div>
           </div>
-          <h2>Активные цели</h2>
+          <section className="balance-next-step">
+            <h2>Следующий шаг</h2>
+            {direction.nextAction ? (
+              <p>
+                {link(
+                  { view: 'action', id: direction.nextAction.id.toString() },
+                  direction.nextAction.title.toString(),
+                )}
+              </p>
+            ) : (
+              <p className="planner-muted">Следующее действие не выбрано.</p>
+            )}
+          </section>
+          <div className="balance-section-heading">
+            <h2>Активные цели</h2>
+            {link(
+              { view: 'new-goal', directionId: direction.direction.id.toString() },
+              'Создать цель',
+            )}
+          </div>
+
           {direction.activeGoals.length ? (
             goalRows(direction.activeGoals)
           ) : (
@@ -682,34 +840,53 @@ export function BalanceWorkspace({
                 : 'Активных целей пока нет.'}
             </p>
           )}
-          <h2>Следующее действие</h2>
-          {direction.nextAction ? (
-            <p>
+          <section className="balance-other-actions" aria-label="Действия направления">
+            <div className="balance-section-heading">
+              <h2>Действия</h2>
               {link(
-                { view: 'action', id: direction.nextAction.id.toString() },
-                direction.nextAction.title.toString(),
+                {
+                  view: 'new-action',
+                  goalId: null,
+                  title: null,
+                  directionId: direction.direction.id.toString(),
+                },
+                'Создать действие',
               )}
-            </p>
-          ) : (
-            <p className="planner-muted">Следующее действие не выбрано.</p>
-          )}
-          <details className="balance-other-actions">
-            <summary>Другие действия</summary>
-            {state.actions
-              .filter(
+            </div>
+            {groupPlannerActions(
+              state.actions.filter(
                 (action) =>
-                  !action.isArchived() &&
-                  action.status !== 'completed' &&
-                  action.status !== 'cancelled' &&
-                  action.id.toString() !== direction.nextAction?.id.toString() &&
-                  direction.goals.some((goal) => action.goalId?.equals(goal.id)),
-              )
-              .map((action) => (
-                <p key={action.id.toString()}>
-                  {link({ view: 'action', id: action.id.toString() }, action.title.toString())}
-                </p>
+                  isOpenAction(action) &&
+                  (action.goalId
+                    ? direction.goals.some((goal) => action.goalId?.equals(goal.id))
+                    : action.directionId?.equals(direction.direction.id)),
+              ),
+              today,
+            )
+              .filter((group) => group.actions.length)
+              .map((group) => (
+                <section key={group.key}>
+                  <h3>{group.label}</h3>
+                  {group.actions.slice(0, 5).map((action) => (
+                    <p key={action.id.toString()}>
+                      {link({ view: 'action', id: action.id.toString() }, action.title.toString())}
+                    </p>
+                  ))}
+                  {group.actions.length > 5 && (
+                    <p className="planner-muted">
+                      Ещё {group.actions.length - 5} · {link({ view: 'actions' }, 'Все действия')}
+                    </p>
+                  )}
+                </section>
               ))}
-          </details>
+            {!state.actions.some(
+              (action) =>
+                isOpenAction(action) &&
+                (action.goalId
+                  ? direction.goals.some((goal) => action.goalId?.equals(goal.id))
+                  : action.directionId?.equals(direction.direction.id)),
+            ) && <p className="planner-empty">Пока нет актуальных действий.</p>}
+          </section>
           <BalanceScore
             effective={direction.effectiveScore}
             automatic={direction.automaticScore}

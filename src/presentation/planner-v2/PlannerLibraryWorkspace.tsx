@@ -1,3 +1,5 @@
+import { PlannerGoalForm } from './PlannerGoalForm';
+import { PlannerSheet } from './PlannerSheet';
 import { PlanningGoalDetail } from './PlanningGoalDetail';
 import { usePlanning } from './PlanningContext';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -89,6 +91,11 @@ export function PlannerLibraryWorkspace({
   const [data, setData] = useState<LibraryData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (!notice) return;
+    const timeout = window.setTimeout(() => setNotice(null), 3500);
+    return () => window.clearTimeout(timeout);
+  }, [notice]);
   const [busy, setBusy] = useState(false);
   const sequence = useRef(0);
   const working = useRef(false);
@@ -169,7 +176,7 @@ export function PlannerLibraryWorkspace({
     {
       label: 'Редактировать',
       run: () => {
-        window.location.hash = `#/goals/${encodeURIComponent(goal.id.toString())}/edit`;
+        onNavigate({ view: 'goal', id: goal.id.toString(), edit: true });
       },
     },
     ...(goal.status === 'achieved'
@@ -184,10 +191,7 @@ export function PlannerLibraryWorkspace({
       run: async () => {
         await run(async () => {
           if (!(await services.deletePilotGoal.execute(goal.id.toString())))
-            throw new DomainError(
-              'goal.delete_blocked',
-              'Цель связана с историей или другими записями. Сначала уберите связи либо архивируйте её.',
-            );
+            throw new DomainError('goal.delete_blocked', 'Цель уже удалена. Обновите список.');
         }, 'Цель удалена');
         if (route.view === 'goal') onNavigate({ view: 'goals' });
       },
@@ -236,7 +240,7 @@ export function PlannerLibraryWorkspace({
           if (!(await services.deletePilotLifeAction.execute(action.id.toString())))
             throw new DomainError(
               'action.delete_blocked',
-              'Действие связано с историей, повторением или поддействиями. Сначала уберите связи либо архивируйте его.',
+              'Действие уже удалено. Обновите список.',
             );
         }, 'Действие удалено');
         if (route.view === 'action') onNavigate({ view: 'actions' });
@@ -342,14 +346,51 @@ export function PlannerLibraryWorkspace({
           </div>
         )
       ) : route.view === 'goal' ? (
-        <PlanningGoalDetail
-          id={route.id}
-          today={today}
-          directions={data.directions}
-          spheres={data.spheres}
-          menuForGoal={menuForGoal}
-          {...operations}
-        />
+        <>
+          {route.edit && data.goals.find((goal) => goal.id.toString() === route.id) && (
+            <PlannerSheet
+              title="Редактировать цель"
+              onClose={() => onNavigate({ view: 'goal', id: route.id })}
+            >
+              <PlannerGoalForm
+                key={route.id}
+                initialGoal={data.goals.find((goal) => goal.id.toString() === route.id)!}
+                directions={data.directions.map((direction) => ({
+                  id: direction.id.toString(),
+                  title: direction.name,
+                }))}
+                onCancel={() => onNavigate({ view: 'goal', id: route.id })}
+                onSubmit={async (draft) => {
+                  const goal = data.goals.find((item) => item.id.toString() === route.id)!;
+                  await run(async () => {
+                    const result = await services.updateGoal.execute({
+                      id: goal.id,
+                      expectedVersion: draft.expectedVersion ?? goal.version,
+                      title: draft.title,
+                      achievementCriteria: draft.outcome,
+                      directionId: draft.directionId ? EntityId.create(draft.directionId) : null,
+                      horizon: draft.horizon || null,
+                      nextProgress: draft.firstStep,
+                      description: draft.description,
+                      whyImportant: draft.whyImportant,
+                      whyNow: draft.whyNow,
+                    });
+                    if (!result.ok) throw result.error;
+                  }, 'Цель сохранена');
+                  onNavigate({ view: 'goal', id: route.id });
+                }}
+              />
+            </PlannerSheet>
+          )}
+          <PlanningGoalDetail
+            id={route.id}
+            today={today}
+            directions={data.directions}
+            spheres={data.spheres}
+            menuForGoal={menuForGoal}
+            {...operations}
+          />
+        </>
       ) : 'section' in route && views ? (
         <section>
           <header className="planner-page-heading">
@@ -406,6 +447,8 @@ export function PlannerLibraryWorkspace({
         <PlannerActionList
           actions={data.actions}
           goals={data.goals}
+          directions={data.directions}
+          spheres={data.spheres}
           today={today}
           busy={busy}
           selectedId={route.view === 'action' ? route.id : null}
@@ -441,12 +484,12 @@ export function PlannerLibraryWorkspace({
           <header className="planner-page-heading">
             <h1>Цели</h1>
             <button
-              className="planner-add-icon"
+              className="planner-primary"
               aria-label="Новая цель"
               type="button"
               onClick={() => onNavigate({ view: 'new-goal' })}
             >
-              +
+              + Новая цель
             </button>
           </header>
           <PlannerViewSwitcher route={route} onNavigate={onNavigate} />

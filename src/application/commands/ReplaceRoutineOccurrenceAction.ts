@@ -15,7 +15,8 @@ import {
 } from './routineOccurrenceCommandSupport';
 
 export interface ReplaceRoutineOccurrenceActionInput extends RoutineOccurrenceCommandInput {
-  readonly replacementActionId: EntityId;
+  readonly replacementActionId?: EntityId;
+  readonly replacementRuleId?: EntityId;
 }
 
 export class ReplaceRoutineOccurrenceAction {
@@ -30,7 +31,10 @@ export class ReplaceRoutineOccurrenceAction {
       if (error instanceof DomainError) return failure(error);
       throw error;
     }
-    if (block.assignment.kind !== ROUTINE_BLOCK_ASSIGNMENT.existingAction) {
+    if (
+      block.assignment.kind !== ROUTINE_BLOCK_ASSIGNMENT.existingAction &&
+      block.assignment.kind !== 'existingSeries'
+    ) {
       return failure(
         new DomainError(
           'routine_occurrence_override.replacement_not_supported',
@@ -38,15 +42,28 @@ export class ReplaceRoutineOccurrenceAction {
         ),
       );
     }
+    let replacementActionId = input.replacementActionId;
     try {
-      await validateReplacementAction(this.dependencies, input.replacementActionId);
+      if (input.replacementRuleId)
+        replacementActionId = (
+          await this.dependencies.recurrence?.selectForDate(
+            input.replacementRuleId.toString(),
+            input.occurrenceDate.toString(),
+          )
+        )?.id;
+      if (!replacementActionId)
+        throw new DomainError(
+          'recurrence.no_occurrence',
+          'На эту дату нет выполнения выбранной серии.',
+        );
+      await validateReplacementAction(this.dependencies, replacementActionId);
     } catch (error: unknown) {
       if (error instanceof DomainError) return failure(error);
       throw error;
     }
     return saveOverride(this.dependencies, input, {
       type: ROUTINE_OCCURRENCE_OVERRIDE_TYPE.replacementAction,
-      replacementActionId: input.replacementActionId,
+      replacementActionId,
     });
   }
 }

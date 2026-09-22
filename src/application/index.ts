@@ -512,6 +512,7 @@ export {
   GetRoutineActionOptions,
   type RoutineActionOption,
 } from './queries/GetRoutineActionOptions';
+export { selectRecurringActionRepresentatives } from './planner/actionSelection';
 export {
   GetRoutineActionDetails,
   type RoutineActionDetails,
@@ -732,3 +733,5 @@ export {
   WalkCaptureContextReader,
   type WalkCaptureReadModel,
 } from './walk-capture/WalkCaptureReadModel';
+export { SleepScheduleService } from './sleep/SleepScheduleService';
+export type { SleepScheduleRepository } from './sleep/SleepScheduleRepository';

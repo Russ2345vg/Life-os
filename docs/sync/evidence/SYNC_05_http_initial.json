@@ -1,0 +1,49 @@
+{
+  "runId": "dcfc39a7-f144-4ad3-8b85-facb0f8af135",
+  "spaces": [
+    {
+      "spaceId": "1f42e53d-15f8-48ee-904f-9892b107c701",
+      "deviceId": "bb9f09af-0f82-4c5e-aacb-42ce1b3ce1ac",
+      "userId": "46566ba8-d98d-4e70-bb6d-f75a4638723a"
+    },
+    {
+      "spaceId": "ccc90048-147f-46bb-a5c3-863df9d9b2a6",
+      "deviceId": "a9129023-5b54-4aa6-add7-4d95ae38a26d",
+      "userId": "2586774a-3d70-49f4-9584-7af419f7470b"
+    }
+  ],
+  "identities": [
+    "46566ba8-d98d-4e70-bb6d-f75a4638723a",
+    "2586774a-3d70-49f4-9584-7af419f7470b",
+    "ec08866c-0782-4720-b98a-4cf291910326"
+  ],
+  "objects": [
+    {
+      "bucket": "lifeos-attachments",
+      "path": "1f42e53d-15f8-48ee-904f-9892b107c701/bbfde811-b558-4f1d-862f-67ed798e43e7/1",
+      "bytes": 137
+    },
+    {
+      "bucket": "lifeos-snapshots",
+      "path": "1f42e53d-15f8-48ee-904f-9892b107c701/fb7709c4-99ae-4d1c-90c5-8c58f13e2308/1",
+      "bytes": 137
+    }
+  ],
+  "checks": [
+    "active ciphertext upload/download exact bytes in lifeos-attachments",
+    "immutable duplicate rejected in lifeos-attachments",
+    "foreign: upload and download denied in lifeos-attachments",
+    "public URL denied in lifeos-attachments",
+    "plaintext filename path denied in lifeos-attachments",
+    "active ciphertext upload/download exact bytes in lifeos-snapshots",
+    "immutable duplicate rejected in lifeos-snapshots",
+    "foreign: upload and download denied in lifeos-snapshots",
+    "public URL denied in lifeos-snapshots",
+    "plaintext filename path denied in lifeos-snapshots"
+  ],
+  "pending": {
+    "userId": "ec08866c-0782-4720-b98a-4cf291910326",
+    "deviceId": "f9bc45fd-2131-4932-aaa3-481f0da33645",
+    "spaceId": "1f42e53d-15f8-48ee-904f-9892b107c701"
+  }
+}

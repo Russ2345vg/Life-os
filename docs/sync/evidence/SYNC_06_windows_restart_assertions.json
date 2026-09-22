@@ -1,0 +1,8 @@
+{
+  "original_record_fingerprints_unchanged": true,
+  "restart_cursor_retained": true,
+  "restart_attachment_queue_retained": true,
+  "restart_snapshots_retained": true,
+  "outbox_empty_before_after": true,
+  "exactly_one_new_backup": true
+}

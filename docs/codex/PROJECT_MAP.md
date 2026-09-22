@@ -132,5 +132,6 @@ npm run format:check
 npm run verify
 ```
 
-`npm run verify` — единый полный bounded gate. Подробный выбор targeted/fast/full проверок и
-правила диагностики timeout описаны в `docs/codex/TEST_MATRIX.md`.
+`npm run verify` — gate без E2E с bounded-этапами; `npm run verify:full` добавляет полный E2E.
+У текущей npm-цепочки нет общего deadline. Выбор проверок по scope и правила диагностики timeout
+описаны в `AGENTS.md` и `docs/codex/TEST_MATRIX.md`.

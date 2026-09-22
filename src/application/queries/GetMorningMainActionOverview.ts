@@ -149,8 +149,11 @@ export function findMorningMainActionOccurrence(
       .filter(
         (occurrence) =>
           !occurrence.isSkipped &&
-          occurrence.effectiveAssignment.kind === ROUTINE_BLOCK_ASSIGNMENT.existingAction &&
-          occurrence.effectiveAssignment.actionId.equals(action.id),
+          (occurrence.effectiveAssignment.kind === ROUTINE_BLOCK_ASSIGNMENT.existingAction
+            ? occurrence.effectiveAssignment.actionId.equals(action.id)
+            : occurrence.effectiveAssignment.kind === 'existingSeries' &&
+              occurrence.effectiveAssignment.ruleId.toString() === action.occurrence?.ruleId &&
+              action.plannedDate?.equals(occurrence.effectiveDate)),
       )
       .sort((left, right) => left.effectiveStartTime.localeCompare(right.effectiveStartTime))[0] ??
     null

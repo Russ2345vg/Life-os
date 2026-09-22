@@ -29,6 +29,7 @@ const EXPECTED_ENTITY_TYPES = [
   'routine_block',
   'routine_occurrence_execution',
   'routine_occurrence_override',
+  'sleep_schedule',
   'sphere',
   'tomorrow_plan',
   'user_settings',
@@ -64,6 +65,7 @@ const EXPECTED_ENTITY_STORES = {
   routine_block: 'routineBlocks',
   routine_occurrence_execution: 'routineOccurrenceExecutions',
   routine_occurrence_override: 'routineOccurrenceOverrides',
+  sleep_schedule: 'sleepSchedules',
   sphere: 'spheres',
   tomorrow_plan: 'tomorrowPlans',
   walk: 'walks',
@@ -75,7 +77,7 @@ describe('LIFE_OS_SYNC_REGISTRY', () => {
   it('declares Goal and parent Action dependencies alongside legacy action dependencies', () => {
     expect(registration('life_action')).toMatchObject({
       recordSchemaVersion: 1,
-      dependencies: ['decision', 'sphere', 'goal', 'recurrence_rule', 'life_action'],
+      dependencies: ['decision', 'sphere', 'direction', 'goal', 'recurrence_rule', 'life_action'],
     });
   });
 
@@ -98,7 +100,7 @@ describe('LIFE_OS_SYNC_REGISTRY', () => {
       LIFE_OS_SYNC_REGISTRY.filter(({ storageKind }) => storageKind === 'indexed_db').map(
         ({ storeName }) => storeName,
       ),
-    ).toHaveLength(31);
+    ).toHaveLength(32);
     expect(LIFE_OS_SYNC_REGISTRY.every(({ readiness }) => readiness === 'sync_ready')).toBe(true);
   });
 

@@ -20,7 +20,7 @@ export interface PlanningPeriod extends PlanningRecord, DateRange {
 }
 export interface PeriodMembership extends PlanningRecord {
   readonly periodId: string;
-  readonly entityType: 'goal' | 'action';
+  readonly entityType: 'goal' | 'action' | 'rule';
   readonly entityId: string;
   readonly focused: boolean;
   readonly removed: boolean;
@@ -28,7 +28,7 @@ export interface PeriodMembership extends PlanningRecord {
 }
 export interface PeriodDecision extends PlanningRecord {
   readonly periodId: string;
-  readonly entityType: 'goal' | 'action';
+  readonly entityType: 'goal' | 'action' | 'rule';
   readonly entityId: string;
   readonly decision: 'continue' | 'unplanned' | 'stop' | 'achieved';
   readonly targetPeriodId: string | null;
@@ -94,7 +94,11 @@ export function thirtyDayPeriod(startDate: string): PlanningPeriod {
 export function nextSevenDays(date: string): DateRange {
   return { startDate: date, endDate: addDays(date, 6) };
 }
-export function membershipId(periodId: string, type: 'goal' | 'action', entityId: string): string {
+export function membershipId(
+  periodId: string,
+  type: 'goal' | 'action' | 'rule',
+  entityId: string,
+): string {
   return `membership:${encodeURIComponent(periodId)}:${type}:${encodeURIComponent(entityId)}`;
 }
 export function focusWarning(kind: PeriodKind, count: number): string | null {

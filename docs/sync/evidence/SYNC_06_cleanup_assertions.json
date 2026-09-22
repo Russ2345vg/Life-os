@@ -1,0 +1,8 @@
+{
+  "original_record_fingerprints_unchanged": true,
+  "active_sync06_test_records": 0,
+  "outbox": 0,
+  "quarantine": 0,
+  "retained_test_tombstone_revision": 4,
+  "new_manual_and_pre_restore_backups_retained": 2
+}

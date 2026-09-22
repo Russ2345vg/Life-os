@@ -1,3 +1,6 @@
+import { VoiceField } from '../voice-input/VoiceField';
+import { VoiceTextInput } from '../voice-input/VoiceTextInput';
+import { recurrenceLabel, type ActionOption } from '../../application/planner/actionSelection';
 import { useEffect, useRef, useState } from 'react';
 import type {
   CancelDecisionSafely,
@@ -31,7 +34,6 @@ import type {
   RescheduleLifeActionSafely,
   ResumeActionSession,
   RoutineActionDetails,
-  RoutineActionOption,
   StartLifeActionSession,
   UpdateDecisionDetails,
   UpdateLifeActionDetails,
@@ -306,7 +308,7 @@ export function RoutinePage(props: RoutinePageProps) {
   const [planFacts, setPlanFacts] = useState<ReadonlyMap<string, RoutinePlanFactPresentation>>(
     new Map(),
   );
-  const [actionOptions, setActionOptions] = useState<readonly RoutineActionOption[]>([]);
+  const [actionOptions, setActionOptions] = useState<readonly ActionOption[]>([]);
   const [actionDetails, setActionDetails] = useState<
     ReadonlyMap<string, RoutineActionDetails | null>
   >(new Map());
@@ -338,6 +340,7 @@ export function RoutinePage(props: RoutinePageProps) {
   const [deviationTime, setDeviationTime] = useState('');
   const [deviationDate, setDeviationDate] = useState('');
   const [replacementActionId, setReplacementActionId] = useState('');
+  const [replacementSearch, setReplacementSearch] = useState('');
   const [deviationError, setDeviationError] = useState<string | null>(null);
   const savingGuard = useRef(new RoutineSubmissionGuard());
   const activationGuard = useRef(new RoutineSubmissionGuard());
@@ -349,11 +352,11 @@ export function RoutinePage(props: RoutinePageProps) {
     let active = true;
     void Promise.all([
       props.getRoutineBlocksForDate.execute(props.selectedDate),
-      workflow?.getRoutineActionOptions.execute() ?? Promise.resolve([]),
+      workflow?.getRoutineActionOptions.choices() ?? Promise.resolve([]),
       props.getRoutinePlanFactForDate?.execute(props.selectedDate) ?? Promise.resolve([]),
       props.getActiveWalk?.execute() ?? Promise.resolve(null),
-    ]).then(
-      async ([nextBlocks, nextOptions, nextPlanFacts, nextActiveWalk]) => {
+    ])
+      .then(async ([nextBlocks, nextOptions, nextPlanFacts, nextActiveWalk]) => {
         const nextDetails =
           workflow === undefined
             ? new Map<string, RoutineActionDetails | null>()
@@ -366,11 +369,10 @@ export function RoutinePage(props: RoutinePageProps) {
         setActionOptions(nextOptions);
         setActionDetails(nextDetails);
         setLoadError(null);
-      },
-      () => {
+      })
+      .catch(() => {
         if (active) setLoadError('Не удалось загрузить распорядок.');
-      },
-    );
+      });
     return () => {
       active = false;
     };
@@ -493,7 +495,7 @@ export function RoutinePage(props: RoutinePageProps) {
   async function reload(): Promise<void> {
     const [nextBlocks, nextOptions] = await Promise.all([
       props.getRoutineBlocksForDate.execute(props.selectedDate),
-      workflow?.getRoutineActionOptions.execute() ?? Promise.resolve([]),
+      workflow?.getRoutineActionOptions.choices() ?? Promise.resolve([]),
     ]);
     const nextPlanFacts =
       (await props.getRoutinePlanFactForDate?.execute(props.selectedDate)) ?? [];
@@ -607,7 +609,13 @@ export function RoutinePage(props: RoutinePageProps) {
                   })
                 : await props.replaceRoutineOccurrenceAction.execute({
                     ...base,
-                    replacementActionId: EntityId.create(replacementActionId),
+                    ...(replacementActionId.startsWith('series:')
+                      ? { replacementRuleId: EntityId.create(replacementActionId.slice(7)) }
+                      : {
+                          replacementActionId: EntityId.create(
+                            replacementActionId.replace(/^action:/, ''),
+                          ),
+                        }),
                   });
       if (!result.ok) {
         setDeviationError(result.error.message);
@@ -709,14 +717,20 @@ export function RoutinePage(props: RoutinePageProps) {
         case ROUTINE_BLOCK_ASSIGNMENT.reminder:
           setReminderBlock(block.sourceBlock);
           return;
+        case ROUTINE_BLOCK_ASSIGNMENT.existingSeries:
         case ROUTINE_BLOCK_ASSIGNMENT.existingAction: {
           if (workflow === undefined) {
             openEdit(block.sourceBlock);
             return;
           }
           const details =
-            actionDetails.get(block.assignment.actionId.toString()) ??
-            (await workflow.getRoutineActionDetails.execute(block.assignment.actionId));
+            actionDetailsForBlock(block, actionDetails) ??
+            (block.assignment.kind === 'existingSeries'
+              ? await workflow.getRoutineActionDetails.series(
+                  block.assignment.ruleId,
+                  block.effectiveDate.toString(),
+                )
+              : await workflow.getRoutineActionDetails.execute(block.assignment.actionId));
           if (details === null) {
             setActivationMessage(
               'Связанное действие больше недоступно. Измените назначение блока или выберите другое действие.',
@@ -1053,7 +1067,8 @@ export function RoutinePage(props: RoutinePageProps) {
                       Решение: {details.decision.title.toString()}
                     </p>
                   )}
-                  {block.assignment.kind === ROUTINE_BLOCK_ASSIGNMENT.existingAction ? (
+                  {block.assignment.kind === ROUTINE_BLOCK_ASSIGNMENT.existingAction ||
+                  block.assignment.kind === 'existingSeries' ? (
                     <p className="routine-card-context">
                       {details == null
                         ? 'Связанное действие недоступно'
@@ -1224,7 +1239,8 @@ export function RoutinePage(props: RoutinePageProps) {
                 Сократить
               </button>
               {deviationTarget.sourceBlock.assignment.kind ===
-              ROUTINE_BLOCK_ASSIGNMENT.existingAction ? (
+                ROUTINE_BLOCK_ASSIGNMENT.existingAction ||
+              deviationTarget.sourceBlock.assignment.kind === 'existingSeries' ? (
                 <button
                   type="button"
                   className="secondary-button"
@@ -1279,6 +1295,16 @@ export function RoutinePage(props: RoutinePageProps) {
                   />
                 </label>
               ) : null}
+              {deviationType === ROUTINE_OCCURRENCE_OVERRIDE_TYPE.replacementAction && (
+                <VoiceField className="routine-field">
+                  <span>Поиск действия</span>
+                  <VoiceTextInput
+                    id="replacement-action-search"
+                    value={replacementSearch}
+                    onValueChange={setReplacementSearch}
+                  />
+                </VoiceField>
+              )}
               {deviationType === ROUTINE_OCCURRENCE_OVERRIDE_TYPE.replacementAction ? (
                 <label className="routine-field">
                   <span>Действие на это появление</span>
@@ -1287,14 +1313,20 @@ export function RoutinePage(props: RoutinePageProps) {
                     onChange={(event) => setReplacementActionId(event.target.value)}
                   >
                     <option value="">Выберите действие</option>
-                    {actionOptions.map((option) => (
-                      <option
-                        key={option.lifeAction.id.toString()}
-                        value={option.lifeAction.id.toString()}
-                      >
-                        {option.lifeAction.title.toString()}
-                      </option>
-                    ))}
+                    {actionOptions
+                      .filter((o) =>
+                        o.title
+                          .toLocaleLowerCase('ru')
+                          .includes(replacementSearch.toLocaleLowerCase('ru')),
+                      )
+                      .map((option) => (
+                        <option key={option.key} value={option.key}>
+                          {option.title}
+                          {option.selection.kind === 'series'
+                            ? ' · ↻ ' + recurrenceLabel(option.rule)
+                            : ''}
+                        </option>
+                      ))}
                   </select>
                 </label>
               ) : null}
@@ -1353,7 +1385,7 @@ export function RoutinePage(props: RoutinePageProps) {
           submitError={submitError}
           isEditing={editing !== null}
           isSaving={isSaving}
-          actionOptions={actionOptions}
+          choices={actionOptions}
           {...(unavailableActionLabel === undefined ? {} : { unavailableActionLabel })}
           onChange={setForm}
           onCancel={() => {
@@ -1745,39 +1777,50 @@ function formatActualDateTime(value: Date): string {
   return `${date}, ${time}`;
 }
 
+function routineDetailsKey(block: EffectiveRoutineOccurrence): string {
+  const a = block.effectiveAssignment;
+  return a.kind === 'existingSeries'
+    ? 'series:' + a.ruleId.toString() + ':' + block.effectiveDate.toString()
+    : a.kind === 'existingAction'
+      ? a.actionId.toString()
+      : '';
+}
 async function resolveActionDetails(
   blocks: readonly EffectiveRoutineOccurrence[],
-  query: Pick<GetRoutineActionDetails, 'execute'>,
+  query: Pick<GetRoutineActionDetails, 'execute' | 'series'>,
 ): Promise<ReadonlyMap<string, RoutineActionDetails | null>> {
-  const ids = [
-    ...new Set(
-      blocks.flatMap((block) =>
-        block.effectiveAssignment.kind === ROUTINE_BLOCK_ASSIGNMENT.existingAction
-          ? [block.effectiveAssignment.actionId.toString()]
-          : [],
-      ),
+  const unique = new Map(blocks.map((b) => [routineDetailsKey(b), b]));
+  unique.delete('');
+  return new Map(
+    await Promise.all(
+      [...unique].map(async ([key, b]) => {
+        const a = b.effectiveAssignment;
+        return [
+          key,
+          a.kind === 'existingSeries'
+            ? await query.series(a.ruleId, b.effectiveDate.toString())
+            : a.kind === 'existingAction'
+              ? await query.execute(a.actionId)
+              : null,
+        ] as const;
+      }),
     ),
-  ];
-  const entries = await Promise.all(
-    ids.map(async (id) => [id, await query.execute(EntityId.create(id))] as const),
   );
-  return new Map(entries);
 }
-
 function actionDetailsForBlock(
   block: EffectiveRoutineOccurrence,
   details: ReadonlyMap<string, RoutineActionDetails | null>,
 ): RoutineActionDetails | null | undefined {
-  return block.effectiveAssignment.kind === ROUTINE_BLOCK_ASSIGNMENT.existingAction
-    ? details.get(block.effectiveAssignment.actionId.toString())
-    : undefined;
+  return details.get(routineDetailsKey(block));
 }
-
 function assignmentTitle(
   block: EffectiveRoutineOccurrence,
   details: RoutineActionDetails | null | undefined,
 ): string {
-  if (block.assignment.kind === ROUTINE_BLOCK_ASSIGNMENT.existingAction) {
+  if (
+    block.assignment.kind === ROUTINE_BLOCK_ASSIGNMENT.existingAction ||
+    block.assignment.kind === 'existingSeries'
+  ) {
     return details === null || details === undefined
       ? 'Действие · недоступно'
       : `Действие · ${details.lifeAction.title.toString()}`;
@@ -1792,6 +1835,7 @@ function primaryCommandLabel(
   switch (block.assignment.kind) {
     case ROUTINE_BLOCK_ASSIGNMENT.reminder:
       return 'Открыть';
+    case ROUTINE_BLOCK_ASSIGNMENT.existingSeries:
     case ROUTINE_BLOCK_ASSIGNMENT.existingAction:
       return details === null || details === undefined ? 'Изменить назначение' : 'Открыть действие';
     case ROUTINE_BLOCK_ASSIGNMENT.createAction:
@@ -1839,6 +1883,7 @@ function formToCommandInput(form: RoutineBlockFormState) {
     selectedWeekdays: form.selectedWeekdays,
     required: form.required,
     assignmentKind: form.assignmentKind,
+    ...(form.assignmentKind === 'existingSeries' ? { ruleId: EntityId.create(form.actionId) } : {}),
     ...(form.assignmentKind === ROUTINE_BLOCK_ASSIGNMENT.existingAction
       ? { actionId: EntityId.create(form.actionId) }
       : {}),
@@ -1856,6 +1901,7 @@ function blockToCommandInput(block: RoutineBlock) {
     selectedWeekdays: block.recurrence.selectedWeekdays,
     required: block.required,
     assignmentKind: block.assignment.kind as RoutineBlockAssignmentKind,
+    ...(block.assignment.kind === 'existingSeries' ? { ruleId: block.assignment.ruleId } : {}),
     ...(block.assignment.kind === ROUTINE_BLOCK_ASSIGNMENT.existingAction
       ? { actionId: block.assignment.actionId }
       : {}),

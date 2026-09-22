@@ -3,9 +3,10 @@ export type PlannerV2Route =
   | { readonly view: 'directions' }
   | { readonly view: 'sphere'; readonly id: string }
   | { readonly view: 'direction'; readonly id: string }
-  | { readonly view: 'goal'; readonly id: string }
+  | { readonly view: 'goal'; readonly id: string; readonly edit?: boolean }
   | { readonly view: 'planning'; readonly sphereId?: string }
   | { readonly view: 'today'; readonly day?: 'tomorrow' }
+  | { readonly view: 'sleep' }
   | {
       readonly view: 'goals';
       readonly sphereId?: string;
@@ -16,9 +17,10 @@ export type PlannerV2Route =
   | { readonly view: 'inbox' }
   | { readonly view: 'kanban' | 'calendar' | 'tree'; readonly section: 'goals' | 'actions' }
   | { readonly view: 'action'; readonly id: string }
-  | { readonly view: 'new-goal' }
+  | { readonly view: 'new-goal'; readonly directionId?: string }
   | {
       readonly view: 'new-action';
+      readonly directionId?: string;
       readonly goalId: string | null;
       readonly title: string | null;
       readonly date?: string;
@@ -58,6 +60,7 @@ export function parsePlannerV2Route(hash: string): PlannerV2Route | null {
       view: 'today',
       ...(new URLSearchParams(query).get('day') === 'tomorrow' ? { day: 'tomorrow' as const } : {}),
     };
+  if (path === '#/v2/sleep') return { view: 'sleep' };
   if (path === '#/v2/goals') {
     const period = new URLSearchParams(query).get('period');
     return {
@@ -82,16 +85,26 @@ export function parsePlannerV2Route(hash: string): PlannerV2Route | null {
   if (path?.startsWith('#/v2/goals/') && path !== '#/v2/goals/new') {
     try {
       const id = decodeURIComponent(path.slice('#/v2/goals/'.length));
-      return id ? { view: 'goal', id } : null;
+      return id
+        ? {
+            view: 'goal',
+            id,
+            ...(new URLSearchParams(query).get('edit') === '1' ? { edit: true } : {}),
+          }
+        : null;
     } catch {
       return null;
     }
   }
-  if (path === '#/v2/goals/new') return { view: 'new-goal' };
+  if (path === '#/v2/goals/new') {
+    const directionId = new URLSearchParams(query).get('directionId')?.trim();
+    return { view: 'new-goal', ...(directionId ? { directionId } : {}) };
+  }
   if (path !== '#/v2/actions/new') return null;
   const params = new URLSearchParams(query);
   return {
     view: 'new-action',
+    ...(params.get('directionId') ? { directionId: params.get('directionId')! } : {}),
     goalId: params.get('goalId')?.trim() || null,
     title: params.get('title')?.trim() || null,
     ...(params.get('date') ? { date: params.get('date')! } : {}),
@@ -114,7 +127,9 @@ export function buildPlannerV2Route(route: PlannerV2Route): string {
     return `#/v2/goals${filter ? `${filter}&period=week` : '?period=week'}`;
   if (route.view === 'today')
     return route.day === 'tomorrow' ? '#/v2/today?day=tomorrow' : '#/v2/today';
-  if (route.view === 'new-goal') return '#/v2/goals/new';
+  if (route.view === 'sleep') return '#/v2/sleep';
+  if (route.view === 'new-goal')
+    return `#/v2/goals/new${route.directionId ? `?${new URLSearchParams({ directionId: route.directionId })}` : ''}`;
   if (route.view === 'goals') {
     const params = new URLSearchParams();
     if (route.sphereId) params.set('sphereId', route.sphereId);
@@ -124,9 +139,11 @@ export function buildPlannerV2Route(route: PlannerV2Route): string {
   if (route.view === 'focus') return '#/v2/goals/focus';
   if (route.view === 'inbox') return '#/v2/inbox';
   if (route.view === 'actions') return '#/v2/actions';
-  if (route.view === 'goal') return `#/v2/goals/${encodeURIComponent(route.id)}`;
+  if (route.view === 'goal')
+    return `#/v2/goals/${encodeURIComponent(route.id)}${route.edit ? '?edit=1' : ''}`;
   if (route.view === 'action') return `#/v2/actions/${encodeURIComponent(route.id)}`;
   const params = new URLSearchParams();
+  if (route.directionId) params.set('directionId', route.directionId);
   if (route.goalId) params.set('goalId', route.goalId);
   if (route.title) params.set('title', route.title);
   if (route.date) params.set('date', route.date);

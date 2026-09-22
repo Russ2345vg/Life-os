@@ -40,12 +40,26 @@ export const emptyGoalFilters = () => ({
 export type GoalFilters = ReturnType<typeof emptyGoalFilters>;
 export type ActionView = 'open' | 'today' | 'upcoming' | 'undated' | 'unassigned' | 'completed';
 export const actionViewLabels: Record<ActionView, string> = {
-  open: 'Все открытые',
+  open: 'Все',
   today: 'Сегодня',
   upcoming: 'Ближайшие',
   undated: 'Без даты',
   unassigned: 'Без цели',
   completed: 'Выполненные',
+};
+export type ActionGroupKey = 'overdue' | 'today' | 'tomorrow' | 'week' | 'later' | 'undated';
+export interface PlannerActionGroup {
+  readonly key: ActionGroupKey;
+  readonly label: string;
+  readonly actions: readonly LifeAction[];
+}
+const actionGroupLabels: Record<ActionGroupKey, string> = {
+  overdue: 'Ранее',
+  today: 'Сегодня',
+  tomorrow: 'Завтра',
+  week: 'На этой неделе',
+  later: 'Позже',
+  undated: 'Без даты',
 };
 export function activeFocusIds(goals: readonly Goal[], focus: FocusPeriod | null): string[] {
   const active = new Set(goals.filter((g) => g.status === 'active').map((g) => g.id.toString()));
@@ -64,7 +78,7 @@ export function filterPlannerGoals(
     return (
       (filter.status ? goal.status === filter.status : true) &&
       (!filter.unassigned || goal.directionId === null) &&
-      // Goal has no exact deadline in the current authoritative model.
+      (!filter.undated || goal.dueDate === null) &&
       (!filter.sphereId ||
         (goal.sphereId ?? direction?.sphereId)?.toString() === filter.sphereId) &&
       (!filter.directionId || goal.directionId?.toString() === filter.directionId) &&
@@ -122,6 +136,55 @@ export function filterPlannerActions(
         (a.plannedDate?.toString() ?? '9999').localeCompare(b.plannedDate?.toString() ?? '9999') ||
         a.createdAt.getTime() - b.createdAt.getTime(),
     );
+}
+export function groupPlannerActions(
+  actions: readonly LifeAction[],
+  today: string,
+): PlannerActionGroup[] {
+  const tomorrow = new Date(`${today}T12:00:00Z`);
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+  const tomorrowKey = tomorrow.toISOString().slice(0, 10);
+  const weekEnd = new Date(`${today}T12:00:00Z`);
+  weekEnd.setUTCDate(weekEnd.getUTCDate() + ((7 - weekEnd.getUTCDay()) % 7));
+  const weekEndKey = weekEnd.toISOString().slice(0, 10);
+  const grouped = new Map<ActionGroupKey, LifeAction[]>([
+    ['overdue', []],
+    ['today', []],
+    ['tomorrow', []],
+    ['week', []],
+    ['later', []],
+    ['undated', []],
+  ]);
+  const seen = new Set<string>();
+  for (const action of actions) {
+    const occurrence = action.occurrence;
+    const identity = occurrence
+      ? `occurrence:${occurrence.ruleId}:${occurrence.slot}`
+      : `action:${action.id.toString()}`;
+    if (seen.has(identity)) continue;
+    seen.add(identity);
+    const date = action.plannedDate?.toString() ?? null;
+    const key: ActionGroupKey =
+      date === null
+        ? 'undated'
+        : date === today
+          ? 'today'
+          : date === tomorrowKey
+            ? 'tomorrow'
+            : date < today
+              ? 'overdue'
+              : date <= weekEndKey
+                ? 'week'
+                : 'later';
+    grouped.get(key)?.push(action);
+  }
+  return (Object.keys(actionGroupLabels) as ActionGroupKey[])
+    .filter((key) => !['overdue', 'later'].includes(key) || grouped.get(key)!.length > 0)
+    .map((key) => ({
+      key,
+      label: actionGroupLabels[key],
+      actions: grouped.get(key) ?? [],
+    }));
 }
 export function goalActions(goal: Goal, actions: readonly LifeAction[]): LifeAction[] {
   return actions

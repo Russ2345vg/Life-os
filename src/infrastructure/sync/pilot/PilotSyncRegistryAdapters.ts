@@ -43,6 +43,7 @@ import {
   WalkRecordMapper,
 } from '../../persistence/mappers';
 import { WalkCaptureRecordMapper } from '../../persistence/mappers/WalkCaptureRecordMapper';
+import { SleepScheduleRecordMapper } from '../../persistence/mappers/SleepScheduleRecordMapper';
 import { LIFE_OS_SYNC_REGISTRY } from '../LifeOsSyncRegistry';
 import { attachmentReference } from '../../../application/sync/attachments/AttachmentContracts';
 
@@ -98,6 +99,7 @@ function mapped<TDomain, TRecord extends object>(
               'completedOn',
               'expectedContributions',
               'parentActionId',
+              'directionId',
             ].filter((field) => !Object.hasOwn(isRecord(value) ? value : {}, field))
           : []),
       ]),
@@ -142,15 +144,35 @@ const PILOT_BINDINGS: Readonly<Record<PilotEntityType, PilotAdapterBinding>> = O
     true,
   ),
   planning_period: mapped(PlanningPeriodRecordMapper, (r) => optional(r, 'primaryGoalId', 'goal')),
-  recurrence_rule: mapped(RecurrenceRuleRecordMapper, (r) => optional(r, 'goalId', 'goal')),
+  recurrence_rule: mapped(RecurrenceRuleRecordMapper, (r) => [
+    ...optional(r, 'goalId', 'goal'),
+    ...optional(r, 'directionId', 'direction'),
+    ...optional(r, 'sphereId', 'sphere'),
+  ]),
   period_membership: mapped(PeriodMembershipRecordMapper, (r) => [
     ...optional(r, 'periodId', 'planning_period'),
-    ...optional(r, 'entityId', r.entityType === 'goal' ? 'goal' : 'life_action'),
+    ...optional(
+      r,
+      'entityId',
+      r.entityType === 'goal'
+        ? 'goal'
+        : r.entityType === 'rule'
+          ? 'recurrence_rule'
+          : 'life_action',
+    ),
   ]),
   period_decision: mapped(PeriodDecisionRecordMapper, (r) => [
     ...optional(r, 'periodId', 'planning_period'),
     ...optional(r, 'targetPeriodId', 'planning_period'),
-    ...optional(r, 'entityId', r.entityType === 'goal' ? 'goal' : 'life_action'),
+    ...optional(
+      r,
+      'entityId',
+      r.entityType === 'goal'
+        ? 'goal'
+        : r.entityType === 'rule'
+          ? 'recurrence_rule'
+          : 'life_action',
+    ),
   ]),
   contribution_link: mapped(ContributionLinkRecordMapper, (r) => [
     ...optional(r, 'goalId', 'goal'),
@@ -220,6 +242,7 @@ const PILOT_BINDINGS: Readonly<Record<PilotEntityType, PilotAdapterBinding>> = O
     LifeActionRecordMapper,
     (record) => [
       ...optional(record, 'decisionId', 'decision'),
+      ...optional(record, 'directionId', 'direction'),
       ...optional(record, 'sphereId', 'sphere'),
       ...optional(record, 'goalId', 'goal'),
       ...optional(record, 'parentActionId', 'life_action'),
@@ -240,7 +263,9 @@ const PILOT_BINDINGS: Readonly<Record<PilotEntityType, PilotAdapterBinding>> = O
     references: journalReferences,
   },
   routine_block: mapped(RoutineBlockRecordMapper, (record) =>
-    optional(record, 'actionId', 'life_action'),
+    record.assignment === 'existingSeries'
+      ? required(record, 'ruleId', 'recurrence_rule')
+      : optional(record, 'actionId', 'life_action'),
   ),
   routine_occurrence_override: mapped(RoutineOccurrenceOverrideRecordMapper, (record) => [
     ...orphanSafe(record, 'routineBlockId', 'routine_block'),
@@ -279,6 +304,7 @@ const PILOT_BINDINGS: Readonly<Record<PilotEntityType, PilotAdapterBinding>> = O
     recommendationApplicationReferences,
   ),
   morning_cycle: mapped(MorningCycleRecordMapper, morningCycleReferences),
+  sleep_schedule: mapped(SleepScheduleRecordMapper),
   inbox_idea: mapped(InboxIdeaRecordMapper, (record) =>
     record.targetType === 'goal'
       ? optional(record, 'targetId', 'goal')

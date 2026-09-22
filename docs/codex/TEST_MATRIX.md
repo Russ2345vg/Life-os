@@ -24,7 +24,8 @@ npm ci
 | ESLint                            | `npm run lint`                                 | bounded one-shot              |            180 с |
 | Production build                  | `npm run build`                                | bounded sequential one-shot   |    240 с + 120 с |
 | Prettier check                    | `npm run format:check`                         | bounded one-shot              |            180 с |
-| Полный quality gate               | `npm run verify`                               | sequential one-shot           |     1800 с общий |
+| Gate без browser E2E              | `npm run verify`                               | sequential one-shot           | deadlines этапов |
+| Gate с полным browser E2E         | `npm run verify:full`                          | verify → E2E                  | deadlines этапов |
 
 `test:target`, `test:fast`, `test`, `test:infra` и `test:alpha` всегда вызывают локальный Vitest с
 подкомандой `run`. Пустой targeted selector завершается как invalid config, поэтому случайный
@@ -38,15 +39,48 @@ lifecycle/heartbeat режимы.
 
 ## Порядок работы
 
-1. После изменения запусти ближайший тест:
+Политику выбора gate задаёт `AGENTS.md`, раздел Testing Stage Gate. Для изменения кода:
+
+1. После изменения поведения запусти ближайший тест:
    `npm run test:target -- src/path/ChangedContract.test.ts`.
 2. Если затронут общий domain/application/shared контракт, добавь `npm run test:fast`.
-3. После стабилизации выполни `npm run typecheck` и `npm run lint`.
-4. Не запускай тяжёлый gate после каждого edit. Перед handoff один раз выполни `npm run verify`.
+3. После стабилизации перед handoff один раз выполни `npm run verify`. Typecheck, lint, unit,
+   infra, alpha, build и формат уже входят в него; отдельно они нужны для локализации проблемы.
+4. Полный E2E добавь только при условиях Testing Stage Gate. Для R9/R10/R12 он обязателен.
+   Перед запуском укажи конкретную причину. `verify:full` эквивалентен verify → E2E.
 
 `verify` последовательно запускает typecheck → lint → full unit/integration → test-infrastructure
-→ alpha → E2E → build → format check → `git diff --check`. Первый failure сохраняет исходный exit
-code и останавливает цепочку. Retry отсутствуют.
+→ alpha → build → format check → `git diff --check`. E2E в него не входит. Первый failure
+останавливает цепочку с ненулевым exit code. Retry отсутствуют.
+
+Источник состава команд — активный `package.json`. Сейчас `verify` представляет npm-цепочку:
+этапы bounded, общего deadline 1800 с у неё нет. Старый `scripts/verify.mjs` содержит иную цепочку
+с E2E и общим deadline, но текущий npm script его не вызывает; не запускай его как замену gate.
+
+Уже успешный gate повторяется только после влияющего на него изменения, нового риска или failure.
+Новый финальный отчёт, смена reviewer или документационная правка не требуют повторного полного suite.
+
+## Документация, навыки и agent config
+
+Для патча только в Markdown, `.agents` или `.codex` без изменения исполняемого продукта:
+
+- проверь свой diff и ссылки на реальные файлы/разделы;
+- проверь формат затронутых Markdown локальным Prettier:
+  `node node_modules/prettier/bin/prettier.cjs --check <file.md> ...`;
+- проверь TOML/YAML существующим parser или доступным валидатором навыков;
+- сверь описанные npm-команды с `package.json` и wrappers;
+- при изменении правил проверь реалистичные решения: продолжение разрешённой работы, нужные
+  согласования, dirty baseline, выбор тестов; межфайловые изменения полезно отдать read-only reviewer;
+- выполни `git diff --check` и `git status --short`.
+
+Эти узкие проверки должны завершаться за ограниченное время (для formatter/parser достаточно
+120 с); для долгого процесса используй существующий `runBoundedProcess` из
+`scripts/test-infrastructure/process-runner.mjs`. Полный `verify`, E2E и тесты на совпадение текста
+правил не нужны. Это исключение не относится к build/test scripts, runtime config, CI или зависимостям.
+Проверяй новые навыки на понятность, границы и поведение; parser проверяет только синтаксис.
+
+Предсуществующий dirty code фиксируется отдельно. Проверки этой задачи не являются свидетельством
+готовности чужого патча или релиза всего приложения.
 
 ## E2E, Vite и порт 4173
 

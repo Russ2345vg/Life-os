@@ -6,6 +6,7 @@ import {
 
 export const ROUTINE_ASSIGNMENT_LABELS = {
   [ROUTINE_BLOCK_ASSIGNMENT.reminder]: 'Напоминание',
+  [ROUTINE_BLOCK_ASSIGNMENT.existingSeries]: 'Повторяющееся действие',
   [ROUTINE_BLOCK_ASSIGNMENT.existingAction]: 'Существующее действие',
   [ROUTINE_BLOCK_ASSIGNMENT.createAction]: 'Создать действие',
   [ROUTINE_BLOCK_ASSIGNMENT.eveningReview]: 'Вечерний контроль',

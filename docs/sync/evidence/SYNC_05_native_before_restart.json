@@ -1,0 +1,149 @@
+{
+  "time": "2026-09-07T15:01:31.367Z",
+  "goals": [
+    {
+      "id": "1850c9da-a593-4ffc-b9dc-0682d77698e0",
+      "title": "SYNC05-QA-ANDROID-COVER--",
+      "hasCover": true,
+      "coverKeys": ["dataUrl", "mimeType", "sizeBytes"],
+      "imageSha": "d01f00790ef5a31aa1a279f7008606495be69e3e549f00e1c771aa4c0ebaa03d"
+    },
+    {
+      "id": "a74e479c-55d3-40d5-bb14-4877c115ace5",
+      "title": "SYNC05-QA-WINDOWS-WINNER_ANDROID",
+      "hasCover": true,
+      "coverKeys": ["dataUrl", "mimeType", "sizeBytes"],
+      "imageSha": "df970fe79811b8f82d4e3f0ac83ea1a198ba7674bb93ed2c3547862a72e8f1da"
+    }
+  ],
+  "attachments": [
+    {
+      "id": "758b9643-83c6-46ed-ae79-b5b224ac1adf",
+      "parent": "82ae4488-d827-4416-aa6a-7f385641c315",
+      "entity": "goal",
+      "state": "uploaded",
+      "verified": "2026-09-07T14:27:36.635Z",
+      "error": null,
+      "local": true
+    },
+    {
+      "id": "813fbe6e-624e-4b32-9733-ffa28fb42102",
+      "parent": "1850c9da-a593-4ffc-b9dc-0682d77698e0",
+      "entity": "goal",
+      "state": "available-local",
+      "verified": "2026-09-07T14:44:27.907Z",
+      "error": null,
+      "local": true
+    },
+    {
+      "id": "88684ec9-8afa-4ce1-a0c9-5b8598773232",
+      "parent": "1fcb9877-8429-409b-a987-58d518ddb153",
+      "entity": "walk",
+      "state": "available-local",
+      "verified": "2026-09-07T14:59:33.702Z",
+      "error": null,
+      "local": true
+    },
+    {
+      "id": "fde23c2c-85d0-4e65-81af-7c226615c7ec",
+      "parent": "1fcb9877-8429-409b-a987-58d518ddb153",
+      "entity": "walk",
+      "state": "tombstoned",
+      "verified": "2026-09-07T14:39:31.671Z",
+      "error": null,
+      "local": true
+    },
+    {
+      "id": "ff5bd3a8-c112-4789-8093-bd6c6d94cb52",
+      "parent": "a74e479c-55d3-40d5-bb14-4877c115ace5",
+      "entity": "goal",
+      "state": "available-local",
+      "verified": "2026-09-07T14:32:30.252Z",
+      "error": null,
+      "local": true
+    }
+  ],
+  "snapshots": [
+    {
+      "id": "045bee26-1d6f-4504-aa78-c902518d8557",
+      "kind": "daily",
+      "verified": "2026-09-07T14:30:12.291Z",
+      "cloudVerified": "2026-09-07T14:30:12.291Z"
+    },
+    {
+      "id": "4e9dfd8e-7f5f-4c93-8ff3-7b98badfc954",
+      "kind": "daily",
+      "verified": "2026-09-07T14:27:23.489Z",
+      "cloudVerified": "2026-09-07T14:27:42.977Z"
+    },
+    {
+      "id": "6d0038b3-76f0-406f-906c-bfcf5fdf0e2e",
+      "kind": "manual",
+      "verified": "2026-09-07T14:43:29.485Z",
+      "cloudVerified": "2026-09-07T14:43:51.093Z"
+    },
+    {
+      "id": "87818dec-64f9-4733-9024-ef14de10fdd2",
+      "kind": "weekly",
+      "verified": "2026-09-07T14:30:12.680Z",
+      "cloudVerified": "2026-09-07T14:30:12.680Z"
+    },
+    {
+      "id": "9dfd70e2-f16e-44e3-9bd8-46e14d1a27dd",
+      "kind": "weekly",
+      "verified": "2026-09-07T14:27:24.180Z",
+      "cloudVerified": "2026-09-07T14:27:35.188Z"
+    },
+    {
+      "id": "a0c22901-b5e6-4afb-bf26-7b89781c5232",
+      "kind": "pre-restore",
+      "verified": "2026-09-07T14:50:56.888Z",
+      "cloudVerified": "2026-09-07T14:51:00.319Z"
+    },
+    {
+      "id": "c99f9fd9-1554-4218-9c80-73086a60581f",
+      "kind": "pre-restore",
+      "verified": "2026-09-07T14:54:02.742Z",
+      "cloudVerified": "2026-09-07T14:54:05.969Z"
+    }
+  ],
+  "outbox": [],
+  "history": [
+    {
+      "id": "4ea0b7e9-ddc8-4e43-8c45-37fd43bf921c",
+      "object": "a74e479c-55d3-40d5-bb14-4877c115ace5",
+      "status": "resolved",
+      "winningRevision": 4,
+      "losingRevision": 4,
+      "resolvedAt": "2026-09-07T14:50:56.915Z"
+    }
+  ],
+  "meta": [
+    {
+      "id": "1850c9da-a593-4ffc-b9dc-0682d77698e0",
+      "revision": 2,
+      "hlcWallTime": 1788792221811,
+      "eventId": "358ebbdc-1d3d-4852-9b78-96c46b4e820f",
+      "deleted": false
+    },
+    {
+      "id": "a74e479c-55d3-40d5-bb14-4877c115ace5",
+      "revision": 7,
+      "hlcWallTime": 1788792842770,
+      "eventId": "3f110dbc-dac8-44ea-9702-5a2afe1a13bd",
+      "deleted": false
+    }
+  ],
+  "walks": [
+    {
+      "id": "1fcb9877-8429-409b-a987-58d518ddb153",
+      "result": "SYNC05-QA-WINDOWS-WALK",
+      "hasPhoto": true,
+      "ref": {
+        "attachmentId": "88684ec9-8afa-4ce1-a0c9-5b8598773232",
+        "blobVersion": 1,
+        "keyEpoch": 3
+      }
+    }
+  ]
+}

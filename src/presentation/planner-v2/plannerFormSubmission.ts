@@ -3,10 +3,13 @@ import type { RecurrenceInput } from '../../application/planner/RecurringActions
 import type { ActionContributionInput } from '../../application/planner/actionPlanningSetup';
 import { DayDate, EntityId, LifeActionTitle, type GoalHorizon } from '../../domain';
 import type { CreateGoal, CreateLifeActionDraft } from '../../application';
+import type { PeriodKind } from '../../domain/planner/PlanningPeriod';
+import type { PeriodPlanning } from '../../application/planner/PeriodPlanning';
 
 export const emptyActionDraft = (goalId: string | null = null, title: string | null = null) => ({
   title: title ?? '',
   goalId: goalId ?? '',
+  directionId: '',
   parentActionId: '',
   date: '',
   description: '',
@@ -16,10 +19,12 @@ export const emptyActionDraft = (goalId: string | null = null, title: string | n
 });
 export type PlannerActionDraft = ReturnType<typeof emptyActionDraft>;
 export const emptyGoalDraft = () => ({
+  expectedVersion: null as number | null,
   title: '',
   outcome: '',
   directionId: '',
   horizon: '' as GoalHorizon | '',
+  period: '' as PeriodKind | '',
   firstStep: '',
   measurement: null as GoalMeasurement | null,
   dueDate: '',
@@ -42,6 +47,7 @@ export async function submitPlannerAction(
     title: LifeActionTitle.create(draft.title),
     description: draft.description,
     goalId: goalId ? EntityId.create(goalId) : null,
+    directionId: draft.directionId ? EntityId.create(draft.directionId) : null,
     parentActionId: parentActionId ? EntityId.create(parentActionId) : null,
     plannedDate: draft.date ? DayDate.create(draft.date) : null,
     isNext: draft.isNext,
@@ -60,6 +66,7 @@ export async function submitPlannerGoal(
     title: draft.title,
     achievementCriteria: draft.outcome,
     status: 'active',
+    stage: 'active_goal',
     directionId: draft.directionId ? EntityId.create(draft.directionId) : null,
     horizon: draft.horizon || null,
     nextProgress: draft.firstStep,
@@ -71,4 +78,27 @@ export async function submitPlannerGoal(
   });
   if (!result.ok) throw result.error;
   return result.value;
+}
+
+export async function submitPlannerGoalWithPeriod(
+  command: Pick<CreateGoal, 'execute'>,
+  draft: PlannerGoalDraft,
+  periods: Pick<PeriodPlanning, 'startCycle' | 'participate'> | undefined,
+  today: string,
+) {
+  const goal = await submitPlannerGoal(command, draft);
+  if (!draft.period) return { goal, warning: null };
+  try {
+    if (!periods) throw new Error('Планирование недоступно.');
+    const date =
+      draft.period === 'thirty_days' ? (await periods.startCycle(today)).startDate : today;
+    await periods.participate(draft.period, date, 'goal', goal.id.toString());
+    return { goal, warning: null };
+  } catch {
+    // Creation already succeeded. Offer recovery from the saved goal, never create a duplicate.
+    return {
+      goal,
+      warning: 'Цель сохранена, но период не добавлен. Откройте цель и выберите период повторно.',
+    };
+  }
 }

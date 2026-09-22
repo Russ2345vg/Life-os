@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Direction, Goal, LifeAction, Sphere } from '../../domain';
 import { focusWeek, type FocusPeriod, type FocusRole } from '../../domain/planner/FocusPeriod';
-import { goalActions } from './plannerCatalogModel';
+import { selectGoalCardActions } from './plannerCatalogModel';
 import { PlannerGoalContext, PlannerGoalProgress } from './PlannerGoalList';
 
 export function PlannerFocus({
@@ -38,8 +38,9 @@ export function PlannerFocus({
     (g) => g.status === 'active' && !links.some((l) => l.goalId === g.id.toString()),
   );
   const stale = (period?.goals ?? []).filter((l) => !links.includes(l));
-  const steps = goal ? goalActions(goal, actions) : [];
-  const next = steps[0];
+  const selection = goal ? selectGoalCardActions(goal, actions) : null;
+  const next = selection?.next;
+  const steps = selection?.open ?? [];
   const week = focusWeek(today);
   const step = (action: LifeAction) => (
     <div className="planner-action-row" key={action.id.toString()}>
@@ -129,7 +130,10 @@ export function PlannerFocus({
           {steps.length > 1 && (
             <section>
               <h3>После этого</h3>
-              {steps.slice(1, 4).map(step)}
+              {steps
+                .filter((action) => action !== next)
+                .slice(0, 3)
+                .map(step)}
             </section>
           )}
           <div className="planner-inline-actions">

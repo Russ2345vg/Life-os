@@ -7,6 +7,9 @@ description: Use when a LifeOS request is vague, urgent, broad, or not yet ready
 
 Turn the request into a bounded, testable task before proposing code changes.
 
+Use existing context and prior approvals first. Follow `AGENTS.md` for autonomy, scope, and skill
+priority. A clear implementation request does not need a separate intake ceremony.
+
 ## Intake sequence
 
 1. State the user outcome in one sentence.
@@ -15,22 +18,20 @@ Turn the request into a bounded, testable task before proposing code changes.
 4. Define observable acceptance criteria. Avoid implementation details unless the request fixes them.
 5. Inspect the current implementation, approved references, domain contracts, and tests read-only.
 6. Identify the likely affected layers and modules using `docs/codex/PROJECT_MAP.md`.
-7. Record risks: domain invariants, persistence, dates, responsive layout, accessibility, and user data.
+7. Record concrete risks relevant to this task, not a checklist of hypothetical concerns.
 8. Select the smallest relevant checks using `docs/codex/TEST_MATRIX.md`.
 
-Ask one concise question only when the missing answer would materially change scope, architecture, user data, or acceptance. Otherwise state the assumption and continue.
+Ask one concise question only when the missing answer cannot be found in available context and
+would materially change scope, architecture, user data, or acceptance. Continue independent work
+while that answer is pending. Otherwise state the assumption and proceed.
 
 ## Required output
 
-Use these headings:
+Summarize the outcome, affected ownership/modules, acceptance evidence, material assumptions and
+selected checks in concise Russian prose. Use a list or table only when it improves clarity.
+For a documentation/config task, identify its authoritative files; domain/UI fields may not apply.
 
-- `Задача` — outcome and current problem.
-- `Сценарий` — user path and visible result.
-- `Границы` — constraints, non-goals, assumptions.
-- `Критерии приёмки` — observable evidence of success.
-- `Затрагивается` — layers and likely modules, not a speculative file dump.
-- `Риски` — concrete regressions to prevent.
-- `Проверки` — targeted tests and required quality gates.
-- `Готовность к плану` — `да`, or one blocking question.
-
-Do not implement, estimate, or expand the feature during intake.
+For an intake-only request, deliver the scoped result. When implementation is already requested,
+continue to the applicable design gate, plan and execution once intake is complete. A standard
+form using existing components can proceed with a defined design contract; mandatory visual
+approval for a major or unique new screen still follows `AGENTS.md`.

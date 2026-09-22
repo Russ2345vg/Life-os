@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { sphereForGoal } from '../../application/balance/GetLifeBalance';
 import type { BalanceState } from '../../application/ports/BalanceRepository';
 import type { Goal, LifeAction } from '../../domain';
+import { selectActionOptions, recurrenceLabel } from '../../application/planner/actionSelection';
 import {
   automaticPeriod,
   addDays,
@@ -103,7 +104,7 @@ export function PlanningWorkspace({
         ? cycleAt(s.periods, anchor)
         : null;
   const members = period ? s.memberships.filter((m) => m.periodId === period.id && !m.removed) : [];
-  const inCurrentPlan = (type: 'goal' | 'action', id: string) =>
+  const inCurrentPlan = (type: 'goal' | 'action' | 'rule', id: string) =>
     s.memberships.some(
       (m) =>
         m.entityType === type &&
@@ -112,7 +113,12 @@ export function PlanningWorkspace({
         s.periods.some((p) => p.id === m.periodId && p.endDate >= today),
     );
   const range = nextSevenDays(today);
-  const matches = (type: 'goal' | 'action', id: string, date: string | null, recurring = false) =>
+  const matches = (
+    type: 'goal' | 'action' | 'rule',
+    id: string,
+    date: string | null,
+    recurring = false,
+  ) =>
     view === 'unplanned'
       ? !inCurrentPlan(type, id)
       : view === 'next7'
@@ -136,12 +142,27 @@ export function PlanningWorkspace({
     (a) =>
       acceptsAction(a) &&
       (!a.isArchived() || Boolean(period && period.endDate < today)) &&
-      matches(
-        'action',
-        a.id.toString(),
-        a.plannedDate?.toString() ?? null,
-        a.occurrence !== null,
-      ) &&
+      ((a.occurrence &&
+        period &&
+        !s.memberships.some(
+          (m) =>
+            m.periodId === period.id &&
+            m.entityType === 'action' &&
+            m.entityId === a.id.toString() &&
+            m.removed,
+        ) &&
+        members.some((m) => m.entityType === 'rule' && m.entityId === a.occurrence?.ruleId) &&
+        Boolean(
+          a.plannedDate &&
+          a.plannedDate.toString() >= period.startDate &&
+          a.plannedDate.toString() <= period.endDate,
+        )) ||
+        matches(
+          'action',
+          a.id.toString(),
+          a.plannedDate?.toString() ?? null,
+          a.occurrence !== null,
+        )) &&
       a.title.toString().toLocaleLowerCase().includes(search.toLocaleLowerCase()),
   );
   const focused = members.filter(
@@ -173,9 +194,16 @@ export function PlanningWorkspace({
     ...s.goals
       .filter((g) => g.status !== 'archived' && acceptsGoal(g.id.toString()))
       .map((g) => ({ key: `goal:${g.id.toString()}`, title: g.title })),
-    ...s.actions
-      .filter((a) => !['completed', 'cancelled', 'archived'].includes(a.status) && acceptsAction(a))
-      .map((a) => ({ key: `action:${a.id.toString()}`, title: a.title.toString() })),
+    ...selectActionOptions(
+      s.actions.filter(acceptsAction),
+      s.rules.filter(
+        (r) => !sphereId || (r.goalId ? acceptsGoal(r.goalId) : r.sphereId === sphereId),
+      ),
+      search,
+    ).map((o) => ({
+      key: o.selection.kind === 'series' ? 'rule:' + o.selection.ruleId : o.key,
+      title: o.title + (o.selection.kind === 'series' ? ' · ↻ ' + recurrenceLabel(o.rule) : ''),
+    })),
   ]
     .filter((v) => !members.some((m) => `${m.entityType}:${m.entityId}` === v.key))
     .sort((a, b) => Number(suggested.has(b.key)) - Number(suggested.has(a.key)));
@@ -185,7 +213,7 @@ export function PlanningWorkspace({
           .filter((v) => v.kind === 'thirty_days' && v.startDate > p.startDate)
           .sort((a, b) => a.startDate.localeCompare(b.startDate))[0] ?? null)
       : automaticPeriod(p.kind, addDays(p.endDate, 1));
-  const decisions = (type: 'goal' | 'action', id: string) =>
+  const decisions = (type: 'goal' | 'action' | 'rule', id: string) =>
     period && period.endDate < today ? (
       <div className="planning-inline">
         {s.decisions.some(
@@ -246,7 +274,7 @@ export function PlanningWorkspace({
         )}
       </div>
     ) : null;
-  const remove = (type: 'goal' | 'action', id: string) =>
+  const remove = (type: 'goal' | 'action' | 'rule', id: string) =>
     period && (
       <button
         disabled={busy}
@@ -492,7 +520,7 @@ export function PlanningWorkspace({
                   context.services.periods.participate(
                     period.kind,
                     period.startDate,
-                    pick.slice(0, split) as 'goal' | 'action',
+                    pick.slice(0, split) as 'goal' | 'action' | 'rule',
                     pick.slice(split + 1),
                   ),
                 );
@@ -523,6 +551,21 @@ export function PlanningWorkspace({
         </section>
         <section aria-label="Действия плана">
           <h2>Действия · {actions.length}</h2>
+          {members
+            .filter((m) => m.entityType === 'rule')
+            .map((m) => {
+              const r = s.rules.find((r) => r.id === m.entityId);
+              return r &&
+                r.title.toLocaleLowerCase('ru').includes(search.toLocaleLowerCase('ru')) &&
+                (!sphereId || (r.goalId ? acceptsGoal(r.goalId) : r.sphereId === sphereId)) ? (
+                <article className="planning-row" key={m.id}>
+                  <h3>↻ {r.title}</h3>
+                  <p className="planner-muted">{recurrenceLabel(r)}</p>
+                  {remove('rule', r.id)}
+                  {decisions('rule', r.id)}
+                </article>
+              ) : null;
+            })}
           {period?.kind === 'week' ? (
             <>
               {Array.from({ length: 7 }, (_, i) => addDays(period.startDate, i)).map((date) => (

@@ -27,10 +27,10 @@ export const LIFE_OS_SYNC_REGISTRY = Object.freeze([
     'period_membership',
     LIFE_OS_STORE.periodMemberships,
     'IndexedDbPlanningRepository',
-    { dependencies: ['planning_period', 'goal', 'life_action'] },
+    { dependencies: ['planning_period', 'goal', 'life_action', 'recurrence_rule'] },
   ),
   registration('period_decision', LIFE_OS_STORE.periodDecisions, 'IndexedDbPlanningRepository', {
-    dependencies: ['planning_period', 'goal', 'life_action'],
+    dependencies: ['planning_period', 'goal', 'life_action', 'recurrence_rule'],
   }),
   registration(
     'contribution_link',
@@ -45,7 +45,7 @@ export const LIFE_OS_SYNC_REGISTRY = Object.freeze([
     { dependencies: ['goal', 'life_action', 'contribution_link'] },
   ),
   registration('recurrence_rule', LIFE_OS_STORE.recurrenceRules, 'IndexedDbPlanningRepository', {
-    dependencies: ['goal'],
+    dependencies: ['goal', 'direction', 'sphere'],
   }),
 
   registration('day', LIFE_OS_STORE.days, 'IndexedDbDayRepository', {
@@ -57,14 +57,14 @@ export const LIFE_OS_SYNC_REGISTRY = Object.freeze([
   }),
   registration('life_action', LIFE_OS_STORE.lifeActions, 'IndexedDbLifeActionRepository', {
     deletionMode: 'archive',
-    dependencies: ['decision', 'sphere', 'goal', 'recurrence_rule', 'life_action'],
+    dependencies: ['decision', 'sphere', 'direction', 'goal', 'recurrence_rule', 'life_action'],
   }),
   registration('action_session', LIFE_OS_STORE.actionSessions, 'IndexedDbActionSessionRepository', {
     dependencies: ['life_action'],
   }),
   registration('routine_block', LIFE_OS_STORE.routineBlocks, 'IndexedDbRoutineBlockRepository', {
     deletionMode: 'guarded_delete',
-    dependencies: ['life_action'],
+    dependencies: ['life_action', 'recurrence_rule'],
   }),
   registration(
     'routine_occurrence_override',
@@ -158,6 +158,9 @@ export const LIFE_OS_SYNC_REGISTRY = Object.freeze([
   ),
   registration('morning_cycle', LIFE_OS_STORE.morningCycles, 'IndexedDbMorningCycleRepository', {
     dependencies: ['day', 'exercise_definition'],
+  }),
+  registration('sleep_schedule', LIFE_OS_STORE.sleepSchedules, 'IndexedDbSleepScheduleRepository', {
+    idSource: 'fixed_or_crypto_uuid',
   }),
   registration('goal', LIFE_OS_STORE.goals, 'IndexedDbGoalRepository', {
     deletionMode: 'archive',

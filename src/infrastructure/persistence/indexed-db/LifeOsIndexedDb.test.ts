@@ -191,6 +191,7 @@ describe('LifeOsIndexedDb', () => {
       LIFE_OS_STORE.routineBlocks,
       LIFE_OS_STORE.routineOccurrenceExecutions,
       LIFE_OS_STORE.routineOccurrenceOverrides,
+      LIFE_OS_STORE.sleepSchedules,
       LIFE_OS_STORE.spheres,
       LIFE_OS_SYNC_STORE.appliedEvents,
       LIFE_OS_SYNC_STORE.attachmentQueue,
@@ -399,7 +400,7 @@ describe('LifeOsIndexedDb', () => {
     const secondConnection = await indexedDb.open();
 
     expect(secondConnection).not.toBe(firstConnection);
-    expect([...secondConnection.objectStoreNames]).toHaveLength(43);
+    expect([...secondConnection.objectStoreNames]).toHaveLength(44);
     indexedDb.close();
   });
 

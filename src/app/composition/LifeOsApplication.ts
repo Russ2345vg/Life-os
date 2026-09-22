@@ -189,6 +189,7 @@ import type {
   PreparationService,
   RelaxationApplicationService,
   SleepCheckApplicationService,
+  SleepScheduleService,
 } from '../../application';
 import { EnsureCurrentDay } from '../../application';
 import type { Day, DayDate } from '../../domain';
@@ -251,6 +252,7 @@ interface LifeOsApplicationServices {
   readonly preparation: PreparationService;
   readonly relaxation: RelaxationApplicationService;
   readonly sleepCheck: SleepCheckApplicationService;
+  readonly sleepSchedule: SleepScheduleService;
   readonly completeEveningCycle: CompleteEveningCycle;
   readonly completeCurrentDay: CompleteCurrentDay;
   readonly updateDayResultSphere: UpdateDayResultSphere;
@@ -449,6 +451,7 @@ export class LifeOsApplication {
   public readonly preparation: PreparationService;
   public readonly relaxation: RelaxationApplicationService;
   public readonly sleepCheck: SleepCheckApplicationService;
+  public readonly sleepSchedule: SleepScheduleService;
   public readonly completeEveningCycle: CompleteEveningCycle;
   public readonly completeCurrentDay: CompleteCurrentDay;
   public readonly updateDayResultSphere: UpdateDayResultSphere;
@@ -647,6 +650,7 @@ export class LifeOsApplication {
     this.preparation = services.preparation;
     this.relaxation = services.relaxation;
     this.sleepCheck = services.sleepCheck;
+    this.sleepSchedule = services.sleepSchedule;
     this.completeEveningCycle = services.completeEveningCycle;
     this.completeCurrentDay = services.completeCurrentDay;
     this.updateDayResultSphere = services.updateDayResultSphere;

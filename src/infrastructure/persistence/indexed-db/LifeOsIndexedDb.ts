@@ -36,6 +36,7 @@ export const SINGLETON_SYNC_STORES = [
   'eveningCycles',
   'tomorrowPlans',
   'preparationPlans',
+  'sleepSchedules',
 ] as const;
 
 interface MutationCaptureConfiguration {
@@ -45,7 +46,7 @@ interface MutationCaptureConfiguration {
 }
 
 export const LIFE_OS_DATABASE_NAME = 'lifeos';
-export const LIFE_OS_DATABASE_VERSION = 25;
+export const LIFE_OS_DATABASE_VERSION = 26;
 
 export const LIFE_OS_DOMAIN_STORE = {
   directionIndicators: 'directionIndicators',
@@ -79,6 +80,7 @@ export const LIFE_OS_DOMAIN_STORE = {
   goals: 'goals',
   inboxIdeas: 'inboxIdeas',
   focusPeriods: 'focusPeriods',
+  sleepSchedules: 'sleepSchedules',
 } as const;
 
 export const LIFE_OS_STORE = LIFE_OS_DOMAIN_STORE;
@@ -286,6 +288,7 @@ export class LifeOsIndexedDb {
               if (!request.result.objectStoreNames.contains(name))
                 request.result.createObjectStore(name, { keyPath: 'id' });
           }
+          if (oldVersion < 26) createVersionTwentySixSchema(request.result);
           if (oldVersion < 22 && request.transaction)
             upgradeLegacyProjects(request.result, request.transaction);
         } catch (error: unknown) {
@@ -564,6 +567,12 @@ function createMutationCapturingObjectStore(
       return typeof value === 'function' ? value.bind(target) : value;
     },
   });
+}
+
+function createVersionTwentySixSchema(database: IDBDatabase): void {
+  if (!database.objectStoreNames.contains(LIFE_OS_STORE.sleepSchedules)) {
+    database.createObjectStore(LIFE_OS_STORE.sleepSchedules, { keyPath: 'id' });
+  }
 }
 
 function createVersionTwentyOneSchema(transaction: IDBTransaction | null): void {

@@ -216,6 +216,9 @@ import { IndexedDbTomorrowPlanUnitOfWork } from '../../infrastructure/persistenc
 import { IndexedDbPreparationPlanRepository } from '../../infrastructure/persistence/IndexedDbPreparationPlanRepository';
 import { IndexedDbPreparationRuleRepository } from '../../infrastructure/persistence/IndexedDbPreparationRuleRepository';
 import { IndexedDbPreparationUnitOfWork } from '../../infrastructure/persistence/IndexedDbPreparationUnitOfWork';
+import { IndexedDbSleepScheduleRepository } from '../../infrastructure/persistence/IndexedDbSleepScheduleRepository';
+import { SleepScheduleService } from '../../application/sleep/SleepScheduleService';
+import { TauriAndroidWakeAlarmGateway } from '../../infrastructure/alarm/TauriAndroidWakeAlarmGateway';
 import { IndexedDbRecommendationApplicationRepository } from '../../infrastructure/persistence/IndexedDbRecommendationApplicationRepository';
 import { LifeOsIndexedDb } from '../../infrastructure/persistence/indexed-db/LifeOsIndexedDb';
 import { LifeOsApplication } from './LifeOsApplication';
@@ -269,6 +272,7 @@ export async function createLifeOsApplication(
     const tomorrowPlanRepository = new IndexedDbTomorrowPlanRepository(database);
     const preparationPlanRepository = new IndexedDbPreparationPlanRepository(database);
     const preparationRuleRepository = new IndexedDbPreparationRuleRepository(database);
+    const sleepScheduleRepository = new IndexedDbSleepScheduleRepository(database);
     const recommendationApplicationRepository = new IndexedDbRecommendationApplicationRepository(
       database,
     );
@@ -364,6 +368,13 @@ export async function createLifeOsApplication(
       localSettings,
     );
     const sleepCheck = new SleepCheckApplicationService(eveningCycleRepository, clock);
+    const sleepSchedule = new SleepScheduleService(
+      sleepScheduleRepository,
+      clock,
+      idGenerator,
+      new TauriAndroidWakeAlarmGateway(),
+    );
+    void sleepSchedule.syncAlarm().catch(() => undefined);
     const getOpenLoopsForDay = new GetOpenLoopsForDay(
       dayRepository,
       decisionRepository,
@@ -547,7 +558,7 @@ export async function createLifeOsApplication(
       decisionRepository,
       clock,
       idGenerator,
-      { goalRepository, unitOfWork: journalUnitOfWork },
+      { goalRepository, directionRepository, unitOfWork: journalUnitOfWork },
     );
     const getPlannerToday = new GetPlannerToday(lifeActionRepository);
     const plannerRepository = new IndexedDbPlannerRepository(database, mutationRecorder);
@@ -758,12 +769,15 @@ export async function createLifeOsApplication(
     const getRoutineActionOptions = new GetRoutineActionOptions(
       lifeActionRepository,
       decisionRepository,
+      planningRepository,
     );
     const getRoutineActionDetails = new GetRoutineActionDetails(
       lifeActionRepository,
       decisionRepository,
+      planning.recurrence,
     );
     const routineOccurrenceDependencies = {
+      recurrence: planning.recurrence,
       routineBlockRepository,
       overrideRepository: routineOccurrenceOverrideRepository,
       dayRepository,
@@ -1031,6 +1045,7 @@ export async function createLifeOsApplication(
       preparation,
       relaxation,
       sleepCheck,
+      sleepSchedule,
       completeEveningCycle,
       completeCurrentDay,
       updateDayResultSphere,

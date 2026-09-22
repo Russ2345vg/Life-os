@@ -10,6 +10,7 @@ import {
 } from '../../domain';
 import { DomainError } from '../../shared/errors/DomainError';
 import { failure, success, type Result } from '../../shared/result/Result';
+import type { DirectionRepository } from '../ports/DirectionRepository';
 import type { GoalRepository } from '../ports/GoalRepository';
 import type { JournalUnitOfWork } from '../ports/JournalUnitOfWork';
 import { clearPreviousMainActions } from './lifeActionPlanning';
@@ -30,6 +31,7 @@ export interface CreateLifeActionDraftInput {
   readonly description?: string;
   readonly decisionId?: EntityId;
   readonly sphereId?: EntityId | null;
+  readonly directionId?: EntityId | null;
   readonly goalId?: EntityId | null;
   readonly parentActionId?: EntityId | null;
   readonly plannedDate?: DayDate | null;
@@ -49,6 +51,7 @@ export class CreateLifeActionDraft {
     idGenerator: IdGenerator,
     readonly planning?: {
       readonly goalRepository: GoalRepository;
+      readonly directionRepository?: DirectionRepository;
       readonly unitOfWork: JournalUnitOfWork;
     },
   ) {
@@ -89,6 +92,17 @@ export class CreateLifeActionDraft {
           ),
         );
     }
+    const goal = input.goalId ? await this.planning?.goalRepository.findById(input.goalId) : null;
+    const directionId = goal?.directionId ?? input.directionId ?? null;
+    if (goal && input.directionId && !goal.directionId?.equals(input.directionId))
+      return failure(
+        new DomainError('life_action.context_conflict', 'Цель принадлежит другому направлению.'),
+      );
+    const direction = directionId
+      ? await this.planning?.directionRepository?.findById(directionId)
+      : null;
+    if (directionId && (!direction || direction.status === 'archived'))
+      return failure(new DomainError('direction.not_found', 'Направление недоступно.'));
     let inheritedSphereId: EntityId | null = null;
     if (input.decisionId !== undefined) {
       const decision = await this.#decisionRepository.findById(input.decisionId);
@@ -114,7 +128,11 @@ export class CreateLifeActionDraft {
         title: input.title,
         ...(input.description === undefined ? {} : { description: input.description }),
         ...(input.decisionId === undefined ? {} : { decisionId: input.decisionId }),
-        sphereId: input.sphereId === undefined ? inheritedSphereId : input.sphereId,
+        sphereId:
+          direction?.sphereId ??
+          goal?.sphereId ??
+          (input.sphereId === undefined ? inheritedSphereId : input.sphereId),
+        directionId: input.goalId ? null : directionId,
         goalId: input.goalId ?? null,
         parentActionId: input.parentActionId ?? null,
         plannedDate: input.plannedDate ?? null,

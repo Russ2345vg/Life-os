@@ -3,8 +3,8 @@
 ## Status
 
 - Design: APPROVED
-- Implementation: NOT STARTED
-- Visual review: PENDING
+- Implementation: IMPLEMENTED — verify and full E2E passed, 2026-09-08
+- Visual review: TECHNICAL QA COMPLETE — owner visual approval pending
 - Lock: UNLOCKED
 - Approved by: LifeOS owner, 2026-09-04
 
@@ -48,21 +48,23 @@ application commands remain authoritative.
 
 Voice input only produces another value for the same controlled callback:
 
-~~~text
+```text
 keyboard event ─┐
                 ├─> existing controlled draft ─> existing validation ─> existing submit command
 voice transcript ┘
-~~~
+```
 
 The voice subsystem must never write a repository, domain entity, IndexedDB record, or application
 form state directly. It must never submit a form.
 
 ## Audit summary
 
-The source audit identified 87 logical voice-eligible fields across 26 presentation files and 53
-intentional exclusions. Raw tag-search totals are not acceptance counts because they also include
-tests, repeated local field abstractions, and utility/choice controls. The 87-field inventory below
-is the implementation and review checklist.
+The refreshed 2026-09-08 source audit identified 88 logical voice-eligible field templates across
+25 presentation files (85 JSX control sites; GoalForm.TextAreaField expands to four uses).
+There are 72 excluded native JSX control sites, or 76 after expanding GoalForm.ShortField;
+selects and button switches are not included in that count. Dynamic maps count as one template.
+Raw tag-search totals are not acceptance counts. The inventory below is the implementation and
+review checklist. The earlier 87/26/53 totals have been superseded by the current source audit.
 
 Existing assets to reuse:
 
@@ -78,7 +80,7 @@ data-tooltip pattern rather than introduce a second tooltip system.
 
 ## Design contract
 
-~~~text
+```text
 FEATURE
 → One system-wide Voice Input capability
 
@@ -109,13 +111,13 @@ APPROVED REFERENCE
 TEST SCOPE
 → TDD for provider/coordinator/buffer/cursor logic, component contracts, affected form tests,
   deterministic Playwright coverage, desktop/mobile browser review, npm run verify:full
-~~~
+```
 
 ## Architecture
 
 The approved dependency flow is:
 
-~~~text
+```text
 VoiceTextInput / VoiceTextArea / VoiceInputButton
                          │
                          ▼
@@ -134,7 +136,7 @@ VoiceTextInput / VoiceTextArea / VoiceInputButton
                          ▲
                          │
               App composition/provider
-~~~
+```
 
 Domain, persistence, application commands, and read models do not change.
 
@@ -184,7 +186,7 @@ large prop fan-out and a Presentation-to-App dependency.
 - src/app/providers/VoiceInputProvider.tsx
   - Owns one runtime for the mounted application, is React StrictMode-safe, and disposes it after
     the genuine final unmount.
-  - Stores the runtime in a stable ref. Effect setup increments a generation; cleanup defers
+  - Stores the runtime with a lazy useState initializer. Effect setup increments a ref generation; cleanup defers
     disposal by one microtask and disposes only when no StrictMode replay has advanced that
     generation. Runtime and session disposal remain idempotent.
 - src/app/App.tsx
@@ -204,6 +206,9 @@ large prop fan-out and a Presentation-to-App dependency.
 - src/presentation/voice-input/VoiceTextControl.tsx
   - Shared internal action rail, selection capture, controlled update, ref/caret restoration, and
     maxLength behavior.
+- src/presentation/voice-input/VoiceField.tsx
+  - Preserves an enclosing label's existing caption and binds its generated id through context.
+    Action labels and transient status text cannot alter the input's accessible name.
 - src/presentation/voice-input/VoiceTextInput.tsx
   - Public controlled text/search input.
 - src/presentation/voice-input/VoiceTextArea.tsx
@@ -228,7 +233,7 @@ plan.
 
 The port exposes capability and one session factory:
 
-~~~ts
+```ts
 type SpeechRecognitionProviderEvent =
   | { readonly type: 'transcript'; readonly transcript: string; readonly isFinal: boolean }
   | { readonly type: 'ended' }
@@ -249,7 +254,7 @@ interface SpeechRecognitionProvider {
   isSupported(): boolean;
   start(request: SpeechRecognitionStartRequest): SpeechRecognitionSession;
 }
-~~~
+```
 
 The implementation retains these names and semantics:
 
@@ -268,15 +273,15 @@ The implementation retains these names and semantics:
 
 Browser-specific errors map to stable categories:
 
-| Category | Meaning | User recovery |
-| --- | --- | --- |
-| permission-denied | Browser or OS denied microphone access | Enable microphone access in settings |
-| microphone-unavailable | No usable capture device | Connect/check the microphone |
-| no-speech | No usable speech result | Speak again |
-| network | Recognition service could not be reached | Check connection and retry |
-| service-unavailable | Browser recognition service is unavailable | Retry or continue typing |
-| aborted | Session was intentionally or externally interrupted | Return to idle unless unexpected |
-| unknown | Unexpected provider failure | Retry or continue typing |
+| Category               | Meaning                                             | User recovery                        |
+| ---------------------- | --------------------------------------------------- | ------------------------------------ |
+| permission-denied      | Browser or OS denied microphone access              | Enable microphone access in settings |
+| microphone-unavailable | No usable capture device                            | Connect/check the microphone         |
+| no-speech              | No usable speech result                             | Speak again                          |
+| network                | Recognition service could not be reached            | Check connection and retry           |
+| service-unavailable    | Browser recognition service is unavailable          | Retry or continue typing             |
+| aborted                | Session was intentionally or externally interrupted | Return to idle unless unexpected     |
+| unknown                | Unexpected provider failure                         | Retry or continue typing             |
 
 Raw browser error codes may be retained only inside Infrastructure diagnostics. Presentation uses
 short Russian copy in the form “what happened → what to do”.
@@ -306,7 +311,7 @@ recognition is fully local.
 
 Voice input uses one discriminated union rather than independent booleans:
 
-~~~ts
+```ts
 type VoiceInputState =
   | { readonly status: 'unsupported' }
   | { readonly status: 'idle' }
@@ -333,7 +338,7 @@ type VoiceInputState =
       readonly sessionId: number;
       readonly failure: SpeechRecognitionFailure;
     };
-~~~
+```
 
 Starting and permission-prompt latency are represented by listening because recognition was
 deliberately activated. The coordinator publishes listening immediately before provider start, and
@@ -342,7 +347,7 @@ not claim that audio has already been captured.
 
 ### Transitions
 
-~~~text
+```text
 unsupported ───────────────────────────────────────────────> unsupported
 
 idle ── start ──> listening
@@ -355,7 +360,7 @@ listening/processing ── provider error ──> error
 listening/processing ── cancel/release ──> idle
 success/error ── feedback reset/manual interaction/release ──> idle
 success/error ── new start ──> listening
-~~~
+```
 
 Final transcript events only append to the current session buffer and never terminate the state.
 The matching ended event is the sole normal terminal event: a non-empty final buffer becomes success
@@ -388,7 +393,7 @@ than an error.
 
 VoiceTextInput and VoiceTextArea accept native attributes plus:
 
-~~~ts
+```ts
 interface VoiceTextValueProps {
   readonly value: string;
   readonly onValueChange: (value: string) => void;
@@ -408,7 +413,7 @@ type VoiceTextAreaProps = Omit<
   'value' | 'defaultValue' | 'onChange'
 > &
   VoiceTextValueProps;
-~~~
+```
 
 Contract details:
 
@@ -711,6 +716,22 @@ Sphere emoji/icon and Sync recovery/manual pairing payloads remain excluded.
   control therefore renders the discoverable disabled microphone state, while the real App always
   supplies the global runtime.
 
+## Implementation refinements, 2026-09-08
+
+- Browser result indices are deduplicated before final chunks cross the application port.
+- Processing has a 15-second deadline after explicit stop; a non-terminating provider is cancelled
+  and reported as service-unavailable. There is no automatic retry.
+- The shared action rail uses a dedicated grid column beside the native field. It reserves actual
+  layout space instead of overlaying text/padding, including when extra endActions are present.
+- VoiceField replaces only labels enclosing a migrated voice control and retains the same label
+  DOM and caption markup. Browser evidence showed that otherwise microphone/action names pollute
+  the accessible name. Explicit standalone labels remain unchanged.
+- Same-value selection replacement restores focus/caret immediately, without waiting for a draft
+  update or the success feedback timer.
+- Goal metric unit remains an intentional exclusion alongside numeric ShortField controls.
+- Test-only HTML/React fixture exercises controlled edge cases with the real shared components;
+  production composition has no fake provider switch or testing backdoor.
+
 ## Privacy and security
 
 - No audio or transcript history is persisted by the voice subsystem.
@@ -806,26 +827,26 @@ The test never grants a real microphone and is deterministic.
 
 During development:
 
-~~~text
+```text
 npm run test:target -- <changed test file>
 npm run test:fast
 npm run typecheck
 npm run lint
-~~~
+```
 
 After stabilization:
 
-~~~text
+```text
 npm run verify
 npm run test:e2e
-~~~
+```
 
 Because this changes browser interaction and desktop/mobile form layout, the final R10-equivalent
 gate is:
 
-~~~text
+```text
 npm run verify:full
-~~~
+```
 
 No command may be reported as passed unless it was run against the final source state.
 
@@ -870,19 +891,19 @@ Rules 34–44 will not be renumbered.
 
 ## Risks and mitigations
 
-| Risk | Mitigation |
-| --- | --- |
-| Browser/WebView lacks Web Speech | Runtime feature detection and unsupported state |
-| Browser vendor uses network speech service | No locality claim; stable network/service error |
-| Permission denial loops | Start only from user gesture; no automatic retry |
-| Transcript enters wrong field | Global active-owner invariant and sessionId filtering |
-| Late event updates unmounted field | release cleanup plus generation guard |
-| Interim text duplicates content | Commit only normalized final buffer |
-| Button overlaps text/actions | Shared action rail and reserved padding |
-| Existing form validation changes | Same controlled callback and existing submit path |
-| StrictMode double lifecycle | StrictMode-safe App provider and idempotent disposal |
-| Huge unrelated refactor | Only eligible controls migrate; non-text controls remain native |
-| Dirty worktree absorbs unrelated edits | Main agent makes scoped patches and reviews scoped diffs |
+| Risk                                       | Mitigation                                                      |
+| ------------------------------------------ | --------------------------------------------------------------- |
+| Browser/WebView lacks Web Speech           | Runtime feature detection and unsupported state                 |
+| Browser vendor uses network speech service | No locality claim; stable network/service error                 |
+| Permission denial loops                    | Start only from user gesture; no automatic retry                |
+| Transcript enters wrong field              | Global active-owner invariant and sessionId filtering           |
+| Late event updates unmounted field         | release cleanup plus generation guard                           |
+| Interim text duplicates content            | Commit only normalized final buffer                             |
+| Button overlaps text/actions               | Shared action rail and reserved padding                         |
+| Existing form validation changes           | Same controlled callback and existing submit path               |
+| StrictMode double lifecycle                | StrictMode-safe App provider and idempotent disposal            |
+| Huge unrelated refactor                    | Only eligible controls migrate; non-text controls remain native |
+| Dirty worktree absorbs unrelated edits     | Main agent makes scoped patches and reviews scoped diffs        |
 
 ## Definition of Done
 

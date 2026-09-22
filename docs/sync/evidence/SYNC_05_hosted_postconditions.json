@@ -1,0 +1,15 @@
+{
+  "projectRef": "oytsyvmlkngsmpevbbct",
+  "migrationVersion": "20260907010000",
+  "migrationInstalled": true,
+  "insertPolicyInstalled": true,
+  "privateBucketCount": 2,
+  "sqlRollbackFixtureUserCount": 0,
+  "finalHttpTestDeviceStatus": "revoked",
+  "sqlAcceptance": "PASS",
+  "httpAcceptance": "PASS",
+  "retainedHttpSyntheticObjects": 4,
+  "retainedHttpSyntheticBytes": 548,
+  "productionCrypto": "native HKDF / XChaCha20-Poly1305",
+  "httpFixtureCrypto": "test-only Node AES-256-GCM; not production crypto"
+}

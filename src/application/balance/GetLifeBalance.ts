@@ -34,6 +34,9 @@ export function projectLifeBalance(state: BalanceState, today: string) {
     const goals = state.goals.filter((g) => g.directionId?.equals(direction.id));
     const activeGoals = goals.filter((g) => g.status === 'active');
     const ids = new Set(activeGoals.map((g) => g.id.toString()));
+    const selectedIds = new Set(
+      activeGoals.flatMap((g) => (g.nextActionId ? [g.nextActionId.toString()] : [])),
+    );
     const nextAction =
       state.actions
         .filter(
@@ -46,6 +49,7 @@ export function projectLifeBalance(state: BalanceState, today: string) {
         )
         .sort(
           (a, b) =>
+            Number(selectedIds.has(b.id.toString())) - Number(selectedIds.has(a.id.toString())) ||
             Number(b.isNext) - Number(a.isNext) ||
             (a.plannedDate?.toString() ?? '9999').localeCompare(
               b.plannedDate?.toString() ?? '9999',

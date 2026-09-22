@@ -1,4 +1,5 @@
 import { defaultRecurrence, RecurrenceFields } from './RecurrenceFields';
+import { addDays } from '../../domain/planner/PlanningPeriod';
 import { usePlanning } from './PlanningContext';
 import { useRef, useState } from 'react';
 import { VoiceField } from '../voice-input/VoiceField';
@@ -9,6 +10,7 @@ import { emptyActionDraft, type PlannerActionDraft } from './plannerFormSubmissi
 export interface PlannerOption {
   readonly id: string;
   readonly title: string;
+  readonly directionId?: string | null;
 }
 export function PlannerActionForm({
   goals,
@@ -20,6 +22,8 @@ export function PlannerActionForm({
   initialDate = null,
   initialParentActionId = null,
   lockGoal = false,
+  initialDirectionId = null,
+  contextLabel = null,
 }: {
   readonly goals: readonly PlannerOption[];
   readonly onSubmit: (draft: PlannerActionDraft) => Promise<void>;
@@ -30,14 +34,20 @@ export function PlannerActionForm({
   readonly initialDate?: string | null;
   readonly initialParentActionId?: string | null;
   readonly lockGoal?: boolean;
+  readonly initialDirectionId?: string | null;
+  readonly contextLabel?: string | null;
 }) {
   const planning = usePlanning();
   const [draft, setDraft] = useState(() => ({
     ...emptyActionDraft(initialGoalId, initialTitle),
     date: initialDate ?? '',
+    directionId: initialDirectionId ?? '',
     parentActionId: initialParentActionId ?? '',
   }));
   const [busy, setBusy] = useState(false);
+  const [specificDate, setSpecificDate] = useState(
+    Boolean(initialDate && initialDate !== currentDate && initialDate !== addDays(currentDate, 1)),
+  );
   const saving = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const goalUnavailable = draft.goalId !== '' && !goals.some((goal) => goal.id === draft.goalId);
@@ -72,6 +82,7 @@ export function PlannerActionForm({
         <p className="planner-muted">Достаточно названия. Всё остальное — по желанию.</p>
       </header>
       <fieldset disabled={busy}>
+        {contextLabel && <p className="planner-muted">{contextLabel}</p>}
         {initialParentActionId && (
           <input type="hidden" name="parentActionId" value={initialParentActionId} />
         )}
@@ -118,7 +129,7 @@ export function PlannerActionForm({
             Выберите другую цель или «Без цели».
           </p>
         ) : null}
-        <label>
+        <label hidden={!specificDate}>
           <span>
             Дата <small>необязательно</small>
           </span>
@@ -135,9 +146,6 @@ export function PlannerActionForm({
                 }))
               }
             />
-            <button type="button" onClick={() => change('date', currentDate)}>
-              Сегодня
-            </button>
             {draft.date ? (
               <button
                 type="button"
@@ -149,6 +157,41 @@ export function PlannerActionForm({
             ) : null}
           </span>
         </label>
+        <div className="planner-segments" role="group" aria-label="Когда выполнить">
+          <button
+            type="button"
+            aria-pressed={draft.date === currentDate && !specificDate}
+            onClick={() => {
+              change('date', currentDate);
+              setSpecificDate(false);
+            }}
+          >
+            Сегодня
+          </button>
+          <button
+            type="button"
+            aria-pressed={draft.date === addDays(currentDate, 1) && !specificDate}
+            onClick={() => {
+              change('date', addDays(currentDate, 1));
+              setSpecificDate(false);
+            }}
+          >
+            Завтра
+          </button>
+          <button
+            type="button"
+            aria-pressed={!draft.date}
+            onClick={() => {
+              setDraft((current) => ({ ...current, date: '', isNext: false }));
+              setSpecificDate(false);
+            }}
+          >
+            Без даты
+          </button>
+          <button type="button" aria-pressed={specificDate} onClick={() => setSpecificDate(true)}>
+            Выбрать дату
+          </button>
+        </div>
         <details className="planner-details">
           <summary>Повторение</summary>
           <label>

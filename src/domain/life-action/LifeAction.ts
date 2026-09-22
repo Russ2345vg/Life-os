@@ -28,6 +28,7 @@ export interface LifeActionDraftInput {
   readonly decisionId?: EntityId;
   readonly sphereId?: EntityId | null;
   readonly goalId?: EntityId | null;
+  readonly directionId?: EntityId | null;
   readonly parentActionId?: EntityId | null;
   readonly plannedDate?: DayDate | null;
   readonly isNext?: boolean;
@@ -67,6 +68,7 @@ export interface LifeActionRehydrationData {
   readonly decisionId: EntityId | null;
   readonly sphereId?: EntityId | null;
   readonly goalId?: EntityId | null;
+  readonly directionId?: EntityId | null;
   readonly parentActionId?: EntityId | null;
   readonly isNext?: boolean;
   readonly plannedDate: DayDate | null;
@@ -92,6 +94,7 @@ export class LifeAction extends Entity {
   readonly #decisionId: EntityId | null;
   #sphereId: EntityId | null;
   #goalId: EntityId | null;
+  readonly #directionId: EntityId | null;
   #parentActionId: EntityId | null;
   #isNext: boolean;
   readonly #createdAt: Date;
@@ -139,6 +142,7 @@ export class LifeAction extends Entity {
     this.#decisionId = data.decisionId;
     this.#sphereId = data.sphereId ?? null;
     this.#goalId = data.goalId ?? null;
+    this.#directionId = data.directionId ?? null;
     this.#parentActionId = data.parentActionId ?? null;
     if (this.#parentActionId?.equals(data.id))
       throw new DomainError(
@@ -294,6 +298,7 @@ export class LifeAction extends Entity {
         decisionId: input.decisionId ?? null,
         sphereId: input.sphereId ?? null,
         goalId: input.goalId ?? null,
+        directionId: input.directionId ?? null,
         parentActionId: input.parentActionId ?? null,
         isNext: input.isNext ?? false,
         plannedDate: input.plannedDate ?? null,
@@ -350,6 +355,10 @@ export class LifeAction extends Entity {
 
   public get decisionId(): EntityId | null {
     return this.#decisionId;
+  }
+
+  public get directionId(): EntityId | null {
+    return this.#directionId;
   }
 
   public get sphereId(): EntityId | null {

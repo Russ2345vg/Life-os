@@ -18,6 +18,10 @@ export function directionDependency(
     case 'goal':
       historical = record.status === 'achieved' || record.status === 'archived';
       break;
+    case 'life_action':
+      historical =
+        record.status === 'completed' || record.status === 'cancelled' || record.archivedAt != null;
+      break;
     case 'project':
       historical = record.status === 'completed' || record.status === 'archived';
       break;

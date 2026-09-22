@@ -12,6 +12,7 @@
 
 - Node.js 22.12 или новее (используемые версии Vite и Vitest также поддерживают Node.js 24)
 - npm 11 или новее
+- Для Windows Desktop: Rust stable MSVC, Microsoft C++ Build Tools и WebView2 Runtime
 
 ## Запуск
 
@@ -19,6 +20,22 @@
 npm install
 npm run dev
 ```
+
+## Windows Desktop
+
+Development mode запускает тот же LifeOS в отдельном нативном окне Tauri:
+
+```bash
+npm run tauri dev
+```
+
+Production-сборка и NSIS installer:
+
+```bash
+npm run tauri build
+```
+
+Готовый установщик создаётся в `src-tauri/target/release/bundle/nsis/`.
 
 ## Проверки
 
@@ -30,8 +47,10 @@ npm run test:fast
 npm run verify
 ```
 
-`npm run verify` — канонический конечный quality gate: unit/integration, test-infrastructure,
-alpha, E2E, build, format и Git whitespace check выполняются последовательно с deadlines.
+`npm run verify` — канонический конечный быстрый quality gate: unit/integration,
+test-infrastructure, alpha, build, format и Git whitespace check выполняются последовательно с
+deadlines. Полный browser E2E запускается отдельно через `npm run test:e2e` или вместе с быстрым
+gate через `npm run verify:full` по правилам testing strategy.
 Подробное разделение быстрых и тяжёлых проверок описано в
 [docs/codex/TEST_MATRIX.md](docs/codex/TEST_MATRIX.md).
 

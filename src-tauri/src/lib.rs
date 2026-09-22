@@ -1,4 +1,6 @@
 #[cfg(target_os = "android")]
+mod android_alarm;
+#[cfg(target_os = "android")]
 mod android_updater;
 mod secure_key_store;
 mod sync_commands;
@@ -38,10 +40,17 @@ pub fn run() {
     #[cfg(target_os = "android")]
     let builder = tauri::Builder::default()
         .plugin(android_updater::init())
+        .plugin(android_alarm::init())
         .plugin(secure_key_store::android::init())
         .invoke_handler(tauri::generate_handler![
             android_updater::android_check_update,
             android_updater::android_download_and_install,
+            android_alarm::android_alarm_reconcile,
+            android_alarm::android_alarm_status,
+            android_alarm::android_alarm_list_sounds,
+            android_alarm::android_alarm_schedule_test,
+            android_alarm::android_alarm_open_settings,
+            android_alarm::android_alarm_stop,
             sync_commands::sync_auth_session_write,
             sync_commands::sync_auth_session_read,
             sync_commands::sync_auth_session_delete,

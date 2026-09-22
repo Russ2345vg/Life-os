@@ -120,12 +120,8 @@ export function GoalDetailContent({
         <p className="planner-eyebrow">Желаемый результат</p>
         <p>{goal.achievementCriteria ?? 'Результат пока не описан.'}</p>
       </section>
-      {goal.measurement ? (
-        <PlanningProgress key={id} goal={goal} date={today} editable onAchieve={achieve} />
-      ) : (
-        <PlannerGoalProgress goal={goal} />
-      )}
-      <GoalPeriodMembership goalId={id} today={today} periods={periods} memberships={memberships} />
+      {!goal.measurement && <PlannerGoalProgress goal={goal} />}
+      <PlanningProgress key={id} goal={goal} date={today} editable onAchieve={achieve} />
       {next ? (
         <section className="planner-goal-next" aria-label="Следующее действие">
           <h2>Следующее действие</h2>
@@ -137,6 +133,17 @@ export function GoalDetailContent({
             goalContext
             recurrenceLabel={recurrenceLabel(next)}
           />
+        </section>
+      ) : goal.nextProgress ? (
+        <section className="planner-goal-next" aria-label="Следующее действие">
+          <h2>Следующий шаг</h2>
+          <p>{goal.nextProgress}</p>
+          <a
+            className="planner-text-link"
+            href={`${newActionHref}&${new URLSearchParams({ title: goal.nextProgress })}`}
+          >
+            Создать действие из шага
+          </a>
         </section>
       ) : (
         <a className="planner-text-link" href={newActionHref}>
@@ -213,13 +220,14 @@ export function GoalDetailContent({
           ))}
         </ul>
       </details>
+      <GoalPeriodMembership goalId={id} today={today} periods={periods} memberships={memberships} />
       <details className="planner-goal-details">
         <summary>Детали</summary>
         <p>{goal.description || 'Описание пока не добавлено.'}</p>
         {goal.whyImportant && <p>Почему важно: {goal.whyImportant}</p>}
         {goal.whyNow && <p>Почему сейчас: {goal.whyNow}</p>}
         {goal.nextProgress && <p>Первый шаг: {goal.nextProgress}</p>}
-        <a href={`#/goals/${encodeURIComponent(id)}`}>Изменить свойства цели</a>
+        <a href={`#/v2/goals/${encodeURIComponent(id)}?edit=1`}>Изменить свойства цели</a>
       </details>
       <details className="planner-goal-history">
         <summary>История · {facts.length}</summary>

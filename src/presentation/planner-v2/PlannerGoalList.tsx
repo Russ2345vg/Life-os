@@ -13,7 +13,7 @@ import { VoiceTextInput } from '../voice-input/VoiceTextInput';
 import {
   emptyGoalFilters,
   filterPlannerGoals,
-  goalActions,
+  selectGoalCardActions,
   horizonLabels,
   importanceLabels,
   measuredGoalProgress,
@@ -108,20 +108,42 @@ export function PlannerGoalList({
         </button>
       </div>
       <div className="planner-period-filter">
-        <label>
-          <span>Период целей</span>
-          <select
-            value={periodFilter}
-            onChange={(event) => setPeriodFilter(event.target.value as GoalPeriodFilter)}
-          >
-            <option value="all">Все</option>
-            <option value="year">Год</option>
-            <option value="quarter">Квартал</option>
-            <option value="thirty_days">30 дней</option>
-            <option value="week">Неделя</option>
-            <option value="none">Без периода</option>
-          </select>
-        </label>
+        <div className="planner-segments" role="group" aria-label="Период целей">
+          {(
+            [
+              ['all', 'Все'],
+              ['now', 'Сейчас'],
+              ['thirty_days', '30 дней'],
+              ['quarter', 'Квартал'],
+              ['year', 'Год'],
+              ['undated', 'Без срока'],
+              ['week', 'Неделя'],
+              ['none', 'Без периода'],
+            ] as const
+          ).map(([value, title]) => (
+            <button
+              type="button"
+              key={value}
+              aria-pressed={
+                value === 'now'
+                  ? filters.horizon === 'now'
+                  : value === 'undated'
+                    ? filters.undated
+                    : periodFilter === value && !filters.horizon && !filters.undated
+              }
+              onClick={() => {
+                setPeriodFilter(value === 'now' || value === 'undated' ? 'all' : value);
+                setFilters((current) => ({
+                  ...current,
+                  horizon: value === 'now' ? 'now' : '',
+                  undated: value === 'undated',
+                }));
+              }}
+            >
+              {title}
+            </button>
+          ))}
+        </div>
         {periodFilter === 'thirty_days' && !cycle && planning?.state && (
           <button
             type="button"
@@ -285,40 +307,95 @@ export function PlannerGoalList({
           )}
         </div>
       )}
-      <ul className="planner-list">
-        {visible.map((goal) => (
-          <li
-            key={goal.id.toString()}
-            className={`planner-catalog-row${focusIds.includes(goal.id.toString()) ? ' planner-catalog-row--focus' : ''}`}
-          >
-            <EntityContextMenu
-              title={goal.title}
-              entityLabel="цель"
-              actions={menuForGoal?.(goal) ?? []}
-            >
-              <a
-                className="planner-goal-title"
-                href={`#/v2/goals/${encodeURIComponent(goal.id.toString())}`}
-              >
-                {goal.title}
-              </a>
-              <PlannerGoalContext goal={goal} directions={directions} spheres={spheres} />
-              <div className="planner-meta">
-                <span>{statusLabels[goal.status]}</span>
-                {goal.intentionLevel && <span>{importanceLabels[goal.intentionLevel]}</span>}
-                {goal.horizon && <span>{horizonLabels[goal.horizon]}</span>}
-              </div>
-              <PlannerGoalProgress goal={goal} />
-              {(goalActions(goal, actions)[0] || goal.nextProgress) && (
-                <p className="planner-muted">
-                  Следующий шаг:{' '}
-                  {goalActions(goal, actions)[0]?.title.toString() ?? goal.nextProgress}
-                </p>
-              )}
-            </EntityContextMenu>
-          </li>
+      {[
+        {
+          title: 'В фокусе',
+          goals: visible.filter((goal) => focusIds.includes(goal.id.toString())),
+        },
+        {
+          title: focusIds.length ? 'Другие цели' : 'Все цели',
+          goals: visible.filter((goal) => !focusIds.includes(goal.id.toString())),
+        },
+      ]
+        .filter((group) => group.goals.length)
+        .map((group) => (
+          <section className="planner-goal-group" key={group.title} aria-label={group.title}>
+            <h2>
+              {group.title} <small>{group.goals.length}</small>
+            </h2>
+            <ul className="planner-list">
+              {group.goals.map((goal) => {
+                const next = selectGoalCardActions(goal, actions).next;
+                const periods = planning?.state?.periods.filter(
+                  (period) =>
+                    period.startDate <= today &&
+                    period.endDate >= today &&
+                    planning.state?.memberships.some(
+                      (m) =>
+                        m.periodId === period.id &&
+                        m.entityType === 'goal' &&
+                        m.entityId === goal.id.toString() &&
+                        !m.removed,
+                    ),
+                );
+                const periodLabels = {
+                  week: 'Неделя',
+                  thirty_days: '30 дней',
+                  quarter: 'Квартал',
+                  year: 'Год',
+                };
+                return (
+                  <li key={goal.id.toString()} className="planner-catalog-row planner-goal-card">
+                    <EntityContextMenu
+                      title={goal.title}
+                      entityLabel="цель"
+                      actions={menuForGoal?.(goal) ?? []}
+                    >
+                      <div className="planner-goal-card-main">
+                        <a
+                          className="planner-goal-title"
+                          href={`#/v2/goals/${encodeURIComponent(goal.id.toString())}`}
+                        >
+                          {goal.title}
+                        </a>
+                        <PlannerGoalContext goal={goal} directions={directions} spheres={spheres} />
+                        {next || goal.nextProgress ? (
+                          <p className="planner-goal-next-link">
+                            Следующий шаг:{' '}
+                            {next ? (
+                              <a href={`#/v2/actions/${encodeURIComponent(next.id.toString())}`}>
+                                {next.title.toString()}
+                              </a>
+                            ) : (
+                              goal.nextProgress
+                            )}
+                          </p>
+                        ) : (
+                          <a
+                            className="planner-text-link"
+                            href={`#/v2/actions/new?${new URLSearchParams({ goalId: goal.id.toString(), returnToGoal: '1' })}`}
+                          >
+                            Добавить следующий шаг
+                          </a>
+                        )}
+                      </div>
+                      <div className="planner-goal-card-progress">
+                        <span className="planner-muted">
+                          {periods?.length
+                            ? periods.map((p) => periodLabels[p.kind]).join(' · ')
+                            : goal.horizon
+                              ? horizonLabels[goal.horizon]
+                              : 'Без срока'}
+                        </span>
+                        <PlannerGoalProgress goal={goal} />
+                      </div>
+                    </EntityContextMenu>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
         ))}
-      </ul>
     </>
   );
 }

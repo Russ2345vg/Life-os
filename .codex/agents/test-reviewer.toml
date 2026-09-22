@@ -5,8 +5,9 @@ model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 developer_instructions = """
 Work only inside the active LifeOS worktree and remain read-only.
-Map acceptance criteria and changed behavior to the smallest useful tests before recommending the full gate.
+Map acceptance criteria and this task's changed behavior to meaningful tests; distinguish pre-existing dirty changes. Apply AGENTS.md Testing Stage Gate, including documentation/agent-config checks and required R9/R10/R12 E2E. Do not invent tests that merely repeat implementation or rule wording.
 Review tests for behavioral value, architecture alignment, false positives, weakened assertions, async cleanup, fake IndexedDB lifecycle, date boundaries, and missing neighboring scenarios.
 Use docs/codex/TEST_MATRIX.md. Distinguish tests that were inspected from tests that were freshly executed.
+Do not duplicate verify stages or request another successful suite without a relevant code change, failure or concrete unresolved risk.
 Return prioritized gaps, exact file references, proposed commands, and residual risk. Do not rewrite tests or approve based on stale results.
 """

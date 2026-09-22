@@ -47,6 +47,87 @@ describe('routine action queries', () => {
     expect(findDecisionById).not.toHaveBeenCalled();
   });
 
+  it('offers one representative for a recurring action instead of every future occurrence', async () => {
+    const actionRepository = new InMemoryLifeActionRepository();
+    const decisionRepository = new InMemoryDecisionRepository();
+    const source = createReadyLifeAction('recurring-source', DATE);
+    source.setPlanningMetadata({
+      occurrence: {
+        ruleId: 'recurrence:training',
+        slot: '2026-08-08',
+        ruleRevision: 1,
+        originalDate: '2026-08-08',
+      },
+    });
+    const tomorrow = createReadyLifeAction('recurring-tomorrow', DayDate.create('2026-08-09'));
+    tomorrow.setPlanningMetadata({
+      occurrence: {
+        ruleId: 'recurrence:training',
+        slot: '2026-08-09',
+        ruleRevision: 1,
+        originalDate: '2026-08-09',
+      },
+    });
+    const later = createReadyLifeAction('recurring-later', DayDate.create('2026-08-10'));
+    later.setPlanningMetadata({
+      occurrence: {
+        ruleId: 'recurrence:training',
+        slot: '2026-08-10',
+        ruleRevision: 1,
+        originalDate: '2026-08-10',
+      },
+    });
+    const ordinary = createReadyLifeAction('ordinary', DATE);
+    await Promise.all(
+      [source, tomorrow, later, ordinary].map((action) => actionRepository.save(action)),
+    );
+
+    const options = await new GetRoutineActionOptions(
+      actionRepository,
+      decisionRepository,
+    ).execute();
+
+    expect(options.map((option) => option.lifeAction.id.toString()).sort()).toEqual([
+      'ordinary',
+      'recurring-source',
+    ]);
+    expect(
+      options.find((option) => option.lifeAction.id.toString() === 'recurring-source')?.lifeAction
+        .occurrence,
+    ).toMatchObject({ ruleId: 'recurrence:training' });
+  });
+
+  it('keeps the next available occurrence when the original occurrence is completed', async () => {
+    const actionRepository = new InMemoryLifeActionRepository();
+    const decisionRepository = new InMemoryDecisionRepository();
+    const completed = completeLifeAction(createReadyLifeAction('completed-occurrence', DATE));
+    completed.setPlanningMetadata({
+      occurrence: {
+        ruleId: 'recurrence:reading',
+        slot: DATE.toString(),
+        ruleRevision: 1,
+        originalDate: DATE.toString(),
+      },
+    });
+    const next = createReadyLifeAction('next-occurrence', DayDate.create('2026-08-09'));
+    next.setPlanningMetadata({
+      occurrence: {
+        ruleId: 'recurrence:reading',
+        slot: '2026-08-09',
+        ruleRevision: 1,
+        originalDate: '2026-08-09',
+      },
+    });
+    await Promise.all([completed, next].map((action) => actionRepository.save(action)));
+
+    const options = await new GetRoutineActionOptions(
+      actionRepository,
+      decisionRepository,
+    ).execute();
+
+    expect(options.map((option) => option.lifeAction.id.toString())).toEqual(['next-occurrence']);
+  });
+
   it('resolves a completed action for a safe historical card and returns null when deleted', async () => {
     const actionRepository = new InMemoryLifeActionRepository();
     const decisionRepository = new InMemoryDecisionRepository();

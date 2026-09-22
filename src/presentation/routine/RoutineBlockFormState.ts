@@ -60,7 +60,9 @@ export function createRoutineBlockEditForm(block: RoutineBlock): RoutineBlockFor
     actionId:
       block.assignment.kind === ROUTINE_BLOCK_ASSIGNMENT.existingAction
         ? block.assignment.actionId.toString()
-        : '',
+        : block.assignment.kind === 'existingSeries'
+          ? block.assignment.ruleId.toString()
+          : '',
   };
 }
 
@@ -85,7 +87,8 @@ export function validateRoutineBlockForm(form: RoutineBlockFormState): RoutineBl
     errors.selectedWeekdays = 'Выберите хотя бы один день недели.';
   }
   if (
-    form.assignmentKind === ROUTINE_BLOCK_ASSIGNMENT.existingAction &&
+    (form.assignmentKind === ROUTINE_BLOCK_ASSIGNMENT.existingAction ||
+      form.assignmentKind === 'existingSeries') &&
     form.actionId.length === 0
   ) {
     errors.actionId = 'Выберите незавершённое действие.';
@@ -100,7 +103,11 @@ export function changeRoutineBlockAssignment(
   return {
     ...form,
     assignmentKind,
-    actionId: assignmentKind === ROUTINE_BLOCK_ASSIGNMENT.existingAction ? form.actionId : '',
+    actionId:
+      assignmentKind === ROUTINE_BLOCK_ASSIGNMENT.existingAction ||
+      assignmentKind === 'existingSeries'
+        ? form.actionId
+        : '',
   };
 }
 

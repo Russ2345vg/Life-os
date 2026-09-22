@@ -30,6 +30,16 @@ export class RecurringActions {
         throw new DomainError('goal.not_found', 'Цель не найдена.');
       const rule = validateRule({
         ...input,
+        directionId:
+          input.directionId ??
+          previous?.directionId ??
+          (actionId ? requireAction(s, actionId).directionId?.toString() : null) ??
+          null,
+        sphereId:
+          input.sphereId ??
+          previous?.sphereId ??
+          (actionId ? requireAction(s, actionId).sphereId?.toString() : null) ??
+          null,
         id: ruleId,
         revision: (previous?.revision ?? 0) + 1,
         effectiveFrom: date,
@@ -90,11 +100,11 @@ export class RecurringActions {
       });
     });
   }
-  async materialize(from: string, to = addDays(from, 13)) {
+  async materialize(from: string, to = addDays(from, 13), onlyRuleId?: string) {
     return this.repository.change((s) => {
       let created = 0;
       const now = this.clock.now();
-      for (const rule of s.rules) {
+      for (const rule of s.rules.filter((r) => !onlyRuleId || r.id === onlyRuleId)) {
         const windowFrom = rule.schedule.kind === 'count' ? localDate(now) : from;
         const windowTo = rule.schedule.kind === 'count' ? addDays(windowFrom, 62) : to;
         this.reconcileFuture(s, rule, windowFrom);
@@ -135,6 +145,8 @@ export class RecurringActions {
           const action = LifeAction.createDraft({
             id: EntityId.create(slot.id),
             title: LifeActionTitle.create(rule.title),
+            directionId: rule.directionId ? EntityId.create(rule.directionId) : null,
+            sphereId: rule.sphereId ? EntityId.create(rule.sphereId) : null,
             goalId: rule.goalId ? EntityId.create(rule.goalId) : null,
             plannedDate: rule.schedule.kind === 'count' ? null : DayDate.create(slot.date),
             createdAt: now,
@@ -157,6 +169,58 @@ export class RecurringActions {
       }
       return created;
     });
+  }
+  async resolveForDate(ruleId: string, date: string): Promise<LifeAction | null> {
+    DayDate.create(date);
+    const initial = await this.repository.read();
+    if (!initial.rules.some((r) => r.id === ruleId)) return null;
+    if (date >= localDate(this.clock.now())) await this.materialize(date, date, ruleId);
+    return this.findOnDate(await this.repository.read(), ruleId, date);
+  }
+  async selectForDate(ruleId: string, date: string): Promise<LifeAction | null> {
+    const existing = await this.resolveForDate(ruleId, date);
+    if (existing || date < localDate(this.clock.now())) return existing;
+    return this.repository.change((s) => {
+      const rule = s.rules.find((r) => r.id === ruleId);
+      const dated = this.findOnDate(s, ruleId, date);
+      if (dated || !rule || rule.schedule.kind !== 'count') return dated;
+      const action = s.actions.find(
+        (a) =>
+          a.occurrence?.ruleId === ruleId &&
+          !a.isArchived() &&
+          !a.plannedDate &&
+          !['completed', 'cancelled'].includes(a.status),
+      );
+      if (!action) return null;
+      action.setPlan(DayDate.create(date), false);
+      s.journal.push(
+        planningJournal(
+          this.ids.generate().toString(),
+          'LifeAction',
+          action.id.toString(),
+          'Повторение назначено на дату',
+          this.clock.now(),
+          { ruleId, date },
+        ),
+      );
+      return action;
+    });
+  }
+  private findOnDate(s: PlanningState, ruleId: string, date: string): LifeAction | null {
+    const rule = s.rules.find((r) => r.id === ruleId);
+    return (
+      s.actions.find(
+        (a) =>
+          a.occurrence?.ruleId === ruleId &&
+          !a.isArchived() &&
+          a.status !== 'cancelled' &&
+          (a.plannedDate?.toString() === date ||
+            (rule?.schedule.kind === 'count' &&
+              a.status === 'completed' &&
+              !a.plannedDate &&
+              a.completedOn === date)),
+      ) ?? null
+    );
   }
   async skip(actionId: string) {
     return this.repository.change((s) => {

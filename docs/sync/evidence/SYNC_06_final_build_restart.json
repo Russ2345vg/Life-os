@@ -1,0 +1,10 @@
+{
+  "time": "2026-09-07T17:10:57.107Z",
+  "originalRecordsUnchanged": true,
+  "outbox": 0,
+  "quarantine": 0,
+  "activeSyntheticRecords": 0,
+  "nativeHealth": "PASS",
+  "cursor": [82],
+  "snapshotCount": 12
+}

@@ -23,6 +23,7 @@ describe('Planner Today', () => {
         onPlan: vi.fn(),
         onQuickAdd: async () => {},
         onNewAction: vi.fn(),
+        onOpenSleep: vi.fn(),
       }),
     );
     expect(html).toContain('Сегодня');
@@ -31,5 +32,8 @@ describe('Planner Today', () => {
     expect(html).not.toContain('<details open');
     expect(html).not.toContain('Начать');
     expect(html).not.toContain('Главное действие');
+    expect(html).toContain('Подготовка ко сну');
+    expect(html).toContain('Прогресс дня');
+    expect(html).toContain('planner-today-sidebar');
   });
 });

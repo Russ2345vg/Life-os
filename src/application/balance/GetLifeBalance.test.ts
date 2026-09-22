@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Direction, Sphere, Goal, EntityId } from '../../domain';
+import { Direction, Sphere, Goal, EntityId, LifeAction, LifeActionTitle } from '../../domain';
 import { initialGoalContribution } from '../../domain/planner/InitialGoalContribution';
 import {
   automaticPeriod,
@@ -77,6 +77,28 @@ const membership = (
   ...extra,
 });
 describe('balance reads existing goal progress and planning contracts', () => {
+  it('prefers the explicit next action selected for an active goal', () => {
+    const state = fixture();
+    const goal = state.goals[0]!.update({ title: 'Режим', status: 'active' }, now).selectNextAction(
+      id('z-selected'),
+      now,
+    );
+    const actions = ['a-first', 'z-selected'].map((key) =>
+      LifeAction.createDraft({
+        id: id(key),
+        title: LifeActionTitle.create(key),
+        goalId: goal.id,
+        createdAt: now,
+        eventId: id(`${key}-event`),
+      }),
+    );
+    expect(
+      projectLifeBalance(
+        { ...state, goals: [goal], actions },
+        '2026-09-14',
+      ).directions[0]?.nextAction?.id.toString(),
+    ).toBe('z-selected');
+  });
   it('uses current recurring cycle, missing source and partial sync without inventing zero', () => {
     const state = fixture(),
       initial = state.contributions[0]!;

@@ -1,3 +1,5 @@
+import { CompletionResult } from './CompletionResult';
+import { RecurrenceBadge } from './RecurrenceBadge';
 import { useRef, useState } from 'react';
 import type { LifeAction } from '../../domain';
 import type { RecurrenceInput } from '../../application/planner/RecurringActions';
@@ -67,25 +69,14 @@ export function PlanningActionDetails({
           .map((item) => item.completionKey),
       ).size
     : 0;
-  const scheduleText =
-    rule?.schedule.kind === 'count'
-      ? 'Без расписания'
-      : rule?.schedule.kind === 'daily'
-        ? 'Каждый день'
-        : rule?.schedule.kind === 'weekdays'
-          ? rule.schedule.weekdays
-              .map((day) => ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'][day])
-              .join(', ')
-          : rule?.schedule.kind === 'monthly'
-            ? `${rule.schedule.day}-го числа каждого месяца`
-            : rule?.schedule.kind === 'interval'
-              ? `через ${rule.schedule.days} дней после выполнения`
-              : null;
   return (
     <>
+      <CompletionResult action={action} />
       {rule && (
         <section className="planner-recurrence-summary" aria-label="Повторение">
-          <p>Повторение: {scheduleText}</p>
+          <p>
+            <RecurrenceBadge rule={rule} />
+          </p>
           {rule.maxCompletions !== null && (
             <p>
               Цель: {rule.maxCompletions} выполнений · {completions} / {rule.maxCompletions}

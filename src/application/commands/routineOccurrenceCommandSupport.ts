@@ -1,3 +1,4 @@
+import type { RecurringActions } from '../planner/RecurringActions';
 import {
   DAY_STATUS,
   LIFE_ACTION_STATUS,
@@ -28,6 +29,7 @@ export interface RoutineOccurrenceCommandDependencies {
   readonly currentDateProvider: CurrentDateProvider;
   readonly clock: Clock;
   readonly idGenerator: IdGenerator;
+  readonly recurrence?: RecurringActions;
   readonly lifeActionRepository?: LifeActionRepository;
   readonly executionRepository?: RoutineOccurrenceExecutionRepository;
 }
@@ -73,9 +75,21 @@ export async function validateMutableOccurrence(
       'План этого появления уже стал историческим и больше не редактируется.',
     );
   }
-  if (block.assignment.kind === ROUTINE_BLOCK_ASSIGNMENT.existingAction) {
+  if (
+    block.assignment.kind === ROUTINE_BLOCK_ASSIGNMENT.existingAction ||
+    block.assignment.kind === 'existingSeries'
+  ) {
     const unfinished = await dependencies.actionSessionRepository.findUnfinished();
-    if (unfinished?.lifeActionId.equals(block.assignment.actionId) ?? false) {
+    const running =
+      unfinished && block.assignment.kind === 'existingSeries'
+        ? await dependencies.lifeActionRepository?.findById(unfinished.lifeActionId)
+        : null;
+    const matches =
+      block.assignment.kind === 'existingSeries'
+        ? running?.occurrence?.ruleId === block.assignment.ruleId.toString() &&
+          running?.plannedDate?.equals(input.occurrenceDate)
+        : unfinished?.lifeActionId.equals(block.assignment.actionId);
+    if (matches) {
       throw new DomainError(
         'routine_occurrence_override.active_session',
         'Сначала завершите или остановите текущую рабочую сессию корректным существующим способом.',

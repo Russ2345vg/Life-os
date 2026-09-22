@@ -1,0 +1,271 @@
+import { describe, expect, it } from 'vitest';
+import { WAKE_OCCURRENCE_STATUS, type SleepScheduleState } from '../../domain/sleep/SleepSchedule';
+import { FakeClock, FakeIdGenerator } from '../../test/helpers/Fakes';
+import type { SleepScheduleRepository, SleepScheduleUpdate } from './SleepScheduleRepository';
+import { SleepScheduleService } from './SleepScheduleService';
+import type {
+  AlarmSound,
+  WakeAlarmGateway,
+  WakeAlarmSchedule,
+  WakeAlarmStatus,
+} from './WakeAlarmGateway';
+
+describe('SleepScheduleService', () => {
+  it('persists settings and reopens one stable night cycle', async () => {
+    const repository = new InMemorySleepScheduleRepository();
+    const clock = new FakeClock(new Date('2026-09-20T12:00:00.000Z'));
+    const service = new SleepScheduleService(repository, clock, new FakeIdGenerator('sleep'));
+    await service.saveSettings({
+      bedtime: '22:00',
+      wakeTime: '07:00',
+      timeZone: 'Asia/Chita',
+      enabled: true,
+    });
+
+    const first = await service.ensureNightCycle('2026-09-20', [
+      {
+        id: 'prepare-water',
+        groupId: 'environment',
+        groupTitle: 'Среда',
+        title: 'Поставить воду',
+        position: 0,
+        status: 'PENDING',
+      },
+    ]);
+    clock.setTime(new Date('2026-09-20T16:30:00.000Z'));
+    const reopened = await service.ensureNightCycle('2026-09-20', []);
+
+    expect(reopened).toEqual(first);
+    expect(repository.state?.nightCycles).toHaveLength(1);
+    expect(repository.saveCount).toBe(2);
+  });
+
+  it('rebuilds idempotently and skips only the nearest persisted wake', async () => {
+    const repository = new InMemorySleepScheduleRepository();
+    const clock = new FakeClock(new Date('2026-09-20T12:00:00.000Z'));
+    const service = new SleepScheduleService(repository, clock, new FakeIdGenerator('sleep'));
+    await service.saveSettings({
+      bedtime: '22:00',
+      wakeTime: '07:00',
+      timeZone: 'Asia/Chita',
+      enabled: true,
+    });
+
+    await service.rebuild(['2026-09-20', '2026-09-21']);
+    await service.rebuild(['2026-09-20', '2026-09-21']);
+    const skipped = await service.skipNearestWake();
+
+    expect(skipped.wakeOccurrences.map(({ status }) => status)).toEqual([
+      WAKE_OCCURRENCE_STATUS.skipped,
+      WAKE_OCCURRENCE_STATUS.scheduled,
+    ]);
+    expect(skipped.alarmExceptions).toHaveLength(1);
+  });
+
+  it('persists the reversible feature switch', async () => {
+    const repository = new InMemorySleepScheduleRepository();
+    const clock = new FakeClock(new Date('2026-09-20T12:00:00.000Z'));
+    const service = new SleepScheduleService(repository, clock, new FakeIdGenerator('sleep'));
+    await service.saveSettings({
+      bedtime: '22:00',
+      wakeTime: '07:00',
+      timeZone: 'Asia/Chita',
+      enabled: true,
+    });
+    await service.rebuild(['2026-09-20']);
+
+    const disabled = await service.setEnabled(false);
+
+    expect(disabled.settings?.enabled).toBe(false);
+    expect(disabled.wakeOccurrences[0]?.status).toBe(WAKE_OCCURRENCE_STATUS.cancelled);
+    await expect(service.getState()).resolves.toEqual(disabled);
+  });
+
+  it('opens the current night from the catalog and immediately persists item completion', async () => {
+    const repository = new InMemorySleepScheduleRepository();
+    const clock = new FakeClock(new Date('2026-09-20T20:30:00.000Z'));
+    const service = new SleepScheduleService(repository, clock, new FakeIdGenerator('sleep'));
+    await service.saveSettings({
+      bedtime: '22:00',
+      wakeTime: '07:00',
+      timeZone: 'Asia/Chita',
+      enabled: true,
+    });
+
+    const opened = await service.openCurrentNight();
+    expect(opened.nightCycles[0]).toMatchObject({ cycleDate: '2026-09-20' });
+    await service.completeItem('base-room-air');
+
+    const reopened = new SleepScheduleService(repository, clock, new FakeIdGenerator('reopen'));
+    expect((await reopened.openCurrentNight()).nightCycles[0]?.preparationItems[0]?.status).toBe(
+      'DONE',
+    );
+  });
+
+  it('persists list settings and keeps an already opened snapshot unchanged', async () => {
+    const repository = new InMemorySleepScheduleRepository();
+    const clock = new FakeClock(new Date('2026-09-20T12:00:00.000Z'));
+    const service = new SleepScheduleService(repository, clock, new FakeIdGenerator('sleep'));
+    await service.saveSettings({
+      bedtime: '22:00',
+      wakeTime: '07:00',
+      timeZone: 'Asia/Chita',
+      enabled: true,
+    });
+    await service.openCurrentNight();
+
+    await service.addCustomItem('personal', 'Подготовить сумку');
+    const state = await service.getState();
+
+    expect(state.preparationItems.at(-1)).toMatchObject({
+      title: 'Подготовить сумку',
+      kind: 'CUSTOM',
+    });
+    expect(state.nightCycles[0]?.preparationItems).toHaveLength(4);
+  });
+
+  it('reconciles the next concrete wake occurrence after settings are saved', async () => {
+    const repository = new InMemorySleepScheduleRepository();
+    const clock = new FakeClock(new Date('2026-09-20T12:00:00.000Z'));
+    const alarm = new FakeWakeAlarmGateway();
+    const service = new SleepScheduleService(
+      repository,
+      clock,
+      new FakeIdGenerator('sleep'),
+      alarm,
+    );
+
+    const saved = await service.saveSettings({
+      bedtime: '22:00',
+      wakeTime: '07:00',
+      timeZone: 'Asia/Chita',
+      enabled: true,
+      alarmSound: { uri: null, title: 'Системный сигнал' },
+    });
+
+    expect(saved.wakeOccurrences.filter(({ status }) => status === 'SCHEDULED').length).toBeGreaterThan(1);
+    expect(alarm.reconciliations).toHaveLength(1);
+    expect(alarm.reconciliations[0]).toMatchObject({
+      enabled: true,
+      wakeTime: '07:00',
+      timeZone: 'Asia/Chita',
+      sound: { uri: null, title: 'Системный сигнал' },
+      nextOccurrence: { cycleDate: '2026-09-20' },
+    });
+  });
+
+  it('cancels the skipped occurrence and reconciles the following day without disabling the series', async () => {
+    const repository = new InMemorySleepScheduleRepository();
+    const clock = new FakeClock(new Date('2026-09-20T12:00:00.000Z'));
+    const alarm = new FakeWakeAlarmGateway();
+    const service = new SleepScheduleService(
+      repository,
+      clock,
+      new FakeIdGenerator('sleep'),
+      alarm,
+    );
+    await service.saveSettings({
+      bedtime: '22:00',
+      wakeTime: '07:00',
+      timeZone: 'Asia/Chita',
+      enabled: true,
+    });
+
+    const skipped = await service.skipNearestWake();
+
+    expect(skipped.wakeOccurrences[0]?.status).toBe(WAKE_OCCURRENCE_STATUS.skipped);
+    expect(alarm.reconciliations.at(-1)).toMatchObject({
+      enabled: true,
+      nextOccurrence: { cycleDate: '2026-09-21' },
+    });
+  });
+
+  it('reconciles an explicit native cancellation when the schedule is disabled', async () => {
+    const repository = new InMemorySleepScheduleRepository();
+    const clock = new FakeClock(new Date('2026-09-20T12:00:00.000Z'));
+    const alarm = new FakeWakeAlarmGateway();
+    const service = new SleepScheduleService(
+      repository,
+      clock,
+      new FakeIdGenerator('sleep'),
+      alarm,
+    );
+    await service.saveSettings({
+      bedtime: '22:00',
+      wakeTime: '07:00',
+      timeZone: 'Asia/Chita',
+      enabled: true,
+    });
+
+    await service.setEnabled(false);
+
+    expect(alarm.reconciliations.at(-1)).toMatchObject({
+      enabled: false,
+      nextOccurrence: null,
+    });
+  });
+});
+
+class FakeWakeAlarmGateway implements WakeAlarmGateway {
+  public readonly reconciliations: WakeAlarmSchedule[] = [];
+
+  public async reconcile(schedule: WakeAlarmSchedule): Promise<WakeAlarmStatus> {
+    this.reconciliations.push(schedule);
+    return readyStatus(schedule);
+  }
+
+  public async status(): Promise<WakeAlarmStatus> {
+    return readyStatus(this.reconciliations.at(-1));
+  }
+
+  public async listSounds(): Promise<readonly AlarmSound[]> {
+    return [{ uri: null, title: 'Системный сигнал' }];
+  }
+
+  public async scheduleTest(): Promise<WakeAlarmStatus> {
+    return this.status();
+  }
+
+  public async openSettings(): Promise<void> {}
+
+  public async stop(): Promise<void> {}
+}
+
+function readyStatus(schedule?: WakeAlarmSchedule): WakeAlarmStatus {
+  return {
+    supported: true,
+    state: schedule?.nextOccurrence === null ? 'READY' : 'SCHEDULED',
+    exactAlarmGranted: true,
+    notificationsGranted: true,
+    fullScreenGranted: true,
+    issues: [],
+    nextOccurrenceId: schedule?.nextOccurrence?.id ?? null,
+    nextScheduledAt: schedule?.nextOccurrence?.scheduledAt ?? null,
+    acknowledgedSettingsVersion: schedule?.settingsVersion ?? null,
+    lastDeliveredAt: null,
+    message: null,
+  };
+}
+
+class InMemorySleepScheduleRepository implements SleepScheduleRepository {
+  public state: SleepScheduleState | null = null;
+  public saveCount = 0;
+
+  public async load(): Promise<SleepScheduleState | null> {
+    return this.state;
+  }
+
+  public async save(state: SleepScheduleState): Promise<void> {
+    this.state = state;
+    this.saveCount += 1;
+  }
+
+  public async update(transform: SleepScheduleUpdate): Promise<SleepScheduleState> {
+    const next = transform(this.state);
+    if (next !== this.state) {
+      this.state = next;
+      this.saveCount += 1;
+    }
+    return next;
+  }
+}

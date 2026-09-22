@@ -12,7 +12,7 @@ describe('pilot delete commands', () => {
     expect(repository.delete.mock.calls).toEqual([
       ['direction', 'direction-1'],
       ['project', 'project-1'],
-      ['goal', 'goal-1'],
+      ['goal', 'goal-1', { explainBlocked: true }],
     ]);
   });
 });

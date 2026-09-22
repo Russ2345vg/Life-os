@@ -9,10 +9,17 @@ import { PlannerV2Workspace, type PlannerV2Services } from './PlannerV2Workspace
 import { PlannerViewSwitcher } from './PlannerViewSwitcher';
 
 describe('V2 preview routes', () => {
+  it('retains the selected direction when creating a goal', () => {
+    expect(parsePlannerV2Route('#/v2/goals/new?directionId=home')).toEqual({
+      view: 'new-goal',
+      directionId: 'home',
+    });
+  });
   it('roundtrips the four entries, focus and a converted action id', () => {
     for (const route of [
       { view: 'goals', period: 'week' },
       { view: 'goal', id: 'goal / русский' },
+      { view: 'goal', id: 'goal / русский', edit: true },
       { view: 'goals' },
       { view: 'focus' },
       { view: 'kanban', section: 'goals' },
@@ -25,6 +32,7 @@ describe('V2 preview routes', () => {
       { view: 'spheres' },
       { view: 'directions' },
       { view: 'today', day: 'tomorrow' },
+      { view: 'sleep' },
       { view: 'sphere', id: 'здоровье / дом' },
       { view: 'direction', id: 'сон' },
       { view: 'goals', sphereId: 'здоровье / дом' },

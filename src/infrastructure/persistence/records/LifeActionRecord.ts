@@ -14,6 +14,7 @@ export interface LifeActionRecord {
   readonly status: 'draft' | 'ready' | 'in_progress' | 'completed' | 'cancelled';
   readonly decisionId: string | null;
   readonly sphereId?: string | null;
+  readonly directionId?: string | null;
   readonly goalId?: string | null;
   readonly parentActionId?: string | null;
   readonly isNext?: boolean;

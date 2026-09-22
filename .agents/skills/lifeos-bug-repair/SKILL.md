@@ -6,6 +6,8 @@ description: Use when a LifeOS defect, failing test, hang, regression, or unexpe
 # LifeOS bug repair
 
 Repair the confirmed cause with regression evidence. Do not mask symptoms or broaden scope.
+Follow `AGENTS.md` for authorization and testing scope. For a diagnosis-only request, investigate
+and report the cause; proceed to repair only when the user requested or already authorized it.
 
 ## Investigation
 
@@ -21,7 +23,10 @@ Repair the confirmed cause with regression evidence. Do not mask symptoms or bro
 2. Make the smallest change at the owning layer. Preserve architecture, persistence, date, and user-data contracts.
 3. Avoid timeout increases, retries, broad cleanup, test weakening, and error suppression unless evidence shows they are the correct behavior.
 4. Run the regression check repeatedly when the defect is timing-sensitive.
-5. Run neighboring checks for the touched invariant, then the full gate in `docs/codex/TEST_MATRIX.md`.
+5. Run neighboring checks for the touched invariant, then the applicable gate in `docs/codex/TEST_MATRIX.md`.
+   For code this is one `npm run verify`, with E2E only when Testing Stage Gate requires it.
+   Instruction/config defects use syntax and decision scenarios, not tests that duplicate wording.
+   Preserve successful results until a relevant change or unresolved risk justifies another run.
 
 ## Required report
 

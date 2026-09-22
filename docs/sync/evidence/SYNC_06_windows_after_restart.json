@@ -1,0 +1,211 @@
+{
+  "time": "2026-09-07T16:47:37.399Z",
+  "counts": {
+    "days": 7,
+    "decisions": 0,
+    "directions": 4,
+    "eveningCycles": 0,
+    "goals": 3,
+    "lifeActions": 0,
+    "projects": 2,
+    "sync_applied_events": 69,
+    "sync_attachment_queue": 5,
+    "sync_conflicts": 9,
+    "sync_cursor": 1,
+    "sync_device_cache": 4,
+    "sync_object_meta": 32,
+    "sync_outbox": 0,
+    "sync_quarantine": 0,
+    "sync_settings": 43,
+    "sync_snapshot_meta": 11
+  },
+  "synthetic": {
+    "goals": [],
+    "directions": [],
+    "projects": [],
+    "decisions": [],
+    "lifeActions": []
+  },
+  "baseline": {
+    "goals": [
+      {
+        "id": "1850c9da-a593-4ffc-b9dc-0682d77698e0",
+        "hash": "24cbbd9bff5f435c044a8728d3562e9b8e00ae69c79bdc02e89e8f9488f35962"
+      },
+      {
+        "id": "82ae4488-d827-4416-aa6a-7f385641c315",
+        "hash": "59170aa3a92a2cdb11029bb96808ba88b6f6ac3650b82c70288a7552d6b4ea22"
+      },
+      {
+        "id": "a74e479c-55d3-40d5-bb14-4877c115ace5",
+        "hash": "d69dd7e28ae971f8655afd9da6266596d862cd043669dc2f47ef1f8423dcda0f"
+      }
+    ],
+    "directions": [
+      {
+        "id": "0fb95676-88bd-46e5-b151-12bd31953b41",
+        "hash": "20b82f6da251cdc000561b119acc4364a8e5c029e37e888deb66ae3c115b5ac5"
+      },
+      {
+        "id": "3eea2a8d-6398-4d9c-8338-34ef5e5e4d07",
+        "hash": "83c50b2b387bcb67acbab1a96bb061f730641ad4f71594de4fa40667e55fab44"
+      },
+      {
+        "id": "ca297cad-9064-4fc5-bfe6-bc7cdb569941",
+        "hash": "0e21078eff1f44104df8768adde5e3a6bc322d59227ae8e335dcb6dba57953c5"
+      },
+      {
+        "id": "e3096ce1-14c2-4808-bc8f-bedb7f0ed69e",
+        "hash": "6c4b2aeebfca799f5f1cc449d2aa24f702bfaf8e4e8df7af1e3fcf7841b81597"
+      }
+    ],
+    "projects": [
+      {
+        "id": "086f507e-7049-4a1f-95e3-835619844168",
+        "hash": "86160d95163d5d63ebc4a1dfd4657e5786f9604465ec2fdd712d265ff6fed97c"
+      },
+      {
+        "id": "eaa8e010-1f18-4351-be1a-594289d667e8",
+        "hash": "4439ce95dbeaaffdb614558ca1f6a0e6ccadcca49ce842604166fd9b274a65ad"
+      }
+    ],
+    "decisions": [],
+    "lifeActions": []
+  },
+  "singleton": {
+    "days": [],
+    "cycles": []
+  },
+  "technical": {
+    "sync_attachment_queue": [
+      {
+        "id": "758b9643-83c6-46ed-ae79-b5b224ac1adf",
+        "spaceId": "10ca7d74-e986-42d1-ba23-5981fc06dd6b",
+        "state": "uploaded",
+        "cloudVerifiedAt": "2026-09-07T14:27:36.635Z",
+        "leaseUntil": null,
+        "nextAttemptAt": "2026-09-07T14:27:19.566Z"
+      },
+      {
+        "id": "813fbe6e-624e-4b32-9733-ffa28fb42102",
+        "spaceId": "10ca7d74-e986-42d1-ba23-5981fc06dd6b",
+        "state": "available-local",
+        "cloudVerifiedAt": "2026-09-07T14:44:27.907Z",
+        "leaseUntil": null,
+        "nextAttemptAt": "2026-09-07T14:44:27.231Z"
+      },
+      {
+        "id": "88684ec9-8afa-4ce1-a0c9-5b8598773232",
+        "spaceId": "10ca7d74-e986-42d1-ba23-5981fc06dd6b",
+        "state": "available-local",
+        "cloudVerifiedAt": "2026-09-07T14:59:33.702Z",
+        "leaseUntil": null,
+        "nextAttemptAt": "2026-09-07T14:59:32.741Z"
+      },
+      {
+        "id": "fde23c2c-85d0-4e65-81af-7c226615c7ec",
+        "spaceId": "10ca7d74-e986-42d1-ba23-5981fc06dd6b",
+        "state": "tombstoned",
+        "cloudVerifiedAt": "2026-09-07T14:39:31.671Z",
+        "leaseUntil": null,
+        "nextAttemptAt": "2026-09-07T14:39:28.838Z"
+      },
+      {
+        "id": "ff5bd3a8-c112-4789-8093-bd6c6d94cb52",
+        "spaceId": "10ca7d74-e986-42d1-ba23-5981fc06dd6b",
+        "state": "available-local",
+        "cloudVerifiedAt": "2026-09-07T14:32:30.252Z",
+        "leaseUntil": null,
+        "nextAttemptAt": "2026-09-07T14:32:27.098Z"
+      }
+    ],
+    "sync_cursor": [
+      {
+        "spaceId": "10ca7d74-e986-42d1-ba23-5981fc06dd6b",
+        "lastSequence": 72
+      }
+    ],
+    "sync_outbox": [],
+    "sync_snapshot_meta": [
+      {
+        "id": "045bee26-1d6f-4504-aa78-c902518d8557",
+        "spaceId": "10ca7d74-e986-42d1-ba23-5981fc06dd6b",
+        "kind": "daily",
+        "verifiedAt": "2026-09-07T14:30:12.291Z",
+        "cloudVerifiedAt": "2026-09-07T14:30:12.291Z",
+        "nextAttemptAt": "2026-09-07T14:30:12.291Z"
+      },
+      {
+        "id": "08e06683-8d50-4c51-87ea-411e0700c9b8",
+        "kind": "pre_sync",
+        "verifiedAt": "2026-09-07T04:17:24.612Z"
+      },
+      {
+        "id": "1b153a04-4be0-4c40-94f0-ff6612e7a4f9",
+        "spaceId": "10ca7d74-e986-42d1-ba23-5981fc06dd6b",
+        "kind": "manual",
+        "verifiedAt": "2026-09-07T16:44:59.367Z",
+        "cloudVerifiedAt": "2026-09-07T16:45:05.100Z",
+        "nextAttemptAt": "2026-09-07T16:44:58.812Z"
+      },
+      {
+        "id": "4e9dfd8e-7f5f-4c93-8ff3-7b98badfc954",
+        "spaceId": "10ca7d74-e986-42d1-ba23-5981fc06dd6b",
+        "kind": "daily",
+        "verifiedAt": "2026-09-07T14:27:23.489Z",
+        "cloudVerifiedAt": "2026-09-07T14:27:42.977Z",
+        "nextAttemptAt": "2026-09-07T14:27:22.736Z"
+      },
+      {
+        "id": "6d0038b3-76f0-406f-906c-bfcf5fdf0e2e",
+        "spaceId": "10ca7d74-e986-42d1-ba23-5981fc06dd6b",
+        "kind": "manual",
+        "verifiedAt": "2026-09-07T14:43:29.485Z",
+        "cloudVerifiedAt": "2026-09-07T14:43:51.093Z",
+        "nextAttemptAt": "2026-09-07T14:43:29.344Z"
+      },
+      {
+        "id": "705343b6-10ea-469a-bb47-08c79ef8bc59",
+        "kind": "pre_sync",
+        "verifiedAt": "2026-09-04T05:06:51.740Z"
+      },
+      {
+        "id": "87818dec-64f9-4733-9024-ef14de10fdd2",
+        "spaceId": "10ca7d74-e986-42d1-ba23-5981fc06dd6b",
+        "kind": "weekly",
+        "verifiedAt": "2026-09-07T14:30:12.680Z",
+        "cloudVerifiedAt": "2026-09-07T14:30:12.680Z",
+        "nextAttemptAt": "2026-09-07T14:30:12.680Z"
+      },
+      {
+        "id": "9dfd70e2-f16e-44e3-9bd8-46e14d1a27dd",
+        "spaceId": "10ca7d74-e986-42d1-ba23-5981fc06dd6b",
+        "kind": "weekly",
+        "verifiedAt": "2026-09-07T14:27:24.180Z",
+        "cloudVerifiedAt": "2026-09-07T14:27:35.188Z",
+        "nextAttemptAt": "2026-09-07T14:27:23.509Z"
+      },
+      {
+        "id": "a0c22901-b5e6-4afb-bf26-7b89781c5232",
+        "spaceId": "10ca7d74-e986-42d1-ba23-5981fc06dd6b",
+        "kind": "pre-restore",
+        "verifiedAt": "2026-09-07T14:50:56.888Z",
+        "cloudVerifiedAt": "2026-09-07T14:51:00.319Z",
+        "nextAttemptAt": "2026-09-07T14:50:56.748Z"
+      },
+      {
+        "id": "b9905c38-a2b3-4cbe-8d0e-761b574572ea",
+        "kind": "pre_sync",
+        "verifiedAt": "2026-09-05T04:13:33.471Z"
+      },
+      {
+        "id": "c99f9fd9-1554-4218-9c80-73086a60581f",
+        "spaceId": "10ca7d74-e986-42d1-ba23-5981fc06dd6b",
+        "kind": "pre-restore",
+        "verifiedAt": "2026-09-07T14:54:02.742Z",
+        "cloudVerifiedAt": "2026-09-07T14:54:05.969Z",
+        "nextAttemptAt": "2026-09-07T14:54:02.592Z"
+      }
+    ]
+  }
+}

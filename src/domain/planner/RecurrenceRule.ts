@@ -18,6 +18,8 @@ export type RecurrenceSchedule =
 export interface RecurrenceRule extends PlanningRecord {
   readonly title: string;
   readonly goalId: string | null;
+  readonly directionId?: string | null;
+  readonly sphereId?: string | null;
   readonly priority: ActionPriority | null;
   readonly startDate: string;
   readonly endDate: string | null;
@@ -43,6 +45,9 @@ export function validateRule(rule: RecurrenceRule): RecurrenceRule {
     rule.revision < 1 ||
     typeof rule.paused !== 'boolean' ||
     (rule.goalId !== null && typeof rule.goalId !== 'string') ||
+    (rule.directionId != null &&
+      (typeof rule.directionId !== 'string' || !rule.directionId.trim())) ||
+    (rule.sphereId != null && (typeof rule.sphereId !== 'string' || !rule.sphereId.trim())) ||
     (rule.priority !== null && !['high', 'normal', 'low'].includes(rule.priority)) ||
     (rule.endDate !== null && rule.endDate < rule.startDate) ||
     (rule.maxCompletions !== null &&

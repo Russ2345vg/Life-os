@@ -1,0 +1,17 @@
+{
+  "goal": {
+    "id": "f49a0e55-dc9a-40a7-9c4d-b3c1690d8512",
+    "title": "SYNC06_TEST_WINDOWS_OFFLINE_20260908",
+    "hasCover": true,
+    "version": 1
+  },
+  "attachments": [
+    {
+      "id": "773de38e-0b00-47a0-af8c-6486765bd21e",
+      "state": "pending-upload",
+      "local": true,
+      "cloud": false
+    }
+  ],
+  "outbox": 1
+}

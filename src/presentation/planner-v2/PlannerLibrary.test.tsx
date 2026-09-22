@@ -14,7 +14,7 @@ const goal = Goal.create({
   status: 'active',
   achievementCriteria: 'Читать свободно',
   now,
-});
+}).selectNextAction(EntityId.create('a'), now);
 const action = LifeAction.createDraft({
   id: EntityId.create('a'),
   title: LifeActionTitle.create('Прочитать главу'),
@@ -23,6 +23,28 @@ const action = LifeAction.createDraft({
   eventId: EntityId.create('e'),
 });
 describe('V2 library rendering', () => {
+  it('shows the explicitly selected next action consistently in the goal list', () => {
+    const next = LifeAction.createDraft({
+      id: EntityId.create('next'),
+      title: LifeActionTitle.create('Выбранный шаг'),
+      goalId: goal.id,
+      createdAt: now,
+      eventId: EntityId.create('next-event'),
+    });
+    const selectedGoal = goal.selectNextAction(next.id, now);
+    const html = renderToStaticMarkup(
+      createElement(PlannerGoalList, {
+        today: '2026-09-14',
+        goals: [selectedGoal],
+        actions: [action, next],
+        directions: [],
+        spheres: [],
+        focusIds: ['g'],
+      }),
+    );
+    expect(html).toContain('Выбранный шаг');
+    expect(html).toContain('В фокусе');
+  });
   it('offers title-only capture with voice and an empty state', () => {
     const html = renderToStaticMarkup(
       createElement(PlannerInbox, {

@@ -44,7 +44,12 @@ const TOMORROW = DayDate.create('2026-08-09');
 const NOW = new Date('2026-08-08T08:00:00.000Z');
 
 async function setup(
-  options: { activeSession?: boolean; completedDay?: boolean; currentDate?: DayDate } = {},
+  options: {
+    series?: boolean;
+    activeSession?: boolean;
+    completedDay?: boolean;
+    currentDate?: DayDate;
+  } = {},
 ) {
   const sourceActionId = EntityId.create('action-a');
   const replacement = LifeAction.createDraft({
@@ -63,8 +68,8 @@ async function setup(
     recurrence: RoutineBlockRecurrence.create(ROUTINE_BLOCK_RECURRENCE.daily),
     required: true,
     assignment: createRoutineBlockAssignment(
-      ROUTINE_BLOCK_ASSIGNMENT.existingAction,
-      sourceActionId,
+      options.series ? 'existingSeries' : ROUTINE_BLOCK_ASSIGNMENT.existingAction,
+      options.series ? EntityId.create('series-a') : sourceActionId,
     ),
     now: NOW,
   });
@@ -99,12 +104,27 @@ async function setup(
         }),
       ]
     : [];
+  const sourceAction = LifeAction.createDraft({
+    id: sourceActionId,
+    title: LifeActionTitle.create('Серия'),
+    createdAt: NOW,
+    eventId: EntityId.create('source-event'),
+    plannedDate: TODAY,
+  });
+  sourceAction.setPlanningMetadata({
+    occurrence: {
+      ruleId: 'series-a',
+      slot: TODAY.toString(),
+      originalDate: TODAY.toString(),
+      ruleRevision: 1,
+    },
+  });
   const dependencies = {
     routineBlockRepository,
     overrideRepository,
     dayRepository,
     actionSessionRepository: new TestActionSessionRepository(sessions),
-    lifeActionRepository: new TestLifeActionRepository([replacement]),
+    lifeActionRepository: new TestLifeActionRepository([replacement, sourceAction]),
     currentDateProvider: new FakeCurrentDateProvider(options.currentDate ?? TODAY),
     clock: new FakeClock(NOW),
     idGenerator: new FakeIdGenerator('override'),
@@ -129,6 +149,13 @@ function occurrenceInput(block: RoutineBlock) {
 }
 
 describe('routine occurrence commands', () => {
+  it('blocks changing a series block while its dated occurrence has an active session', async () => {
+    const app = await setup({ series: true, activeSession: true });
+    expect(await app.skip.execute(occurrenceInput(app.block))).toMatchObject({
+      ok: false,
+      error: { code: 'routine_occurrence_override.active_session' },
+    });
+  });
   it('creates delay without mutating the recurring block', async () => {
     const app = await setup();
     const result = await app.delay.execute({

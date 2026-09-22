@@ -105,6 +105,8 @@ export { InMemoryWalkCaptureRepository } from './persistence/InMemoryWalkCapture
 export { ExerciseDefinitionRecordMapper } from './persistence/mappers/ExerciseDefinitionRecordMapper';
 export type { ExerciseDefinitionRecord } from './persistence/records/ExerciseDefinitionRecord';
 export { IndexedDbWalkCaptureRepository } from './persistence/IndexedDbWalkCaptureRepository';
+export { IndexedDbSleepScheduleRepository } from './persistence/IndexedDbSleepScheduleRepository';
+export { TauriAndroidWakeAlarmGateway } from './alarm/TauriAndroidWakeAlarmGateway';
 export { WalkCaptureRecordMapper } from './persistence/mappers/WalkCaptureRecordMapper';
 export { IndexedDbSnapshotService } from './sync/IndexedDbSnapshotService';
 export { IndexedDbPilotDeleteRepository } from './sync/pilot/IndexedDbPilotDeleteRepository';

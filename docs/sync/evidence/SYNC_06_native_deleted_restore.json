@@ -1,0 +1,43 @@
+{
+  "fixtureId": "f49a0e55-dc9a-40a7-9c4d-b3c1690d8512",
+  "initial": {
+    "exists": true,
+    "hasCover": true,
+    "revision": 1,
+    "deleted": false,
+    "outbox": 0,
+    "preRestore": ["a0c22901-b5e6-4afb-bf26-7b89781c5232", "c99f9fd9-1554-4218-9c80-73086a60581f"]
+  },
+  "deleted": {
+    "exists": false,
+    "hasCover": false,
+    "revision": 2,
+    "deleted": true,
+    "outbox": 1,
+    "preRestore": ["a0c22901-b5e6-4afb-bf26-7b89781c5232", "c99f9fd9-1554-4218-9c80-73086a60581f"]
+  },
+  "restored": {
+    "exists": true,
+    "hasCover": true,
+    "revision": 3,
+    "deleted": false,
+    "outbox": 1,
+    "preRestore": [
+      "a0c22901-b5e6-4afb-bf26-7b89781c5232",
+      "bda39360-f433-4402-a285-d695a56b1c25",
+      "c99f9fd9-1554-4218-9c80-73086a60581f"
+    ]
+  },
+  "cleanup": {
+    "exists": false,
+    "hasCover": false,
+    "revision": 4,
+    "deleted": true,
+    "outbox": 0,
+    "preRestore": [
+      "a0c22901-b5e6-4afb-bf26-7b89781c5232",
+      "bda39360-f433-4402-a285-d695a56b1c25",
+      "c99f9fd9-1554-4218-9c80-73086a60581f"
+    ]
+  }
+}

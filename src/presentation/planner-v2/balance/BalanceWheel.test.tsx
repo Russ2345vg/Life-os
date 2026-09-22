@@ -16,6 +16,8 @@ describe('balance wheel accessible states', () => {
     );
     expect(html).toContain('Сон: нет данных');
     expect(html).toContain('Здоровье: 0.0 из 10');
+    expect(html).toMatch(/<text[^>]*>Сон<\/text>/);
+    expect(html).toMatch(/<text[^>]*>Здоровье<\/text>/);
     expect(html).not.toContain('NaN');
     expect(
       renderToStaticMarkup(

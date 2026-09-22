@@ -353,7 +353,7 @@
 }
 .balance-direction-filters {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(170px, 220px);
+  grid-template-columns: minmax(140px, 1fr) minmax(0, 2fr) minmax(140px, 1fr);
   gap: 12px;
   align-items: end;
   margin: 20px 0 30px;
@@ -382,5 +382,175 @@
     display: block;
     margin-top: 8px;
     font-size: 1rem;
+  }
+}
+
+/* MASTER: a quiet overview and compact, independent sphere cards. */
+.balance-overview {
+  align-items: stretch;
+  gap: var(--space-4);
+  border: 0;
+  padding: 0;
+}
+.balance-wheel-panel,
+.balance-attention,
+.balance-sphere-card,
+.balance-direction-cards .balance-row,
+.balance-state-text > div {
+  padding: var(--space-6);
+  background: var(--surface-1);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-medium);
+}
+.balance-wheel-panel .balance-section-heading {
+  margin: 0;
+  gap: var(--space-2);
+}
+.balance-wheel-panel .balance-section-heading h2 {
+  margin: 0;
+}
+.balance-attention-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  padding: var(--space-6) 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+.balance-attention-row small {
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+.balance-attention-row progress,
+.balance-sphere-card > progress {
+  width: 100%;
+  height: 6px;
+}
+.balance-attention-row > span {
+  font-size: 12px;
+}
+.balance-sphere-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: var(--space-4);
+}
+.balance-sphere-grid > .planner-entity-context {
+  min-width: 0;
+}
+.balance-sphere-grid .planner-entity-content,
+.balance-sphere-card {
+  height: 100%;
+}
+.balance-sphere-card .balance-row {
+  padding-right: var(--space-6);
+  align-items: start;
+}
+.balance-sphere-card .balance-row > strong {
+  font-size: 16px;
+  color: var(--text-primary);
+  white-space: normal;
+}
+.balance-sphere-card--unrated .balance-row > strong {
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 400;
+}
+.balance-sphere-card .balance-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.balance-sphere-card > button {
+  width: 100%;
+}
+.balance-grid {
+  stroke: var(--border-soft);
+}
+.balance-radar-current {
+  stroke: var(--planner-accent);
+  fill: var(--planner-accent);
+}
+.balance-radar-current polygon {
+  fill-opacity: 0.18;
+  stroke-width: 1.5;
+}
+.balance-radar-desired {
+  stroke: var(--text-secondary);
+  fill: none;
+}
+.balance-radar-desired polygon,
+.balance-radar-desired line {
+  stroke-dasharray: 4 4;
+}
+.balance-wheel text {
+  fill: var(--text-secondary);
+  font-size: 12px;
+}
+.balance-wheel .balance-wheel-scale {
+  font-size: 10px;
+}
+.balance-period {
+  align-items: center;
+  flex-wrap: wrap;
+}
+.balance-period > span {
+  padding: 0;
+}
+.balance-form .voice-field,
+.balance-form > label {
+  margin-bottom: var(--space-4);
+}
+.balance-workspace .balance-score > strong {
+  color: var(--text-primary);
+  font-size: 24px;
+}
+.balance-direction-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: var(--space-4);
+}
+.balance-direction-cards .balance-row {
+  height: 100%;
+  align-items: start;
+  padding-right: var(--space-12);
+}
+.balance-direction-cards .balance-row > strong {
+  color: var(--text-secondary);
+  font-size: 14px;
+  white-space: normal;
+}
+.balance-direction-cards .planner-entity-content {
+  height: 100%;
+}
+.balance-next-step {
+  margin-block: var(--space-6);
+  padding: var(--space-6);
+  background: var(--surface-1);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-medium);
+}
+@media (max-width: 760px) {
+  .balance-overview,
+  .balance-state-text {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .balance-wheel-panel,
+  .balance-attention,
+  .balance-sphere-card,
+  .balance-state-text > div {
+    padding: var(--space-4);
+  }
+  .balance-wheel {
+    max-height: 360px;
+  }
+  .balance-period {
+    display: block;
+  }
+  .balance-period .planner-segments {
+    gap: var(--space-1);
+    margin-bottom: var(--space-2);
+  }
+  .balance-period .planner-segments button {
+    padding-inline: var(--space-3);
   }
 }

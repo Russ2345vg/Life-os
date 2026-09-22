@@ -1,0 +1,56 @@
+{
+  "runId": "210ea8c1-927d-443b-8bc0-f45f34fbfbfc",
+  "spaces": [
+    {
+      "spaceId": "67fc7c9f-6585-43c1-93d4-aa876285d165",
+      "deviceId": "726acdbd-873f-434a-8543-81151c189934",
+      "userId": "9550ecb2-051b-4d1f-a655-c64200f017d4"
+    },
+    {
+      "spaceId": "1825f279-0b49-4284-889f-b8f931d9d461",
+      "deviceId": "cffa0e92-c4b0-4441-b81d-cc14cae52a4e",
+      "userId": "6fbc411c-6a94-466e-8a98-3c804a5015d8"
+    }
+  ],
+  "identities": [
+    "9550ecb2-051b-4d1f-a655-c64200f017d4",
+    "6fbc411c-6a94-466e-8a98-3c804a5015d8",
+    "c85f3081-72d7-4683-b07f-06640f5b8a62"
+  ],
+  "objects": [
+    {
+      "bucket": "lifeos-attachments",
+      "path": "67fc7c9f-6585-43c1-93d4-aa876285d165/9f6af09b-66d9-4198-9bb0-5c6f6159cb6c/1",
+      "bytes": 137
+    },
+    {
+      "bucket": "lifeos-snapshots",
+      "path": "67fc7c9f-6585-43c1-93d4-aa876285d165/90681c85-449c-4b92-a1bd-19ae2caf2152/1",
+      "bytes": 137
+    }
+  ],
+  "checks": [
+    "active ciphertext upload/download exact bytes in lifeos-attachments",
+    "immutable duplicate rejected in lifeos-attachments",
+    "overwrite and deletion cannot change retained bytes in lifeos-attachments",
+    "foreign: upload and download denied in lifeos-attachments",
+    "public URL denied in lifeos-attachments",
+    "plaintext filename path denied in lifeos-attachments",
+    "active ciphertext upload/download exact bytes in lifeos-snapshots",
+    "immutable duplicate rejected in lifeos-snapshots",
+    "overwrite and deletion cannot change retained bytes in lifeos-snapshots",
+    "foreign: upload and download denied in lifeos-snapshots",
+    "public URL denied in lifeos-snapshots",
+    "plaintext filename path denied in lifeos-snapshots",
+    "pending: upload and download denied in lifeos-attachments",
+    "pending: upload and download denied in lifeos-snapshots",
+    "revoked: upload and download denied in lifeos-attachments",
+    "revoked: upload and download denied in lifeos-snapshots",
+    "HOSTED STORAGE HTTP ACCEPTANCE COMPLETE"
+  ],
+  "pending": {
+    "userId": "c85f3081-72d7-4683-b07f-06640f5b8a62",
+    "deviceId": "8403b6e9-78da-42ca-bfdc-474b5f70e7a8",
+    "spaceId": "67fc7c9f-6585-43c1-93d4-aa876285d165"
+  }
+}

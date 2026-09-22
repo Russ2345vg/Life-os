@@ -11,6 +11,7 @@ export interface RoutineBlockRecord {
   readonly required: boolean;
   readonly assignment?: string;
   readonly actionId?: string;
+  readonly ruleId?: string;
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly version: number;

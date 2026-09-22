@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { recurrenceLabel, type ActionOption } from '../../application/planner/actionSelection';
 import { VoiceField } from '../voice-input/VoiceField';
 import { VoiceTextInput } from '../voice-input/VoiceTextInput';
 import type { RoutineActionOption } from '../../application';
@@ -32,6 +34,7 @@ interface RoutineBlockFormProps {
   readonly onChange: (form: RoutineBlockFormState) => void;
   readonly onCancel: () => void;
   readonly onSubmit: () => void;
+  readonly choices?: readonly ActionOption[];
   readonly actionOptions?: readonly RoutineActionOption[];
   readonly unavailableActionLabel?: string;
 }
@@ -46,8 +49,22 @@ export function RoutineBlockForm({
   onCancel,
   onSubmit,
   actionOptions = [],
+  choices,
   unavailableActionLabel,
 }: RoutineBlockFormProps) {
+  const [search, setSearch] = useState('');
+  const options: readonly ActionOption[] =
+    choices ??
+    actionOptions.map((o) => ({
+      key: o.lifeAction.occurrence
+        ? 'series:' + o.lifeAction.occurrence.ruleId
+        : 'action:' + o.lifeAction.id.toString(),
+      selection: o.lifeAction.occurrence
+        ? { kind: 'series', ruleId: o.lifeAction.occurrence.ruleId }
+        : { kind: 'action', actionId: o.lifeAction.id.toString() },
+      title: o.lifeAction.title.toString(),
+      rule: null,
+    }));
   return (
     <div className="routine-form-backdrop" role="presentation">
       <section
@@ -131,7 +148,9 @@ export function RoutineBlockForm({
           <label className="routine-field routine-field-wide">
             <span>Назначение</span>
             <select
-              value={form.assignmentKind}
+              value={
+                form.assignmentKind === 'existingSeries' ? 'existingAction' : form.assignmentKind
+              }
               disabled={isSaving}
               onChange={(event) =>
                 onChange(
@@ -142,47 +161,80 @@ export function RoutineBlockForm({
                 )
               }
             >
-              {Object.entries(ROUTINE_ASSIGNMENT_LABELS).map(([value, label]) => (
-                <option value={value} key={value}>
-                  {label}
-                </option>
-              ))}
+              {Object.entries(ROUTINE_ASSIGNMENT_LABELS)
+                .filter(([key]) => key !== 'existingSeries')
+                .map(([value, label]) => (
+                  <option value={value} key={value}>
+                    {label}
+                  </option>
+                ))}
             </select>
           </label>
-          {form.assignmentKind === ROUTINE_BLOCK_ASSIGNMENT.existingAction ? (
+          <VoiceField className="routine-field routine-field-wide">
+            <span>Поиск действия</span>
+            <VoiceTextInput id="routine-action-search" value={search} onValueChange={setSearch} />
+          </VoiceField>
+          {form.assignmentKind === ROUTINE_BLOCK_ASSIGNMENT.existingAction ||
+          form.assignmentKind === 'existingSeries' ? (
             <label className="routine-field routine-field-wide">
               <span>Связанное действие</span>
               <select
-                value={form.actionId}
+                value={
+                  form.actionId
+                    ? (form.assignmentKind === 'existingSeries' ? 'series:' : 'action:') +
+                      form.actionId
+                    : ''
+                }
                 disabled={isSaving}
                 aria-invalid={errors.actionId === undefined ? undefined : true}
-                onChange={(event) => onChange({ ...form, actionId: event.target.value })}
+                onChange={(event) => {
+                  const option = options.find((o) => o.key === event.target.value);
+                  onChange({
+                    ...form,
+                    assignmentKind:
+                      option?.selection.kind === 'series' ? 'existingSeries' : 'existingAction',
+                    actionId:
+                      option?.selection.kind === 'series'
+                        ? option.selection.ruleId
+                        : (option?.selection.actionId ?? ''),
+                  });
+                }}
               >
                 <option value="">Выберите действие</option>
                 {unavailableActionLabel === undefined ||
-                actionOptions.some(
-                  (option) => option.lifeAction.id.toString() === form.actionId,
+                options.some(
+                  (o) =>
+                    o.key ===
+                    (form.assignmentKind === 'existingSeries' ? 'series:' : 'action:') +
+                      form.actionId,
                 ) ? null : (
-                  <option value={form.actionId}>{unavailableActionLabel}</option>
-                )}
-                {actionOptions.map((option) => (
                   <option
-                    value={option.lifeAction.id.toString()}
-                    key={option.lifeAction.id.toString()}
+                    value={
+                      (form.assignmentKind === 'existingSeries' ? 'series:' : 'action:') +
+                      form.actionId
+                    }
                   >
-                    {option.lifeAction.title.toString()}
-                    {option.decision === null
-                      ? ''
-                      : ` · Решение: ${option.decision.title.toString()}`}
+                    {unavailableActionLabel}
                   </option>
-                ))}
+                )}
+                {options
+                  .filter((o) =>
+                    o.title.toLocaleLowerCase('ru').includes(search.toLocaleLowerCase('ru')),
+                  )
+                  .map((option) => (
+                    <option key={option.key} value={option.key}>
+                      {option.title}
+                      {option.selection.kind === 'series'
+                        ? ' · ↻ ' + recurrenceLabel(option.rule)
+                        : ''}
+                    </option>
+                  ))}
               </select>
               {errors.actionId === undefined ? null : (
                 <small className="form-error">{errors.actionId}</small>
               )}
               <small>
-                Одна повторяющаяся запись связывается с одним действием; отдельные копии действия
-                для повторений не создаются.
+                Серия связывается один раз. В каждом дне открывается её выполнение на эту дату.
               </small>
             </label>
           ) : null}

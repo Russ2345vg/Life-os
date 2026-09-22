@@ -34,6 +34,9 @@ export class RoutineBlockRecordMapper {
       selectedWeekdays: [...block.recurrence.selectedWeekdays],
       required: block.required,
       assignment: block.assignment.kind,
+      ...(block.assignment.kind === 'existingSeries'
+        ? { ruleId: block.assignment.ruleId.toString() }
+        : {}),
       ...(block.assignment.kind === ROUTINE_BLOCK_ASSIGNMENT.existingAction
         ? { actionId: block.assignment.actionId.toString() }
         : {}),
@@ -89,7 +92,9 @@ function readAssignment(record: UnknownRecord) {
     record.assignment,
     record.assignment === ROUTINE_BLOCK_ASSIGNMENT.existingAction
       ? readEntityId(record, 'actionId')
-      : undefined,
+      : record.assignment === 'existingSeries'
+        ? readEntityId(record, 'ruleId')
+        : undefined,
   );
 }
 

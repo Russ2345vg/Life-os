@@ -1,0 +1,16 @@
+{
+  "snapshot": {
+    "id": "1b153a04-4be0-4c40-94f0-ff6612e7a4f9",
+    "verified": true,
+    "cloud": true,
+    "createdAt": "2026-09-07T16:44:58.812Z",
+    "encrypted": true
+  },
+  "preview": {
+    "noChanges": true,
+    "preRestoreWarning": true,
+    "warningValidatedByExactText": true
+  },
+  "cancelled": true,
+  "realRestoreApplied": false
+}

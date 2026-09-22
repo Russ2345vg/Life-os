@@ -59,13 +59,16 @@ export class PeriodPlanning {
   async participate(
     kind: PeriodKind,
     date: string,
-    type: 'goal' | 'action',
+    type: 'goal' | 'action' | 'rule',
     entityId: string,
     removed = false,
   ) {
     return this.repository.change((s) => {
       if (type === 'goal') requireGoal(s, entityId);
-      else requireAction(s, entityId);
+      else if (type === 'rule') {
+        if (!s.rules.some((r) => r.id === entityId))
+          throw new DomainError('recurrence.not_found', 'Серия не найдена.');
+      } else requireAction(s, entityId);
       const p = this.ensurePeriod(s, kind, date);
       this.membership(s, p.id, type, entityId, removed);
       if (removed && p.primaryGoalId === entityId)
@@ -115,7 +118,7 @@ export class PeriodPlanning {
   }
   async carryover(
     periodId: string,
-    type: 'goal' | 'action',
+    type: 'goal' | 'action' | 'rule',
     entityId: string,
     decision: 'continue' | 'unplanned' | 'stop' | 'achieved',
     target: PlanningPeriod | null,
@@ -123,7 +126,13 @@ export class PeriodPlanning {
     return this.repository.change((s) => {
       const source = s.periods.find((p) => p.id === periodId);
       if (!source) throw new DomainError('planning.period_missing', 'Период не найден.');
-      const entity = type === 'goal' ? requireGoal(s, entityId) : requireAction(s, entityId);
+      const entity =
+        type === 'goal'
+          ? requireGoal(s, entityId)
+          : type === 'rule'
+            ? s.rules.find((r) => r.id === entityId)
+            : requireAction(s, entityId);
+      if (!entity) throw new DomainError('recurrence.not_found', 'Серия не найдена.');
       const id = `decision:${membershipId(periodId, type, entityId)}`;
       if (s.decisions.some((d) => d.id === id)) return;
       if (decision === 'continue') {
@@ -161,7 +170,14 @@ export class PeriodPlanning {
         entityId,
         decision,
         targetPeriodId: target?.id ?? null,
-        statusAtDecision: decision === 'achieved' ? 'achieved' : entity.status,
+        statusAtDecision:
+          decision === 'achieved'
+            ? 'achieved'
+            : 'status' in entity
+              ? entity.status
+              : entity.paused
+                ? 'paused'
+                : 'active',
         resultAtDecision: snapshot,
         version: 1,
         schemaVersion: 1,
@@ -191,7 +207,7 @@ export class PeriodPlanning {
   private membership(
     s: PlanningState,
     periodId: string,
-    entityType: 'goal' | 'action',
+    entityType: 'goal' | 'action' | 'rule',
     entityId: string,
     removed: boolean,
   ): PeriodMembership {

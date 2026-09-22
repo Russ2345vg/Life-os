@@ -14,7 +14,7 @@ export function PlannerViewSwitcher({
     ...(section === 'goals' ? [{ label: 'Фокус', route: { view: 'focus' } as const }] : []),
     { label: 'Канбан', route: { view: 'kanban', section } },
     { label: 'Календарь', route: { view: 'calendar', section } },
-    { label: 'Древо', route: { view: 'tree', section } },
+    ...(section === 'goals' ? [{ label: 'Древо', route: { view: 'tree', section } as const }] : []),
   ];
   const routes = baseRoutes.map((item) => ({
     ...item,

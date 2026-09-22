@@ -27,7 +27,9 @@ export function BalanceEntityForm({
 }) {
   const direction = entity && 'mode' in entity ? entity : null,
     sphere = entity && 'desiredLevel' in entity ? entity : null;
+  const [expectedVersion] = useState(entity?.version ?? 0);
   const [name, setName] = useState(entity?.name ?? ''),
+    [description, setDescription] = useState(entity?.description ?? ''),
     [importance, setImportance] = useState<BalanceImportance>(entity?.importance ?? 'normal'),
     [manual, setManual] = useState(entity?.manualScore?.toString() ?? ''),
     [desired, setDesired] = useState(sphere?.desiredLevel?.toString() ?? ''),
@@ -38,14 +40,19 @@ export function BalanceEntityForm({
     [mode, setMode] = useState<DirectionMode>(direction?.mode ?? 'develop'),
     [status, setStatus] = useState<DirectionStatus>(direction?.status ?? 'active');
   const save = async () => {
-    const common = { name, importance, manualScore: manual === '' ? null : Number(manual) };
+    const common = {
+      name,
+      description,
+      importance,
+      manualScore: manual === '' ? null : Number(manual),
+    };
     const result =
       kind === 'sphere'
         ? sphere
           ? await services.updateSphere.execute({
               ...common,
               id: sphere.id,
-              expectedVersion: sphere.version,
+              expectedVersion,
               desiredLevel: desired === '' ? null : Number(desired),
               includeInBalanceWheel: include,
             })
@@ -58,7 +65,7 @@ export function BalanceEntityForm({
           ? await services.updateDirection.execute({
               ...common,
               id: direction.id,
-              expectedVersion: direction.version,
+              expectedVersion,
               sphereId: owner ? EntityId.create(owner) : null,
               currentStateText: current,
               desiredState: future,
@@ -105,8 +112,21 @@ export function BalanceEntityForm({
           </select>
         </label>
       )}
+      <VoiceField>
+        <span>Описание</span>
+        <VoiceTextArea
+          id="balance-description"
+          value={description}
+          onValueChange={setDescription}
+          maxLength={kind === 'sphere' ? 500 : 2000}
+          placeholder={kind === 'sphere' ? 'Что входит в эту сферу?' : 'Что вы хотите развивать?'}
+        />
+      </VoiceField>
+      {kind === 'sphere' && (
+        <ScoreField label="Желаемый уровень · 0–10" value={desired} onChange={setDesired} />
+      )}
       <details open={entity !== null}>
-        <summary>Состояние и настройки</summary>
+        <summary>Дополнительные настройки</summary>
         <div className="balance-fields">
           {kind === 'direction' && (
             <>
@@ -155,7 +175,6 @@ export function BalanceEntityForm({
           <p className="planner-muted">Пустая ручная оценка включает автоматический расчёт.</p>
           {kind === 'sphere' && (
             <>
-              <ScoreField label="Желаемый уровень · 0–10" value={desired} onChange={setDesired} />
               <label className="balance-check">
                 <input
                   type="checkbox"

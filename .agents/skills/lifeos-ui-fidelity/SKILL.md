@@ -6,6 +6,9 @@ description: Use when implementing or reviewing a LifeOS screen against an appro
 # LifeOS UI fidelity
 
 Verify rendered behavior and visual hierarchy, not just JSX or CSS similarity.
+Follow the design and Testing Stage Gate in `AGENTS.md`. A review request authorizes inspection
+and findings, not implementation. Approved images and Figma nodes are both valid references;
+absence of a main Figma file is not itself a blocker when the task has a usable reference.
 
 ## Workflow
 
@@ -16,7 +19,9 @@ Verify rendered behavior and visual hierarchy, not just JSX or CSS similarity.
 5. Run the real application at the actual route. Check the primary scenario plus loading, empty, disabled, error, success, and long-data states that apply.
 6. Check desktop and mobile viewports from `UI_RULES.md`, including horizontal overflow, touch targets, keyboard focus, safe area, and reduced motion.
 7. Inspect browser console and page errors. A visually plausible screen with runtime errors is not ready.
-8. Compare rendered output with the source of truth, list concrete gaps, iterate only within task scope, and repeat the affected checks.
+8. Compare rendered output with the source of truth and list concrete gaps. When implementation
+   is authorized, refine within scope and repeat affected checks. During read-only review, report
+   the gaps without editing. Reuse unchanged evidence; do not restart successful suites for reporting.
 
 ## Evidence and verdict
 
@@ -27,7 +32,7 @@ Report:
 - confirmed matches;
 - remaining visual or behavioral gaps;
 - console/runtime result;
-- targeted and full checks run;
+- targeted checks, applicable gate and any unperformed required check (R1 audits do not run full E2E);
 - verdict: `готово`, `не готово`, or `Требуется ручная визуальная проверка`.
 
 Do not claim pixel-perfect fidelity without a rendered comparison against an approved reference. Do not approve from static code review alone.

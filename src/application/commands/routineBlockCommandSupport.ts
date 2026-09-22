@@ -23,6 +23,7 @@ export interface RoutineBlockDetailsInput {
   readonly required: boolean;
   readonly assignmentKind?: RoutineBlockAssignmentKind;
   readonly actionId?: EntityId;
+  readonly ruleId?: EntityId;
 }
 
 export function routineBlockDetails(input: RoutineBlockDetailsInput): RoutineBlockDetails {
@@ -34,7 +35,10 @@ export function routineBlockDetails(input: RoutineBlockDetailsInput): RoutineBlo
     category: input.category,
     recurrence: RoutineBlockRecurrence.create(input.recurrence, input.selectedWeekdays),
     required: input.required,
-    assignment: createRoutineBlockAssignment(input.assignmentKind ?? 'reminder', input.actionId),
+    assignment: createRoutineBlockAssignment(
+      input.assignmentKind ?? 'reminder',
+      input.assignmentKind === 'existingSeries' ? input.ruleId : input.actionId,
+    ),
   };
 }
 

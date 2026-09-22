@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { LongPressController } from './LongPressController';
 import './entity-context-menu.css';
 
@@ -25,7 +26,7 @@ export function EntityContextMenu({
   readonly children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const [above, setAbove] = useState(false);
+  const [portalTarget, setPortalTarget] = useState<Element | null>(null);
   const [confirm, setConfirm] = useState<{
     action: EntityMenuAction;
     message: string;
@@ -35,16 +36,17 @@ export function EntityContextMenu({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const root = useRef<HTMLDivElement>(null);
+  const popup = useRef<HTMLDivElement>(null);
+  const working = useRef(false);
   const moreButton = useRef<HTMLButtonElement>(null);
   const cancelButton = useRef<HTMLButtonElement>(null);
   const confirmButton = useRef<HTMLButtonElement>(null);
   const touchPointerActive = useRef(false);
   const openMenu = useCallback(() => {
-    const top = root.current?.getBoundingClientRect().top ?? 0;
-    const menuHeight = actions.length * 44 + 12;
-    setAbove(window.innerHeight - top - 80 < menuHeight + 47 && top >= menuHeight);
+    if (working.current) return;
+    setPortalTarget(root.current?.closest('.planner-v2') ?? document.body);
     setOpen(true);
-  }, [actions.length]);
+  }, []);
   const gesture = useRef<LongPressController | null>(null);
   useEffect(() => {
     const controller = new LongPressController(openMenu);
@@ -56,26 +58,57 @@ export function EntityContextMenu({
   }, [openMenu]);
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && (open || confirm)) {
+      if (event.key === 'Escape' && (open || confirm) && !working.current) {
         setOpen(false);
         setConfirm(null);
         moreButton.current?.focus();
       }
     };
     const outside = (event: PointerEvent) => {
-      if (!root.current?.contains(event.target as Node)) setOpen(false);
+      if (
+        !root.current?.contains(event.target as Node) &&
+        !popup.current?.contains(event.target as Node)
+      )
+        setOpen(false);
+    };
+    const scroll = (event: Event) => {
+      if (event.target instanceof Node && popup.current?.contains(event.target)) return;
+      gesture.current?.cancel();
+      setOpen(false);
     };
     document.addEventListener('keydown', key);
     document.addEventListener('pointerdown', outside);
+    document.addEventListener('scroll', scroll, true);
+    window.addEventListener('resize', scroll);
     return () => {
       document.removeEventListener('keydown', key);
       document.removeEventListener('pointerdown', outside);
+      document.removeEventListener('scroll', scroll, true);
+      window.removeEventListener('resize', scroll);
     };
   }, [open, confirm]);
+  useLayoutEffect(() => {
+    const menu = popup.current;
+    const anchor = moreButton.current;
+    if (!open || !menu || !anchor) return;
+    const rect = anchor.getBoundingClientRect();
+    const margin = 8;
+    menu.style.maxHeight = `${Math.max(44, window.innerHeight - margin * 2)}px`;
+    const bounds = menu.getBoundingClientRect();
+    const below = rect.bottom + 4;
+    const top =
+      below + bounds.height <= window.innerHeight - margin ? below : rect.top - bounds.height - 4;
+    menu.style.top = `${Math.max(margin, Math.min(top, window.innerHeight - bounds.height - margin))}px`;
+    menu.style.left = `${Math.max(margin, Math.min(rect.right - bounds.width, window.innerWidth - bounds.width - margin))}px`;
+    menu.style.visibility = 'visible';
+    menu.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus({ preventScroll: true });
+  }, [open]);
   useEffect(() => {
     if (confirm) cancelButton.current?.focus();
   }, [confirm]);
   const run = async (action: EntityMenuAction) => {
+    if (working.current) return;
+    working.current = true;
     if (action.destructive) {
       setOpen(false);
       setBusy(true);
@@ -84,13 +117,14 @@ export function EntityContextMenu({
         const prepared = await action.prepare?.();
         setConfirm({
           action,
-          message: prepared?.message ?? `${action.label} ${entityLabel} «${title}»?`,
+          message: prepared?.message ?? `${action.label} «${title}»?`,
           confirmLabel: prepared?.confirmLabel ?? action.label,
           ...(prepared?.alternative ? { alternative: prepared.alternative } : {}),
         });
       } catch (reason: unknown) {
         setError(reason instanceof Error ? reason.message : 'Не удалось проверить связи.');
       } finally {
+        working.current = false;
         setBusy(false);
       }
       return;
@@ -103,6 +137,7 @@ export function EntityContextMenu({
     } catch (reason: unknown) {
       setError(reason instanceof Error ? reason.message : 'Не удалось выполнить действие.');
     } finally {
+      working.current = false;
       setBusy(false);
     }
   };
@@ -112,6 +147,7 @@ export function EntityContextMenu({
       ref={root}
       className="planner-entity-context"
       onContextMenu={(event) => {
+        if (!root.current?.contains(event.target as Node) || confirm) return;
         event.preventDefault();
         if (
           touchPointerActive.current ||
@@ -122,6 +158,7 @@ export function EntityContextMenu({
         openMenu();
       }}
       onPointerDown={(event) => {
+        if (!root.current?.contains(event.target as Node) || confirm) return;
         if (event.pointerType !== 'touch' || !event.isPrimary) return;
         touchPointerActive.current = true;
         gesture.current?.down(event.clientX, event.clientY);
@@ -157,83 +194,124 @@ export function EntityContextMenu({
       >
         ⋯
       </button>
-      {open && (
-        <div
-          className={`planner-entity-popup${above ? ' planner-entity-popup--above' : ''}`}
-          role="menu"
-          aria-label={`Действия: ${title}`}
-        >
-          {actions.map((action) => (
-            <button
-              key={action.label}
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                void run(action);
-              }}
-            >
-              {action.label}
-            </button>
-          ))}
-        </div>
-      )}
-      {confirm && (
-        <div
-          className="planner-entity-confirm"
-          role="alertdialog"
-          aria-modal="true"
-          aria-label={`Подтвердить: ${confirm.action.label}`}
-          onKeyDown={(event) => {
-            if (event.key !== 'Tab') return;
-            if (event.shiftKey && document.activeElement === cancelButton.current) {
-              event.preventDefault();
-              confirmButton.current?.focus();
-            } else if (!event.shiftKey && document.activeElement === confirmButton.current) {
-              event.preventDefault();
-              cancelButton.current?.focus();
-            }
-          }}
-        >
-          <p>{confirm.message}</p>
-          <div>
-            <button
-              ref={cancelButton}
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                setConfirm(null);
+      {open &&
+        createPortal(
+          <div
+            ref={popup}
+            className="planner-entity-popup"
+            role="menu"
+            aria-label={`Действия: ${title}`}
+            onKeyDown={(event) => {
+              const items = Array.from(
+                popup.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? [],
+              );
+              const index = items.indexOf(document.activeElement as HTMLButtonElement);
+              if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+                event.preventDefault();
+                const next =
+                  event.key === 'Home'
+                    ? 0
+                    : event.key === 'End'
+                      ? items.length - 1
+                      : (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) %
+                        items.length;
+                items[next]?.focus();
+              } else if (event.key === 'Tab') {
+                setOpen(false);
                 moreButton.current?.focus();
-              }}
-            >
-              Отмена
-            </button>
-            <button
-              ref={confirmButton}
-              type="button"
-              className="planner-entity-danger"
-              disabled={busy}
-              onClick={() => {
-                setBusy(true);
-                setError(null);
-                void Promise.resolve()
-                  .then(() =>
-                    confirm.alternative ? confirm.alternative.run() : confirm.action.run(),
-                  )
-                  .then(() => setConfirm(null))
-                  .catch((reason: unknown) =>
-                    setError(
-                      reason instanceof Error ? reason.message : 'Не удалось удалить запись.',
-                    ),
-                  )
-                  .finally(() => setBusy(false));
-              }}
-            >
-              {confirm.alternative?.label ?? confirm.confirmLabel}
-            </button>
-          </div>
-        </div>
-      )}
-      {error && (
+              }
+            }}
+          >
+            {actions.map((action) => (
+              <button
+                key={action.label}
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  void run(action);
+                }}
+              >
+                {action.label}
+              </button>
+            ))}
+          </div>,
+          portalTarget ?? document.body,
+        )}
+      {confirm &&
+        createPortal(
+          <div
+            className="planner-entity-confirm"
+            role="alertdialog"
+            aria-modal="true"
+            aria-label={`Подтвердить: ${confirm.action.label} ${entityLabel}`}
+            onKeyDown={(event) => {
+              if (event.key !== 'Tab') return;
+              if (event.shiftKey && document.activeElement === cancelButton.current) {
+                event.preventDefault();
+                confirmButton.current?.focus();
+              } else if (!event.shiftKey && document.activeElement === confirmButton.current) {
+                event.preventDefault();
+                cancelButton.current?.focus();
+              }
+            }}
+          >
+            <p>
+              {confirm.message}
+              {error && (
+                <span role="alert" className="planner-error">
+                  {error}
+                </span>
+              )}
+            </p>
+            <div>
+              <button
+                ref={cancelButton}
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  if (working.current) return;
+                  setConfirm(null);
+                  moreButton.current?.focus();
+                }}
+              >
+                Отмена
+              </button>
+              <button
+                ref={confirmButton}
+                type="button"
+                className="planner-entity-danger"
+                disabled={busy}
+                onClick={() => {
+                  if (working.current) return;
+                  working.current = true;
+                  setBusy(true);
+                  setError(null);
+                  void Promise.resolve()
+                    .then(() =>
+                      confirm.alternative ? confirm.alternative.run() : confirm.action.run(),
+                    )
+                    .then(() => {
+                      setConfirm(null);
+                      moreButton.current?.focus();
+                    })
+                    .catch((reason: unknown) =>
+                      setError(
+                        reason instanceof Error ? reason.message : 'Не удалось удалить запись.',
+                      ),
+                    )
+                    .finally(() => {
+                      working.current = false;
+                      setBusy(false);
+                    });
+                }}
+              >
+                {confirm.alternative?.label ?? confirm.confirmLabel}
+              </button>
+            </div>
+          </div>,
+          portalTarget ?? document.body,
+        )}
+      {error && !confirm && (
         <p role="alert" className="planner-error">
           {error}
         </p>

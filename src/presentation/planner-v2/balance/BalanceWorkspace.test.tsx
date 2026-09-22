@@ -123,13 +123,14 @@ describe('balance screens and compact editors', () => {
   });
   it('renders period context, recommendations and wheel settings without writing goals', () => {
     const html = screen({ view: 'spheres' });
-    expect(html).toContain('selected="">Квартал');
+    expect(html).toMatch(/aria-pressed="true"[^>]*>Квартал/);
+    expect(html).toContain('Сферы жизни');
+    expect(html).toContain('Требует внимания');
     for (const label of [
       'Год',
       '30 дней',
       'Неделя',
       'Настроить колесо',
-      'Прогресс целей',
       'Рекомендуемый фокус',
       '4 целей',
     ])
@@ -185,9 +186,7 @@ describe('balance screens and compact editors', () => {
     });
     const html = screen({ view: 'direction', id: 'd' });
     expect(html).toContain('Источник недоступен');
-    expect(html).toContain(
-      '<h2>Активные цели</h2><div class="balance-row"><a href="#/v2/goals/g">Без срока</a>',
-    );
+    expect(html).toContain('<div class="balance-row"><a href="#/v2/goals/g">Без срока</a>');
     expect(html).toContain('Нет данных');
   });
   it('renders voice fields, lifecycle choices and only the selected indicator inputs', () => {

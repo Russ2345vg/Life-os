@@ -1,3 +1,4 @@
+import { ActionActualResult } from '../../domain';
 import type { PlanningRepository, PlanningState } from '../ports/PlanningRepository';
 import type { Clock } from '../ports/Clock';
 import type { IdGenerator } from '../ports/IdGenerator';
@@ -76,6 +77,28 @@ export class GoalContributions {
     readonly clock: Clock,
     readonly ids: IdGenerator,
   ) {}
+  async saveResult(actionId: string, completionKey: string, text: string) {
+    const result = ActionActualResult.create(text);
+    return this.repository.change((s) => {
+      const action = requireAction(s, actionId);
+      if (action.status !== 'completed' || action.completionKey !== completionKey)
+        throw new DomainError(
+          'life_action.completion_changed',
+          'Выполнение изменилось. Откройте действие заново.',
+        );
+      if (action.correctActualResult(result))
+        s.journal.push(
+          planningJournal(
+            this.ids.generate().toString(),
+            'LifeAction',
+            actionId,
+            'Результат выполнения сохранён',
+            this.clock.now(),
+            { completionKey, result: text },
+          ),
+        );
+    });
+  }
   async configure(
     goalId: string,
     measurement: GoalMeasurement | null,

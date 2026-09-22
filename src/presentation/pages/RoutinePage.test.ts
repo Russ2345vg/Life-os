@@ -28,6 +28,7 @@ import { InMemoryRoutineBlockRepository } from '../../infrastructure';
 import { FakeClock, FakeIdGenerator } from '../../test/helpers/Fakes';
 import { RoutineBlockForm } from '../routine/RoutineBlockForm';
 import { createEmptyRoutineBlockForm } from '../routine/RoutineBlockFormState';
+import { createReadyLifeAction } from '../../test/helpers/LifeActionTestFactory';
 import { findRoutineBlockOverlaps } from '../routine/RoutineBlockOverlaps';
 import { deviationLabel, deviationTitle } from '../routine/RoutineDeviationPresentation';
 import { ROUTINE_MORNING_VIEW, ROUTINE_SECTION } from '../routine/RoutineNavigation';
@@ -484,5 +485,32 @@ describe('RoutineBlockForm', () => {
     expect(markup).toContain('routine-form-grid');
     expect(markup.match(/disabled=""/g)?.length).toBeGreaterThan(5);
     expect(markup).toContain('Сохраняем…');
+  });
+
+  it('marks a recurring action in the action selection', () => {
+    const recurring = createReadyLifeAction('recurring', DATE);
+    recurring.setPlanningMetadata({
+      occurrence: {
+        ruleId: 'recurrence:training',
+        slot: DATE.toString(),
+        ruleRevision: 1,
+        originalDate: DATE.toString(),
+      },
+    });
+    const markup = renderToStaticMarkup(
+      createElement(RoutineBlockForm, {
+        form: { ...createEmptyRoutineBlockForm(DATE), assignmentKind: 'existingAction' },
+        errors: {},
+        submitError: null,
+        isEditing: false,
+        isSaving: false,
+        onChange: () => undefined,
+        onCancel: () => undefined,
+        onSubmit: () => undefined,
+        actionOptions: [{ lifeAction: recurring, decision: null }],
+      }),
+    );
+
+    expect(markup).toContain('↻ Повторяется');
   });
 });

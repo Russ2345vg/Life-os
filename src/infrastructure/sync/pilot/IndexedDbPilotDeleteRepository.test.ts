@@ -10,8 +10,55 @@ import {
 import type { SyncSettingsRecord } from '../../persistence/records/SyncStoreRecords';
 import { IndexedDbPilotDeleteRepository } from './IndexedDbPilotDeleteRepository';
 import { IndexedDbPilotMutationRecorder } from './IndexedDbPilotMutationRecorder';
+import { DeletePilotGoal } from '../../../application/sync/pilot/DeletePilotGoal';
+import { DeletePilotLifeAction } from '../../../application/sync/pilot/DeletePilotLifeAction';
+import { DeletePilotSphere } from '../../../application/sync/pilot/DeletePilotSphere';
 
 describe('IndexedDbPilotDeleteRepository', () => {
+  it('explains the actual blocking record through the daily workflow commands without deleting data', async () => {
+    const indexedDb = new LifeOsIndexedDb(new IDBFactory());
+    try {
+      const database = await indexedDb.open();
+      const seed = database.transaction(
+        ['goals', 'lifeActions', 'spheres', 'directions'],
+        'readwrite',
+      );
+      seed.objectStore('goals').put({ id: 'g' });
+      seed.objectStore('lifeActions').put({ id: 'a', title: 'Прогулка', goalId: 'g' });
+      seed
+        .objectStore('lifeActions')
+        .put({ id: 'child', title: 'Подготовка', parentActionId: 'a' });
+      seed.objectStore('spheres').put({ id: 's' });
+      seed.objectStore('directions').put({ id: 'd', name: 'Тело', sphereId: 's' });
+      await done(seed);
+      const repository = new IndexedDbPilotDeleteRepository(
+        indexedDb,
+        new IndexedDbPilotMutationRecorder(),
+      );
+      await expect(new DeletePilotGoal(repository).execute('g')).rejects.toMatchObject({
+        code: 'sync.delete_blocked',
+        message: expect.stringContaining('Прогулка'),
+      });
+      await expect(new DeletePilotLifeAction(repository).execute('a')).rejects.toMatchObject({
+        code: 'sync.delete_blocked',
+        message: expect.stringContaining('Подготовка'),
+      });
+      await expect(new DeletePilotSphere(repository).execute('s')).rejects.toMatchObject({
+        code: 'sync.delete_blocked',
+        message: expect.stringContaining('Тело'),
+      });
+      for (const [store, id] of [
+        ['goals', 'g'],
+        ['lifeActions', 'a'],
+        ['lifeActions', 'child'],
+        ['spheres', 's'],
+      ])
+        expect(await read(database, store!, id!)).toBeDefined();
+    } finally {
+      indexedDb.close();
+    }
+  });
+
   it('keeps a canonical goal with linked decisions and does not enqueue deletion', async () => {
     const indexedDb = new LifeOsIndexedDb(new IDBFactory());
     const database = await indexedDb.open();

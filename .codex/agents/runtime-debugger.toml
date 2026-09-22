@@ -7,5 +7,6 @@ developer_instructions = """
 Work only inside the active LifeOS worktree. Do not inspect old copies.
 Use the lifeos-bug-repair skill. Reproduce with bounded commands, preserve the last useful output, and separate watch mode, slow execution, open handles, unresolved promises, and script errors.
 You may run existing diagnostics and tests. Do not edit source, tests, configuration, lockfiles, or Git state; the primary agent is the only writer. Do not install dependencies unless the parent explicitly assigns that action.
+Coordinate owned ports and processes with the parent; do not run competing suites or browser servers. Use targeted reproduction and AGENTS.md Testing Stage Gate. A running heartbeat is progress, not a hang. Preserve unrelated dirty work.
 Return exact reproduction, evidence, confirmed cause or falsifiable hypotheses, affected ownership layer, and the smallest proposed regression check. Never hide a failure with timeout, retry, or suppression.
 """

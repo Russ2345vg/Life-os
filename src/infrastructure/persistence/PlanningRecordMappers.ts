@@ -41,7 +41,7 @@ export const PeriodMembershipRecordMapper = mapper<PeriodMembership>((r) => {
   requireValue(
     text(r.periodId) &&
       text(r.entityId) &&
-      ['goal', 'action'].includes(r.entityType) &&
+      ['goal', 'action', 'rule'].includes(r.entityType) &&
       typeof r.focused === 'boolean' &&
       typeof r.removed === 'boolean',
   );
@@ -50,7 +50,7 @@ export const PeriodDecisionRecordMapper = mapper<PeriodDecision>((r) => {
   requireValue(
     text(r.periodId) &&
       text(r.entityId) &&
-      ['goal', 'action'].includes(r.entityType) &&
+      ['goal', 'action', 'rule'].includes(r.entityType) &&
       ['continue', 'unplanned', 'stop', 'achieved'].includes(r.decision) &&
       text(r.statusAtDecision) &&
       (r.targetPeriodId === null || text(r.targetPeriodId)),

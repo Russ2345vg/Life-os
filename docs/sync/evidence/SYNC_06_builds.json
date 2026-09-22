@@ -1,0 +1,17 @@
+{
+  "windows": {
+    "path": "src-tauri/target/release/lifeos.exe",
+    "sha256": "13ef98fbcbf154aa1d5c8ad1c3758c28c563135ae2f8028a9ae3eec4e89f6354",
+    "bytes": 16370688,
+    "buildSeconds": 102.97
+  },
+  "android": {
+    "path": "src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk",
+    "sha256": "8eb8c89c6ce64861cf67f6b7439d2be126d29ed7a66c7653a21c79f8f699c809",
+    "bytes": 17668080,
+    "nativeLibraries": ["lib/arm64-v8a/liblifeos_lib.so"],
+    "buildSeconds": 126.05,
+    "updateInstall": "Success"
+  },
+  "includesFinalMorePageCopy": true
+}

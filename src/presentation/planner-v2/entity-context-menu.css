@@ -18,26 +18,26 @@
   line-height: 1;
 }
 .planner-entity-popup {
-  position: absolute;
-  top: 47px;
-  right: 4px;
+  position: fixed;
+  top: 0;
+  left: 0;
+  visibility: hidden;
   z-index: 30;
   display: grid;
-  min-width: 190px;
-  padding: 6px;
-  border: 1px solid #343434;
-  border-radius: 11px;
-  background: #151515;
-  box-shadow: 0 16px 32px #000b;
-}
-.planner-entity-popup--above {
-  top: auto;
-  bottom: 47px;
+  width: min(240px, calc(100vw - 16px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-2, 8px);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md, 12px);
+  background: var(--surface-glass-overlay, #181818);
+  box-shadow: var(--shadow-deep, 0 16px 32px #000b);
 }
 .planner-v2 .planner-entity-popup button {
   min-height: 44px;
   border: 0;
   text-align: left;
+  overflow-wrap: anywhere;
 }
 .planner-entity-confirm {
   position: fixed;
@@ -45,43 +45,42 @@
   inset: 0;
   display: grid;
   place-content: center;
-  gap: 18px;
-  padding: 22px;
+  gap: var(--space-4, 16px);
+  padding: var(--space-4, 16px);
   background: #000c;
 }
 .planner-entity-confirm > p,
 .planner-entity-confirm > div {
-  max-width: min(420px, calc(100vw - 44px));
+  width: min(420px, calc(100vw - 32px));
 }
 .planner-entity-confirm > p {
   margin: 0;
   max-height: calc(100dvh - 150px);
   overflow-y: auto;
   overflow-wrap: anywhere;
-  padding: 22px 22px 0;
-  border: 1px solid #343434;
+  padding: var(--space-5, 24px) var(--space-5, 24px) 0;
+  border: 1px solid var(--border-soft);
   border-bottom: 0;
-  border-radius: 14px 14px 0 0;
-  background: #151515;
+  border-radius: var(--radius-lg, 16px) var(--radius-lg, 16px) 0 0;
+  background: var(--surface-glass-overlay, #181818);
 }
 .planner-entity-confirm > div {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 10px;
-  margin-top: -18px;
-  padding: 16px 22px 22px;
-  border: 1px solid #343434;
+  gap: var(--space-2, 8px);
+  margin-top: calc(-1 * var(--space-4, 16px));
+  padding: var(--space-4, 16px) var(--space-5, 24px) var(--space-5, 24px);
+  border: 1px solid var(--border-soft);
   border-top: 0;
-  border-radius: 0 0 14px 14px;
-  background: #151515;
+  border-radius: 0 0 var(--radius-lg, 16px) var(--radius-lg, 16px);
+  background: var(--surface-glass-overlay, #181818);
 }
 .planner-v2 .planner-entity-danger {
-  border-color: #9d4a4a;
-  color: #ffd6d6;
+  border-color: var(--danger);
+  color: var(--danger);
 }
-@media (max-width: 700px) {
-  .planner-entity-popup {
-    max-width: calc(100vw - 24px);
-  }
+.planner-entity-confirm .planner-error {
+  display: block;
+  margin-top: var(--space-3, 12px);
 }

@@ -1,5 +1,6 @@
 import type { PilotDeleteRepository } from '../../../application/sync/pilot/PilotDeleteRepository';
 import type { PilotEntityType } from '../../../application/sync/pilot/PilotSyncProtocol';
+import { DomainError } from '../../../shared/errors/DomainError';
 import { type LifeOsIndexedDb } from '../../persistence/indexed-db/LifeOsIndexedDb';
 import {
   IndexedDbPilotMutationRecorder,
@@ -17,7 +18,11 @@ export class IndexedDbPilotDeleteRepository implements PilotDeleteRepository {
     private readonly recorder: IndexedDbPilotMutationRecorder,
   ) {}
 
-  public async delete(entityType: PilotEntityType, objectId: string): Promise<boolean> {
+  public async delete(
+    entityType: PilotEntityType,
+    objectId: string,
+    options?: { readonly explainBlocked: boolean },
+  ): Promise<boolean> {
     const database = await this.database.open();
     const stores = new Set<string>([
       pilotStoreFor(entityType),
@@ -40,17 +45,28 @@ export class IndexedDbPilotDeleteRepository implements PilotDeleteRepository {
         const children = await request<Readonly<Record<string, unknown>>[]>(
           transaction.objectStore(pilotStoreFor(type)).getAll(),
         );
-        if (
-          children.some(
-            (child) =>
-              !(type === entityType && child.id === objectId) &&
-              pilotRelationshipReferences(type, child).some(
-                (ref) => ref.required && ref.entityType === entityType && ref.objectId === objectId,
-              ),
-          )
-        ) {
+        const blocking = children.find(
+          (child) =>
+            !(type === entityType && child.id === objectId) &&
+            pilotRelationshipReferences(type, child).some(
+              (ref) => ref.required && ref.entityType === entityType && ref.objectId === objectId,
+            ),
+        );
+        if (blocking) {
           transaction.abort();
           await afterAbort(transaction);
+          if (options?.explainBlocked) {
+            const title =
+              blocking.title ??
+              blocking.name ??
+              blocking.labelAtEvent ??
+              blocking.date ??
+              blocking.id;
+            throw new DomainError(
+              'sync.delete_blocked',
+              `Удаление невозможно: ${dependencyLabel(type)} «${String(title)}» использует эту запись. Измените её связь или архивируйте удаляемую запись — история сохранится.`,
+            );
+          }
           return false;
         }
       }
@@ -62,6 +78,11 @@ export class IndexedDbPilotDeleteRepository implements PilotDeleteRepository {
       if (rules.some((rule) => rule.id === `recurrence:${objectId}`)) {
         transaction.abort();
         await afterAbort(transaction);
+        if (options?.explainBlocked)
+          throw new DomainError(
+            'sync.delete_blocked',
+            'У действия есть расписание повторений. Архивируйте действие, чтобы сохранить расписание и историю.',
+          );
         return false;
       }
     }
@@ -77,6 +98,30 @@ export class IndexedDbPilotDeleteRepository implements PilotDeleteRepository {
     this.recorder.notifyCommitted(recorded);
     return true;
   }
+}
+
+function dependencyLabel(type: PilotEntityType): string {
+  const labels: Partial<Record<PilotEntityType, string>> = {
+    goal: 'цель',
+    project: 'проект',
+    direction: 'направление',
+    life_action: 'действие',
+    decision: 'решение',
+    day: 'день',
+    action_session: 'сессия действия',
+    routine_block: 'блок распорядка',
+    recurrence_rule: 'расписание повторений',
+    direction_indicator: 'показатель направления',
+    journal_entry: 'запись дневника',
+    walk: 'прогулка',
+    tomorrow_plan: 'план на завтра',
+    preparation_plan: 'план подготовки',
+    preparation_rule: 'правило подготовки',
+    evening_cycle: 'вечерний обзор',
+    morning_cycle: 'утренний обзор',
+    recommendation_application: 'применённая рекомендация',
+  };
+  return labels[type] ?? 'запись';
 }
 
 function request<T>(value: IDBRequest<T>): Promise<T> {

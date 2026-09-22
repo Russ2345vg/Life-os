@@ -1,0 +1,10 @@
+{
+  "sql": "supabase/tests/database/sync_06_privacy_test.sql",
+  "result": "PASS",
+  "encrypted_events": 73,
+  "encrypted_objects": 46,
+  "attachment_blobs": 9,
+  "snapshot_blobs": 11,
+  "returns_plaintext_or_secrets": false,
+  "read_only": true
+}

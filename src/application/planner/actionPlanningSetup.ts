@@ -21,6 +21,8 @@ export function actionPlanningSetup(
         ...recurrence,
         title: action.title.toString(),
         goalId: action.goalId?.toString() ?? null,
+        directionId: action.directionId?.toString() ?? null,
+        sphereId: action.sphereId?.toString() ?? null,
         id: `recurrence:${actionId}`,
         revision: 1,
         effectiveFrom: localDate(now),
