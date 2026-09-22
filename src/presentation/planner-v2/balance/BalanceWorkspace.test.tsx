@@ -8,7 +8,7 @@ import { BalanceWorkspace } from './BalanceWorkspace';
 import { BalanceIndicatorForm } from './BalanceIndicatorForm';
 import { BalanceEntityForm } from './BalanceEntityForm';
 import { useBalanceState } from './useBalanceState';
-import type { PlannerV2Route } from '../PlannerV2Navigation';
+import type { PlannerRoute } from '../PlannerNavigation';
 vi.mock('./useBalanceState', () => ({ useBalanceState: vi.fn() }));
 const now = new Date('2026-09-14T12:00:00Z');
 const unexpected = vi.fn(async () => {
@@ -84,7 +84,7 @@ function withState(state: BalanceState | null, error: string | null = null) {
     refresh: () => {},
   });
 }
-function screen(route: PlannerV2Route) {
+function screen(route: PlannerRoute) {
   return renderToStaticMarkup(
     <BalanceWorkspace services={services} today="2026-09-14" route={route} onNavigate={() => {}} />,
   );

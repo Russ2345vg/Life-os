@@ -27,6 +27,7 @@ export function selectActionOptions(
       rule: null,
     }));
   const series: ActionOption[] = rules
+    .filter((r) => r.removedAt == null)
     .filter((r) => {
       const instances = actions.filter((a) => a.occurrence?.ruleId === r.id);
       return !instances.length || instances.some((a) => !a.isArchived());

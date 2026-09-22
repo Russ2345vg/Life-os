@@ -31,11 +31,13 @@
 ### Task 1: Application alarm contract and reconciliation
 
 **Files:**
+
 - Create: `src/application/sleep/WakeAlarmGateway.ts`
 - Modify: `src/application/sleep/SleepScheduleService.ts`
 - Test: `src/application/sleep/SleepScheduleService.test.ts`
 
 **Interfaces:**
+
 - Consumes: `SleepScheduleState`, будущие `WakeOccurrence`, настройки звука.
 - Produces: `WakeAlarmGateway.reconcile`, `status`, `scheduleTest`, `openSettings`, `listSounds`; `SleepScheduleService.syncAlarm`.
 
@@ -47,6 +49,7 @@
 ### Task 2: Tauri adapter and honest UI state
 
 **Files:**
+
 - Create: `src/infrastructure/alarm/TauriAndroidWakeAlarmGateway.ts`
 - Test: `src/infrastructure/alarm/TauriAndroidWakeAlarmGateway.test.ts`
 - Modify: `src/app/composition/createLifeOsApplication.ts`
@@ -54,6 +57,7 @@
 - Test: `src/presentation/planner-v2/SleepPreparationPage.test.tsx`
 
 **Interfaces:**
+
 - Consumes: Rust commands `android_alarm_*`.
 - Produces: normalised Android readiness, next signal, sound list and settings actions.
 
@@ -65,6 +69,7 @@
 ### Task 3: Native Android alarm delivery
 
 **Files:**
+
 - Create: `src-tauri/src/android_alarm.rs`
 - Modify: `src-tauri/src/lib.rs`
 - Create: `src-tauri/gen/android/app/src/main/java/com/lifeos/desktop/LifeOsAlarm*.kt`
@@ -72,6 +77,7 @@
 - Test: `src-tauri/gen/android/app/src/test/java/com/lifeos/desktop/AlarmScheduleMathTest.kt`
 
 **Interfaces:**
+
 - Consumes: schedule version, occurrence id/cycle date, wake time/zone, selected system sound.
 - Produces: exact `setAlarmClock` delivery, lock-screen notification/activity, looping alarm audio, stop action, persisted acknowledgement and recovery receivers.
 
@@ -80,4 +86,3 @@
 - [ ] Запустить `:app:testDebugUnitTest` для конкретного JUnit-класса и targeted Android compile/build.
 - [ ] Установить APK через ADB, предоставить разрешения через штатные Android-механизмы, поставить пробный сигнал, заблокировать экран и отключить сеть.
 - [ ] Подтвердить сигнал, остановку, отсутствие старого события после изменения/отмены и собрать `dumpsys alarm`/logcat evidence.
-

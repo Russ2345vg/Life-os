@@ -5,7 +5,6 @@ import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it } from 'vitest';
 import { EntityId, GOAL_STAGE, GOAL_STATUS } from '../../../domain';
 import { IndexedDbGoalRepository } from '../IndexedDbGoalRepository';
-import { IndexedDbWalkRepository } from '../IndexedDbWalkRepository';
 import { WalkRecordMapper } from '../mappers/WalkRecordMapper';
 import { historyWalk } from '../../../test/helpers/WalkHistoryFixtures';
 import { executeIndexedDbRequest } from './IndexedDbRequest';
@@ -148,9 +147,6 @@ describe('LifeOsIndexedDb', () => {
       ).toEqual([{ id: `v17-${name}`, title: `Existing ${name}` }]);
     }
     adapter.close();
-    const restored = await new IndexedDbWalkRepository(adapter).findById(walk.id);
-    expect(restored).not.toBeNull();
-    expect(WalkRecordMapper.toRecord(restored!)).toEqual(record);
     adapter.close();
   });
 

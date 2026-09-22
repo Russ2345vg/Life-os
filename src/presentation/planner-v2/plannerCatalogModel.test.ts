@@ -22,7 +22,7 @@ const action = LifeAction.createDraft({
   createdAt: now,
   eventId: EntityId.create('e'),
 });
-describe('V2 catalogue projections', () => {
+describe('current catalogue projections', () => {
   it('excludes goals with a deadline from the undated filter', () => {
     const dated = goal.update({ title: goal.title, dueDate: '2026-10-01' }, now);
     expect(

@@ -43,6 +43,26 @@ const operations = {
 };
 
 describe('PlannerActionList', () => {
+  it('shows one active row for a recurring series instead of every materialized occurrence', () => {
+    const html = renderToStaticMarkup(
+      createElement(PlannerActionList, {
+        actions: [
+          action('repeat-today', 'Повторяемое действие', '2026-09-13'),
+          action('repeat-tomorrow', 'Повторяемое действие', '2026-09-14'),
+        ],
+        goals: [goal],
+        today: '2026-09-13',
+        onNew: () => {},
+        selectedId: null,
+        ...operations,
+      }),
+    );
+
+    expect(html.match(/aria-label="Выполнить: Повторяемое действие"/g)).toHaveLength(1);
+    expect(html).toContain('Сегодня');
+    expect(html).not.toContain('Завтра <span>1</span>');
+  });
+
   it('renders date groups and action metadata', () => {
     const html = renderToStaticMarkup(
       createElement(PlannerActionList, {

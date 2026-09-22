@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { createLifeOsApplication } from './createLifeOsApplication';
 import { LifeOsIndexedDb } from '../../infrastructure/persistence/indexed-db/LifeOsIndexedDb';
 import { IndexedDbPlanningRepository } from '../../infrastructure/persistence/IndexedDbPlanningRepository';
+import { IndexedDbLifeActionRepository } from '../../infrastructure/persistence/IndexedDbLifeActionRepository';
 import {
   emptyActionDraft,
   submitPlannerAction,
@@ -67,7 +68,7 @@ describe('V2 Action form through application and IndexedDB', () => {
         const saved = await submitPlannerAction(app.createLifeActionDraft, draft);
         expect(saved.id.toString()).not.toBe('');
         database.close();
-        const restored = await app.lifeActionRepository.findById(saved.id);
+        const restored = await new IndexedDbLifeActionRepository(database).findById(saved.id);
         expect(restored?.title.toString()).toBe(draft.title);
         expect(restored?.goalId?.toString() ?? null).toBe(draft.goalId || null);
         expect(restored?.plannedDate?.toString() ?? null).toBe(draft.date || null);

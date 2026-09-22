@@ -5,6 +5,5 @@ export * from './PilotPushEngine';
 export * from './PilotPullEngine';
 export * from './PilotDeleteRepository';
 export * from './DeletePilotDirection';
-export * from './DeletePilotProject';
 export * from './DeletePilotGoal';
 export * from './PilotSyncCoordinator';

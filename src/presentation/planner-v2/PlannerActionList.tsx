@@ -13,6 +13,7 @@ import {
   isOpenAction,
   type ActionView,
 } from './plannerCatalogModel';
+import { selectRecurringActionRepresentatives } from '../../application/planner/actionSelection';
 
 export interface PlannerActionOperations {
   readonly busy: boolean;
@@ -86,7 +87,7 @@ export function PlannerActionList({
   );
   if (sort === 'title')
     visible.sort((a, b) => a.title.toString().localeCompare(b.title.toString(), 'ru'));
-  const activeActions = visible.filter(isOpenAction);
+  const activeActions = selectRecurringActionRepresentatives(visible.filter(isOpenAction));
   const completedActions = visible.filter((action) => action.status === 'completed');
   const activeGroups = groupPlannerActions(activeActions, today);
   const completedGroups = groupPlannerActions(completedActions, today);

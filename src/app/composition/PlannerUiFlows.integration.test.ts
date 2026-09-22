@@ -24,7 +24,6 @@ describe('Planner UI flows', () => {
       expect(action.plannedDate).toBeNull();
       expect(action.decisionId).toBeNull();
       expect(action.expectedResult).toBeNull();
-      expect(await app.actionSessionRepository.findByLifeActionId(action.id)).toHaveLength(0);
     } finally {
       database.close();
     }
@@ -62,15 +61,11 @@ describe('Planner UI flows', () => {
       if (!created.ok) throw created.error;
       await completePlannerAction(app.completeLifeAction, created.value.id.toString());
       await completePlannerAction(app.completeLifeAction, created.value.id.toString());
-      const saved = await app.lifeActionRepository.findById(created.value.id);
+      const saved = (await app.plannerCatalog.actions()).find((action) =>
+        action.id.equals(created.value.id),
+      );
       expect(saved?.status).toBe('completed');
       expect(saved?.actualResult).toBeNull();
-      expect(await app.actionSessionRepository.findByLifeActionId(created.value.id)).toHaveLength(
-        0,
-      );
-      expect(
-        await app.journalRepository.findByEffectiveDateRange(app.currentDate, app.currentDate),
-      ).toHaveLength(1);
     } finally {
       database.close();
     }

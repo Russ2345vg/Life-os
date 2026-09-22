@@ -22,7 +22,7 @@ const action = LifeAction.createDraft({
   createdAt: now,
   eventId: EntityId.create('e'),
 });
-describe('V2 library rendering', () => {
+describe('current library rendering', () => {
   it('shows the explicitly selected next action consistently in the goal list', () => {
     const next = LifeAction.createDraft({
       id: EntityId.create('next'),

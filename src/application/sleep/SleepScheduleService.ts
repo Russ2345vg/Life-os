@@ -284,8 +284,7 @@ export class SleepScheduleService {
     const now = this.#clock.now().getTime();
     const nextOccurrence = state.wakeOccurrences
       .filter(
-        (occurrence) =>
-          occurrence.status === 'SCHEDULED' && occurrence.scheduledAt.getTime() > now,
+        (occurrence) => occurrence.status === 'SCHEDULED' && occurrence.scheduledAt.getTime() > now,
       )
       .sort(
         (left, right) =>

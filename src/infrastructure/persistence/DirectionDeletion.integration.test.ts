@@ -7,13 +7,16 @@ import type { DirectionIndicator } from '../../domain/balance/DirectionIndicator
 import type { SyncOutboxRecord, SyncSettingsRecord } from './records/SyncStoreRecords';
 import { parsePilotSyncPayload } from '../../application/sync/pilot/PilotSyncProtocol';
 import { DayDate, EntityId, JournalEntry } from '../../domain';
+import { IndexedDbDirectionRepository } from './IndexedDbDirectionRepository';
+import { IndexedDbGoalRepository } from './IndexedDbGoalRepository';
+import { JournalEntryRecordMapper } from './mappers/JournalEntryRecordMapper';
 
 describe('Direction removal with retained history', () => {
   it('removes a Direction from active work while preserving a closed Goal', async () => {
     const database = new LifeOsIndexedDb(new IDBFactory());
     const app = await createLifeOsApplication({ database });
     try {
-      const direction = await app.createDirection.execute({ name: 'Здоровье' });
+      const direction = await app.balance.createDirection.execute({ name: 'Здоровье' });
       if (!direction.ok) throw direction.error;
       const goal = await app.createGoal.execute({
         title: 'Закрытая цель',
@@ -36,10 +39,14 @@ describe('Direction removal with retained history', () => {
         expectedVersion: direction.value.version,
       });
       expect(result.kind).toBe('archived');
-      expect(await app.directionRepository.findById(direction.value.id)).toMatchObject({
+      expect(
+        await new IndexedDbDirectionRepository(database).findById(direction.value.id),
+      ).toMatchObject({
         status: 'archived',
       });
-      expect(await app.goalRepository.findById(goal.value.id)).toEqual(closed.value);
+      expect(await new IndexedDbGoalRepository(database).findById(goal.value.id)).toEqual(
+        closed.value,
+      );
       expect(
         await app.balance.removeDirectionSafely.execute({
           id: direction.value.id,
@@ -54,7 +61,7 @@ describe('Direction removal with retained history', () => {
     const database = new LifeOsIndexedDb(new IDBFactory());
     const app = await createLifeOsApplication({ database });
     try {
-      const direction = await app.createDirection.execute({ name: 'Работа' });
+      const direction = await app.balance.createDirection.execute({ name: 'Работа' });
       if (!direction.ok) throw direction.error;
       const goal = await app.createGoal.execute({
         title: 'Активная цель',
@@ -70,10 +77,14 @@ describe('Direction removal with retained history', () => {
         kind: 'blocked',
         live: [{ entityType: 'goal', label: 'Активная цель' }],
       });
-      expect(await app.directionRepository.findById(direction.value.id)).toMatchObject({
+      expect(
+        await new IndexedDbDirectionRepository(database).findById(direction.value.id),
+      ).toMatchObject({
         status: 'active',
       });
-      expect(await app.goalRepository.findById(goal.value.id)).toEqual(goal.value);
+      expect(await new IndexedDbGoalRepository(database).findById(goal.value.id)).toEqual(
+        goal.value,
+      );
     } finally {
       database.close();
     }
@@ -82,7 +93,7 @@ describe('Direction removal with retained history', () => {
     const database = new LifeOsIndexedDb(new IDBFactory());
     const app = await createLifeOsApplication({ database });
     try {
-      const direction = await app.createDirection.execute({ name: 'Меняющееся' });
+      const direction = await app.balance.createDirection.execute({ name: 'Меняющееся' });
       if (!direction.ok) throw direction.error;
       expect((await app.balance.removeDirectionSafely.inspect(direction.value.id)).kind).toBe(
         'deleted',
@@ -98,7 +109,7 @@ describe('Direction removal with retained history', () => {
           expectedVersion: direction.value.version,
         }),
       ).toMatchObject({ kind: 'blocked', live: [{ label: 'Новая связь' }] });
-      const archived = await app.archiveDirection.execute({
+      const archived = await app.balance.archiveDirection.execute({
         id: direction.value.id,
         expectedVersion: direction.value.version,
       });
@@ -117,7 +128,7 @@ describe('Direction removal with retained history', () => {
     const database = new LifeOsIndexedDb(new IDBFactory());
     const app = await createLifeOsApplication({ database });
     try {
-      const direction = await app.createDirection.execute({ name: 'Временное' });
+      const direction = await app.balance.createDirection.execute({ name: 'Временное' });
       if (!direction.ok) throw direction.error;
       const preview = await app.balance.removeDirectionSafely.inspect(direction.value.id);
       expect(preview).toMatchObject({ kind: 'deleted', live: [], historical: [] });
@@ -126,7 +137,9 @@ describe('Direction removal with retained history', () => {
         expectedVersion: direction.value.version,
       });
       expect(result.kind).toBe('deleted');
-      expect(await app.directionRepository.findById(direction.value.id)).toBeNull();
+      expect(
+        await new IndexedDbDirectionRepository(database).findById(direction.value.id),
+      ).toBeNull();
       expect(
         await app.balance.removeDirectionSafely.execute({
           id: direction.value.id,
@@ -141,7 +154,7 @@ describe('Direction removal with retained history', () => {
     const database = new LifeOsIndexedDb(new IDBFactory());
     const app = await createLifeOsApplication({ database });
     try {
-      const direction = await app.createDirection.execute({ name: 'Сон' });
+      const direction = await app.balance.createDirection.execute({ name: 'Сон' });
       if (!direction.ok) throw direction.error;
       const id = direction.value.id.toString();
       const stored = await database.open();
@@ -185,7 +198,7 @@ describe('Direction removal with retained history', () => {
     const database = new LifeOsIndexedDb(new IDBFactory());
     const app = await createLifeOsApplication({ database });
     try {
-      const direction = await app.createDirection.execute({ name: 'С историей журнала' });
+      const direction = await app.balance.createDirection.execute({ name: 'С историей журнала' });
       if (!direction.ok) throw direction.error;
       const now = new Date('2026-09-13T10:00:00.000Z');
       const entry = JournalEntry.create({
@@ -198,7 +211,8 @@ describe('Direction removal with retained history', () => {
         createdAt: now,
         effectiveDate: DayDate.create('2026-09-13'),
       });
-      await app.journalRepository.append(entry);
+      const stored = await database.open();
+      await writeRecord(stored, LIFE_OS_STORE.journal, JournalEntryRecordMapper.toRecord(entry));
       const result = await app.balance.removeDirectionSafely.execute({
         id: direction.value.id,
         expectedVersion: direction.value.version,
@@ -207,10 +221,16 @@ describe('Direction removal with retained history', () => {
         kind: 'archived',
         historical: [{ entityType: 'journal_entry', objectId: entry.id.toString() }],
       });
-      expect(await app.directionRepository.findById(direction.value.id)).toMatchObject({
+      expect(
+        await new IndexedDbDirectionRepository(database).findById(direction.value.id),
+      ).toMatchObject({
         status: 'archived',
       });
-      expect(await app.journalRepository.findById(entry.id)).toEqual(entry);
+      const read = stored.transaction(LIFE_OS_STORE.journal, 'readonly');
+      expect(
+        await request(read.objectStore(LIFE_OS_STORE.journal).get(entry.id.toString())),
+      ).toEqual(JournalEntryRecordMapper.toRecord(entry));
+      await done(read);
     } finally {
       database.close();
     }
@@ -219,8 +239,8 @@ describe('Direction removal with retained history', () => {
     const database = new LifeOsIndexedDb(new IDBFactory());
     const app = await createLifeOsApplication({ database });
     try {
-      const historical = await app.createDirection.execute({ name: 'С историей' });
-      const unlinked = await app.createDirection.execute({ name: 'Без связей' });
+      const historical = await app.balance.createDirection.execute({ name: 'С историей' });
+      const unlinked = await app.balance.createDirection.execute({ name: 'Без связей' });
       if (!historical.ok) throw historical.error;
       if (!unlinked.ok) throw unlinked.error;
       const goal = await app.createGoal.execute({
@@ -273,7 +293,9 @@ describe('Direction removal with retained history', () => {
           record: null,
         }),
       );
-      expect(await app.goalRepository.findById(goal.value.id)).toEqual(closed.value);
+      expect(await new IndexedDbGoalRepository(database).findById(goal.value.id)).toEqual(
+        closed.value,
+      );
     } finally {
       database.close();
     }
@@ -311,4 +333,10 @@ function done(transaction: IDBTransaction): Promise<void> {
     transaction.oncomplete = () => resolve();
     transaction.onabort = () => reject(transaction.error);
   });
+}
+
+function writeRecord(database: IDBDatabase, store: string, record: object): Promise<void> {
+  const transaction = database.transaction(store, 'readwrite');
+  transaction.objectStore(store).put(record);
+  return done(transaction);
 }

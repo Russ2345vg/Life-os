@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { IDBFactory } from 'fake-indexeddb';
 import { DayDate, Direction, EntityId } from '../../../domain';
 import { EnsureCurrentDay } from '../../../application/commands/EnsureCurrentDay';
 import {
@@ -7,7 +8,8 @@ import {
   FakeDayRepository,
   FakeIdGenerator,
 } from '../../../test/helpers/Fakes';
-import { InMemoryDirectionRepository } from '../InMemoryDirectionRepository';
+import { IndexedDbDirectionRepository } from '../IndexedDbDirectionRepository';
+import { LifeOsIndexedDb } from '../indexed-db/LifeOsIndexedDb';
 import { DayRecordMapper } from '../mappers/DayRecordMapper';
 import { DailyDirection } from '../../../application/planner/DailyDirection';
 
@@ -18,10 +20,10 @@ const now = new Date('2026-09-14T08:00:00Z');
 describe('daily main direction', () => {
   it('keeps independent selections for today and tomorrow across old-record mapping', async () => {
     const days = new FakeDayRepository();
-    const directions = new InMemoryDirectionRepository([
-      Direction.create({ id: EntityId.create('health'), name: 'Тело', now }),
-      Direction.create({ id: EntityId.create('work'), name: 'Работа', now }),
-    ]);
+    const database = new LifeOsIndexedDb(new IDBFactory());
+    const directions = new IndexedDbDirectionRepository(database);
+    await directions.create(Direction.create({ id: EntityId.create('health'), name: 'Тело', now }));
+    await directions.create(Direction.create({ id: EntityId.create('work'), name: 'Работа', now }));
     const ensure = new EnsureCurrentDay(
       days,
       new FakeCurrentDateProvider(today),
@@ -39,6 +41,7 @@ describe('daily main direction', () => {
     delete legacy.mainDirectionId;
     expect(DayRecordMapper.fromRecord(legacy).mainDirectionId).toBeNull();
     expect(DayRecordMapper.fromRecord(old).mainDirectionId?.toString()).toBe('health');
+    database.close();
   });
 
   it('rejects an unavailable direction and does not create a day', async () => {
@@ -49,10 +52,12 @@ describe('daily main direction', () => {
       new FakeClock(now),
       new FakeIdGenerator(),
     );
-    const daily = new DailyDirection(days, new InMemoryDirectionRepository(), ensure);
+    const database = new LifeOsIndexedDb(new IDBFactory());
+    const daily = new DailyDirection(days, new IndexedDbDirectionRepository(database), ensure);
     await expect(daily.set(today, EntityId.create('missing'))).rejects.toMatchObject({
       code: 'day.direction_unavailable',
     });
     expect(await daily.get(today)).toBeNull();
+    database.close();
   });
 });

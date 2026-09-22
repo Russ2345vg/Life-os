@@ -5,12 +5,7 @@ export type AlarmSound = SleepAlarmSound;
 export type WakeAlarmPermissionIssue = 'EXACT_ALARM' | 'NOTIFICATIONS' | 'FULL_SCREEN';
 
 export type WakeAlarmState =
-  | 'UNAVAILABLE'
-  | 'PERMISSION_REQUIRED'
-  | 'READY'
-  | 'SCHEDULED'
-  | 'RINGING'
-  | 'ERROR';
+  'UNAVAILABLE' | 'PERMISSION_REQUIRED' | 'READY' | 'SCHEDULED' | 'RINGING' | 'ERROR';
 
 export interface WakeAlarmStatus {
   readonly supported: boolean;

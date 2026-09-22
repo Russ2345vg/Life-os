@@ -27,26 +27,6 @@ export const LIFE_OS_LOCAL_STORAGE_POLICY: readonly LifeOsLocalStoragePolicyEntr
       classification: 'sync_now',
       meaningfulFields: Object.freeze(['eveningRitual']),
     }),
-    Object.freeze({
-      key: 'lifeos.sidebar-collapsed.v1',
-      classification: 'ui_local_only',
-      meaningfulFields: Object.freeze([]),
-    }),
-    Object.freeze({
-      key: 'lifeos.today-action-selection.v1',
-      classification: 'ui_local_only',
-      meaningfulFields: Object.freeze([]),
-    }),
-    Object.freeze({
-      key: 'lifeos.action-list-filters.v1',
-      classification: 'ui_local_only',
-      meaningfulFields: Object.freeze([]),
-    }),
-    Object.freeze({
-      key: 'lifeos.system-update.last-check',
-      classification: 'technical_local_only',
-      meaningfulFields: Object.freeze([]),
-    }),
   ],
 );
 

@@ -1,53 +1,11 @@
-import { parseGoalAlbumRoute, type GoalAlbumRoute } from '../goals/GoalAlbumNavigation';
-import { MANAGEMENT_SECTION } from '../management/ManagementSection';
-import { parseRoutineRoute, type RoutineRoute } from '../routine/RoutineNavigation';
-import { APP_SECTION, resolveMenuEntrySection, type AppSection } from './AppSection';
-import { parsePlannerV2Route, type PlannerV2Route } from '../planner-v2/PlannerV2Navigation';
+import { parsePlannerRoute, type PlannerRoute } from '../planner-v2/PlannerNavigation';
 
-export type RoutedApplicationSection =
-  | { readonly section: typeof APP_SECTION.today; readonly route: PlannerV2Route | null }
-  | {
-      readonly section: typeof APP_SECTION.management;
-      readonly managementSection: typeof MANAGEMENT_SECTION.goals;
-      readonly route: GoalAlbumRoute;
-    }
-  | {
-      readonly section: typeof APP_SECTION.routine;
-      readonly route: RoutineRoute;
-    };
+export type ApplicationRoute = PlannerRoute;
 
-export function parseApplicationRoute(hash: string): RoutedApplicationSection | null {
-  const plannerRoute = parsePlannerV2Route(hash);
-  if (plannerRoute !== null) return { section: APP_SECTION.today, route: plannerRoute };
-  if (hash === '#/legacy/today') return { section: APP_SECTION.today, route: null };
-  const goalRoute = parseGoalAlbumRoute(hash);
-  if (goalRoute !== null) {
-    return {
-      section: APP_SECTION.management,
-      managementSection: MANAGEMENT_SECTION.goals,
-      route: goalRoute,
-    };
-  }
-
-  const routineRoute = parseRoutineRoute(hash);
-  if (routineRoute !== null) {
-    return { section: APP_SECTION.routine, route: routineRoute };
-  }
-
-  return null;
+export function parseApplicationRoute(hash: string): ApplicationRoute | null {
+  return parsePlannerRoute(hash);
 }
 
-export function resolveInitialPlannerV2Route(
-  route: RoutedApplicationSection | null,
-  defaultSection: AppSection,
-): PlannerV2Route | null {
-  if (route !== null) return route.section === APP_SECTION.today ? route.route : null;
-  return resolveMenuEntrySection(defaultSection) === APP_SECTION.today ? { view: 'today' } : null;
-}
-
-export function resolveInitialApplicationSection(
-  route: RoutedApplicationSection | null,
-  defaultSection: AppSection,
-): AppSection {
-  return route?.section ?? resolveMenuEntrySection(defaultSection);
+export function resolveInitialApplicationRoute(route: ApplicationRoute | null): ApplicationRoute {
+  return route ?? { view: 'today' };
 }

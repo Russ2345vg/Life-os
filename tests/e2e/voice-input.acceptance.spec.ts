@@ -3,8 +3,8 @@ import { expect, test, type Page } from '@playwright/test';
 import { installSpeech, speech, type VoiceTest } from './helpers/voiceFake';
 
 async function openForm(page: Page) {
-  await page.goto('/#/goals/new');
-  await expect(page.locator('#goal-title')).toBeVisible();
+  await page.goto('/#/v2/goals/new');
+  await expect(page.locator('#planner-goal-title')).toBeVisible();
 }
 
 test('textarea counter stays below voice feedback and multi-phrase text reaches the field', async ({
@@ -15,7 +15,7 @@ test('textarea counter stays below voice feedback and multi-phrase text reaches 
   await page.locator('button[aria-controls="fixture-note"]').click();
   await speech(page, 'error', 0);
   const feedback = await page.locator('#fixture-note-voice-message').boundingBox();
-  const counter = await page.locator('.tomorrow-textarea-shell > small').boundingBox();
+  const counter = await page.locator('.voice-textarea-shell > small').boundingBox();
   expect(counter!.y).toBeGreaterThanOrEqual(feedback!.y + feedback!.height);
   await page.locator('button[aria-controls="fixture-note"]').click();
   await speech(page, 'result', 1, 'Заметка голосом');
@@ -88,9 +88,9 @@ test('dictation preserves selection, updates the controlled goal draft, stops an
   page.on('pageerror', (error) => errors.push(error.message));
   await installSpeech(page);
   await openForm(page);
-  const title = page.locator('#goal-title');
-  const mic = page.locator('button[aria-controls="goal-title"]');
-  await expect(title).toHaveAccessibleName('Название цели');
+  const title = page.locator('#planner-goal-title');
+  const mic = page.locator('button[aria-controls="planner-goal-title"]');
+  await expect(title).toHaveAccessibleName('Название');
   await expect
     .poll(() =>
       page.evaluate(
@@ -108,7 +108,6 @@ test('dictation preserves selection, updates the controlled goal draft, stops an
   await speech(page, 'end', 0);
   await expect(title).toHaveValue('Это проверка голосового ввода');
   await expect(title).toBeFocused();
-  await expect(page.locator('.goal-form-preview')).toContainText('Это проверка голосового ввода');
   await title.fill('Сегодня я пойду домой');
   await title.evaluate((node: HTMLInputElement) => node.setSelectionRange(9, 9));
   await mic.click();
@@ -121,7 +120,7 @@ test('dictation preserves selection, updates the controlled goal draft, stops an
   await speech(page, 'result', 2, 'поеду');
   await speech(page, 'end', 2);
   await expect(title).toHaveValue('Сегодня я после работы поеду домой');
-  await expect(page.locator('.goal-form')).toBeVisible();
+  await expect(page.locator('.planner-form')).toBeVisible();
   expect(errors).toEqual([]);
   await page.screenshot({ path: testInfo.outputPath('voice-goal-form.png'), fullPage: true });
 });
@@ -131,9 +130,10 @@ test('switch, permission denial, manual editing, Escape and unmount release one 
 }) => {
   await installSpeech(page);
   await openForm(page);
-  const title = page.locator('#goal-title');
-  const first = page.locator('button[aria-controls="goal-title"]');
-  const second = page.locator('button[aria-controls="goal-why-important"]');
+  await page.getByText('Дополнительно', { exact: true }).click();
+  const title = page.locator('#planner-goal-title');
+  const first = page.locator('button[aria-controls="planner-goal-title"]');
+  const second = page.locator('button[aria-controls="planner-goal-why-important"]');
   await title.fill('Сохранённый текст');
   await first.click();
   await second.click();
@@ -146,22 +146,19 @@ test('switch, permission denial, manual editing, Escape and unmount release one 
   await speech(page, 'result', 0, 'Чужой результат');
   await speech(page, 'end', 0);
   await speech(page, 'error', 1);
-  await expect(page.locator('#goal-why-important-voice-message')).toContainText(
+  await expect(page.locator('#planner-goal-why-important-voice-message')).toContainText(
     'Доступ к микрофону запрещён',
   );
   await expect(title).toHaveValue('Сохранённый текст');
-  await page.locator('#goal-why-important').fill('Пишу вручную');
-  await expect(page.locator('#goal-why-important-voice-message')).toBeEmpty();
+  await page.locator('#planner-goal-why-important').fill('Пишу вручную');
+  await expect(page.locator('#planner-goal-why-important-voice-message')).toBeEmpty();
   await first.click();
   await title.focus();
   await page.keyboard.press('Escape');
-  await expect(first).toHaveAttribute('aria-pressed', 'false');
-  await first.click();
-  await page.getByRole('button', { name: 'Отмена', exact: true }).click();
   await expect(title).toHaveCount(0);
   expect(
     await page.evaluate(
-      () => (window as unknown as { voiceTest: VoiceTest }).voiceTest.instances[3]!.aborted,
+      () => (window as unknown as { voiceTest: VoiceTest }).voiceTest.instances[2]!.aborted,
     ),
   ).toBe(true);
 });
@@ -171,15 +168,20 @@ test('unsupported remains discoverable and keyboard editing plus validation work
 }) => {
   await installSpeech(page, false);
   await openForm(page);
-  const mic = page.locator('button[aria-controls="goal-title"]');
+  const mic = page.locator('button[aria-controls="planner-goal-title"]');
   await expect(mic).toHaveAttribute('aria-disabled', 'true');
   await mic.focus();
   await page.keyboard.press('Space');
-  await expect(page.locator('#goal-title')).toHaveValue('');
-  await page.locator('.goal-form button[type="submit"]').click();
-  await expect(page.locator('#goal-title')).toHaveAttribute('aria-invalid', 'true');
-  await page.locator('#goal-title').fill('Новая цель');
-  await expect(page.locator('.goal-form-preview')).toContainText('Новая цель');
+  await expect(page.locator('#planner-goal-title')).toHaveValue('');
+  await page.locator('.planner-form button[type="submit"]').click();
+  await expect(page.locator('#planner-goal-title')).toBeFocused();
+  expect(
+    await page
+      .locator('#planner-goal-title')
+      .evaluate((input: HTMLInputElement) => input.checkValidity()),
+  ).toBe(false);
+  await page.locator('#planner-goal-title').fill('Новая цель');
+  await expect(page.locator('#planner-goal-title')).toHaveValue('Новая цель');
 });
 
 test('desktop and mobile reserve action space, touch targets and reduced motion', async ({
@@ -220,10 +222,10 @@ test('desktop and mobile reserve action space, touch targets and reduced motion'
     await page.screenshot({ path: testInfo.outputPath(`voice-${width}.png`), fullPage: true });
   }
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.locator('button[aria-controls="goal-title"]').click();
+  await page.locator('button[aria-controls="planner-goal-title"]').click();
   expect(
     await page
-      .locator('button[aria-controls="goal-title"] svg')
+      .locator('button[aria-controls="planner-goal-title"] svg')
       .evaluate((node) => getComputedStyle(node).animationName),
   ).toBe('none');
 });

@@ -10,7 +10,6 @@ import { GoalRecordMapper } from './mappers/GoalRecordMapper';
 import { DirectionRecordMapper } from './mappers/DirectionRecordMapper';
 import { DecisionRecordMapper } from './mappers/DecisionRecordMapper';
 import { GOAL_MIGRATION_BACKUP } from './indexed-db/LegacyProjectGoalMigration';
-import { parseGoalAlbumRoute } from '../../presentation/goals/GoalAlbumNavigation';
 import {
   applyRemotePilotRecord,
   normalizePilotRecord,
@@ -243,10 +242,6 @@ describe('single canonical goal album', () => {
       { id: 'goals:same-id', store: 'goals', key: 'same-id', value: existing },
     ]);
     expect(backups.find((row) => row.store === 'decisions')?.value).toEqual(legacyDecision);
-    expect(parseGoalAlbumRoute('#/projects/same-id')).toEqual({
-      view: 'detail',
-      goalId: goal?.id.toString(),
-    });
     db.close();
     const reopened = new LifeOsIndexedDb(factory);
     expect(await new IndexedDbGoalRepository(reopened).findAll()).toHaveLength(2);

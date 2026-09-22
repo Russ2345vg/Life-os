@@ -1,17 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_EVENING_RITUAL_SETTINGS } from '../../application/evening-settings';
-import { ACTION_LIST_FILTERS_STORAGE_KEY } from '../../app/settings/BrowserActionListFiltersStore';
 import { LOCAL_SETTINGS_STORAGE_KEY } from '../../app/settings/BrowserLocalSettingsStore';
-import { SIDEBAR_PREFERENCE_STORAGE_KEY } from '../../app/settings/BrowserSidebarPreferenceStore';
-import { TODAY_ACTION_SELECTION_STORAGE_KEY } from '../../app/settings/BrowserTodayActionSelectionStore';
 import {
   LIFE_OS_LOCAL_STORAGE_POLICY,
   LIFE_OS_LOCAL_STORAGE_SYNC_ALLOWLIST,
   classifyLifeOsLocalStorageKey,
   projectMeaningfulLocalSettings,
 } from './LifeOsLocalStoragePolicy';
-
-const SYSTEM_UPDATE_KEY = 'lifeos.system-update.last-check';
 
 describe('LifeOS localStorage sync policy', () => {
   it('allows only the structured local-settings projection and denies unknown keys by default', () => {
@@ -26,32 +21,11 @@ describe('LifeOS localStorage sync policy', () => {
         classification: 'sync_now',
         meaningfulFields: ['eveningRitual'],
       },
-      {
-        key: SIDEBAR_PREFERENCE_STORAGE_KEY,
-        classification: 'ui_local_only',
-        meaningfulFields: [],
-      },
-      {
-        key: TODAY_ACTION_SELECTION_STORAGE_KEY,
-        classification: 'ui_local_only',
-        meaningfulFields: [],
-      },
-      {
-        key: ACTION_LIST_FILTERS_STORAGE_KEY,
-        classification: 'ui_local_only',
-        meaningfulFields: [],
-      },
-      {
-        key: SYSTEM_UPDATE_KEY,
-        classification: 'technical_local_only',
-        meaningfulFields: [],
-      },
     ]);
     expect(classifyLifeOsLocalStorageKey(LOCAL_SETTINGS_STORAGE_KEY)).toBe('sync_now');
-    expect(classifyLifeOsLocalStorageKey(SYSTEM_UPDATE_KEY)).toBe('technical_local_only');
-    expect(classifyLifeOsLocalStorageKey(SIDEBAR_PREFERENCE_STORAGE_KEY)).toBe('ui_local_only');
-    expect(classifyLifeOsLocalStorageKey(TODAY_ACTION_SELECTION_STORAGE_KEY)).toBe('ui_local_only');
-    expect(classifyLifeOsLocalStorageKey(ACTION_LIST_FILTERS_STORAGE_KEY)).toBe('ui_local_only');
+    expect(classifyLifeOsLocalStorageKey('lifeos.sidebar-collapsed.v1')).toBe('deny_unknown');
+    expect(classifyLifeOsLocalStorageKey('lifeos.today-action-selection.v1')).toBe('deny_unknown');
+    expect(classifyLifeOsLocalStorageKey('lifeos.action-list-filters.v1')).toBe('deny_unknown');
   });
 
   it('projects only validated evening ritual settings for a local safety snapshot', () => {

@@ -70,13 +70,13 @@ describe('one-shot Vitest dispatcher', () => {
   test('CLI discovers and runs an explicit .test.tsx selector once', async () => {
     const result = await runCli([
       'target',
-      'src/presentation/components/SphereReference.test.tsx',
+      'src/presentation/planner-v2/PlannerForms.test.tsx',
       '--reporter=verbose',
     ]);
 
     expect(result.code).toBe(0);
     expect(result.signal).toBeNull();
-    expect(result.output).toContain('SphereReference.test.tsx');
+    expect(result.output).toContain('PlannerForms.test.tsx');
     expect(result.output).toContain('[vitest:target] PASS');
   }, 20_000);
 });

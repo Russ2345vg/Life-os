@@ -13,7 +13,7 @@ import {
 } from '../../../application/balance/GetLifeBalance';
 import { automaticPeriod, cycleAt, type PeriodKind } from '../../../domain/planner/PlanningPeriod';
 import type { DirectionIndicator } from '../../../domain/balance/DirectionIndicator';
-import { buildPlannerV2Route, type PlannerV2Route } from '../PlannerV2Navigation';
+import { buildPlannerRoute, type PlannerRoute } from '../PlannerNavigation';
 import { BalanceWheel } from './BalanceWheel';
 import { BalanceEntityForm } from './BalanceEntityForm';
 import { BalanceIndicatorForm } from './BalanceIndicatorForm';
@@ -41,8 +41,8 @@ export function BalanceWorkspace({
 }: {
   readonly services: BalanceServices;
   readonly today: string;
-  readonly route: PlannerV2Route;
-  readonly onNavigate: (r: PlannerV2Route) => void;
+  readonly route: PlannerRoute;
+  readonly onNavigate: (r: PlannerRoute) => void;
 }) {
   const query = useBalanceState(services, today);
   const { state, load, refresh } = query;
@@ -63,7 +63,7 @@ export function BalanceWorkspace({
     return () => clearTimeout(timer);
   }, [notice]);
   const visibleError = error ?? query.error;
-  const routeKey = buildPlannerV2Route(route);
+  const routeKey = buildPlannerRoute(route);
   const [renderedRoute, setRenderedRoute] = useState(routeKey);
   if (renderedRoute !== routeKey) {
     setRenderedRoute(routeKey);
@@ -97,15 +97,15 @@ export function BalanceWorkspace({
       setBusy(false);
     }
   };
-  const navigate = (target: PlannerV2Route) => {
+  const navigate = (target: PlannerRoute) => {
     setEditor(null);
     setSettings(false);
     setNotice('');
     onNavigate(target);
   };
-  const link = (target: PlannerV2Route, label: string) => (
+  const link = (target: PlannerRoute, label: string) => (
     <a
-      href={buildPlannerV2Route(target)}
+      href={buildPlannerRoute(target)}
       onClick={(e) => {
         if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
         e.preventDefault();

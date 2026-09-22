@@ -150,7 +150,7 @@ export function PlannerInbox({
                     className="planner-text-link"
                     href={
                       i.targetType === 'goal'
-                        ? `#/goals/${encodeURIComponent(i.targetId)}`
+                        ? `#/v2/goals/${encodeURIComponent(i.targetId)}`
                         : `#/v2/actions/${encodeURIComponent(i.targetId)}`
                     }
                   >

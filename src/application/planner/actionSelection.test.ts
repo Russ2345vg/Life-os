@@ -49,4 +49,29 @@ describe('series selection', () => {
     });
     expect(actions).toHaveLength(100);
   });
+
+  it('does not offer a removed series even when historical occurrences remain', () => {
+    const historical = LifeAction.createDraft({
+      id: EntityId.create('historical'),
+      title: LifeActionTitle.create('Удалённая практика'),
+      createdAt: new Date('2026-09-21T10:00:00Z'),
+      eventId: EntityId.create('historical-event'),
+    });
+    historical.setPlanningMetadata({
+      occurrence: {
+        ruleId: 'removed',
+        slot: '2026-09-21',
+        originalDate: '2026-09-21',
+        ruleRevision: 2,
+      },
+    });
+    const removed: RecurrenceRule = {
+      ...rule('removed'),
+      paused: true,
+      removedAt: '2026-09-21T10:00:00Z',
+      revision: 2,
+    };
+
+    expect(selectActionOptions([historical], [removed])).toEqual([]);
+  });
 });

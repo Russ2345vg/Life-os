@@ -1,6 +1,6 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it } from 'vitest';
-import { DayDate, EntityId, LifeActionTitle } from '../../domain';
+import { DayDate, LifeActionTitle } from '../../domain';
 import { selectGoalCardActions } from '../../presentation/planner-v2/plannerCatalogModel';
 import { LifeOsIndexedDb } from '../../infrastructure/persistence/indexed-db/LifeOsIndexedDb';
 import { FakeClock, FakeIdGenerator } from '../../test/helpers/Fakes';
@@ -60,9 +60,10 @@ describe('Planner daily workflow persistence', () => {
 
     const reopened = new LifeOsIndexedDb(factory);
     const restored = await createLifeOsApplication({ database: reopened });
-    const actions = await restored.lifeActionRepository.findAll!();
-    const goalA = await restored.getGoalById.execute(firstGoal.value.id);
-    const goalB = await restored.getGoalById.execute(secondGoal.value.id);
+    const actions = await restored.plannerCatalog.actions();
+    const goals = await restored.getGoals.execute();
+    const goalA = goals.find((goal) => goal.id.equals(firstGoal.value.id));
+    const goalB = goals.find((goal) => goal.id.equals(secondGoal.value.id));
     expect(goalA?.nextActionId?.toString()).toBe(first.value.id.toString());
     expect(goalB?.nextActionId?.toString()).toBe(second.value.id.toString());
     expect(selectGoalCardActions(goalA!, actions).next?.id.toString()).toBe(
@@ -108,7 +109,8 @@ describe('Planner daily workflow persistence', () => {
 
     const reopened = new LifeOsIndexedDb(factory);
     const restored = await createLifeOsApplication({ database: reopened });
-    const saved = await restored.lifeActionRepository.findById(child.value.id);
+    const actions = await restored.plannerCatalog.actions();
+    const saved = actions.find((action) => action.id.equals(child.value.id));
     expect(saved?.parentActionId?.toString()).toBe(root.value.id.toString());
     expect(saved?.title.toString()).toBe('Поддействие изменено');
     expect(saved?.description).toBe('Детали');
@@ -118,10 +120,11 @@ describe('Planner daily workflow persistence', () => {
     });
     expect(unlink.ok).toBe(true);
     expect(
-      (await restored.lifeActionRepository.findById(child.value.id))?.parentActionId,
+      (await restored.plannerCatalog.actions()).find((action) => action.id.equals(child.value.id))
+        ?.parentActionId,
     ).toBeNull();
     expect(
-      await restored.lifeActionRepository.findById(EntityId.create(root.value.id.toString())),
+      (await restored.plannerCatalog.actions()).find((action) => action.id.equals(root.value.id)),
     ).not.toBeNull();
     reopened.close();
   });

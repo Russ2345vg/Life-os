@@ -29,7 +29,6 @@ import * as mappers from '../../persistence/mappers';
 import { WalkCaptureRecordMapper } from '../../persistence/mappers/WalkCaptureRecordMapper';
 import { SleepScheduleRecordMapper } from '../../persistence/mappers/SleepScheduleRecordMapper';
 import { createEmptySleepSchedule, updateSleepSettings } from '../../../domain/sleep/SleepSchedule';
-import { pendingRecommendationApplication } from '../../../application/recommendations/RecommendationApplication';
 import { DEFAULT_EVENING_RITUAL_SETTINGS } from '../../../application/evening-settings';
 import type { SyncEntityType } from '../../../application/sync/SyncRegistry';
 
@@ -376,9 +375,17 @@ export function structuredSyncFixtures(): Readonly<
       ),
     },
     recommendation_application: {
-      ...mappers.RecommendationApplicationRecordMapper.toRecord(
-        pendingRecommendationApplication('sync04-recommendation_application', now),
-      ),
+      id: 'sync04-recommendation_application',
+      status: 'PENDING',
+      targetType: null,
+      targetId: null,
+      resultMessage: null,
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+      appliedAt: null,
+      dismissedAt: null,
+      version: 1,
+      schemaVersion: 1,
     },
     inbox_idea: {
       id: 'sync04-inbox',

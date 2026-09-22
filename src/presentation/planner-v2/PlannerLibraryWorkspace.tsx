@@ -25,7 +25,7 @@ import { PlannerFocus } from './PlannerFocus';
 import { PlannerActionList } from './PlannerActionList';
 import { activeFocusIds } from './plannerCatalogModel';
 import { completePlannerAction, planPlannerAction } from './plannerTodayCommands';
-import type { PlannerV2Route } from './PlannerV2Navigation';
+import type { PlannerRoute } from './PlannerNavigation';
 import { useSyncContentChanged } from '../sync/SyncStatusContext';
 import './planner-library.css';
 import './planner-views.css';
@@ -83,9 +83,9 @@ export function PlannerLibraryWorkspace({
   onNavigate,
 }: {
   readonly services: PlannerLibraryServices;
-  readonly route: PlannerV2Route;
+  readonly route: PlannerRoute;
   readonly today: string;
-  readonly onNavigate: (route: PlannerV2Route) => void;
+  readonly onNavigate: (route: PlannerRoute) => void;
 }) {
   const planningContext = usePlanning();
   const [data, setData] = useState<LibraryData | null>(null);
@@ -232,20 +232,60 @@ export function PlannerLibraryWorkspace({
           },
         ]
       : []),
-    {
-      label: 'Удалить',
-      destructive: true,
-      run: async () => {
-        await run(async () => {
-          if (!(await services.deletePilotLifeAction.execute(action.id.toString())))
-            throw new DomainError(
-              'action.delete_blocked',
-              'Действие уже удалено. Обновите список.',
-            );
-        }, 'Действие удалено');
-        if (route.view === 'action') onNavigate({ view: 'actions' });
-      },
-    },
+    ...(action.occurrence && services.planning
+      ? [
+          ...(planningContext?.state?.rules.find((rule) => rule.id === action.occurrence?.ruleId)
+            ?.schedule.kind === 'count'
+            ? []
+            : [
+                {
+                  label: 'Удалить это повторение',
+                  destructive: true,
+                  prepare: async () => ({
+                    message: `Удалить только это повторение «${action.title}»? Остальная серия продолжится.`,
+                    confirmLabel: 'Удалить повторение',
+                  }),
+                  run: async () => {
+                    await run(
+                      () => services.planning!.recurrence.skip(action.id.toString()),
+                      'Повторение удалено',
+                    );
+                    if (route.view === 'action') onNavigate({ view: 'actions' });
+                  },
+                } satisfies EntityMenuAction,
+              ]),
+          {
+            label: 'Удалить всю серию',
+            destructive: true,
+            prepare: async () => ({
+              message: `Удалить всю серию «${action.title}»? Все незавершённые повторения исчезнут. Выполненная история сохранится.`,
+              confirmLabel: 'Удалить всю серию',
+            }),
+            run: async () => {
+              await run(
+                () => services.planning!.recurrence.remove(action.occurrence!.ruleId),
+                'Серия удалена',
+              );
+              if (route.view === 'action') onNavigate({ view: 'actions' });
+            },
+          } satisfies EntityMenuAction,
+        ]
+      : [
+          {
+            label: 'Удалить',
+            destructive: true,
+            run: async () => {
+              await run(async () => {
+                if (!(await services.deletePilotLifeAction.execute(action.id.toString())))
+                  throw new DomainError(
+                    'action.delete_blocked',
+                    'Действие уже удалено. Обновите список.',
+                  );
+              }, 'Действие удалено');
+              if (route.view === 'action') onNavigate({ view: 'actions' });
+            },
+          } satisfies EntityMenuAction,
+        ]),
   ];
   const views = useMemo(() => (data ? buildPlannerViews(data) : null), [data]);
   const operations: PlannerViewOperations = {

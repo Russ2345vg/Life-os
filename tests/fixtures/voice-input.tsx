@@ -5,7 +5,6 @@ import { VoiceTextInput } from '../../src/presentation/voice-input/VoiceTextInpu
 import { VoiceTextArea } from '../../src/presentation/voice-input/VoiceTextArea';
 import { VoiceField } from '../../src/presentation/voice-input/VoiceField';
 import '../../src/presentation/styles/tokens.css';
-import '../../src/presentation/styles/planning-tomorrow.css';
 
 function Fixture() {
   const [value, setValue] = useState('');
@@ -47,7 +46,7 @@ function Fixture() {
             </VoiceField>
             <VoiceField>
               <span>Заметка</span>
-              <span className="tomorrow-textarea-shell">
+              <span className="voice-textarea-shell">
                 <VoiceTextArea id="fixture-note" value={note} onValueChange={setNote} />
                 <small aria-hidden="true">{note.length} / 1000</small>
               </span>

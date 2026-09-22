@@ -23,7 +23,8 @@ export function PlanningActionDetails({
     [amount, setAmount] = useState('1'),
     [pauseUntil, setPauseUntil] = useState('');
   const working = useRef(false);
-  const rule = c?.state?.rules.find((r) => r.id === action.occurrence?.ruleId);
+  const storedRule = c?.state?.rules.find((r) => r.id === action.occurrence?.ruleId);
+  const rule = storedRule?.removedAt == null ? storedRule : undefined;
   const [draft, setDraft] = useState<RecurrenceInput>(
     () =>
       rule ?? defaultRecurrence(action.title.toString(), today, action.goalId?.toString() ?? null),
@@ -52,8 +53,8 @@ export function PlanningActionDetails({
       setBusy(false);
     }
   };
-  const sourceType = rule ? 'rule' : 'action',
-    sourceId = rule?.id ?? action.id.toString();
+  const sourceType = storedRule ? 'rule' : 'action',
+    sourceId = storedRule?.id ?? action.id.toString();
   const links = s.links.filter(
     (l) => l.sourceType === sourceType && l.sourceId === sourceId && !l.removed,
   );
@@ -62,24 +63,28 @@ export function PlanningActionDetails({
       p.actionId === action.id.toString() &&
       contributionIsEffective(p, new Map([[action.id.toString(), action]])),
   );
-  const completions = rule
+  const completions = storedRule
     ? new Set(
         s.actions
-          .filter((item) => item.occurrence?.ruleId === rule.id && item.status === 'completed')
+          .filter(
+            (item) => item.occurrence?.ruleId === storedRule.id && item.status === 'completed',
+          )
           .map((item) => item.completionKey),
       ).size
     : 0;
   return (
     <>
       <CompletionResult action={action} />
-      {rule && (
+      {storedRule && (
         <section className="planner-recurrence-summary" aria-label="Повторение">
           <p>
-            <RecurrenceBadge rule={rule} />
+            <RecurrenceBadge rule={storedRule} />
           </p>
-          {rule.maxCompletions !== null && (
+          {storedRule.removedAt != null && <p>Серия удалена. Выполненная история сохранена.</p>}
+          {storedRule.maxCompletions !== null && (
             <p>
-              Цель: {rule.maxCompletions} выполнений · {completions} / {rule.maxCompletions}
+              Цель: {storedRule.maxCompletions} выполнений · {completions} /{' '}
+              {storedRule.maxCompletions}
             </p>
           )}
         </section>
@@ -126,56 +131,58 @@ export function PlanningActionDetails({
                   onSave={(value) => run(() => c.services.progress.setActual(f.id, value))}
                 />
               ))}
-            <details>
-              <summary>{rule ? 'Изменить будущие повторения' : 'Сделать повторяющимся'}</summary>
-              <RecurrenceFields value={draft} onChange={setDraft} />
-              <button
-                onClick={() => {
-                  void run(() =>
-                    c.services.recurrence.save(
-                      draft,
-                      rule?.id,
-                      rule ? undefined : action.id.toString(),
-                    ),
-                  );
-                }}
-              >
-                Сохранить расписание
-              </button>
-              {rule && (
-                <>
-                  <label>
-                    Пауза до · необязательно
-                    <input
-                      type="date"
-                      value={pauseUntil}
-                      onChange={(e) => setPauseUntil(e.target.value)}
-                    />
-                  </label>
-                  <button
-                    onClick={() => {
-                      void run(() =>
-                        rule.paused
-                          ? c.services.recurrence.resume(rule.id)
-                          : c.services.recurrence.pause(rule.id, pauseUntil || null),
-                      );
-                    }}
-                  >
-                    {rule.paused ? 'Возобновить' : 'Приостановить'}
-                  </button>
-                  {rule.schedule.kind !== 'count' &&
-                    !['completed', 'cancelled', 'archived'].includes(action.status) && (
-                      <button
-                        onClick={() => {
-                          void run(() => c.services.recurrence.skip(action.id.toString()));
-                        }}
-                      >
-                        Пропустить это повторение
-                      </button>
-                    )}
-                </>
-              )}
-            </details>
+            {storedRule?.removedAt == null && (
+              <details>
+                <summary>{rule ? 'Изменить будущие повторения' : 'Сделать повторяющимся'}</summary>
+                <RecurrenceFields value={draft} onChange={setDraft} />
+                <button
+                  onClick={() => {
+                    void run(() =>
+                      c.services.recurrence.save(
+                        draft,
+                        rule?.id,
+                        rule ? undefined : action.id.toString(),
+                      ),
+                    );
+                  }}
+                >
+                  Сохранить расписание
+                </button>
+                {rule && (
+                  <>
+                    <label>
+                      Пауза до · необязательно
+                      <input
+                        type="date"
+                        value={pauseUntil}
+                        onChange={(e) => setPauseUntil(e.target.value)}
+                      />
+                    </label>
+                    <button
+                      onClick={() => {
+                        void run(() =>
+                          rule.paused
+                            ? c.services.recurrence.resume(rule.id)
+                            : c.services.recurrence.pause(rule.id, pauseUntil || null),
+                        );
+                      }}
+                    >
+                      {rule.paused ? 'Возобновить' : 'Приостановить'}
+                    </button>
+                    {rule.schedule.kind !== 'count' &&
+                      !['completed', 'cancelled', 'archived'].includes(action.status) && (
+                        <button
+                          onClick={() => {
+                            void run(() => c.services.recurrence.skip(action.id.toString()));
+                          }}
+                        >
+                          Пропустить это повторение
+                        </button>
+                      )}
+                  </>
+                )}
+              </details>
+            )}
             <label>
               Цель для вклада
               <select value={goalId} onChange={(e) => setGoalId(e.target.value)}>

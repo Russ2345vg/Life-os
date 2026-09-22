@@ -4,6 +4,7 @@ import { DayDate, EntityId, Goal, LifeActionTitle } from '../../domain';
 import { planPlannerAction } from '../../presentation/planner-v2/plannerTodayCommands';
 import { createLifeOsApplication } from './createLifeOsApplication';
 import { LifeOsIndexedDb } from '../../infrastructure/persistence/indexed-db/LifeOsIndexedDb';
+import { IndexedDbGoalRepository } from '../../infrastructure/persistence/IndexedDbGoalRepository';
 
 describe('V2 inbox and period focus', () => {
   it('preserves main selection on date edits and explicitly clears it when removing the date', async () => {
@@ -37,7 +38,7 @@ describe('V2 inbox and period focus', () => {
       title: 'Сохранить исходник',
       note: 'Не терять текст',
     });
-    await app.goalRepository.create(
+    await new IndexedDbGoalRepository(database).create(
       Goal.create({
         id: EntityId.create(`inbox-result:goal:${idea.id}`),
         title: 'Collision',
@@ -68,12 +69,10 @@ describe('V2 inbox and period focus', () => {
       if (!goal.ok) throw goal.error;
       await app.setLifeActionGoal.execute({ lifeActionId, goalId: goal.value.id });
       await app.setLifeActionGoal.execute({ lifeActionId, goalId: null });
-      expect((await app.lifeActionRepository.findById(lifeActionId))?.completedAt).toEqual(
-        completed.value.completedAt,
-      );
       expect(
-        await app.journalRepository.findByEffectiveDateRange(app.currentDate, app.currentDate),
-      ).toHaveLength(1);
+        (await app.plannerCatalog.actions()).find((action) => action.id.equals(lifeActionId))
+          ?.completedAt,
+      ).toEqual(completed.value.completedAt);
     } finally {
       database.close();
     }

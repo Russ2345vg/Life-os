@@ -1,8 +1,3 @@
-import {
-  isRecommendationApplicationStatus,
-  isRecommendationApplicationTargetType,
-  type RecommendationApplication,
-} from '../../../application';
 import type { RecommendationApplicationRecord } from '../records/RecommendationApplicationRecord';
 import {
   assertRecordAndSchemaVersion,
@@ -14,6 +9,43 @@ import {
   readString,
   toNullableIsoDate,
 } from './RecordMapperSupport';
+
+type RecommendationApplicationStatus = 'PENDING' | 'APPLIED' | 'DISMISSED';
+type RecommendationApplicationTargetType =
+  'TOMORROW_PLAN' | 'DECISION' | 'PREPARATION_PLAN' | 'EVENING_PROCESS';
+
+interface RecommendationApplication {
+  readonly recommendationId: string;
+  readonly status: RecommendationApplicationStatus;
+  readonly targetType: RecommendationApplicationTargetType | null;
+  readonly targetId: string | null;
+  readonly resultMessage: string | null;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+  readonly appliedAt: Date | null;
+  readonly dismissedAt: Date | null;
+  readonly version: number;
+}
+
+const STATUSES: readonly string[] = ['PENDING', 'APPLIED', 'DISMISSED'];
+const TARGET_TYPES: readonly string[] = [
+  'TOMORROW_PLAN',
+  'DECISION',
+  'PREPARATION_PLAN',
+  'EVENING_PROCESS',
+];
+
+function isRecommendationApplicationStatus(
+  value: string,
+): value is RecommendationApplicationStatus {
+  return STATUSES.includes(value);
+}
+
+function isRecommendationApplicationTargetType(
+  value: string,
+): value is RecommendationApplicationTargetType {
+  return TARGET_TYPES.includes(value);
+}
 
 export class RecommendationApplicationRecordMapper {
   public static toRecord(application: RecommendationApplication): RecommendationApplicationRecord {

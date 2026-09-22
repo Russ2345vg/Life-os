@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import * as infrastructure from '../../index';
+import { describe, expect, it } from 'vitest';
 import { EntityId, WalkCapture } from '../../../domain';
+import { WalkCaptureRecordMapper } from './WalkCaptureRecordMapper';
 
 const capture = () =>
   WalkCapture.create({
@@ -12,11 +12,9 @@ const capture = () =>
   });
 
 describe('WalkCaptureRecordMapper', () => {
-  beforeEach(() => expect(infrastructure).toHaveProperty('WalkCaptureRecordMapper'));
-
   it('roundtrips pending and processed text without copying Walk context', () => {
     const thought = capture();
-    const record = infrastructure.WalkCaptureRecordMapper.toRecord(thought);
+    const record = WalkCaptureRecordMapper.toRecord(thought);
     expect(record).toEqual({
       schemaVersion: 1,
       id: 'c1',
@@ -30,13 +28,11 @@ describe('WalkCaptureRecordMapper', () => {
       status: 'pending',
       version: 1,
     });
-    expect(infrastructure.WalkCaptureRecordMapper.fromRecord(record)).toEqual(thought);
+    expect(WalkCaptureRecordMapper.fromRecord(record)).toEqual(thought);
     const processed = thought.process(new Date('2026-08-26T08:05:00Z'));
-    expect(
-      infrastructure.WalkCaptureRecordMapper.fromRecord(
-        infrastructure.WalkCaptureRecordMapper.toRecord(processed),
-      ),
-    ).toEqual(processed);
+    expect(WalkCaptureRecordMapper.fromRecord(WalkCaptureRecordMapper.toRecord(processed))).toEqual(
+      processed,
+    );
   });
 
   it.each([
@@ -49,9 +45,7 @@ describe('WalkCaptureRecordMapper', () => {
     { version: 0 },
     { walkId: '' },
   ])('rejects malformed persisted data: %j', (patch) => {
-    const record = infrastructure.WalkCaptureRecordMapper.toRecord(capture());
-    expect(() =>
-      infrastructure.WalkCaptureRecordMapper.fromRecord({ ...record, ...patch }),
-    ).toThrow();
+    const record = WalkCaptureRecordMapper.toRecord(capture());
+    expect(() => WalkCaptureRecordMapper.fromRecord({ ...record, ...patch })).toThrow();
   });
 });

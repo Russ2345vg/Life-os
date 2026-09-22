@@ -26,6 +26,8 @@ export interface RecurrenceRule extends PlanningRecord {
   readonly maxCompletions: number | null;
   readonly paused: boolean;
   readonly pauseUntil: string | null;
+  /** A removed series remains as a historical reference but cannot produce new occurrences. */
+  readonly removedAt?: string | null;
   readonly schedule: RecurrenceSchedule;
   readonly revision: number;
   readonly effectiveFrom: string;
@@ -36,6 +38,8 @@ export function validateRule(rule: RecurrenceRule): RecurrenceRule {
   DayDate.create(rule.effectiveFrom);
   if (rule.endDate !== null) DayDate.create(rule.endDate);
   if (rule.pauseUntil !== null) DayDate.create(rule.pauseUntil);
+  if (rule.removedAt != null && !Number.isFinite(Date.parse(rule.removedAt)))
+    throw new DomainError('recurrence.invalid_rule', 'Проверьте расписание и границы повторения.');
   const s = rule.schedule;
   if (
     typeof rule.title !== 'string' ||
@@ -44,6 +48,7 @@ export function validateRule(rule: RecurrenceRule): RecurrenceRule {
     !Number.isInteger(rule.revision) ||
     rule.revision < 1 ||
     typeof rule.paused !== 'boolean' ||
+    (rule.removedAt != null && (!rule.paused || rule.pauseUntil !== null)) ||
     (rule.goalId !== null && typeof rule.goalId !== 'string') ||
     (rule.directionId != null &&
       (typeof rule.directionId !== 'string' || !rule.directionId.trim())) ||
@@ -82,6 +87,7 @@ export function occurrenceSlots(
   DayDate.create(to);
   if (to < from || to > addDays(from, 62))
     throw new DomainError('recurrence.window_too_large', 'Выберите окно не длиннее 63 дней.');
+  if (rule.removedAt != null) return [];
   if (
     rule.maxCompletions !== null &&
     new Set(completions.map((c) => c.key)).size >= rule.maxCompletions

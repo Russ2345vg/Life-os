@@ -143,7 +143,9 @@ describe('SleepScheduleService', () => {
       alarmSound: { uri: null, title: 'Системный сигнал' },
     });
 
-    expect(saved.wakeOccurrences.filter(({ status }) => status === 'SCHEDULED').length).toBeGreaterThan(1);
+    expect(
+      saved.wakeOccurrences.filter(({ status }) => status === 'SCHEDULED').length,
+    ).toBeGreaterThan(1);
     expect(alarm.reconciliations).toHaveLength(1);
     expect(alarm.reconciliations[0]).toMatchObject({
       enabled: true,

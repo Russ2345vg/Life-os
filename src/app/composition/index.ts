@@ -1,4 +1,4 @@
-export { LifeOsApplication } from './LifeOsApplication';
+export type { LifeOsApplication } from './LifeOsApplication';
 export { LifeOsApplicationInitializationError } from './LifeOsApplicationInitializationError';
 export {
   createLifeOsApplication,

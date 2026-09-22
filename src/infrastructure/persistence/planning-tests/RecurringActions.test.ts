@@ -30,6 +30,58 @@ const input: RecurrenceInput = {
   schedule: { kind: 'daily' },
 };
 describe('bounded recurring actions', () => {
+  it('removes an entire series, preserves completed history and never materializes it again', async () => {
+    const factory = new IDBFactory();
+    const db = new LifeOsIndexedDb(factory);
+    const repo = new IndexedDbPlanningRepository(db);
+    const clock = new FakeClock(new Date('2026-09-14T10:00:00Z'));
+    const ids = new FakeIdGenerator('remove-series');
+    const recurring = new RecurringActions(repo, clock, ids);
+    const complete = new CompleteLifeAction(
+      new IndexedDbLifeActionRepository(db),
+      clock,
+      ids,
+      new IndexedDbJournalUnitOfWork(db),
+    );
+
+    const rule = await recurring.save(input);
+    await recurring.materialize('2026-09-14', '2026-09-20');
+    const first = (await repo.read()).actions.find(
+      (action) => action.occurrence?.ruleId === rule.id,
+    )!;
+    expect((await complete.execute({ lifeActionId: first.id })).ok).toBe(true);
+
+    await recurring.remove(rule.id);
+    const removed = await repo.read();
+    expect(removed.rules.find((candidate) => candidate.id === rule.id)).toMatchObject({
+      removedAt: '2026-09-14T10:00:00.000Z',
+      paused: true,
+      pauseUntil: null,
+    });
+    expect(
+      removed.actions.filter(
+        (action) => action.occurrence?.ruleId === rule.id && action.status === 'completed',
+      ),
+    ).toHaveLength(1);
+    expect(
+      removed.actions.filter(
+        (action) => action.occurrence?.ruleId === rule.id && action.status === 'draft',
+      ),
+    ).toHaveLength(0);
+
+    clock.setTime(new Date('2026-09-21T10:00:00Z'));
+    expect(await recurring.materialize('2026-09-21', '2026-09-27')).toBe(0);
+    await expect(recurring.resume(rule.id)).rejects.toMatchObject({ code: 'recurrence.removed' });
+    db.close();
+
+    const reopened = new LifeOsIndexedDb(factory);
+    const restored = new IndexedDbPlanningRepository(reopened);
+    expect(
+      (await restored.read()).rules.find((candidate) => candidate.id === rule.id)?.removedAt,
+    ).toBe('2026-09-14T10:00:00.000Z');
+    reopened.close();
+  });
+
   it('keeps a count occurrence paused until its real resume date and rejects skip without trapping it', async () => {
     const db = new LifeOsIndexedDb(new IDBFactory());
     const repo = new IndexedDbPlanningRepository(db);
