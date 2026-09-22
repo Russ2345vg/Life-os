@@ -11,6 +11,7 @@ export const LIFE_OS_SUPABASE_AUTH_OPTIONS = Object.freeze({
   autoRefreshToken: true,
   persistSession: true,
   detectSessionInUrl: false,
+  flowType: 'pkce' as const,
 });
 
 export function createLifeOsSupabaseClient(
