@@ -5,6 +5,7 @@ export function createLifeOsApplicationForEnvironment(): Promise<LifeOsApplicati
     syncEnvironment: {
       VITE_LIFEOS_SUPABASE_URL: import.meta.env.VITE_LIFEOS_SUPABASE_URL,
       VITE_LIFEOS_SUPABASE_PUBLISHABLE_KEY: import.meta.env.VITE_LIFEOS_SUPABASE_PUBLISHABLE_KEY,
+      VITE_LIFEOS_ACCOUNT_SYNC_ENABLED: import.meta.env.VITE_LIFEOS_ACCOUNT_SYNC_ENABLED,
     },
   });
 }

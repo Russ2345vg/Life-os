@@ -7,6 +7,7 @@ import type {
   CreateGoal,
   CreateLifeActionDraft,
   CompleteLifeAction,
+  AccountSync,
   GetDirections,
   GetGoals,
   GetPlannerToday,
@@ -17,7 +18,7 @@ import type {
 import { DayDate, EntityId, type Goal, type LifeAction } from '../../domain';
 import { addDays } from '../../domain/planner/PlanningPeriod';
 import type { DailyDirection } from '../../application/planner/DailyDirection';
-import { AppIcon } from '../components/AppIcon';
+import { AppIcon, type AppIconName } from '../components/AppIcon';
 import { PlannerActionForm, type PlannerOption } from './PlannerActionForm';
 import { PlannerGoalForm } from './PlannerGoalForm';
 import { PlannerToday } from './PlannerToday';
@@ -37,6 +38,7 @@ import { DomainError } from '../../shared/errors/DomainError';
 import { SleepMoonIcon, SleepPreparationPage } from './SleepPreparationPage';
 import { PlannerSheet } from './PlannerSheet';
 import './planner-master.css';
+import { AccountSyncPage } from './AccountSyncPage';
 
 export interface PlannerServices extends PlannerLibraryServices {
   readonly balance?: BalanceServices;
@@ -50,6 +52,7 @@ export interface PlannerServices extends PlannerLibraryServices {
   readonly getDirections: Pick<GetDirections, 'execute'>;
   readonly dailyDirection: Pick<DailyDirection, 'get' | 'set'>;
   readonly sleepSchedule: SleepScheduleService;
+  readonly accountSync: AccountSync;
 }
 interface PlannerData {
   readonly overview: PlannerTodayOverview;
@@ -101,7 +104,7 @@ export function PlannerWorkspace({
     setError(null);
   }
   const load = useCallback(async () => {
-    if (route.view === 'sleep') return;
+    if (route.view === 'sleep' || route.view === 'account') return;
     const sequence = ++request.current;
     const date = DayDate.create(selectedDateKey);
     if (services.planning) await services.planning.recurrence.materialize(selectedDateKey);
@@ -290,11 +293,7 @@ export function PlannerWorkspace({
       );
     else navigate({ view: 'actions' });
   };
-  const navLink = (
-    target: PlannerRoute,
-    label: string,
-    icon: 'today' | 'goals' | 'create' | 'actions' | 'history',
-  ) => (
+  const navLink = (target: PlannerRoute, label: string, icon: AppIconName) => (
     <a
       href={buildPlannerRoute(target)}
       aria-current={
@@ -371,6 +370,7 @@ export function PlannerWorkspace({
             <button
               className="planner-nav-more"
               type="button"
+              aria-current={route.view === 'account' ? 'page' : undefined}
               aria-expanded={moreOpen}
               aria-controls="planner-more-menu"
               onClick={() => setMoreOpen((value) => !value)}
@@ -379,12 +379,11 @@ export function PlannerWorkspace({
               <span>Ещё</span>
             </button>
           </nav>
-          {moreOpen && (
-            <div id="planner-more-menu" className="planner-more-menu">
-              {navLink({ view: 'spheres' }, 'Сферы', 'goals')}
-              {navLink({ view: 'inbox' }, 'Входящие', 'history')}
-            </div>
-          )}
+          <div id="planner-more-menu" className="planner-more-menu" hidden={!moreOpen}>
+            {navLink({ view: 'spheres' }, 'Сферы', 'goals')}
+            {navLink({ view: 'inbox' }, 'Входящие', 'history')}
+            {navLink({ view: 'account' }, 'Аккаунт и синхронизация', 'account')}
+          </div>
         </aside>
         <main
           ref={mainContent}
@@ -410,7 +409,12 @@ export function PlannerWorkspace({
               </button>
             </div>
           ) : null}
-          {['spheres', 'sphere', 'directions', 'direction'].includes(route.view) ? (
+          {route.view === 'account' ? (
+            <AccountSyncPage
+              service={services.accountSync}
+              onBack={() => navigate({ view: 'today' })}
+            />
+          ) : ['spheres', 'sphere', 'directions', 'direction'].includes(route.view) ? (
             services.balance ? (
               <BalanceWorkspace
                 services={services.balance}

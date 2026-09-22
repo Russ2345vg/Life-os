@@ -1,12 +1,14 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { EntityId, Goal, LifeAction, LifeActionTitle } from '../../domain';
+import { DayDate, EntityId, Goal, LifeAction, LifeActionTitle } from '../../domain';
+import type { AccountSync } from '../../application';
 import { PlannerInbox } from './PlannerInbox';
 import { PlannerGoalList } from './PlannerGoalList';
 import { PlannerFocus } from './PlannerFocus';
 import { PlannerActionList } from './PlannerActionList';
 import { focusPeriod, focusWeek } from '../../domain/planner/FocusPeriod';
+import { PlannerWorkspace, type PlannerServices } from './PlannerWorkspace';
 const now = new Date('2026-09-13T10:00:00Z');
 const goal = Goal.create({
   id: EntityId.create('g'),
@@ -23,6 +25,32 @@ const action = LifeAction.createDraft({
   eventId: EntityId.create('e'),
 });
 describe('current library rendering', () => {
+  it('renders the account route before planner data is available', () => {
+    const accountSync = {
+      load: async () => ({
+        state: 'local_anonymous' as const,
+        email: null,
+        connection: 'local' as const,
+        recoveryMaterial: null,
+        pendingMutations: 0,
+        conflicts: 0,
+        devices: [],
+      }),
+    } as unknown as AccountSync;
+    const html = renderToStaticMarkup(
+      createElement(PlannerWorkspace, {
+        services: { accountSync } as PlannerServices,
+        route: { view: 'account' },
+        currentDate: DayDate.create('2026-09-22'),
+        onNavigate: () => undefined,
+      }),
+    );
+
+    expect(html).toContain('Аккаунт и синхронизация');
+    expect(html).toContain('Загружаем состояние аккаунта');
+    expect(html).not.toContain('Повторить загрузку');
+  });
+
   it('shows the explicitly selected next action consistently in the goal list', () => {
     const next = LifeAction.createDraft({
       id: EntityId.create('next'),

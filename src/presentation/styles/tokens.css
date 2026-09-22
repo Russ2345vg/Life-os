@@ -39,6 +39,8 @@
   --surface-selected: linear-gradient(120deg, rgb(237 188 140 / 30%), rgb(237 188 140 / 10%));
   --surface-primary: linear-gradient(115deg, #f6d2a5, #dfad78);
   --border-accent: rgb(237 188 140 / 65%);
+  --surface-primary-gold: linear-gradient(115deg, #f6d2a5, #dfad78);
+  --border-gold: rgb(237 188 140 / 65%);
   --shadow-glass: inset 0 1px 0 rgb(255 255 255 / 9%), 0 8px 24px rgb(0 0 0 / 12%);
   --shadow-selected: inset 0 0 12px rgb(237 188 140 / 13%), 0 0 0 1px rgb(237 188 140 / 12%);
   --blur-surface: 14px;

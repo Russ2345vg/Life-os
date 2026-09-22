@@ -7,6 +7,7 @@ export type PlannerRoute =
   | { readonly view: 'planning'; readonly sphereId?: string }
   | { readonly view: 'today'; readonly day?: 'tomorrow' }
   | { readonly view: 'sleep' }
+  | { readonly view: 'account' }
   | {
       readonly view: 'goals';
       readonly sphereId?: string;
@@ -61,6 +62,7 @@ export function parsePlannerRoute(hash: string): PlannerRoute | null {
       ...(new URLSearchParams(query).get('day') === 'tomorrow' ? { day: 'tomorrow' as const } : {}),
     };
   if (path === '#/v2/sleep') return { view: 'sleep' };
+  if (path === '#/v2/account') return { view: 'account' };
   if (path === '#/v2/goals') {
     const period = new URLSearchParams(query).get('period');
     return {
@@ -128,6 +130,7 @@ export function buildPlannerRoute(route: PlannerRoute): string {
   if (route.view === 'today')
     return route.day === 'tomorrow' ? '#/v2/today?day=tomorrow' : '#/v2/today';
   if (route.view === 'sleep') return '#/v2/sleep';
+  if (route.view === 'account') return '#/v2/account';
   if (route.view === 'new-goal')
     return `#/v2/goals/new${route.directionId ? `?${new URLSearchParams({ directionId: route.directionId })}` : ''}`;
   if (route.view === 'goals') {

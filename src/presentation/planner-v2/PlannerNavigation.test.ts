@@ -31,6 +31,7 @@ describe('V2 preview routes', () => {
       { view: 'directions' },
       { view: 'today', day: 'tomorrow' },
       { view: 'sleep' },
+      { view: 'account' },
       { view: 'sphere', id: 'здоровье / дом' },
       { view: 'direction', id: 'сон' },
       { view: 'goals', sphereId: 'здоровье / дом' },

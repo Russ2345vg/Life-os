@@ -114,13 +114,22 @@
   color: #a6a6a6;
 }
 .planner-sidebar nav .planner-nav-more {
-  display: none;
+  display: flex;
   width: 100%;
   border: 0;
   text-align: left;
   background: transparent;
 }
 .planner-more-menu {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  background: var(--surface-glass-overlay);
+}
+.planner-more-menu[hidden] {
   display: none;
 }
 .planner-day-switch {
