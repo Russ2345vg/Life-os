@@ -35,7 +35,7 @@ test('opens every primary current route directly and survives reload', async ({ 
     if (path === 'account') {
       await expect(page.getByText('Данные хранятся только на этом устройстве')).toBeVisible();
     }
-    await page.reload();
+    await page.reload({ waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(new RegExp(`#\\/v2\\/${path}$`));
     await expect(page.locator('#planner-main-content').getByRole('heading').first()).toBeVisible();
   }

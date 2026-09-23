@@ -461,6 +461,27 @@ export function AccountSyncPageView({
                 'Пароль обновлён.',
               )
             }
+            onRevealRecovery={() =>
+              void perform(
+                () => service.revealRecoveryMaterial(),
+                [],
+                'ready',
+                'Ключ восстановления показан только на этом устройстве.',
+              )
+            }
+            onCopyRecovery={() => {
+              if (overview.recoveryMaterial === null) return;
+              void navigator.clipboard
+                .writeText(overview.recoveryMaterial)
+                .then(() => setNotice('Ключ восстановления скопирован.'))
+                .catch(() =>
+                  setError('Не удалось скопировать ключ. Выделите его и скопируйте вручную.'),
+                );
+            }}
+            onHideRecovery={() => {
+              onOverview({ ...overview, recoveryMaterial: null });
+              setNotice('Ключ восстановления скрыт.');
+            }}
             onSignOut={() => setStep('sign-out-confirm')}
           />
         ) : null}
@@ -596,6 +617,9 @@ function ReadyAccountPanel({
   onSync,
   onRevoke,
   onChangePassword,
+  onRevealRecovery,
+  onCopyRecovery,
+  onHideRecovery,
   onSignOut,
 }: {
   readonly overview: AccountOverview;
@@ -603,6 +627,9 @@ function ReadyAccountPanel({
   readonly onSync: () => void;
   readonly onRevoke: (device: CachedSyncDevice) => void;
   readonly onChangePassword: (password: string) => void;
+  readonly onRevealRecovery: () => void;
+  readonly onCopyRecovery: () => void;
+  readonly onHideRecovery: () => void;
   readonly onSignOut: () => void;
 }) {
   const [newPassword, setNewPassword] = useState('');
@@ -657,7 +684,7 @@ function ReadyAccountPanel({
       <section className="account-panel account-security">
         <div className="account-security__summary">
           <p className="account-eyebrow">Безопасность</p>
-          <h3>Пароль и выход</h3>
+          <h3>Пароль, ключ и выход</h3>
           <p>Перед выходом LifeOS проверит отправку изменений и резервную копию.</p>
         </div>
         <form
@@ -687,6 +714,40 @@ function ReadyAccountPanel({
         >
           Выйти на этом устройстве
         </button>
+        <div className="account-security__recovery">
+          <div>
+            <h4>Ключ восстановления</h4>
+            <p>Он расшифровывает данные на новом устройстве. Не отправляйте его другим людям.</p>
+          </div>
+          {overview.recoveryMaterial === null ? (
+            <button
+              className="account-button"
+              type="button"
+              disabled={busy}
+              onClick={onRevealRecovery}
+            >
+              Показать ключ восстановления
+            </button>
+          ) : (
+            <div className="account-security__recovery-value">
+              <output className="account-recovery-material" aria-label="Ключ восстановления">
+                {overview.recoveryMaterial}
+              </output>
+              <div className="account-security__recovery-actions">
+                <button className="account-button" type="button" onClick={onCopyRecovery}>
+                  Скопировать ключ
+                </button>
+                <button
+                  className="account-button account-button--text"
+                  type="button"
+                  onClick={onHideRecovery}
+                >
+                  Скрыть ключ
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </section>
     </div>
   );

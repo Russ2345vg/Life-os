@@ -203,6 +203,19 @@ describe('AccountSyncService', () => {
     });
   });
 
+  it('reveals recovery material from secure storage only for a ready account', async () => {
+    const fixture = createFixture(readyInstallation());
+
+    await expect(fixture.service.revealRecoveryMaterial()).resolves.toMatchObject({
+      state: 'ready',
+      recoveryMaterial: RECOVERY,
+    });
+
+    expect(fixture.auth.current).toHaveBeenCalledOnce();
+    expect(fixture.sync.exportRecoveryMaterial).toHaveBeenCalledOnce();
+    expect(JSON.stringify(fixture.installations.savedStates)).not.toContain(RECOVERY);
+  });
+
   it('signs an untrusted device into recovery state without changing local sync identity', async () => {
     const initial = localInstallation();
     const fixture = createFixture(initial);

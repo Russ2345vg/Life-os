@@ -32,6 +32,7 @@ export interface AccountSync {
   verifyEmail(token: string): Promise<AccountOverview>;
   setPasswordAndAdopt(password: string): Promise<AccountOverview>;
   confirmRecoverySaved(): Promise<AccountOverview>;
+  revealRecoveryMaterial(): Promise<AccountOverview>;
   signIn(email: string, password: string): Promise<AccountOverview>;
   recoverDevice(recoveryMaterial: string): Promise<AccountOverview>;
   requestPasswordReset(email: string): Promise<void>;
@@ -156,6 +157,13 @@ export class AccountSyncService implements AccountSync {
     };
     await this.dependencies.installations.save(updated);
     return this.present({ ...overview, installation: updated });
+  }
+
+  public async revealRecoveryMaterial(): Promise<AccountOverview> {
+    const installation = await this.requireInstallation('ready');
+    await this.requireCurrentSession(installation);
+    const recoveryMaterial = await this.dependencies.sync.exportRecoveryMaterial();
+    return this.present(await this.overviewWith(installation), recoveryMaterial);
   }
 
   public async signIn(email: string, password: string): Promise<AccountOverview> {

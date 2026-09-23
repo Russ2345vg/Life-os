@@ -110,6 +110,9 @@ export class UnavailableAccountSync implements AccountSync {
   public confirmRecoverySaved(): Promise<AccountOverview> {
     return this.reject();
   }
+  public revealRecoveryMaterial(): Promise<AccountOverview> {
+    return this.reject();
+  }
   public signIn(): Promise<AccountOverview> {
     return this.reject();
   }

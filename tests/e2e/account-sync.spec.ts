@@ -42,6 +42,20 @@ test('completes registration, recovery confirmation, offline attention and safe 
   expect(await page.locator('body').textContent()).not.toContain(PASSWORD);
   expect(await page.locator('body').textContent()).not.toContain(RECOVERY);
 
+  await page.getByRole('button', { name: 'Показать ключ восстановления' }).click();
+  await expect(page.getByLabel('Ключ восстановления')).toHaveText(RECOVERY);
+  await assertResponsivePage(page, info.project.name);
+  await page.screenshot({
+    path: info.outputPath(`account-recovery-${info.project.name}.png`),
+    fullPage: true,
+  });
+  await page.getByRole('button', { name: 'Скопировать ключ' }).click();
+  await expect(page.locator('[aria-live="polite"]')).toContainText(
+    'Ключ восстановления скопирован',
+  );
+  await page.getByRole('button', { name: 'Скрыть ключ' }).click();
+  expect(await page.locator('body').textContent()).not.toContain(RECOVERY);
+
   await page.getByRole('button', { name: 'Синхронизировать сейчас' }).click();
   await expect(page.getByText('Офлайн — изменения ожидают отправки')).toBeVisible();
   await expect(page.getByText('Ожидают отправки: 2')).toBeVisible();

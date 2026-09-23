@@ -107,6 +107,18 @@ describe('AccountSyncPage', () => {
     expect(ready).toContain('Ноутбук');
     expect(ready).toContain('Телефон');
     expect(ready).toContain('Отключено');
+    expect(ready).toContain('Показать ключ восстановления');
+
+    const revealed = render({
+      ...localOverview(),
+      state: 'ready',
+      email: 'person@example.com',
+      connection: 'online',
+      recoveryMaterial: RECOVERY,
+    });
+    expect(revealed).toContain(RECOVERY);
+    expect(revealed).toContain('Скопировать ключ');
+    expect(revealed).toContain('Скрыть ключ');
 
     const offline = render({
       ...localOverview(),
@@ -207,6 +219,7 @@ function service(): AccountSync {
     verifyEmail: async () => overview,
     setPasswordAndAdopt: async () => overview,
     confirmRecoverySaved: async () => overview,
+    revealRecoveryMaterial: async () => overview,
     signIn: async () => overview,
     recoverDevice: async () => overview,
     requestPasswordReset: async () => undefined,

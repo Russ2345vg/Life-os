@@ -48,6 +48,11 @@ class FixtureAccountSync implements AccountSync {
     return this.load();
   }
 
+  public async revealRecoveryMaterial(): Promise<AccountOverview> {
+    this.#overview = { ...this.#overview, recoveryMaterial: RECOVERY };
+    return this.load();
+  }
+
   public async signIn(email: string): Promise<AccountOverview> {
     this.#overview = {
       ...localOverview(),
@@ -104,6 +109,7 @@ function localOverview(): AccountOverview {
   return {
     state: 'local_anonymous',
     email: null,
+    emailVerified: false,
     connection: 'local',
     recoveryMaterial: null,
     pendingMutations: 0,
@@ -116,6 +122,7 @@ function readyOverview(): AccountOverview {
   return {
     state: 'ready',
     email: EMAIL,
+    emailVerified: true,
     connection: 'online',
     recoveryMaterial: null,
     pendingMutations: 0,
