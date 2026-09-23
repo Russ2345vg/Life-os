@@ -87,6 +87,19 @@ test('signs in on a new device and requires recovery material before data appear
   expect(issues).toEqual([]);
 });
 
+test('submits the email visibly inserted by WebView autofill without a change event', async ({
+  page,
+}) => {
+  await page.goto('/tests/fixtures/account-sync.html');
+  await page.getByLabel('Электронная почта').evaluate((element) => {
+    (element as HTMLInputElement).value = 'person@example.com';
+  });
+
+  await page.getByRole('button', { name: 'Продолжить' }).click();
+
+  await expect(page.getByLabel('Код из письма')).toBeVisible();
+});
+
 async function assertResponsivePage(page: Page, projectName: string): Promise<void> {
   const sizes =
     projectName === 'mobile-chrome'

@@ -190,14 +190,16 @@ export function AccountSyncPageView({
             title="Создать аккаунт"
             description="Ваши текущие данные будут сохранены и привязаны к аккаунту."
             busy={busy}
-            onSubmit={() =>
+            onSubmit={(form) => {
+              const submittedEmail = readFormValue(form, 'email', email);
+              setEmail(submittedEmail);
               void perform(
-                () => service.beginRegistration(email),
+                () => service.beginRegistration(submittedEmail),
                 [],
                 'verify',
                 'Письмо с кодом отправлено.',
-              )
-            }
+              );
+            }}
           >
             <EmailField value={email} onChange={setEmail} autoFocus />
             <button className="account-button account-button--primary" type="submit">
@@ -221,11 +223,15 @@ export function AccountSyncPageView({
             title="Войти в LifeOS"
             description="После входа понадобится ключ восстановления для расшифровки данных на этом устройстве."
             busy={busy}
-            onSubmit={() => {
-              const submitted = password;
-              void perform(() => service.signIn(email, submitted), [submitted], 'recover').finally(
-                () => setPassword(''),
-              );
+            onSubmit={(form) => {
+              const submittedEmail = readFormValue(form, 'email', email);
+              const submittedPassword = readFormValue(form, 'password', password);
+              setEmail(submittedEmail);
+              void perform(
+                () => service.signIn(submittedEmail, submittedPassword),
+                [submittedPassword],
+                'recover',
+              ).finally(() => setPassword(''));
             }}
           >
             <EmailField value={email} onChange={setEmail} autoFocus />
@@ -262,13 +268,15 @@ export function AccountSyncPageView({
             title="Восстановить пароль"
             description="Отправим письмо для безопасной смены пароля."
             busy={busy}
-            onSubmit={() => {
+            onSubmit={(form) => {
               if (working.current) return;
+              const submittedEmail = readFormValue(form, 'email', email);
+              setEmail(submittedEmail);
               working.current = true;
               setBusy(true);
               setError(null);
               void service
-                .requestPasswordReset(email)
+                .requestPasswordReset(submittedEmail)
                 .then(() => setNotice('Письмо для смены пароля отправлено.'))
                 .catch((reason: unknown) => setError(redactAccountError(reason, [])))
                 .finally(() => {
@@ -296,8 +304,8 @@ export function AccountSyncPageView({
             title="Подтвердите почту"
             description={`Код отправлен на ${overview.email ?? email}.`}
             busy={busy}
-            onSubmit={() => {
-              const submitted = token;
+            onSubmit={(form) => {
+              const submitted = readFormValue(form, 'token', token);
               void perform(
                 () => service.verifyEmail(submitted),
                 [submitted],
@@ -309,6 +317,7 @@ export function AccountSyncPageView({
             <label>
               <span>Код из письма</span>
               <input
+                name="token"
                 value={token}
                 onChange={(event) => setToken(event.target.value)}
                 inputMode="numeric"
@@ -341,8 +350,8 @@ export function AccountSyncPageView({
             title="Создайте пароль"
             description="После этого LifeOS сделает проверенную резервную копию и подключит текущие данные."
             busy={busy}
-            onSubmit={() => {
-              const submitted = password;
+            onSubmit={(form) => {
+              const submitted = readFormValue(form, 'password', password);
               void perform(() => service.setPasswordAndAdopt(submitted), [submitted]).finally(() =>
                 setPassword(''),
               );
@@ -401,8 +410,8 @@ export function AccountSyncPageView({
             title="Расшифровать данные"
             description="Введите ключ восстановления для расшифровки данных на этом устройстве"
             busy={busy}
-            onSubmit={() => {
-              const submitted = recovery;
+            onSubmit={(form) => {
+              const submitted = readFormValue(form, 'recovery', recovery);
               void perform(
                 () => service.recoverDevice(submitted),
                 [submitted],
@@ -414,6 +423,7 @@ export function AccountSyncPageView({
             <label>
               <span>Ключ восстановления</span>
               <textarea
+                name="recovery"
                 value={recovery}
                 onChange={(event) => setRecovery(event.target.value)}
                 autoComplete="off"
@@ -507,7 +517,7 @@ function AccountForm({
   readonly title: string;
   readonly description: string;
   readonly busy: boolean;
-  readonly onSubmit: () => void;
+  readonly onSubmit: (form: HTMLFormElement) => void;
   readonly children: React.ReactNode;
 }) {
   return (
@@ -515,7 +525,7 @@ function AccountForm({
       className="account-panel account-form"
       onSubmit={(event) => {
         event.preventDefault();
-        onSubmit();
+        onSubmit(event.currentTarget);
       }}
     >
       <header>
@@ -540,6 +550,7 @@ function EmailField({
     <label>
       <span>Электронная почта</span>
       <input
+        name="email"
         type="email"
         value={value}
         onChange={(event) => onChange(event.target.value)}
@@ -566,6 +577,7 @@ function PasswordField({
     <label>
       <span>{label}</span>
       <input
+        name="password"
         type="password"
         value={value}
         onChange={(event) => onChange(event.target.value)}
@@ -652,7 +664,7 @@ function ReadyAccountPanel({
           className="account-password-change"
           onSubmit={(event) => {
             event.preventDefault();
-            const submitted = newPassword;
+            const submitted = readFormValue(event.currentTarget, 'password', newPassword);
             onChangePassword(submitted);
             setNewPassword('');
           }}
@@ -678,6 +690,13 @@ function ReadyAccountPanel({
       </section>
     </div>
   );
+}
+
+function readFormValue(form: HTMLFormElement, name: string, fallback: string): string {
+  const control = form.elements.namedItem(name);
+  return control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement
+    ? control.value
+    : fallback;
 }
 
 function DeviceRow({

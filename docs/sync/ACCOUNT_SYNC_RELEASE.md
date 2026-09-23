@@ -1,7 +1,7 @@
 # LifeOS Account Sync — release evidence
 
 - Дата проверки: 2026-09-23
-- Версия клиента: 1.0.6
+- Версия клиента: 1.0.7
 - Пакет приложения: `com.lifeos.desktop`
 
 ## Объём выпуска
@@ -11,7 +11,7 @@
 возобновляемое подключение и безопасный выход. Local-only режим остаётся доступен без аккаунта и
 без Supabase.
 
-Account-флаг `VITE_LIFEOS_ACCOUNT_SYNC_ENABLED=true` включён в собранных клиентах 1.0.6.
+Account-флаг `VITE_LIFEOS_ACCOUNT_SYNC_ENABLED=true` включён в собранных клиентах 1.0.7.
 Hosted-миграции применены к проекту `LifeOS Sync`; публикация неподписанного Windows installer
 по-прежнему не разрешена.
 
@@ -49,19 +49,20 @@ Hosted-миграции применены к проекту `LifeOS Sync`; пу
 offline convergence и немедленную блокировку отозванной сессии. Тест удаляет пользователя и blob
 в teardown.
 
-Перед выпуском 1.0.6 нормализация email дополнена удалением недопустимых пробельных и невидимых
-formatting-символов, которые могут попасть в адрес при вставке и визуально не отображаются.
+Перед выпуском 1.0.7 нормализация email дополнена удалением недопустимых пробельных и невидимых
+formatting-символов. Account-формы также читают фактические значения HTML-полей при submit, чтобы
+WebView-autofill без React change event не отправлял устаревшее пустое значение.
 
 ## Нативные артефакты
 
 ### Windows x64
 
-- NSIS: `src-tauri/target/release/bundle/nsis/LifeOS_1.0.6_x64-setup.exe`
-- Размер: 7 592 571 bytes
-- SHA-256: `2132FE2C3A34FC8283FB5930D067186321F4BE2191E42165D24482AAF243CCE5`
+- NSIS: `src-tauri/target/release/bundle/nsis/LifeOS_1.0.7_x64-setup.exe`
+- Размер: 7 592 305 bytes
+- SHA-256: `FCFBC9595B164E4C407FA2E166546FCBA24FE088BAB359C919E931E3C76DD1AD`
 - Authenticode: `NotSigned`. Updater artifact намеренно отключён для локальной сборки, потому что
   приватный updater key отсутствует; публикация этой сборки запрещена.
-- Установка: PASS, silent update exit 0 в `%LOCALAPPDATA%\LifeOS\LifeOS.exe`; file version 1.0.6,
+- Установка: PASS, silent update exit 0 в `%LOCALAPPDATA%\LifeOS\LifeOS.exe`; file version 1.0.7,
   процесс успешно запущен.
 - Installer не очищал каталог `%LOCALAPPDATA%\com.lifeos.desktop`; профиль
   WebView/IndexedDB остался на месте. Содержимое предметных данных требует визуальной проверки
@@ -70,17 +71,17 @@ formatting-символов, которые могут попасть в адр�
 ### Android universal
 
 - APK: `src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk`
-- Размер: 64 527 949 bytes
-- SHA-256: `904455FD25E6D8DB2AB8685908317F6AE47695262ABF86281A9BF57EB4A40F57`
-- Package/version: `com.lifeos.desktop`, versionName 1.0.6, versionCode 1000006, minSdk 24,
+- Размер: 64 526 957 bytes
+- SHA-256: `FC158B7B48576182FECC41D280AAAA20EC01AA01BD49560885F4DF293153203F`
+- Package/version: `com.lifeos.desktop`, versionName 1.0.7, versionCode 1000007, minSdk 24,
   targetSdk 36.
 - ABI: `arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64`.
 - APK Signature Scheme v2: PASS. Signer:
   `CN=LifeOS, OU=LifeOS, O=LifeOS, L=Chita, ST=Zabaykalsky Krai, C=RU`; certificate SHA-256:
   `F3669CD0CA91CD17670E01A284D07493330BCAF32D4993CFBB88CA5099D92C69`.
 - Установка: PASS на Samsung SM-A235F. `adb install -r` вернул
-  `Performing Streamed Install Success`; установлен package versionName 1.0.6,
-  versionCode 1000006. Удаление приложения и очистка данных не выполнялись. Запуск
+  `Performing Streamed Install Success`; установлен package versionName 1.0.7,
+  versionCode 1000007. Удаление приложения и очистка данных не выполнялись. Запуск
   `com.lifeos.desktop/.MainActivity` успешен, окно приложения подтверждено как текущее в фокусе.
 
 Сборка сама по себе не является публикацией.
@@ -90,7 +91,7 @@ formatting-символов, которые могут попасть в адр�
 1. Additive backend migrations: PASS.
 2. Hosted email confirmation, email provider и anonymous bootstrap: PASS по публичным settings.
 3. Локальные pgTAP/RLS и двухсессионный encrypted round-trip: PASS.
-4. Account-enabled Windows/Android 1.0.6 build и установка без очистки профиля: PASS.
+4. Account-enabled Windows/Android 1.0.7 build и установка без очистки профиля: PASS.
 5. Реальная доставка email и физический двухустройственный recovery-flow: требуется ручная
    приёмка пользователем.
 

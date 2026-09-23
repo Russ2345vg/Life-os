@@ -19,6 +19,9 @@ class FixtureAccountSync implements AccountSync {
   }
 
   public async beginRegistration(email: string): Promise<AccountOverview> {
+    if (email !== EMAIL) {
+      throw new DomainError('account.email_invalid', 'Укажите корректный адрес электронной почты.');
+    }
     this.#overview = { ...localOverview(), state: 'email_verification_pending', email };
     return this.load();
   }
