@@ -1938,7 +1938,7 @@ dependencies = [
 
 [[package]]
 name = "lifeos"
-version = "1.0.10"
+version = "1.0.11"
 dependencies = [
  "base64 0.22.1",
  "chacha20poly1305",

@@ -57,6 +57,36 @@ describe('AccountSyncService', () => {
     expect(JSON.stringify(fixture.installations.savedStates)).not.toMatch(/123456|correct horse/i);
   });
 
+  it('resumes password setup when the pending email was confirmed outside the app', async () => {
+    const fixture = createFixture(registrationInstallation());
+
+    await expect(fixture.service.load()).resolves.toMatchObject({
+      state: 'email_verification_pending',
+      email: EMAIL,
+      emailVerified: true,
+    });
+
+    expect(fixture.auth.current).toHaveBeenCalledOnce();
+    expect(fixture.installations.value).toMatchObject({
+      accountUserId: USER_ID,
+      accountSessionId: SESSION_ID,
+      accountEmail: EMAIL,
+    });
+  });
+
+  it('keeps an unverified pending session on email verification', async () => {
+    const fixture = createFixture(registrationInstallation());
+    fixture.auth.current.mockResolvedValue(
+      session({ anonymous: true, email: EMAIL, verified: false }),
+    );
+
+    await expect(fixture.service.load()).resolves.toMatchObject({
+      state: 'email_verification_pending',
+      email: EMAIL,
+      emailVerified: false,
+    });
+  });
+
   it('snapshots before first-space setup, starts initial push and waits for recovery confirmation', async () => {
     const fixture = createFixture(registrationInstallation());
     const setupInstallation = {

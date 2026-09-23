@@ -791,7 +791,8 @@ function SignOutDialog({
 
 function stepFor(overview: AccountOverview): AccountPageStep {
   if (overview.state === 'local_anonymous') return 'register';
-  if (overview.state === 'email_verification_pending') return 'verify';
+  if (overview.state === 'email_verification_pending')
+    return overview.emailVerified ? 'set-password' : 'verify';
   if (overview.state === 'account_migration_pending') return 'migration';
   if (overview.state === 'recovery_confirmation_pending')
     return overview.recoveryMaterial ? 'save-recovery' : 'recover';
@@ -812,6 +813,12 @@ function accountStatus(overview: AccountOverview): {
     };
   if (overview.state === 'ready' && overview.connection === 'online')
     return { label: 'Защищено', description: 'Синхронизировано и защищено', tone: 'success' };
+  if (overview.state !== 'ready')
+    return {
+      label: 'Настройка',
+      description: 'Завершите защищённое подключение аккаунта',
+      tone: 'pending',
+    };
   if (overview.connection === 'offline')
     return {
       label: 'Нет соединения',
@@ -840,6 +847,7 @@ function localOverview(): AccountOverview {
   return {
     state: 'local_anonymous',
     email: null,
+    emailVerified: false,
     connection: 'local',
     recoveryMaterial: null,
     pendingMutations: 0,

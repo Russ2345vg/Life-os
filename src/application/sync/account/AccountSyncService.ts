@@ -17,6 +17,7 @@ import type { AccountLocalData } from './AccountLocalData';
 export interface AccountOverview {
   readonly state: AccountSetupState;
   readonly email: string | null;
+  readonly emailVerified: boolean;
   readonly connection: 'local' | 'online' | 'offline';
   readonly recoveryMaterial: string | null;
   readonly pendingMutations: number;
@@ -71,6 +72,24 @@ export class AccountSyncService implements AccountSync {
     ) {
       return this.finishRecoveryConvergence(overview);
     }
+    if (overview.installation.accountSetupState === 'email_verification_pending') {
+      const session = await this.dependencies.auth.current();
+      if (
+        session !== null &&
+        !session.isAnonymous &&
+        session.emailVerified &&
+        session.userId === overview.installation.accountUserId &&
+        session.email === overview.installation.accountEmail
+      ) {
+        const updated = await this.saveSession(
+          overview.installation,
+          session,
+          'email_verification_pending',
+        );
+        return this.present({ ...overview, installation: updated }, null, undefined, true);
+      }
+      return this.present(overview, null, undefined, false);
+    }
     return this.present(overview);
   }
 
@@ -85,7 +104,12 @@ export class AccountSyncService implements AccountSync {
       session,
       'email_verification_pending',
     );
-    return this.present({ ...overview, installation: updated });
+    return this.present(
+      { ...overview, installation: updated },
+      null,
+      undefined,
+      session.emailVerified,
+    );
   }
 
   public async resendVerification(): Promise<void> {
@@ -100,7 +124,7 @@ export class AccountSyncService implements AccountSync {
     const session = await this.dependencies.auth.verifyEmail(installation.accountEmail, token);
     if (!session.emailVerified) throw invalidAccountState();
     const updated = await this.saveSession(installation, session, 'email_verification_pending');
-    return this.present(await this.overviewWith(updated));
+    return this.present(await this.overviewWith(updated), null, undefined, true);
   }
 
   public async setPasswordAndAdopt(password: string): Promise<AccountOverview> {
@@ -371,11 +395,14 @@ export class AccountSyncService implements AccountSync {
     overview: SyncOverview,
     recoveryMaterial: string | null = null,
     report?: PilotSyncRunResult,
+    emailVerified = overview.installation.accountSetupState !== 'local_anonymous' &&
+      overview.installation.accountSetupState !== 'email_verification_pending',
   ): AccountOverview {
     const pilot = this.dependencies.sync.pilotStatus();
     return {
       state: overview.installation.accountSetupState,
       email: overview.installation.accountEmail,
+      emailVerified,
       connection: overview.connection,
       recoveryMaterial,
       pendingMutations: report?.pending ?? pilot.pendingCount,

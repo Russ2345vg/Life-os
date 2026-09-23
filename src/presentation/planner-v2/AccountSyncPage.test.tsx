@@ -48,6 +48,33 @@ describe('AccountSyncPage', () => {
     expect(recovery).toContain('Я сохранил ключ');
   });
 
+  it('opens password setup after out-of-band verification and does not call setup offline', () => {
+    const html = render({
+      ...localOverview(),
+      state: 'email_verification_pending',
+      email: 'person@example.com',
+      emailVerified: true,
+      connection: 'offline',
+    });
+
+    expect(html).toContain('Создайте пароль');
+    expect(html).toContain('Завершите защищённое подключение аккаунта');
+    expect(html).not.toContain('Код из письма');
+    expect(html).not.toContain('Нет соединения');
+  });
+
+  it('keeps an unverified pending email on the code form', () => {
+    const html = render({
+      ...localOverview(),
+      state: 'email_verification_pending',
+      email: 'person@example.com',
+      emailVerified: false,
+    });
+
+    expect(html).toContain('Код из письма');
+    expect(html).not.toContain('Создайте пароль');
+  });
+
   it('shows password login followed by recovery input on a new device', () => {
     const login = render(localOverview(), 'sign-in');
     expect(login).toContain('Войти в LifeOS');
@@ -143,6 +170,7 @@ function localOverview(): AccountOverview {
   return {
     state: 'local_anonymous',
     email: null,
+    emailVerified: false,
     connection: 'local',
     recoveryMaterial: null,
     pendingMutations: 0,

@@ -87,6 +87,7 @@ export class UnavailableAccountSync implements AccountSync {
     return {
       state: 'local_anonymous',
       email: null,
+      emailVerified: false,
       connection: 'local',
       recoveryMaterial: null,
       pendingMutations: 0,
