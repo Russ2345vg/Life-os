@@ -63,6 +63,25 @@ describe('SupabaseAccountAuth', () => {
     expect(updateUser).toHaveBeenCalledWith({ email: 'person@example.com' });
   });
 
+  it('converts a real anonymous Supabase session whose email field is an empty string', async () => {
+    const anonymous = session({ anonymous: true, email: '' });
+    const convertedUser = user({
+      anonymous: true,
+      email: '',
+      newEmail: 'person@example.com',
+      emailConfirmedAt: null,
+    });
+    const updateUser = vi.fn(async () => ({ data: { user: convertedUser }, error: null }));
+    const auth = new SupabaseAccountAuth(client({ session: anonymous, updateUser }));
+
+    await expect(auth.beginRegistration('person@example.com')).resolves.toMatchObject({
+      email: 'person@example.com',
+      emailVerified: false,
+      isAnonymous: true,
+    });
+    expect(updateUser).toHaveBeenCalledWith({ email: 'person@example.com' });
+  });
+
   it('removes invisible formatting and whitespace accidentally pasted into an email', async () => {
     const anonymous = session({ anonymous: true, email: null });
     const convertedUser = user({
@@ -261,6 +280,7 @@ interface AuthSessionView {
 interface AuthUserView {
   readonly id: string;
   readonly email?: string;
+  readonly new_email?: string;
   readonly email_confirmed_at?: string | null;
   readonly is_anonymous?: boolean;
 }
@@ -269,6 +289,7 @@ function session(
   input: {
     readonly anonymous?: boolean;
     readonly email?: string | null;
+    readonly newEmail?: string;
     readonly emailConfirmedAt?: string | null;
     readonly tokenSessionId?: string;
   } = {},
@@ -283,12 +304,14 @@ function user(
   input: {
     readonly anonymous?: boolean;
     readonly email?: string | null;
+    readonly newEmail?: string;
     readonly emailConfirmedAt?: string | null;
   } = {},
 ): AuthUserView {
   return {
     id: USER_ID,
     ...(input.email === null ? {} : { email: input.email ?? 'person@example.com' }),
+    ...(input.newEmail === undefined ? {} : { new_email: input.newEmail }),
     email_confirmed_at: input.emailConfirmedAt ?? null,
     is_anonymous: input.anonymous ?? false,
   };

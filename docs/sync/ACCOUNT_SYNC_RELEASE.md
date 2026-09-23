@@ -1,7 +1,7 @@
 # LifeOS Account Sync — release evidence
 
 - Дата проверки: 2026-09-23
-- Версия клиента: 1.0.7
+- Версия клиента: 1.0.10
 - Пакет приложения: `com.lifeos.desktop`
 
 ## Объём выпуска
@@ -11,7 +11,7 @@
 возобновляемое подключение и безопасный выход. Local-only режим остаётся доступен без аккаунта и
 без Supabase.
 
-Account-флаг `VITE_LIFEOS_ACCOUNT_SYNC_ENABLED=true` включён в собранных клиентах 1.0.7.
+Account-флаг `VITE_LIFEOS_ACCOUNT_SYNC_ENABLED=true` включён в собранных клиентах 1.0.10.
 Hosted-миграции применены к проекту `LifeOS Sync`; публикация неподписанного Windows installer
 по-прежнему не разрешена.
 
@@ -38,9 +38,9 @@ Hosted-миграции применены к проекту `LifeOS Sync`; пу
 | TypeScript                 | PASS      | `npm run typecheck`, exit 0                                                        |
 | Account desktop/mobile E2E | PASS      | 4 сценария: 1440×900, 390×844 и 360×800; keyboard, overflow, live regions, console |
 | Реальный route smoke       | PASS      | `#/v2/account` открывается и переживает reload в local-only состоянии              |
-| Native Rust sync tests     | PASS      | `cargo test ... sync_`: 12 passed                                                  |
+| Native Rust sync tests     | PASS      | `cargo test`: 15 passed                                                            |
 | pgTAP/RLS                  | PASS      | 6 файлов, 155 тестов после чистого `supabase db reset`                             |
-| Полный R9/R10 gate         | PASS      | 1351 passed + 1 skipped, 55 infra, 1 alpha, build/format/diff и 68 E2E             |
+| Полный R9/R10 gate         | PASS      | 1353 passed + 1 skipped, 55 infra, 1 alpha, build/format/diff и 70 E2E             |
 
 Детерминированный Playwright fixture вызывает настоящий `AccountSync` application-контракт и не
 изменяет DOM напрямую. Local Supabase integration test принимает только loopback URL, создаёт
@@ -49,20 +49,27 @@ Hosted-миграции применены к проекту `LifeOS Sync`; пу
 offline convergence и немедленную блокировку отозванной сессии. Тест удаляет пользователя и blob
 в teardown.
 
-Перед выпуском 1.0.7 нормализация email дополнена удалением недопустимых пробельных и невидимых
-formatting-символов. Account-формы также читают фактические значения HTML-полей при submit, чтобы
-WebView-autofill без React change event не отправлял устаревшее пустое значение.
+Перед выпуском 1.0.10 нормализация email дополнена удалением недопустимых пробельных и невидимых
+formatting-символов. Account-формы читают фактические значения HTML-полей при submit, чтобы
+WebView-autofill без React change event не отправлял устаревшее пустое значение. Реальный hosted
+flow также подтвердил два контракта Supabase: анонимная сессия содержит пустой `email` и pending
+адрес в `new_email`, а PKCE подтверждение использует отдельные flow/index/legacy storage keys.
+LifeOS теперь разбирает pending email и хранит PKCE-значения в отдельных строго разрешённых
+native secure-store slots, не перезаписывая основной auth session token.
+
+Установленная Windows 1.0.10 выполнила реальный `PUT /auth/v1/user`, получила HTTP 200 и открыла
+поле «Код из письма». Получение и ввод OTP остаются пользовательским шагом.
 
 ## Нативные артефакты
 
 ### Windows x64
 
-- NSIS: `src-tauri/target/release/bundle/nsis/LifeOS_1.0.7_x64-setup.exe`
-- Размер: 7 592 305 bytes
-- SHA-256: `FCFBC9595B164E4C407FA2E166546FCBA24FE088BAB359C919E931E3C76DD1AD`
+- NSIS: `src-tauri/target/release/bundle/nsis/LifeOS_1.0.10_x64-setup.exe`
+- Размер: 7 588 567 bytes
+- SHA-256: `0C3617C6B0C1ED9DA464D1C3488347FCA2128EC05A9212AD4989D6E5CD1CAC24`
 - Authenticode: `NotSigned`. Updater artifact намеренно отключён для локальной сборки, потому что
   приватный updater key отсутствует; публикация этой сборки запрещена.
-- Установка: PASS, silent update exit 0 в `%LOCALAPPDATA%\LifeOS\LifeOS.exe`; file version 1.0.7,
+- Установка: PASS, silent update exit 0 в `%LOCALAPPDATA%\LifeOS\LifeOS.exe`; file version 1.0.10,
   процесс успешно запущен.
 - Installer не очищал каталог `%LOCALAPPDATA%\com.lifeos.desktop`; профиль
   WebView/IndexedDB остался на месте. Содержимое предметных данных требует визуальной проверки
@@ -71,18 +78,17 @@ WebView-autofill без React change event не отправлял устаре�
 ### Android universal
 
 - APK: `src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk`
-- Размер: 64 526 957 bytes
-- SHA-256: `FC158B7B48576182FECC41D280AAAA20EC01AA01BD49560885F4DF293153203F`
-- Package/version: `com.lifeos.desktop`, versionName 1.0.7, versionCode 1000007, minSdk 24,
+- Размер: 64 530 501 bytes
+- SHA-256: `37D0B129DD8104F050248DEFAB43A23EDEE6EA29E6AD8F5A52E196CA1CEFFDA1`
+- Package/version: `com.lifeos.desktop`, versionName 1.0.10, versionCode 1000010, minSdk 24,
   targetSdk 36.
 - ABI: `arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64`.
 - APK Signature Scheme v2: PASS. Signer:
   `CN=LifeOS, OU=LifeOS, O=LifeOS, L=Chita, ST=Zabaykalsky Krai, C=RU`; certificate SHA-256:
   `F3669CD0CA91CD17670E01A284D07493330BCAF32D4993CFBB88CA5099D92C69`.
-- Установка: PASS на Samsung SM-A235F. `adb install -r` вернул
-  `Performing Streamed Install Success`; установлен package versionName 1.0.7,
-  versionCode 1000007. Удаление приложения и очистка данных не выполнялись. Запуск
-  `com.lifeos.desktop/.MainActivity` успешен, окно приложения подтверждено как текущее в фокусе.
+- Установка 1.0.10: PENDING. После сборки `adb devices -l` вернул пустой список даже после
+  перезапуска ADB daemon. Последняя подтверждённая установленная Android-версия — 1.0.8;
+  удаление приложения и очистка данных не выполнялись.
 
 Сборка сама по себе не является публикацией.
 
@@ -91,9 +97,10 @@ WebView-autofill без React change event не отправлял устаре�
 1. Additive backend migrations: PASS.
 2. Hosted email confirmation, email provider и anonymous bootstrap: PASS по публичным settings.
 3. Локальные pgTAP/RLS и двухсессионный encrypted round-trip: PASS.
-4. Account-enabled Windows/Android 1.0.7 build и установка без очистки профиля: PASS.
-5. Реальная доставка email и физический двухустройственный recovery-flow: требуется ручная
-   приёмка пользователем.
+4. Account-enabled Windows 1.0.10 build и установка без очистки профиля: PASS.
+5. Android 1.0.10 build/signature: PASS; установка ожидает повторного подключения телефона к ADB.
+6. Hosted registration request и переход к OTP: PASS; получение/ввод письма и физический
+   двухустройственный recovery-flow требуют ручной приёмки пользователем.
 
 Legacy anonymous access остаётся включённым на измеряемое окно миграции, чтобы уже установленные
 клиенты не потеряли синхронизацию до принятия аккаунта.
@@ -122,8 +129,9 @@ account-owned spaces backend migration нельзя откатывать destruc
 и запуск приложения; hosted двухустройственный flow требует пользовательского email, OTP и
 сохранения recovery key.
 
-Текущие Windows- и Android-установки подтверждают upgrade и запуск без команды очистки профиля.
-Полный account flow остаётся ручным gate тестового backend.
+Текущая Windows-установка подтверждает upgrade и запуск без команды очистки профиля. Android
+1.0.10 подготовлен, но не установлен из-за отсутствия устройства в ADB. Полный account flow
+остаётся ручным gate тестового backend.
 
 ## Стоп-граница
 

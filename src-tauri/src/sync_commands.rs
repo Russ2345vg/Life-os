@@ -611,4 +611,27 @@ mod tests {
         assert!(device_secret_ids("not-a-uuid", "20000000-0000-4000-8000-000000000001").is_err());
         assert!(device_secret_ids("10000000-0000-4000-8000-000000000001", "bad-space").is_err());
     }
+
+    #[test]
+    fn auth_storage_slots_keep_session_and_pkce_values_separate() {
+        let session = SecretId::auth_session("supabase-auth-session").expect("session slot");
+        let flow =
+            SecretId::auth_session("supabase-auth-pkce-flow-0123456789abcdef0123456789abcdef")
+                .expect("flow slot");
+        let index = SecretId::auth_session("supabase-auth-pkce-flow-index").expect("index slot");
+        let legacy = SecretId::auth_session("supabase-auth-pkce-legacy").expect("legacy slot");
+
+        let names = [
+            session.storage_name(),
+            flow.storage_name(),
+            index.storage_name(),
+            legacy.storage_name(),
+        ];
+        assert_eq!(
+            names.iter().collect::<std::collections::HashSet<_>>().len(),
+            4
+        );
+        assert!(SecretId::auth_session("supabase-auth-pkce-flow-not-hex").is_err());
+        assert!(SecretId::auth_session("device-private-key").is_err());
+    }
 }

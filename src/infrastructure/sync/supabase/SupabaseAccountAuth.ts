@@ -4,6 +4,7 @@ import { DomainError } from '../../../shared/errors/DomainError';
 interface AuthUserView {
   readonly id: string;
   readonly email?: string;
+  readonly new_email?: string;
   readonly email_confirmed_at?: string | null;
   readonly confirmed_at?: string | null;
   readonly is_anonymous?: boolean;
@@ -200,7 +201,14 @@ function parseSession(session: AuthSessionView): AccountSession {
   const sessionId = claims.session_id;
   if (typeof sessionId !== 'string' || !isUuid(sessionId)) throw authInvalid();
 
-  const email = session.user.email === undefined ? null : normalizeEmail(session.user.email);
+  let providerEmail = session.user.email;
+  if (session.user.is_anonymous === true && (providerEmail === undefined || providerEmail === '')) {
+    providerEmail = session.user.new_email;
+  }
+  const email =
+    providerEmail === undefined || (session.user.is_anonymous === true && providerEmail === '')
+      ? null
+      : normalizeEmail(providerEmail);
   const confirmedAt = session.user.email_confirmed_at ?? session.user.confirmed_at ?? null;
   if (confirmedAt !== null && !isTimestamp(confirmedAt)) throw authInvalid();
 
