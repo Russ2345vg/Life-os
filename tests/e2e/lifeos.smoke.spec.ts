@@ -1,7 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-function observeRuntimeIssues(page: Page): string[] {
-  const issues: string[] = [];
+function observeRuntimeIssues(page: Page, issues: string[] = []): string[] {
   page.on('pageerror', (error) => issues.push(error.message));
   page.on('console', (message) => {
     if (message.type() === 'error') issues.push(message.text());
@@ -19,8 +18,9 @@ test('starts in the current workspace and replaces removed routes with Today', a
   expect(issues).toEqual([]);
 });
 
-test('opens every primary current route directly and survives reload', async ({ page }) => {
-  const issues = observeRuntimeIssues(page);
+test('opens every primary current route directly and survives reload', async ({ context }) => {
+  test.slow();
+  const issues: string[] = [];
   for (const path of [
     'today',
     'spheres',
@@ -30,14 +30,26 @@ test('opens every primary current route directly and survives reload', async ({ 
     'inbox',
     'account',
   ] as const) {
-    await page.goto(`/#/v2/${path}`);
-    await expect(page.locator('#planner-main-content').getByRole('heading').first()).toBeVisible();
-    if (path === 'account') {
-      await expect(page.getByText('Данные хранятся только на этом устройстве')).toBeVisible();
+    const routePage = await context.newPage();
+    observeRuntimeIssues(routePage, issues);
+    try {
+      await routePage.goto(`/#/v2/${path}`);
+      await expect(
+        routePage.locator('#planner-main-content').getByRole('heading').first(),
+      ).toBeVisible();
+      if (path === 'account') {
+        await expect(
+          routePage.getByText('Данные хранятся только на этом устройстве'),
+        ).toBeVisible();
+      }
+      await routePage.reload({ waitUntil: 'domcontentloaded' });
+      await expect(routePage).toHaveURL(new RegExp(`#\\/v2\\/${path}$`));
+      await expect(
+        routePage.locator('#planner-main-content').getByRole('heading').first(),
+      ).toBeVisible();
+    } finally {
+      await routePage.close();
     }
-    await page.reload({ waitUntil: 'domcontentloaded' });
-    await expect(page).toHaveURL(new RegExp(`#\\/v2\\/${path}$`));
-    await expect(page.locator('#planner-main-content').getByRole('heading').first()).toBeVisible();
   }
   expect(issues).toEqual([]);
 });

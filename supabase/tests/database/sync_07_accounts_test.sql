@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(24);
+select plan(29);
 
 select has_column('public', 'sync_spaces', 'owner_user_id', 'sync spaces bind to account owners');
 select has_column('public', 'devices', 'account_user_id', 'devices bind to account users');
@@ -274,6 +274,44 @@ select is(
   (select status from public.devices where device_id = '83000000-0000-4000-8000-000000000004'),
   'active',
   'recovery completion activates the session-bound device'
+);
+
+select lives_ok(
+  $$select * from public.lifeos_sync_begin_recovery(
+    '84000000-0000-4000-8000-000000000002', repeat('44', 32),
+    '83000000-0000-4000-8000-000000000004', repeat('47', 32), 'android'
+  )$$,
+  'the same session and device can retry recovery after activation'
+);
+select is(
+  (select row(status, encode(public_key, 'hex'))::text
+   from public.devices where device_id = '83000000-0000-4000-8000-000000000004'),
+  row('pending', repeat('47', 32))::text,
+  'a recovery retry refreshes the same device instead of creating a duplicate'
+);
+select lives_ok(
+  $$select public.lifeos_sync_complete_recovery(
+    '83000000-0000-4000-8000-000000000004', repeat('44', 32),
+    encode(
+      extensions.digest(decode(repeat('25', 32) || repeat('26', 24), 'hex'),
+      'sha256'
+    ),
+    'hex'),
+    repeat('42', 32), repeat('43', 24)
+  )$$,
+  'the retried recovery can complete normally'
+);
+select is(
+  (select status from public.devices where device_id = '83000000-0000-4000-8000-000000000004'),
+  'active',
+  'the retried recovery restores the active device state'
+);
+select throws_ok(
+  $$select * from public.lifeos_sync_begin_recovery(
+    '84000000-0000-4000-8000-000000000002', repeat('44', 32),
+    '83000000-0000-4000-8000-000000000006', repeat('48', 32), 'android'
+  )$$,
+  '42501', null, 'the same session cannot retry recovery as a different device'
 );
 
 select throws_ok(

@@ -1,7 +1,7 @@
 # LifeOS Account Sync — release evidence
 
 - Дата проверки: 2026-09-23
-- Версия клиента: 1.0.12
+- Версия клиента: 1.0.13
 - Пакет приложения: `com.lifeos.desktop`
 
 ## Объём выпуска
@@ -11,7 +11,7 @@
 возобновляемое подключение и безопасный выход. Local-only режим остаётся доступен без аккаунта и
 без Supabase.
 
-Account-флаг `VITE_LIFEOS_ACCOUNT_SYNC_ENABLED=true` включён в собранных клиентах 1.0.12.
+Account-флаг `VITE_LIFEOS_ACCOUNT_SYNC_ENABLED=true` включён в собранных клиентах 1.0.13.
 Hosted-миграции применены к проекту `LifeOS Sync`; публикация неподписанного Windows installer
 по-прежнему не разрешена.
 
@@ -23,11 +23,17 @@ Hotfix 1.0.11 восстанавливает регистрацию после �
 Ключ извлекается только по явному действию пользователя из защищённого хранилища текущего
 устройства и не сохраняется в предметной базе или журнале.
 
+Версия 1.0.13 исправляет повтор восстановления на новом устройстве. Если первая синхронизация
+после ввода recovery key временно не сошлась, клиент сохраняет уже выданное доверие и локальные
+ключи, а при следующем запуске повторяет только синхронизацию. Hosted RPC разрешает безопасно
+повторить восстановление для той же auth-сессии и того же device id, но отклоняет подмену device id.
+
 ## Hosted rollout
 
-- `20260922010000_sync_07_accounts.sql` и
-  `20260922020000_sync_07_1_pending_device_policy.sql` применены через Supabase CLI.
-- Повторный `supabase migration list --linked` подтвердил совпадение всех семи local/remote
+- `20260922010000_sync_07_accounts.sql`,
+  `20260922020000_sync_07_1_pending_device_policy.sql` и
+  `20260923010000_sync_07_2_recovery_retry.sql` применены через Supabase CLI.
+- Повторный `supabase migration list --linked` подтвердил совпадение всех восьми local/remote
   миграций.
 - Публичный `GET /auth/v1/settings` подтвердил: signup разрешён, email provider включён,
   подтверждение email обязательно (`mailer_autoconfirm=false`), anonymous bootstrap включён.
@@ -41,13 +47,13 @@ Hotfix 1.0.11 восстанавливает регистрацию после �
 
 | Проверка                   | Результат | Доказательство                                                                   |
 | -------------------------- | --------- | -------------------------------------------------------------------------------- |
-| Account/application target | PASS      | 21 тест сервиса и экрана, включая повторный показ recovery key                   |
+| Account/application target | PASS      | 19 тестов сервиса и recovery-convergence, включая сохранение доверия             |
 | Local Supabase round-trip  | PASS      | 1 реальный auth/RPC/Storage-сценарий с двумя `session_id`                        |
 | TypeScript                 | PASS      | `npm run typecheck`, exit 0                                                      |
 | Account desktop/mobile E2E | PASS      | 6 сценариев: 1440×900, 390×844 и 360×800; recovery, keyboard, overflow и console |
 | Реальный route smoke       | PASS      | `#/v2/account` открывается и переживает reload в local-only состоянии            |
 | Native Rust sync tests     | PASS      | `cargo test`: 15 passed                                                          |
-| pgTAP/RLS                  | PASS      | 6 файлов, 155 тестов после чистого `supabase db reset`                           |
+| pgTAP/RLS                  | PASS      | 6 файлов, 160 тестов после чистого `supabase db reset`                           |
 | Полный R9/R10 gate         | PASS      | 1358 passed + 1 skipped, 55 infra, 1 alpha, build/format/diff и 70 E2E           |
 
 Детерминированный Playwright fixture вызывает настоящий `AccountSync` application-контракт и не
@@ -73,16 +79,20 @@ native secure-store slots, не перезаписывая основной auth
 подтверждены показ, копирование и повторное скрытие recovery key; значение ключа не выводилось в
 журнал проверки. После QA ключ оставлен скрытым, а приложение открыто на нужном блоке безопасности.
 
+Установленная Windows 1.0.13 сохранила существующий каталог профиля и запустилась после silent
+update. Серверная миграция повторного восстановления применена до выпуска клиента. Физический
+повтор проблемного recovery-flow на втором компьютере остаётся ручной приёмкой владельца.
+
 ## Нативные артефакты
 
 ### Windows x64
 
-- NSIS: `src-tauri/target/release/bundle/nsis/LifeOS_1.0.12_x64-setup.exe`
-- Размер: 7 589 172 bytes
-- SHA-256: `B9857D28A6C50F7B0F725BBD7A1D78D7FF7946EE315770EA975540D3CB669422`
+- NSIS: `src-tauri/target/release/bundle/nsis/LifeOS_1.0.13_x64-setup.exe`
+- Размер: 7 588 616 bytes
+- SHA-256: `81679D3C13E1B437EA5DFABB57213503A3EFD329963E0A01EF648A5453EB0B22`
 - Authenticode: `NotSigned`. Updater artifact намеренно отключён для локальной сборки, потому что
   приватный updater key отсутствует; публикация этой сборки запрещена.
-- Установка: PASS, silent update exit 0 в `%LOCALAPPDATA%\LifeOS\LifeOS.exe`; file version 1.0.12,
+- Установка: PASS, silent update exit 0 в `%LOCALAPPDATA%\LifeOS\LifeOS.exe`; file version 1.0.13,
   процесс успешно запущен.
 - Installer не очищал каталог `%LOCALAPPDATA%\com.lifeos.desktop`; профиль
   WebView/IndexedDB остался на месте. Содержимое предметных данных требует визуальной проверки
@@ -91,15 +101,15 @@ native secure-store slots, не перезаписывая основной auth
 ### Android universal
 
 - APK: `src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk`
-- Размер: 64 530 341 bytes
-- SHA-256: `CF522EECF2BA865CF650946A9D0349558C37D0CB39CFDFDCB66D928C674CA529`
-- Package/version: `com.lifeos.desktop`, versionName 1.0.12, versionCode 1000012, minSdk 24,
+- Размер: 64 529 781 bytes
+- SHA-256: `C1576C85AD8313C055CB74CC559A1B8EECDBC9961B499DDD91F565CCA04D7C24`
+- Package/version: `com.lifeos.desktop`, versionName 1.0.13, versionCode 1000013, minSdk 24,
   targetSdk 36.
 - ABI: `arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64`.
 - APK Signature Scheme v2: PASS. Signer:
   `CN=LifeOS, OU=LifeOS, O=LifeOS, L=Chita, ST=Zabaykalsky Krai, C=RU`; certificate SHA-256:
   `F3669CD0CA91CD17670E01A284D07493330BCAF32D4993CFBB88CA5099D92C69`.
-- Установка 1.0.12: PENDING. Перед сборкой `adb devices -l` вернул пустой список. Последняя
+- Установка 1.0.13: PENDING. Перед сборкой `adb devices -l` вернул пустой список. Последняя
   подтверждённая установленная Android-версия — 1.0.8;
   удаление приложения и очистка данных не выполнялись.
 
@@ -110,9 +120,8 @@ native secure-store slots, не перезаписывая основной auth
 1. Additive backend migrations: PASS.
 2. Hosted email confirmation, email provider и anonymous bootstrap: PASS по публичным settings.
 3. Локальные pgTAP/RLS и двухсессионный encrypted round-trip: PASS.
-4. Account-enabled Windows 1.0.12 build, обновление без очистки профиля и повторный показ
-   recovery key на готовом аккаунте: PASS.
-5. Android 1.0.12 build/signature: PASS; установка ожидает повторного подключения телефона к ADB.
+4. Account-enabled Windows 1.0.13 build и обновление без очистки профиля: PASS.
+5. Android 1.0.13 build/signature: PASS; установка ожидает повторного подключения телефона к ADB.
 6. Hosted registration request: PASS. Доставка OTP не подтверждена; создание пароля и физический
    двухустройственный recovery-flow требуют ручной приёмки пользователем.
 
@@ -144,7 +153,7 @@ account-owned spaces backend migration нельзя откатывать destruc
 сохранения recovery key.
 
 Текущая Windows-установка подтверждает upgrade и запуск без команды очистки профиля. Android
-1.0.12 подготовлен, но не установлен из-за отсутствия устройства в ADB. Полный account flow
+1.0.13 подготовлен, но не установлен из-за отсутствия устройства в ADB. Полный account flow
 остаётся ручным gate тестового backend.
 
 ## Стоп-граница

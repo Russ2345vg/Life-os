@@ -79,7 +79,7 @@ describe('AccountSyncService recovery convergence', () => {
     { pending: 1, conflicts: 0, quarantined: 0, lastSequence: 12 },
     { pending: 0, conflicts: 0, quarantined: 1, lastSequence: 12 },
     { pending: 0, conflicts: 0, quarantined: 0, lastSequence: null },
-  ])('rolls back secrets when first convergence is incomplete %#', async (report) => {
+  ])('preserves device trust when first convergence is incomplete %#', async (report) => {
     const fixture = recoveryFixture(pendingInstallation());
     fixture.sync.recover.mockImplementation(async () => {
       const active = activeInstallation();
@@ -92,9 +92,10 @@ describe('AccountSyncService recovery convergence', () => {
 
     expect(error).toMatchObject({ code: 'account.convergence_incomplete' });
     expect(JSON.stringify(error)).not.toContain(RECOVERY);
-    expect(fixture.crypto.deleteDeviceSecrets).toHaveBeenCalledWith(DEVICE_ID, SPACE_ID);
+    expect(fixture.crypto.deleteDeviceSecrets).not.toHaveBeenCalled();
     expect(fixture.installations.value).toMatchObject({
-      membershipStatus: 'pending',
+      membershipStatus: 'active',
+      setupState: 'configured',
       accountSetupState: 'recovery_confirmation_pending',
       snapshotId: SNAPSHOT_ID,
     });

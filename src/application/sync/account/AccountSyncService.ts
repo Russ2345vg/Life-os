@@ -316,23 +316,7 @@ export class AccountSyncService implements AccountSync {
       throw invalidAccountState();
     }
     const report = await this.dependencies.sync.syncPilotNow();
-    try {
-      requireConverged(report);
-    } catch (error) {
-      await this.dependencies.crypto.deleteDeviceSecrets(
-        installation.deviceId,
-        installation.spaceId,
-      );
-      await this.dependencies.installations.save({
-        ...installation,
-        membershipStatus: 'pending',
-        recoveryConfirmedAt: null,
-        setupState: 'not_configured',
-        accountSetupState: 'recovery_confirmation_pending',
-        updatedAt: this.now().toISOString(),
-      });
-      throw error;
-    }
+    requireConverged(report);
     const ready: SyncInstallation = {
       ...installation,
       accountSetupState: 'ready',
