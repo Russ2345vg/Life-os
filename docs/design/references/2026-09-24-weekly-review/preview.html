@@ -1,0 +1,642 @@
+<!doctype html>
+<html lang="ru">
+  <meta charset="utf-8" /><meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  /><title>LifeOS · Обзор недели · Макет</title
+  ><link rel="stylesheet" href="/src/presentation/styles/global.css" /><link
+    rel="stylesheet"
+    href="/src/presentation/planner-v2/planner-v2.css"
+  /><link rel="stylesheet" href="/src/presentation/planner-v2/planning.css" /><link
+    rel="stylesheet"
+    href="/src/presentation/planner-v2/planner-library.css"
+  /><link rel="stylesheet" href="/src/presentation/planner-v2/planner-views.css" /><link
+    rel="stylesheet"
+    href="/src/presentation/planner-v2/planner-master.css"
+  /><style>
+    body {
+      margin: 0;
+    }
+    .review-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .review-view {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+      color: var(--text-secondary);
+    }
+    .review-view select {
+      width: auto;
+      padding: 10px 32px 10px 12px;
+      min-height: 44px;
+    }
+    .period,
+    .actions,
+    .rowhead {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .period {
+      margin: 24px 0;
+    }
+    .muted,
+    small {
+      color: var(--text-secondary);
+    }
+    .hero {
+      padding: 24px;
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-large);
+      background: var(--surface-1);
+    }
+    .hero h2 {
+      font-size: 22px;
+      margin: 0 0 8px;
+    }
+    .hero p {
+      margin: 0;
+      color: var(--text-secondary);
+    }
+    .stats {
+      display: flex;
+      gap: 32px;
+      margin-top: 20px;
+      flex-wrap: wrap;
+    }
+    .stat strong {
+      font-size: 24px;
+      margin-right: 8px;
+    }
+    .stat span {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr);
+      gap: 24px;
+      margin-top: 24px;
+    }
+    .grid h2 {
+      font-size: 18px;
+    }
+    .goal {
+      padding: 20px 16px;
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-large);
+      background: var(--surface-1);
+      margin: 12px 0;
+    }
+    .goal h3,
+    .side h3 {
+      font-size: 16px;
+      margin: 0;
+    }
+    .goal p {
+      margin: 8px 0;
+    }
+    .rowhead {
+      justify-content: space-between;
+    }
+    .tag {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .tag.good {
+      color: var(--success);
+    }
+    .value {
+      font-size: 20px;
+      margin-top: 12px;
+    }
+    .value small {
+      font-size: 13px;
+    }
+    .bar {
+      height: 4px;
+      background: var(--surface-3);
+      margin: 12px 0;
+      max-width: 360px;
+    }
+    .bar span {
+      display: block;
+      height: 100%;
+      background: var(--planner-accent);
+    }
+    .actions {
+      margin-top: 12px;
+    }
+    .planner-v2 .text {
+      color: var(--planner-accent);
+      padding-left: 0;
+      border: 0;
+    }
+    .side {
+      padding: 0 0 0 8px;
+    }
+    .side article {
+      padding: 20px 0;
+      border-bottom: 1px solid var(--border-soft);
+    }
+    .side p {
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+    .note {
+      font-size: 13px;
+      margin-top: 24px;
+    }
+    .eyebrow {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .state {
+      padding: 32px;
+      background: var(--surface-1);
+      border-radius: 16px;
+    }
+    .skeleton {
+      height: 20px;
+      background: var(--surface-3);
+      margin: 20px 0;
+      border-radius: 8px;
+      max-width: 80%;
+    }
+    .prototype-tools {
+      margin-top: 32px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border-soft);
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+    .prototype-tools select {
+      min-height: 44px;
+      padding: 8px 32px 8px 12px;
+    }
+    .planner-v2 dialog {
+      color: var(--text-primary);
+      background: var(--surface-glass-overlay);
+      border: 1px solid var(--border-soft);
+      border-radius: 16px;
+      padding: 24px;
+      max-width: 440px;
+      width: calc(100% - 32px);
+    }
+    dialog::backdrop {
+      background: rgba(0, 0, 0, 0.6);
+    }
+    [hidden] {
+      display: none !important;
+    }
+    @media (max-width: 850px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+      .side {
+        padding: 0;
+      }
+      .stats {
+        gap: 16px;
+      }
+      .stat {
+        flex: 1;
+        min-width: 100px;
+      }
+      .stat strong {
+        display: block;
+      }
+      .hero {
+        padding: 16px;
+      }
+      .review-heading {
+        align-items: flex-start;
+      }
+      .review-heading button {
+        white-space: nowrap;
+      }
+    }
+  </style>
+  <div class="planner-v2">
+    <aside class="planner-sidebar">
+      <a class="planner-brand" href="#/v2/today">LifeOS</a>
+      <nav aria-label="Рабочий интерфейс">
+        <a href="#/v2/today"
+          ><svg
+            viewBox="0 0 24 24"
+            width="1.25em"
+            height="1.25em"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <rect x="3" y="5" width="18" height="16" rx="2"></rect>
+            <path d="M8 3v4M16 3v4M3 10h18"></path>
+            <path d="M8 14h3M8 17h6"></path></svg
+          ><span>Сегодня</span></a
+        ><span class="planner-nav-secondary"
+          ><a href="#/v2/spheres"
+            ><svg
+              viewBox="0 0 24 24"
+              width="1.25em"
+              height="1.25em"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <circle cx="12" cy="12" r="8"></circle>
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M12 4V2M12 22v-2M4 12H2M22 12h-2"></path></svg
+            ><span>Сферы</span></a
+          ></span
+        ><a href="#/v2/directions"
+          ><svg
+            viewBox="0 0 24 24"
+            width="1.25em"
+            height="1.25em"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <circle cx="12" cy="12" r="8"></circle>
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M12 4V2M12 22v-2M4 12H2M22 12h-2"></path></svg
+          ><span>Направления</span></a
+        ><a href="#/v2/goals" aria-current="page"
+          ><svg
+            viewBox="0 0 24 24"
+            width="1.25em"
+            height="1.25em"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <circle cx="12" cy="12" r="8"></circle>
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M12 4V2M12 22v-2M4 12H2M22 12h-2"></path></svg
+          ><span>Цели</span></a
+        ><a href="#/v2/actions"
+          ><svg
+            viewBox="0 0 24 24"
+            width="1.25em"
+            height="1.25em"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path d="M13 2 4.5 13H11l-1 9 8.5-11H12l1-9Z"></path></svg
+          ><span>Действия</span></a
+        ><span class="planner-nav-secondary"
+          ><a href="#/v2/inbox"
+            ><svg
+              viewBox="0 0 24 24"
+              width="1.25em"
+              height="1.25em"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path>
+              <path d="M3 3v5h5M12 7v5l3 2"></path></svg
+            ><span>Входящие</span></a
+          ></span
+        ><button
+          class="planner-nav-more"
+          type="button"
+          aria-expanded="false"
+          aria-controls="planner-more-menu"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            width="1.25em"
+            height="1.25em"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path>
+            <path d="M3 3v5h5M12 7v5l3 2"></path></svg
+          ><span>Ещё</span>
+        </button>
+      </nav>
+      <div id="planner-more-menu" class="planner-more-menu" hidden="">
+        <a href="#/v2/spheres"
+          ><svg
+            viewBox="0 0 24 24"
+            width="1.25em"
+            height="1.25em"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <circle cx="12" cy="12" r="8"></circle>
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M12 4V2M12 22v-2M4 12H2M22 12h-2"></path></svg
+          ><span>Сферы</span></a
+        ><a href="#/v2/inbox"
+          ><svg
+            viewBox="0 0 24 24"
+            width="1.25em"
+            height="1.25em"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path>
+            <path d="M3 3v5h5M12 7v5l3 2"></path></svg
+          ><span>Входящие</span></a
+        ><a href="#/v2/sleep"
+          ><svg
+            viewBox="0 0 24 24"
+            width="1.25em"
+            height="1.25em"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <rect x="3" y="5" width="18" height="16" rx="2"></rect>
+            <path d="M8 3v4M16 3v4M3 10h18"></path>
+            <path d="M8 14h3M8 17h6"></path></svg
+          ><span>Подготовка ко сну</span></a
+        ><a href="#/v2/account"
+          ><svg
+            viewBox="0 0 24 24"
+            width="1.25em"
+            height="1.25em"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <circle cx="12" cy="8" r="4"></circle>
+            <path d="M4.5 21a7.5 7.5 0 0 1 15 0"></path></svg
+          ><span>Аккаунт и синхронизация</span></a
+        >
+      </div>
+    </aside>
+    <main class="planner-content">
+      <header class="planner-page-heading review-heading">
+        <h1>Цели</h1>
+        <button class="planner-primary" onclick="openDemo('Новая цель')">+ Новая цель</button>
+      </header>
+      <div class="review-view">
+        <label for="view">Представление</label
+        ><select
+          id="view"
+          onchange="openDemo('Представление: ' + this.options[this.selectedIndex].text)"
+        >
+          <option>Список</option>
+          <option selected>Обзор недели</option>
+          <option>Фокус</option>
+          <option>Канбан</option>
+          <option>Календарь</option>
+          <option>Древо</option>
+        </select>
+      </div>
+      <div class="period">
+        <button aria-label="Предыдущая неделя" onclick="week(-1)">←</button
+        ><strong id="dates">14–20 сентября 2026</strong
+        ><button aria-label="Следующая неделя" onclick="week(1)">→</button
+        ><span class="muted" id="periodLabel">Завершённая неделя</span>
+      </div>
+      <div id="content" style="margin-top: 24px">
+        <section class="hero">
+          <h2>Итоги недели</h2>
+          <p class="muted">
+            В двух целях появились записи результата. Для двух целей нужно выбрать следующий шаг.
+          </p>
+          <div class="stats">
+            <div class="stat"><strong>4</strong><span>активные цели сейчас</span></div>
+            <div class="stat"><strong>2</strong><span>с записями за неделю</span></div>
+            <div class="stat"><strong>2</strong><span>нужен следующий шаг</span></div>
+          </div>
+        </section>
+        <div class="grid">
+          <section>
+            <h2>Результаты по целям</h2>
+            <p class="muted">Текущее состояние и записи за выбранную неделю.</p>
+            <article class="goal">
+              <div class="rowhead">
+                <h3>Прочитать 12 книг</h3>
+                <span class="tag">Личное развитие</span>
+              </div>
+              <div class="value">4 <small>из 12 книг · сейчас</small></div>
+              <div class="bar"><span style="width: 33.3%"></span></div>
+              <p>За неделю: <strong>+1 книга</strong></p>
+              <small>Выполнено связанных действий: 2</small>
+              <div class="actions">
+                <button class="text" onclick="openDemo('История результата')">
+                  Посмотреть записи →
+                </button>
+              </div>
+            </article>
+            <article class="goal">
+              <div class="rowhead">
+                <h3>Тренироваться 3 раза в неделю</h3>
+                <span class="tag good">Норма достигнута</span>
+              </div>
+              <div class="value">3 <small>из 3 тренировок · 14–20 сентября</small></div>
+              <p class="muted">Результат выбранной недели. Новый цикл считается отдельно.</p>
+              <div class="actions">
+                <button class="text" onclick="openDemo('История тренировок')">
+                  Посмотреть записи →
+                </button>
+              </div>
+            </article>
+            <article class="goal">
+              <div class="rowhead">
+                <h3>Подготовить портфолио</h3>
+                <span class="tag">Без измерения</span>
+              </div>
+              <p>Числовой результат не настроен</p>
+              <small>Выполнено связанных действий: 3. Это не процент готовности цели.</small>
+              <div class="actions">
+                <button onclick="openDemo('Выбрать следующий шаг')">Выбрать следующий шаг</button>
+              </div>
+            </article>
+            <article class="goal">
+              <h3>Сформировать резерв</h3>
+              <div class="value">80 000 <small>из 200 000 ₽ · сейчас</small></div>
+              <div class="bar"><span style="width: 40%"></span></div>
+              <p>За неделю нет записей результата</p>
+              <small>Запись обновлена: 10 сентября. Это не означает отсутствие прогресса.</small>
+              <div class="actions">
+                <button onclick="openDemo('Обновить результат')">Обновить результат</button>
+              </div>
+            </article>
+          </section>
+          <section class="side">
+            <span class="eyebrow">Решения на следующую неделю</span>
+            <h2 style="margin-top: 12px">Что пересмотреть сейчас</h2>
+            <p class="muted">Подсказки по текущему плану, а не оценка прошлой недели.</p>
+            <article>
+              <h3>Подготовить портфолио</h3>
+              <p>Срок — 28 сентября. Следующее действие не выбрано.</p>
+              <button class="planner-primary" onclick="openDemo('Выбрать следующий шаг')">
+                Выбрать шаг
+              </button>
+            </article>
+            <article>
+              <h3>Сформировать резерв</h3>
+              <p>Запись результата обновлена 10 сентября. Следующее действие не выбрано.</p>
+              <button onclick="openDemo('Пересмотреть план')">Пересмотреть план</button>
+            </article>
+            <p class="muted note">
+              Ты решаешь, что менять. Сроки, статусы и задачи автоматически не меняются.
+            </p>
+          </section>
+        </div>
+        <p class="muted note">
+          Обзор пересчитывается по доступным записям с учётом исправлений. Это не сохранённый снимок
+          прошлого.
+        </p>
+      </div>
+      <section id="alternate" class="state" hidden role="status"></section>
+      <div class="prototype-tools">
+        <span>Макет · демонстрационные данные</span>
+        <label class="top"
+          >Состояние макета
+          <select id="state" onchange="stateChange(this.value)">
+            <option value="ready">Есть результаты</option>
+            <option value="empty">Нет целей</option>
+            <option value="loading">Загрузка</option>
+            <option value="error">Ошибка</option>
+          </select></label
+        >
+      </div>
+      <dialog id="dialog">
+        <h2 id="dialogTitle"></h2>
+        <p>
+          В приложении здесь откроется существующая форма цели или выбора действия. После сохранения
+          обзор обновится.
+        </p>
+        <p class="muted">В макете данные не сохраняются.</p>
+        <button onclick="document.getElementById('dialog').close()">Вернуться к обзору</button>
+      </dialog>
+    </main>
+  </div>
+
+  <script>
+    document.querySelectorAll('.planner-sidebar a').forEach((a) =>
+      a.addEventListener('click', (e) => {
+        e.preventDefault();
+        openDemo(a.textContent.trim());
+      }),
+    );
+    document.querySelector('.planner-nav-more').addEventListener('click', () => {
+      const menu = document.getElementById('planner-more-menu');
+      menu.hidden = !menu.hidden;
+    });
+    const weeks = ['7–13 сентября 2026', '14–20 сентября 2026', '21–27 сентября 2026'];
+    let index = 1;
+    function week(dir) {
+      index = Math.max(0, Math.min(2, index + dir));
+      document.getElementById('dates').textContent = weeks[index];
+      document.getElementById('periodLabel').textContent =
+        index === 2 ? 'Текущая неделя · ещё идёт' : 'Завершённая неделя';
+      document.getElementById('content').hidden = index !== 1;
+      document.getElementById('alternate').hidden = index === 1;
+      document.getElementById('alternate').textContent =
+        'В этом макете данные показаны для 14–20 сентября. Вернитесь к этой неделе.';
+    }
+    function openDemo(title) {
+      document.getElementById('dialogTitle').textContent = title;
+      document.getElementById('dialog').showModal();
+    }
+    function stateChange(value) {
+      const alt = document.getElementById('alternate');
+      document.getElementById('content').hidden = value !== 'ready';
+      alt.hidden = value === 'ready';
+      alt.replaceChildren();
+      if (value === 'ready') {
+        index = 1;
+        week(0);
+        return;
+      }
+      const h = document.createElement('h2');
+      h.textContent =
+        value === 'empty'
+          ? 'Начни с одной цели'
+          : value === 'error'
+            ? 'Не удалось загрузить обзор'
+            : 'Загружаем результаты…';
+      alt.append(h);
+      if (value === 'loading') {
+        for (let i = 0; i < 3; i++) {
+          const line = document.createElement('div');
+          line.className = 'skeleton';
+          alt.append(line);
+        }
+        return;
+      }
+      const p = document.createElement('p');
+      p.textContent =
+        value === 'empty'
+          ? 'Здесь появятся результаты и подсказки для следующего шага.'
+          : 'Попробуй ещё раз. Твои данные сохранены.';
+      const b = document.createElement('button');
+      b.textContent = value === 'empty' ? 'Создать цель' : 'Повторить';
+      b.onclick = () => {
+        if (value === 'empty') openDemo('Создать цель');
+        else {
+          document.getElementById('state').value = 'ready';
+          stateChange('ready');
+        }
+      };
+      alt.append(p, b);
+    }
+  </script>
+</html>

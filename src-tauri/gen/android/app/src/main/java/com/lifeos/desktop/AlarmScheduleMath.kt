@@ -10,11 +10,21 @@ object AlarmScheduleMath {
   private val timePattern = Regex("^(\\d{2}):(\\d{2})$")
 
   fun triggerForCycleDate(cycleDate: String, wakeTime: String, timeZone: String): Long {
+    return triggerForLocalTime(cycleDate, wakeTime, timeZone, 1)
+  }
+
+  fun triggerForLocalTime(
+    cycleDate: String,
+    localTime: String,
+    timeZone: String,
+    dayOffset: Int,
+  ): Long {
     require(cycleDatePattern.matches(cycleDate)) { "Invalid cycle date." }
-    val time = requireNotNull(timePattern.matchEntire(wakeTime)) { "Invalid wake time." }
+    val time = requireNotNull(timePattern.matchEntire(localTime)) { "Invalid local time." }
     val hour = time.groupValues[1].toInt()
     val minute = time.groupValues[2].toInt()
-    require(hour in 0..23 && minute in 0..59) { "Invalid wake time." }
+    require(hour in 0..23 && minute in 0..59) { "Invalid local time." }
+    require(dayOffset in 0..1) { "Invalid day offset." }
     val zone = TimeZone.getTimeZone(timeZone)
     require(zone.id == timeZone || timeZone == "GMT") { "Unknown time zone." }
     val parser = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply {
@@ -25,7 +35,7 @@ object AlarmScheduleMath {
     return Calendar.getInstance(zone).apply {
       isLenient = true
       this.time = cycle
-      add(Calendar.DAY_OF_MONTH, 1)
+      add(Calendar.DAY_OF_MONTH, dayOffset)
       set(Calendar.HOUR_OF_DAY, hour)
       set(Calendar.MINUTE, minute)
       set(Calendar.SECOND, 0)

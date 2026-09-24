@@ -76,6 +76,31 @@ describe('V2 Goal action centre', () => {
     expect(html.indexOf('Детали')).toBeLessThan(html.indexOf('История'));
     expect(html).toContain('Без периода');
   });
+  it('offers direct completion on an active Goal without routing through its LifeActions', () => {
+    const render = (item: Goal) =>
+      renderToStaticMarkup(
+        createElement(GoalDetailContent, {
+          goal: item,
+          actions: [],
+          directions: [],
+          spheres: [],
+          facts: [],
+          today: '2026-09-14',
+          operations,
+        }),
+      );
+    const active = render(goal);
+
+    expect(active).toContain('class="planner-primary planner-goal-achieve"');
+    expect(active).toContain('>Завершить цель</button>');
+    expect(active.indexOf('Завершить цель')).toBeLessThan(active.indexOf('Действия цели'));
+
+    const achieved = goal.update(
+      { title: goal.title, status: 'achieved', stage: 'achieved' },
+      new Date('2026-09-14T10:00:00Z'),
+    );
+    expect(render(achieved)).not.toContain('Завершить цель');
+  });
   it('shows current Goal memberships as compact metadata', () => {
     const periods = [
       automaticPeriod('year', '2026-09-14'),

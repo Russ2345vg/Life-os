@@ -1,5 +1,5 @@
 import { groupPlannerActions, isOpenAction } from '../plannerCatalogModel';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useBalanceState } from './useBalanceState';
 import type { Goal } from '../../../domain';
 import { DomainError } from '../../../shared/errors/DomainError';
@@ -31,7 +31,12 @@ const periods: Record<PeriodKind, string> = {
 };
 const lifecycle = { active: 'Активно', paused: 'На паузе', archived: 'В архиве' };
 type Editor =
-  | { kind: 'sphere' | 'direction'; id: string | null; sphereId: string | null }
+  | {
+      kind: 'sphere' | 'direction';
+      id: string | null;
+      sphereId: string | null;
+      scoreContext?: { automaticScore: number | null };
+    }
   | { kind: 'indicator'; directionId: string; indicator: DirectionIndicator | null };
 export function BalanceWorkspace({
   services,
@@ -62,6 +67,15 @@ export function BalanceWorkspace({
     const timer = setTimeout(() => setNotice(''), 3500);
     return () => clearTimeout(timer);
   }, [notice]);
+  const settingsPanel = useRef<HTMLElement>(null);
+  const wheelHeading = useRef<HTMLHeadingElement>(null);
+  const [scoreSaveCount, setScoreSaveCount] = useState(0);
+  useEffect(() => {
+    if (settings) settingsPanel.current?.focus();
+  }, [settings]);
+  useEffect(() => {
+    if (scoreSaveCount > 0) wheelHeading.current?.focus();
+  }, [scoreSaveCount]);
   const visibleError = error ?? query.error;
   const routeKey = buildPlannerRoute(route);
   const [renderedRoute, setRenderedRoute] = useState(routeKey);
@@ -81,6 +95,9 @@ export function BalanceWorkspace({
     setEditor(null);
     setNotice('Сохранено');
     setError(null);
+    if (editor?.kind === 'sphere' && editor.scoreContext) {
+      setScoreSaveCount((count) => count + 1);
+    }
   };
   const run = async (work: () => Promise<unknown>, rethrow = false) => {
     if (busy) return;
@@ -170,6 +187,21 @@ export function BalanceWorkspace({
   const wheel = projection.spheres.filter(
     (s) => s.sphere.status === 'active' && s.sphere.includeInBalanceWheel,
   );
+  const activeSpheres = projection.spheres.filter((s) => s.sphere.status === 'active');
+  const ratedCount = wheel.filter((s) => s.effectiveScore !== null).length;
+  const firstUnrated = wheel.find((s) => s.effectiveScore === null);
+  const comparable = activeSpheres.filter((s) => s.attentionNeed !== null);
+  const needsAttention = comparable
+    .filter((s) => (s.attentionNeed ?? 0) > 0)
+    .sort((a, b) => (b.attentionNeed ?? 0) - (a.attentionNeed ?? 0))
+    .slice(0, 3);
+  const assess = (s: LifeBalanceProjection['spheres'][number]) =>
+    setEditor({
+      kind: 'sphere',
+      id: s.sphere.id.toString(),
+      sphereId: null,
+      scoreContext: { automaticScore: s.automaticScore },
+    });
   const periodSelector = (
     <div className="balance-period">
       <div className="planner-segments" role="group" aria-label="Контекст целей">
@@ -414,6 +446,7 @@ export function BalanceWorkspace({
               <p className="planner-muted">Развивайте важное и поддерживайте устойчивое.</p>
             </div>
             <button
+              className="planner-primary"
               type="button"
               onClick={() => setEditor({ kind: 'direction', id: null, sphereId: null })}
             >
@@ -490,83 +523,21 @@ export function BalanceWorkspace({
               <h1>Сферы жизни</h1>
               <p className="planner-muted">Что важно поддерживать. Куда направить внимание.</p>
             </div>
-            <button onClick={() => setEditor({ kind: 'sphere', id: null, sphereId: null })}>
+            <button
+              className={ratedCount ? 'planner-primary' : undefined}
+              onClick={() => setEditor({ kind: 'sphere', id: null, sphereId: null })}
+            >
               Новая сфера
             </button>
           </header>
-          {periodSelector}
-          <div className="balance-overview">
-            <section className="balance-wheel-panel">
-              <div className="balance-section-heading">
-                <h2>Колесо жизни</h2>
-                <button aria-expanded={settings} onClick={() => setSettings(!settings)}>
-                  Настроить колесо
-                </button>
-              </div>
-              <BalanceWheel
-                items={wheel.map((s) => ({
-                  id: s.sphere.id.toString(),
-                  name: s.sphere.name,
-                  score: s.effectiveScore,
-                  desired: s.sphere.desiredLevel,
-                }))}
-              />
-              <p className="balance-legend">
-                <span>● Состояние</span>
-                <span>┄ Желаемый уровень</span>
-                <span>— Нет данных</span>
-              </p>
-            </section>
-            <section className="balance-attention">
-              <h2>Требует внимания</h2>
-              <p className="planner-muted">Сферы с наибольшим дефицитом внимания.</p>
-              {projection.spheres
-                .filter(
-                  (s) =>
-                    s.sphere.status === 'active' &&
-                    s.effectiveScore !== null &&
-                    (s.attentionNeed ?? 0) > 0,
-                )
-                .sort((a, b) => (b.attentionNeed ?? 0) - (a.attentionNeed ?? 0))
-                .slice(0, 3)
-                .map((s) => (
-                  <div className="balance-attention-row" key={s.sphere.id.toString()}>
-                    {link({ view: 'sphere', id: s.sphere.id.toString() }, s.sphere.name)}
-                    <strong>
-                      {scoreLabel(s.effectiveScore)} <small>/ 10</small>
-                    </strong>
-                    <progress
-                      max={10}
-                      value={s.effectiveScore ?? 0}
-                      aria-label={`Оценка: ${s.sphere.name}`}
-                    />
-                    <span className="planner-muted">Дефицит {scoreLabel(s.attentionNeed)}</span>
-                  </div>
-                ))}
-              {!projection.spheres.some(
-                (s) =>
-                  s.sphere.status === 'active' &&
-                  s.effectiveScore !== null &&
-                  (s.attentionNeed ?? 0) > 0,
-              ) && (
-                <p className="planner-empty">
-                  Пока нет оценённых сфер с дефицитом. Оцените важные для вас сферы ниже.
-                </p>
-              )}
-              <a
-                className="planner-text-link"
-                href="#all-spheres"
-                onClick={(event) => {
-                  event.preventDefault();
-                  document.getElementById('all-spheres')?.scrollIntoView({ behavior: 'instant' });
-                }}
-              >
-                Посмотреть все сферы →
-              </a>
-            </section>
-          </div>
           {settings && (
-            <section className="balance-panel">
+            <section
+              className="balance-panel balance-wheel-settings"
+              id="balance-wheel-settings"
+              aria-label="Сферы в колесе"
+              ref={settingsPanel}
+              tabIndex={-1}
+            >
               <h2>Сферы в колесе</h2>
               {state.spheres
                 .filter((s) => s.status === 'active')
@@ -592,8 +563,139 @@ export function BalanceWorkspace({
                     {s.name}
                   </label>
                 ))}
+              <button
+                type="button"
+                onClick={() => {
+                  setSettings(false);
+                  wheelHeading.current?.focus();
+                }}
+              >
+                Готово
+              </button>
             </section>
           )}
+
+          <div className={`balance-overview${ratedCount === 0 ? ' balance-overview--start' : ''}`}>
+            <section className="balance-wheel-panel">
+              <div className="balance-section-heading">
+                <h2 ref={wheelHeading} tabIndex={-1}>
+                  Колесо жизни
+                </h2>
+                {wheel.length > 0 && (
+                  <button
+                    aria-expanded={settings}
+                    aria-controls="balance-wheel-settings"
+                    onClick={() => setSettings(!settings)}
+                  >
+                    Настроить колесо
+                  </button>
+                )}
+              </div>
+              {ratedCount > 0 ? (
+                <>
+                  <BalanceWheel
+                    items={wheel.map((s) => ({
+                      id: s.sphere.id.toString(),
+                      name: s.sphere.name,
+                      score: s.effectiveScore,
+                      desired: s.sphere.desiredLevel,
+                    }))}
+                  />
+                  <p className="balance-legend">
+                    <span>● Состояние</span>
+                    <span>┄ Желаемый уровень</span>
+                    <span>— Нет данных</span>
+                  </p>
+                </>
+              ) : (
+                <div className="balance-start">
+                  <h3>
+                    {!activeSpheres.length
+                      ? 'Начните с важной для вас сферы'
+                      : !wheel.length
+                        ? 'Выберите сферы для колеса'
+                        : 'Как вы оцениваете состояние этих сфер?'}
+                  </h3>
+                  <p className="planner-muted">
+                    {!activeSpheres.length
+                      ? 'Сферы помогают увидеть, что вы хотите поддерживать и развивать.'
+                      : !wheel.length
+                        ? 'Выберите существующие сферы, которые хотите видеть в обзоре.'
+                        : 'Поставьте первую оценку от 0 до 10. Остальные можно добавить позже.'}
+                  </p>
+                  <button
+                    className="planner-primary"
+                    type="button"
+                    onClick={() =>
+                      !activeSpheres.length
+                        ? setEditor({ kind: 'sphere', id: null, sphereId: null })
+                        : !wheel.length
+                          ? setSettings(true)
+                          : firstUnrated && assess(firstUnrated)
+                    }
+                  >
+                    {!activeSpheres.length
+                      ? 'Создать первую сферу'
+                      : !wheel.length
+                        ? 'Выбрать сферы'
+                        : 'Оценить первую сферу'}
+                  </button>
+                </div>
+              )}
+              {wheel.length > 0 && (
+                <p
+                  className="planner-muted"
+                  role="status"
+                >{`Оценено ${ratedCount} из ${wheel.length} сфер`}</p>
+              )}
+              {ratedCount > 0 && firstUnrated && (
+                <button type="button" onClick={() => assess(firstUnrated)}>
+                  Оценить следующую сферу
+                </button>
+              )}
+            </section>
+            {activeSpheres.length > 0 && (
+              <section className="balance-attention">
+                <h2>Требует внимания</h2>
+                <p className="planner-muted">Сферы с наибольшим дефицитом внимания.</p>
+                {needsAttention.map((s) => (
+                  <div className="balance-attention-row" key={s.sphere.id.toString()}>
+                    {link({ view: 'sphere', id: s.sphere.id.toString() }, s.sphere.name)}
+                    <strong>
+                      {scoreLabel(s.effectiveScore)} <small>/ 10</small>
+                    </strong>
+                    <progress
+                      max={10}
+                      value={s.effectiveScore ?? 0}
+                      aria-label={`Оценка: ${s.sphere.name}`}
+                    />
+                    <span className="planner-muted">Дефицит {scoreLabel(s.attentionNeed)}</span>
+                  </div>
+                ))}
+                {needsAttention.length === 0 && (
+                  <p className="planner-empty">
+                    {comparable.length === 0
+                      ? 'Недостаточно данных для сравнения. Укажите текущую оценку и желаемый уровень.'
+                      : 'Среди оценённых сфер дефицита не выявлено.'}
+                  </p>
+                )}
+                {comparable.length > 0 && comparable.length < activeSpheres.length && (
+                  <p className="planner-muted">Не у всех сфер есть оценка и желаемый уровень.</p>
+                )}
+                <a
+                  className="planner-text-link"
+                  href="#all-spheres"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    document.getElementById('all-spheres')?.scrollIntoView({ behavior: 'instant' });
+                  }}
+                >
+                  Посмотреть все сферы →
+                </a>
+              </section>
+            )}
+          </div>
+          {activeSpheres.length > 0 && periodSelector}
           <div className="balance-section-heading">
             <h2 id="all-spheres">Все сферы</h2>
             <span className="planner-muted">
@@ -668,9 +770,8 @@ export function BalanceWorkspace({
                     </div>
                     <button
                       type="button"
-                      onClick={() =>
-                        setEditor({ kind: 'sphere', id: s.sphere.id.toString(), sphereId: null })
-                      }
+                      disabled={s.sphere.status === 'archived'}
+                      onClick={() => assess(s)}
                     >
                       {s.effectiveScore === null ? 'Оценить сферу' : 'Изменить оценку'} →
                     </button>
@@ -1030,6 +1131,7 @@ function BalanceEditor({
   ) : (
     <BalanceEntityForm
       kind={editor.kind}
+      scoreContext={editor.scoreContext ?? null}
       entity={
         (editor.kind === 'sphere' ? state.spheres : state.directions).find(
           (e) => e.id.toString() === editor.id,

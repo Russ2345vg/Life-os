@@ -1,50 +1,55 @@
 :root {
+  --control-sm: 44px;
+  --control-md: 44px;
+  --control-lg: 48px;
   color-scheme: dark;
 
-  --bg-canvas: #101619;
-  --surface-1: #1b2225;
-  --surface-2: #252c2f;
-  --surface-3: #30373a;
-  --border-soft: rgb(218 226 229 / 18%);
-  --border-strong: rgb(225 232 235 / 32%);
-  --text-on-primary: #21180f;
-  --text-primary: #f3f4f3;
-  --text-secondary: #b6c0c7;
-  --text-muted: #a4afb6;
-  --gold-main: #edbc8c;
-  --gold-soft: #ffdab0;
-  --success: #62a86b;
-  --danger: #e58484;
-  --section-today: var(--gold-main);
-  --section-routine: var(--gold-main);
+  /* Approved premium direction 2, 2026-09-25: graphite and jade. */
+  --bg-canvas: #0b1012;
+  --surface-1: #11181b;
+  --surface-2: #182125;
+  --surface-3: #222e32;
+  --border-soft: #283438;
+  --border-strong: #506268;
+  --text-on-primary: #09251b;
+  --text-primary: #eef3f2;
+  --text-secondary: #b2bfbe;
+  --text-muted: #95a5a5;
+  --accent-primary: #81cfab;
+  --accent-hover: #a0e2c1;
+  /* Legacy token names remain aliases while existing components migrate. */
+  --gold-main: var(--accent-primary);
+  --gold-soft: var(--accent-hover);
+  --success: #83c99a;
+  --warning: #e4bc7b;
+  --danger: #f09a9a;
+  --section-today: var(--accent-primary);
+  --section-routine: var(--accent-primary);
 
-  /* Compatibility names resolve to the same palette throughout the application. */
   --color-background: var(--bg-canvas);
   --color-surface: var(--surface-1);
   --color-text: var(--text-primary);
   --color-text-muted: var(--text-secondary);
   --color-border: var(--border-soft);
-  --color-accent-gold: var(--gold-main);
+  --color-accent-gold: var(--accent-primary);
   --color-accent-green: var(--success);
   --color-error: var(--danger);
 
-  --surface-glass:
-    linear-gradient(115deg, rgb(255 255 255 / 5%), transparent 65%), rgb(27 33 36 / 56%);
-  --surface-glass-raised:
-    linear-gradient(125deg, rgb(237 188 140 / 10%), transparent 62%), rgb(32 37 39 / 65%);
-  --surface-glass-shell: rgb(18 25 29 / 30%);
-  --surface-glass-overlay: rgb(28 35 39 / 94%);
-  --surface-field: rgb(12 19 23 / 56%);
-  --surface-hover: rgb(255 255 255 / 6%);
-  --surface-selected: linear-gradient(120deg, rgb(237 188 140 / 30%), rgb(237 188 140 / 10%));
-  --surface-primary: linear-gradient(115deg, #f6d2a5, #dfad78);
-  --border-accent: rgb(237 188 140 / 65%);
-  --surface-primary-gold: linear-gradient(115deg, #f6d2a5, #dfad78);
-  --border-gold: rgb(237 188 140 / 65%);
-  --shadow-glass: inset 0 1px 0 rgb(255 255 255 / 9%), 0 8px 24px rgb(0 0 0 / 12%);
-  --shadow-selected: inset 0 0 12px rgb(237 188 140 / 13%), 0 0 0 1px rgb(237 188 140 / 12%);
-  --blur-surface: 14px;
-  --application-atmosphere: url('/lifeos-forest-atmosphere.png');
+  --surface-glass: var(--surface-1);
+  --surface-glass-raised: var(--surface-2);
+  --surface-glass-shell: #0d1416;
+  --surface-glass-overlay: var(--surface-2);
+  --surface-field: #0d1417;
+  --surface-hover: #1c292d;
+  --surface-selected: #1b342b;
+  --surface-primary: var(--accent-primary);
+  --border-accent: #477e66;
+  --surface-primary-gold: var(--accent-primary);
+  --border-gold: var(--border-accent);
+  --shadow-glass: 0 4px 16px rgb(0 0 0 / 10%);
+  --shadow-selected: none;
+  --blur-surface: 0px;
+  --application-atmosphere: none;
 
   --space-1: 0.25rem;
   --space-2: 0.5rem;

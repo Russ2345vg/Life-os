@@ -19,8 +19,12 @@ data class LifeOsAlarmOccurrence(
 data class LifeOsAlarmConfiguration(
   val enabled: Boolean,
   val settingsVersion: Int,
+  val bedtime: String,
   val wakeTime: String,
   val timeZone: String,
+  val quietModeEnabled: Boolean,
+  val currentCycleDate: String,
+  val repeatReminderSuppressed: Boolean,
   val soundUri: String?,
   val soundTitle: String,
   val nextOccurrence: LifeOsAlarmOccurrence?,
@@ -32,11 +36,16 @@ data class LifeOsAlarmStatus(
   val exactAlarmGranted: Boolean,
   val notificationsGranted: Boolean,
   val fullScreenGranted: Boolean,
+  val notificationPolicyAccessGranted: Boolean,
   val issues: List<String>,
   val nextOccurrenceId: String?,
   val nextScheduledAtEpochMillis: Long?,
   val acknowledgedSettingsVersion: Int?,
   val lastDeliveredAtEpochMillis: Long?,
+  val quietModeState: String,
+  val nextReminderAtEpochMillis: Long?,
+  val sleepEvents: List<NativeSleepEvent>,
+  val wakeResults: List<NativeWakeResult>,
   val message: String?,
 )
 
@@ -70,6 +79,17 @@ object LifeOsAlarmScheduler {
   private const val KEY_LAST_ERROR = "lastError"
 
   fun reconcile(context: Context, configuration: LifeOsAlarmConfiguration): LifeOsAlarmStatus {
+    LifeOsEveningScheduler.reconcile(
+      context,
+      LifeOsEveningConfiguration(
+        bedtime = configuration.bedtime,
+        wakeTime = configuration.wakeTime,
+        timeZone = configuration.timeZone,
+        currentCycleDate = configuration.currentCycleDate,
+        repeatReminderSuppressed = configuration.repeatReminderSuppressed,
+        quietModeEnabled = configuration.quietModeEnabled,
+      ),
+    )
     cancelRecurring(context)
     val preferences = preferences(context)
     preferences.edit()
@@ -131,23 +151,34 @@ object LifeOsAlarmScheduler {
     val exact = exactAlarmGranted(context)
     val notifications = notificationsGranted(context)
     val fullScreen = fullScreenGranted(context)
-    val issues = if (enabled) capabilityIssues(context) else emptyList()
+    val evening = LifeOsEveningScheduler.status(context)
+    val alarmIssues = if (enabled) capabilityIssues(context) else emptyList()
+    val issues = buildList {
+      addAll(alarmIssues)
+      if (
+        LifeOsEveningScheduler.quietModeEnabled(context) &&
+        !evening.notificationPolicyAccessGranted
+      ) {
+        add("DND_POLICY")
+      }
+    }
     val nextId = preferences.getString(KEY_NEXT_ID, null)
     val nextAt = preferences.getLong(KEY_NEXT_AT, 0L).takeIf { it > 0L }
     val error = preferences.getString(KEY_LAST_ERROR, null)
     val ringing = preferences.getBoolean(KEY_RINGING, false)
-    val state = when {
-      ringing -> "RINGING"
-      issues.isNotEmpty() -> "PERMISSION_REQUIRED"
-      error != null -> "ERROR"
-      enabled && nextId != null && nextAt != null -> "SCHEDULED"
-      else -> "READY"
-    }
+    val state = LifeOsAlarmStatusPolicy.state(
+      ringing = ringing,
+      hasAlarmCapabilityIssues = alarmIssues.isNotEmpty(),
+      error = error,
+      enabled = enabled,
+      hasScheduledOccurrence = nextId != null && nextAt != null,
+    )
     return LifeOsAlarmStatus(
       state = state,
       exactAlarmGranted = exact,
       notificationsGranted = notifications,
       fullScreenGranted = fullScreen,
+      notificationPolicyAccessGranted = evening.notificationPolicyAccessGranted,
       issues = issues,
       nextOccurrenceId = nextId,
       nextScheduledAtEpochMillis = nextAt,
@@ -157,6 +188,10 @@ object LifeOsAlarmScheduler {
         null
       },
       lastDeliveredAtEpochMillis = preferences.getLong(KEY_LAST_DELIVERED_AT, 0L).takeIf { it > 0L },
+      quietModeState = evening.quietModeState,
+      nextReminderAtEpochMillis = evening.nextReminderAtEpochMillis,
+      sleepEvents = LifeOsSleepEventStore(context).events(),
+      wakeResults = LifeOsSleepEventStore(context).wakeResults(),
       message = error,
     )
   }
@@ -177,6 +212,7 @@ object LifeOsAlarmScheduler {
   }
 
   fun reschedulePersisted(context: Context) {
+    LifeOsEveningScheduler.reschedulePersisted(context)
     val preferences = preferences(context)
     if (!preferences.getBoolean(KEY_ENABLED, false) || capabilityIssues(context).isNotEmpty()) return
     val wakeTime = preferences.getString(KEY_WAKE_TIME, null) ?: return
@@ -219,6 +255,9 @@ object LifeOsAlarmScheduler {
       .putLong(KEY_LAST_DELIVERED_AT, System.currentTimeMillis())
       .putBoolean(KEY_RINGING, true)
       .apply()
+    if (!isTest) {
+      LifeOsSleepEventStore(context).recordWakeDelivered(occurrenceId, cycleDate)
+    }
     if (!isTest && preferences.getBoolean(KEY_ENABLED, false)) {
       val wakeTime = preferences.getString(KEY_WAKE_TIME, null) ?: return true
       val timeZone = preferences.getString(KEY_TIME_ZONE, null) ?: return true

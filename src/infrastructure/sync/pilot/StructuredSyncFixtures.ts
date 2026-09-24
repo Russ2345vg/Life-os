@@ -41,6 +41,16 @@ export function structuredSyncFixtures(): Readonly<
   const id = (type: string) => EntityId.create(`sync04-${type}`);
   const common = { now, occurredAt: now, createdAt: now };
   return {
+    task_scenario: {
+      id: 'sync04-task-scenario',
+      title: 'За компьютером',
+      actionIds: ['sync04-life_action'],
+      date: null,
+      archived: false,
+      updatedAt: now.toISOString(),
+      version: 1,
+      schemaVersion: 1,
+    },
     direction_indicator: {
       id: 'indicator:sync04-direction:0',
       directionId: 'sync04-direction',

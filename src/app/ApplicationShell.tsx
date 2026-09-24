@@ -9,6 +9,8 @@ import { SyncStatusProvider } from '../presentation/sync/SyncStatusContext';
 import { startBrowserApplicationRouteSync } from './lifecycle/BrowserApplicationRouteSync';
 import { startBrowserCurrentDateRefresh } from './lifecycle/BrowserCurrentDateRefresh';
 import { useLifeOsApplication } from './providers';
+import { createApplicationUpdateService } from './composition/createApplicationUpdateService';
+import { ApplicationUpdateNotice } from '../presentation/updates/ApplicationUpdateNotice';
 
 const PlannerWorkspace = lazy(() =>
   import('../presentation/planner-v2/PlannerWorkspace').then((module) => ({
@@ -18,6 +20,10 @@ const PlannerWorkspace = lazy(() =>
 
 export function ApplicationShell() {
   const application = useLifeOsApplication();
+  const [updates] = useState(createApplicationUpdateService);
+  useEffect(() => {
+    void updates.start();
+  }, [updates]);
   const [route, setRoute] = useState<PlannerRoute>(() =>
     resolveInitialApplicationRoute(parseApplicationRoute(window.location.hash)),
   );
@@ -59,6 +65,7 @@ export function ApplicationShell() {
     <SyncStatusProvider sync={application.sync}>
       <Suspense fallback={<p role="status">Загружаем…</p>}>
         <PlannerWorkspace
+          systemNotice={<ApplicationUpdateNotice service={updates} />}
           services={application}
           route={route}
           currentDate={currentDate}

@@ -1,8 +1,12 @@
-import type { SleepAlarmSound } from '../../domain/sleep/SleepSchedule';
+import type { SleepAlarmSound, SleepEvent, WakeResult } from '../../domain/sleep/SleepSchedule';
 
 export type AlarmSound = SleepAlarmSound;
 
-export type WakeAlarmPermissionIssue = 'EXACT_ALARM' | 'NOTIFICATIONS' | 'FULL_SCREEN';
+export type WakeAlarmPermissionIssue =
+  'EXACT_ALARM' | 'NOTIFICATIONS' | 'FULL_SCREEN' | 'DND_POLICY';
+
+export type QuietModeState =
+  'UNAVAILABLE' | 'DISABLED' | 'READY' | 'ACTIVE' | 'OVERRIDDEN' | 'ERROR';
 
 export type WakeAlarmState =
   'UNAVAILABLE' | 'PERMISSION_REQUIRED' | 'READY' | 'SCHEDULED' | 'RINGING' | 'ERROR';
@@ -13,12 +17,25 @@ export interface WakeAlarmStatus {
   readonly exactAlarmGranted: boolean;
   readonly notificationsGranted: boolean;
   readonly fullScreenGranted: boolean;
+  readonly notificationPolicyAccessGranted: boolean;
   readonly issues: readonly WakeAlarmPermissionIssue[];
   readonly nextOccurrenceId: string | null;
   readonly nextScheduledAt: Date | null;
   readonly acknowledgedSettingsVersion: number | null;
   readonly lastDeliveredAt: Date | null;
+  readonly quietModeState: QuietModeState;
+  readonly nextReminderAt: Date | null;
+  readonly sleepEvents: readonly SleepEvent[];
+  readonly wakeResults: readonly WakeResult[];
   readonly message: string | null;
+}
+
+export interface WakeDismissalSetup {
+  readonly supported: boolean;
+  readonly qrConfigured: boolean;
+  readonly emergencyPhraseConfigured: boolean;
+  readonly qrSavedTo: string | null;
+  readonly lastWaterCompletedAt: Date | null;
 }
 
 export interface WakeAlarmOccurrenceCommand {
@@ -30,8 +47,12 @@ export interface WakeAlarmOccurrenceCommand {
 export interface WakeAlarmSchedule {
   readonly enabled: boolean;
   readonly settingsVersion: number;
+  readonly bedtime: string;
   readonly wakeTime: string;
   readonly timeZone: string;
+  readonly quietModeEnabled: boolean;
+  readonly currentCycleDate: string;
+  readonly repeatReminderSuppressed: boolean;
   readonly sound: AlarmSound;
   readonly nextOccurrence: WakeAlarmOccurrenceCommand | null;
 }
@@ -46,6 +67,9 @@ export interface WakeAlarmGateway {
   }): Promise<WakeAlarmStatus>;
   openSettings(issue: WakeAlarmPermissionIssue): Promise<void>;
   stop(): Promise<void>;
+  dismissalSetup(): Promise<WakeDismissalSetup>;
+  regenerateDismissalQr(): Promise<WakeDismissalSetup>;
+  saveEmergencyPhrase(phrase: string): Promise<WakeDismissalSetup>;
 }
 
 export class UnsupportedWakeAlarmGateway implements WakeAlarmGateway {
@@ -68,6 +92,18 @@ export class UnsupportedWakeAlarmGateway implements WakeAlarmGateway {
   public async openSettings(): Promise<void> {}
 
   public async stop(): Promise<void> {}
+
+  public async dismissalSetup(): Promise<WakeDismissalSetup> {
+    return unavailableWakeDismissalSetup();
+  }
+
+  public async regenerateDismissalQr(): Promise<WakeDismissalSetup> {
+    return unavailableWakeDismissalSetup();
+  }
+
+  public async saveEmergencyPhrase(): Promise<WakeDismissalSetup> {
+    return unavailableWakeDismissalSetup();
+  }
 }
 
 export function unavailableWakeAlarmStatus(): WakeAlarmStatus {
@@ -77,11 +113,26 @@ export function unavailableWakeAlarmStatus(): WakeAlarmStatus {
     exactAlarmGranted: false,
     notificationsGranted: false,
     fullScreenGranted: false,
+    notificationPolicyAccessGranted: false,
     issues: [],
     nextOccurrenceId: null,
     nextScheduledAt: null,
     acknowledgedSettingsVersion: null,
     lastDeliveredAt: null,
+    quietModeState: 'UNAVAILABLE',
+    nextReminderAt: null,
+    sleepEvents: [],
+    wakeResults: [],
     message: 'Постановка подтверждается только приложением LifeOS на Android.',
+  };
+}
+
+export function unavailableWakeDismissalSetup(): WakeDismissalSetup {
+  return {
+    supported: false,
+    qrConfigured: false,
+    emergencyPhraseConfigured: false,
+    qrSavedTo: null,
+    lastWaterCompletedAt: null,
   };
 }

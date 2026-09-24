@@ -3,9 +3,11 @@ import type { BalanceServices } from '../../application/balance/BalanceServices'
 import type { PlanningServices } from '../../application/planner/PlanningServices';
 import type { DayDate } from '../../domain';
 import type { PlannerServices } from '../../presentation/planner-v2/PlannerWorkspace';
+import type { PlannerScenarios } from '../../application/planner/PlannerScenarios';
 
 /** The application surface consumed by the current LifeOS workspace. */
 export interface LifeOsApplication extends PlannerServices {
+  readonly plannerScenarios: PlannerScenarios;
   readonly balance: BalanceServices;
   readonly planning: PlanningServices;
   readonly sync: SyncApplication;

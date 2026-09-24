@@ -1,6 +1,6 @@
 import { PlanningProgress } from './PlanningProgress';
 import { usePlanning } from './PlanningContext';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   currentGoalPeriod,
   filterGoalsByPeriod,
@@ -20,6 +20,15 @@ import {
   statusLabels,
   type GoalFilters,
 } from './plannerCatalogModel';
+
+const periodOptions: readonly [GoalPeriodFilter, string, string][] = [
+  ['all', 'Все периоды', 'Не ограничивать цели периодом планирования.'],
+  ['week', 'Текущая неделя', 'Цели, добавленные в план текущей недели.'],
+  ['thirty_days', 'Текущий 30-дневный цикл', 'Цели, добавленные в текущий 30-дневный цикл.'],
+  ['quarter', 'Текущий квартал', 'Цели, добавленные в план текущего квартала.'],
+  ['year', 'Текущий год', 'Цели, добавленные в план текущего года.'],
+  ['none', 'Без периода', 'Цели, не добавленные ни в один период планирования.'],
+];
 
 export function PlannerGoalList({
   goals,
@@ -48,6 +57,16 @@ export function PlannerGoalList({
   const [periodError, setPeriodError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
+  const filterButton = useRef<HTMLButtonElement>(null);
+  const closeFilters = () => {
+    setOpen(false);
+    filterButton.current?.focus();
+  };
+  const resetFilters = () => {
+    setFilters(emptyGoalFilters());
+    setPeriodFilter('all');
+    setPeriodError(null);
+  };
   const change = <K extends keyof GoalFilters>(key: K, value: GoalFilters[K]) =>
     setFilters((f) => ({ ...f, [key]: value }));
   const selected = planning?.state
@@ -66,12 +85,14 @@ export function PlannerGoalList({
     ? currentGoalPeriod('thirty_days', today, planning.state.periods)
     : null;
   const active = Object.entries(filters).filter(([, v]) => Boolean(v));
+  const filterCount = active.length + Number(periodFilter !== 'all');
+  const periodOption = periodOptions.find(([value]) => value === periodFilter)!;
   const label = (key: string, value: string | boolean) => {
     switch (key) {
       case 'unassigned':
         return 'Без направления';
       case 'undated':
-        return 'Без срока';
+        return 'Без даты завершения';
       case 'status':
         return statusLabels[value as keyof typeof statusLabels];
       case 'importance':
@@ -100,73 +121,53 @@ export function PlannerGoalList({
         </VoiceField>
         <button
           type="button"
+          ref={filterButton}
           aria-expanded={open}
           aria-controls="goal-filters"
+          onKeyDown={(event) => {
+            if (event.key === 'Escape' && open) closeFilters();
+          }}
           onClick={() => setOpen(!open)}
         >
-          Фильтр{active.length ? ` · ${active.length}` : ''}
+          Фильтры{filterCount ? ` · ${filterCount}` : ''}
         </button>
-      </div>
-      <div className="planner-period-filter">
-        <div className="planner-segments" role="group" aria-label="Период целей">
-          {(
-            [
-              ['all', 'Все'],
-              ['now', 'Сейчас'],
-              ['thirty_days', '30 дней'],
-              ['quarter', 'Квартал'],
-              ['year', 'Год'],
-              ['undated', 'Без срока'],
-              ['week', 'Неделя'],
-              ['none', 'Без периода'],
-            ] as const
-          ).map(([value, title]) => (
-            <button
-              type="button"
-              key={value}
-              aria-pressed={
-                value === 'now'
-                  ? filters.horizon === 'now'
-                  : value === 'undated'
-                    ? filters.undated
-                    : periodFilter === value && !filters.horizon && !filters.undated
-              }
-              onClick={() => {
-                setPeriodFilter(value === 'now' || value === 'undated' ? 'all' : value);
-                setFilters((current) => ({
-                  ...current,
-                  horizon: value === 'now' ? 'now' : '',
-                  undated: value === 'undated',
-                }));
-              }}
-            >
-              {title}
-            </button>
-          ))}
-        </div>
-        {periodFilter === 'thirty_days' && !cycle && planning?.state && (
-          <button
-            type="button"
-            onClick={() => {
-              void planning.services.periods
-                .startCycle(today)
-                .then(() => planning.refresh())
-                .catch((error: unknown) =>
-                  setPeriodError(
-                    error instanceof Error ? error.message : 'Не удалось начать цикл.',
-                  ),
-                );
-            }}
-          >
-            Начать 30-дневный цикл
-          </button>
-        )}
       </div>
       {periodError && <p role="alert">{periodError}</p>}
       {periodFilter !== 'all' && !planning?.state && <p role="status">Загружаем периоды…</p>}
       {open && (
-        <section id="goal-filters" className="planner-filter-panel" aria-label="Фильтры целей">
+        <section
+          id="goal-filters"
+          className="planner-filter-panel"
+          aria-label="Фильтры целей"
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.stopPropagation();
+              closeFilters();
+            }
+          }}
+        >
           <div className="planner-form-columns">
+            <label>
+              <span>Плановый период</span>
+              <select
+                value={periodFilter}
+                aria-label="Плановый период"
+                aria-describedby="goal-period-help"
+                onChange={(event) => {
+                  setPeriodFilter(event.target.value as GoalPeriodFilter);
+                  setPeriodError(null);
+                }}
+              >
+                {periodOptions.map(([value, title]) => (
+                  <option key={value} value={value}>
+                    {title}
+                  </option>
+                ))}
+              </select>
+              <small id="goal-period-help" className="planner-muted">
+                {periodOption[2]}
+              </small>
+            </label>
             <label>
               <span>Состояние</span>
               <select
@@ -223,6 +224,8 @@ export function PlannerGoalList({
             <label>
               <span>Горизонт</span>
               <select
+                aria-label="Горизонт"
+                aria-describedby="goal-horizon-help"
                 value={filters.horizon}
                 onChange={(e) => change('horizon', e.target.value as GoalFilters['horizon'])}
               >
@@ -233,6 +236,9 @@ export function PlannerGoalList({
                   </option>
                 ))}
               </select>
+              <small id="goal-horizon-help" className="planner-muted">
+                Когда вы намерены заниматься целью. «Сейчас» не означает включение в план недели.
+              </small>
             </label>
             <label>
               <span>Фокус текущей недели</span>
@@ -259,28 +265,59 @@ export function PlannerGoalList({
                 checked={filters.undated}
                 onChange={(e) => change('undated', e.target.checked)}
               />
-              Без срока
+              Только без даты завершения
             </label>
           </div>
+          {periodFilter === 'thirty_days' && !cycle && planning?.state && (
+            <button
+              type="button"
+              onClick={() => {
+                void planning.services.periods
+                  .startCycle(today)
+                  .then(() => planning.refresh())
+                  .catch((error: unknown) =>
+                    setPeriodError(
+                      error instanceof Error ? error.message : 'Не удалось начать цикл.',
+                    ),
+                  );
+              }}
+            >
+              Начать 30-дневный цикл
+            </button>
+          )}
           <div className="planner-inline-actions">
-            <button type="button" onClick={() => setFilters(emptyGoalFilters())}>
+            <button type="button" onClick={resetFilters}>
               Сбросить все
             </button>
-            <button className="planner-primary" type="button" onClick={() => setOpen(false)}>
+            <button className="planner-primary" type="button" onClick={closeFilters}>
               Показать: {visible.length}
             </button>
           </div>
         </section>
       )}
-      {active.length > 0 && (
+      {filterCount > 0 && (
         <div className="planner-active-filters" aria-label="Активные фильтры">
+          {periodFilter !== 'all' && (
+            <button
+              type="button"
+              aria-label={`Убрать фильтр: ${periodOption[1]}`}
+              onClick={() => {
+                setPeriodFilter('all');
+                setPeriodError(null);
+                filterButton.current?.focus();
+              }}
+            >
+              {periodOption[1]} ×
+            </button>
+          )}
           {active.map(([key, value]) => (
             <button
               key={key}
               type="button"
-              onClick={() =>
-                setFilters((f) => ({ ...f, [key]: typeof value === 'boolean' ? false : '' }))
-              }
+              onClick={() => {
+                setFilters((f) => ({ ...f, [key]: typeof value === 'boolean' ? false : '' }));
+                filterButton.current?.focus();
+              }}
               aria-label={`Убрать фильтр: ${label(key, value)}`}
             >
               {label(key, value)} ×
@@ -293,13 +330,20 @@ export function PlannerGoalList({
       </p>
       {visible.length === 0 && (
         <div className="planner-empty">
-          <p>{search ? `По запросу «${search}» ничего не найдено.` : 'Здесь пока нет целей.'}</p>
-          {(search || active.length > 0) && (
+          <p>
+            {search
+              ? `По запросу «${search}» ничего не найдено.`
+              : filterCount
+                ? 'Нет целей с выбранными условиями.'
+                : 'Здесь пока нет целей.'}
+          </p>
+          {(search || filterCount > 0) && (
             <button
               type="button"
               onClick={() => {
-                setFilters(emptyGoalFilters());
+                resetFilters();
                 setSearch('');
+                filterButton.current?.focus();
               }}
             >
               Сбросить фильтры и поиск
@@ -373,7 +417,7 @@ export function PlannerGoalList({
                         ) : (
                           <a
                             className="planner-text-link"
-                            href={`#/v2/actions/new?${new URLSearchParams({ goalId: goal.id.toString(), returnToGoal: '1' })}`}
+                            href={`#/v2/actions/new?${new URLSearchParams({ goalId: goal.id.toString(), returnToGoals: '1' })}`}
                           >
                             Добавить следующий шаг
                           </a>

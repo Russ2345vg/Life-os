@@ -1,0 +1,54 @@
+.planner-overdue {
+  margin-top: var(--space-8);
+}
+
+.planner-overdue h2 span {
+  color: var(--text-secondary);
+}
+
+.planner-v2 .planner-today .planner-action-row--overdue {
+  flex-wrap: wrap;
+}
+
+.planner-overdue-controls {
+  flex: 1 0 100%;
+  min-width: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.planner-overdue-controls p {
+  margin: 0;
+}
+
+.planner-overdue-controls .planner-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.planner-overdue-controls form {
+  display: grid;
+  gap: var(--space-2);
+  max-width: 100%;
+}
+
+.planner-overdue-controls input {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.planner-overdue-controls button {
+  min-height: 2.75rem;
+  white-space: normal;
+}
+
+@media (max-width: 40rem) {
+  .planner-v2 .planner-today .planner-action-row--overdue {
+    padding-right: var(--space-4);
+  }
+
+  .planner-overdue-controls .planner-inline-actions > button {
+    flex: 1 1 auto;
+  }
+}

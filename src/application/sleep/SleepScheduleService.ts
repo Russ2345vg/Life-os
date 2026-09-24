@@ -7,6 +7,8 @@ import {
   deletePreparationItem,
   ensureNightCycle,
   finishPreparation,
+  importNativeSleepEvents,
+  importNativeWakeResults,
   movePreparationGroup,
   movePreparationItem,
   rebuildWakeSchedule,
@@ -15,6 +17,7 @@ import {
   reopenPreparationItem,
   setPreparationItemEnabled,
   setSleepFeatureEnabled,
+  setSleepQuietModeEnabled,
   skipNearestWakeOccurrence,
   updateSleepSettings,
   type NightCycle,
@@ -34,6 +37,7 @@ import {
   type WakeAlarmPermissionIssue,
   type WakeAlarmSchedule,
   type WakeAlarmStatus,
+  type WakeDismissalSetup,
 } from './WakeAlarmGateway';
 
 const NATIVE_SCHEDULE_HORIZON_DAYS = 2;
@@ -176,28 +180,34 @@ export class SleepScheduleService {
 
   public async completeItem(itemId: string): Promise<SleepScheduleState> {
     const now = this.#clock.now();
-    return this.#repository.update((current) => {
+    const state = await this.#repository.update((current) => {
       const state = current ?? createEmptySleepSchedule();
       return completePreparationItem(state, currentCycleDate(state, now), itemId, now);
     });
+    await this.#reconcileNative(state);
+    return state;
   }
 
   public async reopenItem(itemId: string): Promise<SleepScheduleState> {
     const now = this.#clock.now();
-    return this.#repository.update((current) => {
+    const state = await this.#repository.update((current) => {
       const state = current ?? createEmptySleepSchedule();
       return reopenPreparationItem(state, currentCycleDate(state, now), itemId);
     });
+    await this.#reconcileNative(state);
+    return state;
   }
 
   public async finish(
     kind: Extract<PreparationCompletionKind, 'WITH_SKIPS' | 'SKIPPED_TODAY'>,
   ): Promise<SleepScheduleState> {
     const now = this.#clock.now();
-    return this.#repository.update((current) => {
+    const state = await this.#repository.update((current) => {
       const state = current ?? createEmptySleepSchedule();
       return finishPreparation(state, currentCycleDate(state, now), kind, now);
     });
+    await this.#reconcileNative(state);
+    return state;
   }
 
   public async rebuild(cycleDates: readonly string[]): Promise<SleepScheduleState> {
@@ -236,13 +246,26 @@ export class SleepScheduleService {
     return state;
   }
 
+  public async setQuietModeEnabled(enabled: boolean): Promise<SleepScheduleState> {
+    const now = this.#clock.now();
+    const state = await this.#repository.update((current) =>
+      setSleepQuietModeEnabled(current ?? createEmptySleepSchedule(), enabled, now),
+    );
+    await this.#reconcileNative(state);
+    return state;
+  }
+
   public async syncAlarm(): Promise<{
     readonly state: SleepScheduleState;
     readonly alarm: WakeAlarmStatus;
   }> {
     const now = this.#clock.now();
+    const nativeStatus = await this.#alarmGateway.status();
     const state = await this.#repository.update((current) => {
-      const loaded = current ?? createEmptySleepSchedule();
+      const loaded = importNativeWakeResults(
+        importNativeSleepEvents(current ?? createEmptySleepSchedule(), nativeStatus.sleepEvents),
+        nativeStatus.wakeResults,
+      );
       if (loaded.settings === null) return loaded;
       return rebuildWakeSchedule(loaded, {
         cycleDates: upcomingCycleDates(
@@ -278,6 +301,18 @@ export class SleepScheduleService {
     await this.#alarmGateway.stop();
   }
 
+  public async getWakeDismissalSetup(): Promise<WakeDismissalSetup> {
+    return this.#alarmGateway.dismissalSetup();
+  }
+
+  public async regenerateWakeDismissalQr(): Promise<WakeDismissalSetup> {
+    return this.#alarmGateway.regenerateDismissalQr();
+  }
+
+  public async saveWakeEmergencyPhrase(phrase: string): Promise<WakeDismissalSetup> {
+    return this.#alarmGateway.saveEmergencyPhrase(phrase);
+  }
+
   async #reconcileNative(state: SleepScheduleState): Promise<WakeAlarmStatus> {
     const settings = state.settings;
     if (settings === null) return this.#alarmGateway.status();
@@ -291,11 +326,17 @@ export class SleepScheduleService {
           left.scheduledAt.getTime() - right.scheduledAt.getTime() ||
           left.id.localeCompare(right.id),
       )[0];
+    const activeCycleDate = currentCycleDate(state, this.#clock.now());
+    const activeCycle = state.nightCycles.find(({ cycleDate }) => cycleDate === activeCycleDate);
     const schedule: WakeAlarmSchedule = {
       enabled: settings.enabled,
       settingsVersion: settings.version,
+      bedtime: settings.bedtime,
       wakeTime: settings.wakeTime,
       timeZone: settings.timeZone,
+      quietModeEnabled: settings.quietModeEnabled,
+      currentCycleDate: activeCycleDate,
+      repeatReminderSuppressed: activeCycle?.preparationCompletionKind != null,
       sound: settings.alarmSound,
       nextOccurrence:
         settings.enabled && nextOccurrence !== undefined

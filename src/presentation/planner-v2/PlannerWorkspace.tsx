@@ -2,7 +2,7 @@ import type { BalanceServices } from '../../application/balance/BalanceServices'
 import { BalanceWorkspace } from './balance/BalanceWorkspace';
 import type { PlanningServices } from '../../application/planner/PlanningServices';
 import { PlanningProvider } from './PlanningContext';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import type {
   CreateGoal,
   CreateLifeActionDraft,
@@ -22,6 +22,7 @@ import { AppIcon, type AppIconName } from '../components/AppIcon';
 import { PlannerActionForm, type PlannerOption } from './PlannerActionForm';
 import { PlannerGoalForm } from './PlannerGoalForm';
 import { PlannerToday } from './PlannerToday';
+import type { ScenarioService } from './PlannerScenariosPanel';
 import { buildPlannerRoute, type PlannerRoute } from './PlannerNavigation';
 import {
   emptyActionDraft,
@@ -35,12 +36,19 @@ import './planner-v2.css';
 import { PlannerLibraryWorkspace, type PlannerLibraryServices } from './PlannerLibraryWorkspace';
 import type { EntityMenuAction } from './EntityContextMenu';
 import { DomainError } from '../../shared/errors/DomainError';
-import { SleepMoonIcon, SleepPreparationPage } from './SleepPreparationPage';
+import { SleepPreparationPage } from './SleepPreparationPage';
 import { PlannerSheet } from './PlannerSheet';
 import './planner-master.css';
 import { AccountSyncPage } from './AccountSyncPage';
+import {
+  selectSleepTodayEntry,
+  type SleepTodayEntry,
+} from '../../application/sleep/SleepTodayEntry';
+
+import './planner-premium.css';
 
 export interface PlannerServices extends PlannerLibraryServices {
+  readonly plannerScenarios?: ScenarioService;
   readonly balance?: BalanceServices;
   readonly planning?: PlanningServices;
   readonly createLifeActionDraft: Pick<CreateLifeActionDraft, 'execute'>;
@@ -61,14 +69,17 @@ interface PlannerData {
   readonly actions: readonly LifeAction[];
   readonly mainDirectionId: string | null;
   readonly directionChoices: readonly PlannerOption[];
+  readonly sleepEntry: SleepTodayEntry;
 }
 
 export function PlannerWorkspace({
+  systemNotice,
   services,
   route,
   currentDate,
   onNavigate,
 }: {
+  readonly systemNotice?: ReactNode;
   readonly services: PlannerServices;
   readonly route: PlannerRoute;
   readonly currentDate: DayDate;
@@ -115,8 +126,9 @@ export function PlannerWorkspace({
       services.plannerCatalog.actions(),
       services.dailyDirection.get(date),
       services.getSpheres.execute(),
+      services.sleepSchedule.getState(),
     ])
-      .then(([overview, goals, directions, actions, day, spheres]) => {
+      .then(([overview, goals, directions, actions, day, spheres, sleepState]) => {
         if (sequence !== request.current) return;
         setData({
           overview,
@@ -138,6 +150,7 @@ export function PlannerWorkspace({
               id: direction.id.toString(),
               title: `${spheres.active.find((sphere) => sphere.id.toString() === direction.sphereId?.toString())?.name ?? 'Без сферы'} → ${direction.name}`,
             })),
+          sleepEntry: selectSleepTodayEntry(sleepState, new Date()),
         });
         setError(null);
       })
@@ -277,10 +290,12 @@ export function PlannerWorkspace({
   };
   const today = () => onNavigate({ view: 'today' });
   const closeForm = () => {
+    requestAnimationFrame(() => mainContent.current?.focus());
     if (route.view === 'new-goal')
       navigate(
         route.directionId ? { view: 'direction', id: route.directionId } : { view: 'goals' },
       );
+    else if (route.view === 'new-action' && route.returnToGoals) navigate({ view: 'goals' });
     else if (route.view === 'new-action' && route.directionId)
       onNavigate({ view: 'direction', id: route.directionId });
     else if (route.view === 'new-action' && route.returnToGoal && route.goalId)
@@ -357,20 +372,14 @@ export function PlannerWorkspace({
             <span className="planner-nav-secondary">
               {navLink({ view: 'inbox' }, 'Входящие', 'history')}
             </span>
-            {route.view === 'sleep' ? (
-              <span className="planner-sleep-nav-current" aria-current="page">
-                <span aria-hidden="true">
-                  <SleepMoonIcon />
-                </span>
-                <span className="planner-sleep-nav-current__label" data-mobile-label="Сон">
-                  Подготовка ко сну
-                </span>
-              </span>
-            ) : null}
             <button
               className="planner-nav-more"
               type="button"
-              aria-current={route.view === 'account' ? 'page' : undefined}
+              aria-current={
+                ['account', 'inbox', 'spheres', 'sphere', 'sleep'].includes(route.view)
+                  ? 'page'
+                  : undefined
+              }
               aria-expanded={moreOpen}
               aria-controls="planner-more-menu"
               onClick={() => setMoreOpen((value) => !value)}
@@ -382,6 +391,7 @@ export function PlannerWorkspace({
           <div id="planner-more-menu" className="planner-more-menu" hidden={!moreOpen}>
             {navLink({ view: 'spheres' }, 'Сферы', 'goals')}
             {navLink({ view: 'inbox' }, 'Входящие', 'history')}
+            {navLink({ view: 'sleep' }, 'Подготовка ко сну', 'today')}
             {navLink({ view: 'account' }, 'Аккаунт и синхронизация', 'account')}
           </div>
         </aside>
@@ -391,6 +401,7 @@ export function PlannerWorkspace({
           className={`planner-content${'section' in route ? ' planner-content--views' : ''}${route.view === 'sleep' ? ' planner-content--sleep' : ''}`}
           tabIndex={-1}
         >
+          {systemNotice}
           {notice ? (
             <p className="planner-notice" role="status">
               {notice}
@@ -473,6 +484,7 @@ export function PlannerWorkspace({
               date={selectedDate}
               day={route.day === 'tomorrow' ? 'tomorrow' : 'today'}
               overview={data.overview}
+              scenarios={services.plannerScenarios}
               goals={data.goals}
               availableActions={data.actions}
               mainDirectionId={data.mainDirectionId}
@@ -498,6 +510,7 @@ export function PlannerWorkspace({
                 })
               }
               onOpenSleep={() => navigate({ view: 'sleep' })}
+              sleepEntry={data.sleepEntry}
               onComplete={(id) => {
                 void run(
                   () => completePlannerAction(services.completeLifeAction, id),
@@ -541,6 +554,13 @@ export function PlannerWorkspace({
                   main ? 'Главное действие выбрано' : 'План сохранён',
                 );
               }}
+              onReschedule={(id, date) =>
+                run(
+                  () => planPlannerAction(services.setLifeActionPlan, id, date, false),
+                  date ? 'План сохранён' : 'Действие убрано из плана и сохранено без даты',
+                  true,
+                )
+              }
               onQuickAdd={async (title) => {
                 setBusy(true);
                 try {
@@ -581,7 +601,7 @@ export function PlannerWorkspace({
                   contextLabel={
                     data.directions.find((d) => d.id === route.directionId)?.title ?? null
                   }
-                  lockGoal={route.returnToGoal === true}
+                  lockGoal={route.returnToGoal === true || route.returnToGoals === true}
                   initialTitle={route.title}
                   initialDate={route.date ?? null}
                   initialParentActionId={route.parentActionId ?? null}
@@ -600,7 +620,9 @@ export function PlannerWorkspace({
                               ? `Действие сохранено на ${draft.date}`
                               : 'Действие сохранено в блоке «Без даты»',
                         );
-                        if (route.parentActionId) {
+                        if (route.returnToGoals) {
+                          onNavigate({ view: 'goals' });
+                        } else if (route.parentActionId) {
                           onNavigate({ view: 'action', id: route.parentActionId });
                         } else if (
                           route.returnToGoal &&

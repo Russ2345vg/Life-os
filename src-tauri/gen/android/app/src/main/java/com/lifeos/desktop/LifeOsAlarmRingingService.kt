@@ -33,10 +33,11 @@ class LifeOsAlarmRingingService : Service() {
     }
     if (intent?.action != LifeOsAlarmScheduler.ACTION_RING) return START_NOT_STICKY
     val occurrenceId = intent.getStringExtra(LifeOsAlarmScheduler.EXTRA_OCCURRENCE_ID) ?: "alarm"
+    val cycleDate = intent.getStringExtra(LifeOsAlarmScheduler.EXTRA_CYCLE_DATE) ?: "test"
     val soundTitle =
       intent.getStringExtra(LifeOsAlarmScheduler.EXTRA_SOUND_TITLE) ?: "Системный сигнал"
     val isTest = intent.getBooleanExtra(LifeOsAlarmScheduler.EXTRA_IS_TEST, false)
-    startForeground(NOTIFICATION_ID, notification(occurrenceId, soundTitle, isTest))
+    startForeground(NOTIFICATION_ID, notification(occurrenceId, cycleDate, soundTitle, isTest))
     if (player?.isPlaying != true) {
       acquireWakeLock()
       startVibration()
@@ -92,7 +93,12 @@ class LifeOsAlarmRingingService : Service() {
     }
   }
 
-  private fun notification(occurrenceId: String, soundTitle: String, isTest: Boolean) =
+  private fun notification(
+    occurrenceId: String,
+    cycleDate: String,
+    soundTitle: String,
+    isTest: Boolean,
+  ) =
     NotificationCompat.Builder(this, CHANNEL_ID)
       .setSmallIcon(R.mipmap.ic_launcher)
       .setContentTitle(if (isTest) "Пробный будильник LifeOS" else "Время подъёма")
@@ -102,31 +108,26 @@ class LifeOsAlarmRingingService : Service() {
       .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
       .setOngoing(true)
       .setAutoCancel(false)
-      .setContentIntent(alarmActivityIntent(occurrenceId, isTest))
-      .setFullScreenIntent(alarmActivityIntent(occurrenceId, isTest), true)
-      .addAction(0, "Остановить сигнал", stopIntent())
+      .setContentIntent(alarmActivityIntent(occurrenceId, cycleDate, isTest))
+      .setFullScreenIntent(alarmActivityIntent(occurrenceId, cycleDate, isTest), true)
       .build()
 
-  private fun alarmActivityIntent(occurrenceId: String, isTest: Boolean): PendingIntent =
+  private fun alarmActivityIntent(
+    occurrenceId: String,
+    cycleDate: String,
+    isTest: Boolean,
+  ): PendingIntent =
     PendingIntent.getActivity(
       this,
       47_104,
       Intent(this, LifeOsAlarmActivity::class.java).apply {
         flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         putExtra(LifeOsAlarmScheduler.EXTRA_OCCURRENCE_ID, occurrenceId)
+        putExtra(LifeOsAlarmScheduler.EXTRA_CYCLE_DATE, cycleDate)
         putExtra(LifeOsAlarmScheduler.EXTRA_IS_TEST, isTest)
       },
       PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
-
-  private fun stopIntent(): PendingIntent = PendingIntent.getService(
-    this,
-    47_105,
-    Intent(this, LifeOsAlarmRingingService::class.java).apply {
-      action = LifeOsAlarmScheduler.ACTION_STOP
-    },
-    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-  )
 
   private fun createNotificationChannel() {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return

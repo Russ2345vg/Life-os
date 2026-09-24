@@ -1,5 +1,7 @@
 import type {
   PreparationSnapshotStatus,
+  SleepEventKind,
+  WakeResultKind,
   WakeOccurrenceStatus,
 } from '../../../domain/sleep/SleepSchedule';
 
@@ -13,6 +15,8 @@ export interface SleepScheduleRecord {
   readonly nightCycles: readonly NightCycleRecord[];
   readonly wakeOccurrences: readonly WakeOccurrenceRecord[];
   readonly alarmExceptions: readonly AlarmExceptionRecord[];
+  readonly sleepEvents?: readonly SleepEventRecord[];
+  readonly wakeResults?: readonly WakeResultRecord[];
 }
 
 export interface SleepPreparationGroupRecord {
@@ -35,6 +39,7 @@ export interface SleepSettingsRecord {
   readonly wakeTime: string;
   readonly timeZone: string;
   readonly enabled: boolean;
+  readonly quietModeEnabled?: boolean;
   readonly alarmSound?: {
     readonly uri: string | null;
     readonly title: string;
@@ -77,4 +82,22 @@ export interface AlarmExceptionRecord {
   readonly occurrenceId: string;
   readonly kind: 'SKIP_ONCE';
   readonly createdAt: string;
+}
+
+export interface SleepEventRecord {
+  readonly id: string;
+  readonly cycleDate: string;
+  readonly kind: SleepEventKind;
+  readonly occurredAt: string;
+}
+
+export interface WakeResultRecord {
+  readonly id: string;
+  readonly occurrenceId: string;
+  readonly cycleDate: string;
+  readonly kind: WakeResultKind;
+  readonly recordedAt: string;
+  readonly emergencyReason: string | null;
+  readonly emergencyComment: string | null;
+  readonly waterCompletedAt: string | null;
 }

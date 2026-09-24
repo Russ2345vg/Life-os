@@ -29,8 +29,12 @@ class AndroidAlarmOccurrenceArgs {
 class AndroidAlarmScheduleArgs {
   var enabled: Boolean = false
   var settingsVersion: Int = 0
+  lateinit var bedtime: String
   lateinit var wakeTime: String
   lateinit var timeZone: String
+  var quietModeEnabled: Boolean = false
+  lateinit var currentCycleDate: String
+  var repeatReminderSuppressed: Boolean = false
   var soundUri: String? = null
   lateinit var soundTitle: String
   var nextOccurrence: AndroidAlarmOccurrenceArgs? = null
@@ -53,6 +57,11 @@ class AndroidAlarmSettingsArgs {
   lateinit var issue: String
 }
 
+@InvokeArg
+class AndroidEmergencyPhraseArgs {
+  lateinit var phrase: String
+}
+
 @TauriPlugin
 class LifeOsAlarmPlugin(private val activity: Activity) : Plugin(activity) {
   @Command
@@ -71,8 +80,12 @@ class LifeOsAlarmPlugin(private val activity: Activity) : Plugin(activity) {
         LifeOsAlarmConfiguration(
           enabled = input.enabled,
           settingsVersion = input.settingsVersion,
+          bedtime = input.bedtime,
           wakeTime = input.wakeTime,
           timeZone = input.timeZone,
+          quietModeEnabled = input.quietModeEnabled,
+          currentCycleDate = input.currentCycleDate,
+          repeatReminderSuppressed = input.repeatReminderSuppressed,
           soundUri = input.soundUri,
           soundTitle = input.soundTitle,
           nextOccurrence = next,
@@ -153,6 +166,9 @@ class LifeOsAlarmPlugin(private val activity: Activity) : Plugin(activity) {
               )
             }
           }
+          "DND_POLICY" -> activity.startActivity(
+            Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS),
+          )
           else -> throw IllegalArgumentException("Unknown Android alarm setting.")
         }
         invoke.resolve()
@@ -168,6 +184,34 @@ class LifeOsAlarmPlugin(private val activity: Activity) : Plugin(activity) {
       action = LifeOsAlarmScheduler.ACTION_STOP
     })
     invoke.resolve()
+  }
+
+  @Command
+  fun dismissalStatus(invoke: Invoke) {
+    invoke.resolve(WakeChallengeStore(activity).status().toJsObject())
+  }
+
+  @Command
+  fun regenerateDismissalQr(invoke: Invoke) {
+    try {
+      invoke.resolve(WakeChallengeStore(activity).regenerateQr().toJsObject())
+    } catch (error: Exception) {
+      invoke.reject(error.message ?: "Не удалось сохранить QR.", "WAKE_QR_FAILED", error)
+    }
+  }
+
+  @Command
+  fun saveEmergencyPhrase(invoke: Invoke) {
+    try {
+      val phrase = invoke.parseArgs(AndroidEmergencyPhraseArgs::class.java).phrase
+      invoke.resolve(WakeChallengeStore(activity).saveEmergencyPhrase(phrase).toJsObject())
+    } catch (error: Exception) {
+      invoke.reject(
+        error.message ?: "Не удалось сохранить аварийную фразу.",
+        "WAKE_PHRASE_FAILED",
+        error,
+      )
+    }
   }
 
   private fun openNotificationPermission() {
@@ -200,10 +244,45 @@ private fun LifeOsAlarmStatus.toJsObject() = JSObject().apply {
   put("exactAlarmGranted", exactAlarmGranted)
   put("notificationsGranted", notificationsGranted)
   put("fullScreenGranted", fullScreenGranted)
+  put("notificationPolicyAccessGranted", notificationPolicyAccessGranted)
   put("issues", JSArray(issues))
   put("nextOccurrenceId", nextOccurrenceId)
   put("nextScheduledAtEpochMillis", nextScheduledAtEpochMillis)
   put("acknowledgedSettingsVersion", acknowledgedSettingsVersion)
   put("lastDeliveredAtEpochMillis", lastDeliveredAtEpochMillis)
+  put("quietModeState", quietModeState)
+  put("nextReminderAtEpochMillis", nextReminderAtEpochMillis)
+  put("sleepEvents", JSArray().apply {
+    sleepEvents.forEach { event ->
+      put(JSObject().apply {
+        put("id", event.id)
+        put("cycleDate", event.cycleDate)
+        put("kind", event.kind)
+        put("occurredAtEpochMillis", event.occurredAtEpochMillis)
+      })
+    }
+  })
+  put("wakeResults", JSArray().apply {
+    wakeResults.forEach { result ->
+      put(JSObject().apply {
+        put("id", result.id)
+        put("occurrenceId", result.occurrenceId)
+        put("cycleDate", result.cycleDate)
+        put("kind", result.kind)
+        put("recordedAtEpochMillis", result.recordedAtEpochMillis)
+        put("emergencyReason", result.emergencyReason)
+        put("emergencyComment", result.emergencyComment)
+        put("waterCompletedAtEpochMillis", result.waterCompletedAtEpochMillis)
+      })
+    }
+  })
   put("message", message)
+}
+
+private fun WakeDismissalSetupStatus.toJsObject() = JSObject().apply {
+  put("supported", supported)
+  put("qrConfigured", qrConfigured)
+  put("emergencyPhraseConfigured", emergencyPhraseConfigured)
+  put("qrSavedTo", qrSavedTo)
+  put("lastWaterCompletedAtEpochMillis", lastWaterCompletedAtEpochMillis)
 }

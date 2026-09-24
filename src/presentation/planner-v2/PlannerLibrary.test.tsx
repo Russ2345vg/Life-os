@@ -147,7 +147,8 @@ describe('current library rendering', () => {
         onLink: async () => {},
       }),
     );
-    expect(html).toContain('Без цели');
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).not.toContain('aria-label="Показать действия"');
     expect(html).toContain('Без даты');
     expect(html).toContain('Выполнить: Прочитать главу');
     expect(html).not.toContain('Начать');

@@ -8,12 +8,10 @@ export function PlanningProgress({
   goal,
   date,
   editable = false,
-  onAchieve,
 }: {
   readonly goal: Goal;
   readonly date: string;
   readonly editable?: boolean;
-  readonly onAchieve?: () => void;
 }) {
   const context = usePlanning();
   const [measurement, setMeasurement] = useState(goal.measurement),
@@ -67,13 +65,6 @@ export function PlanningProgress({
                 <p role="status">
                   Целевое значение достигнуто
                   {goal.measurement?.mode === 'recurring' ? ' в этом цикле' : ''}.
-                  {goal.measurement?.mode !== 'recurring' &&
-                    goal.status === 'active' &&
-                    onAchieve && (
-                      <button type="button" onClick={onAchieve}>
-                        Завершить цель
-                      </button>
-                    )}
                 </p>
               )}
             </>

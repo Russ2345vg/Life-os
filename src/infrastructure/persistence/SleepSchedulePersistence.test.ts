@@ -14,7 +14,7 @@ import {
 } from './indexed-db/LifeOsIndexedDb';
 
 describe('Sleep schedule persistence migration', () => {
-  it('adds only the sleep store when upgrading v25 and preserves planner data byte-for-byte', async () => {
+  it('adds sleep and scenario stores when upgrading v25 and preserves planner data byte-for-byte', async () => {
     const factory = new IDBFactory();
     const legacyRecord = {
       id: 'legacy-idea',
@@ -29,7 +29,11 @@ describe('Sleep schedule persistence migration', () => {
     const upgraded = await database.open();
 
     expect(upgraded.version).toBe(LIFE_OS_DATABASE_VERSION);
-    expect(Array.from(upgraded.objectStoreNames)).toEqual(['inboxIdeas', 'sleepSchedules']);
+    expect(Array.from(upgraded.objectStoreNames)).toEqual([
+      'inboxIdeas',
+      'sleepSchedules',
+      'taskScenarios',
+    ]);
     await expect(
       observeRequest(
         upgraded.transaction('inboxIdeas').objectStore('inboxIdeas').get('legacy-idea'),
@@ -86,6 +90,44 @@ describe('Sleep schedule persistence migration', () => {
       'Личное',
     ]);
     expect(restored?.preparationItems).toHaveLength(4);
+    expect(restored?.settings).toBeNull();
+    expect(restored?.sleepEvents).toEqual([]);
+    expect(restored?.wakeResults).toEqual([]);
+    database.close();
+  });
+
+  it('reads an older settings record with quiet mode disabled by default', async () => {
+    const database = new LifeOsIndexedDb(new IDBFactory());
+    const repository = new IndexedDbSleepScheduleRepository(database);
+    const legacy = fullState();
+    const record = {
+      schemaVersion: 1,
+      id: SLEEP_SCHEDULE_ID,
+      version: legacy.version,
+      settings: {
+        bedtime: '22:00',
+        wakeTime: '07:00',
+        timeZone: 'Asia/Chita',
+        enabled: true,
+        version: 2,
+        updatedAt: '2026-09-20T12:00:00.000Z',
+      },
+      preparationGroups: legacy.preparationGroups,
+      preparationItems: legacy.preparationItems,
+      nightCycles: [],
+      wakeOccurrences: [],
+      alarmExceptions: [],
+    };
+    const opened = await database.open();
+    const transaction = opened.transaction(LIFE_OS_STORE.sleepSchedules, 'readwrite');
+    transaction.objectStore(LIFE_OS_STORE.sleepSchedules).put(record);
+    await observeTransaction(transaction);
+
+    const restored = await repository.load();
+
+    expect(restored?.settings?.quietModeEnabled).toBe(false);
+    expect(restored?.sleepEvents).toEqual([]);
+    expect(restored?.wakeResults).toEqual([]);
     database.close();
   });
 
@@ -131,6 +173,7 @@ function fullState(): SleepScheduleState {
       wakeTime: '07:00',
       timeZone: 'Asia/Chita',
       enabled: true,
+      quietModeEnabled: true,
       alarmSound: { uri: 'content://alarm/2', title: 'Morning' },
       version: 2,
       updatedAt: new Date('2026-09-20T12:00:00.000Z'),
@@ -187,6 +230,26 @@ function fullState(): SleepScheduleState {
         occurrenceId: 'wake-1',
         kind: 'SKIP_ONCE',
         createdAt: new Date('2026-09-20T12:30:00.000Z'),
+      },
+    ],
+    sleepEvents: [
+      {
+        id: 'REMINDER_60:2026-09-20',
+        cycleDate: '2026-09-20',
+        kind: 'REMINDER_60',
+        occurredAt: new Date('2026-09-20T12:00:00.000Z'),
+      },
+    ],
+    wakeResults: [
+      {
+        id: 'wake:wake-1',
+        occurrenceId: 'wake-1',
+        cycleDate: '2026-09-20',
+        kind: 'QR',
+        recordedAt: new Date('2026-09-20T22:01:00.000Z'),
+        emergencyReason: null,
+        emergencyComment: null,
+        waterCompletedAt: new Date('2026-09-20T22:02:00.000Z'),
       },
     ],
   };

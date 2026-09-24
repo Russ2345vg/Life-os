@@ -15,6 +15,7 @@ import {
   FocusPeriodRecordMapper,
 } from '../../persistence/PlannerRecordMappers';
 import { DomainError } from '../../../shared/errors/DomainError';
+import { TaskScenarioRecordMapper } from '../../persistence/TaskScenarioRecordMapper';
 import { normalizeLegacyGoalLinks } from '../../../shared/legacyGoalIdentity';
 import { parseEveningRitualSettings } from '../../../application/evening-settings';
 import type { PilotEntityType } from '../../../application/sync/pilot';
@@ -315,6 +316,13 @@ const PILOT_BINDINGS: Readonly<Record<PilotEntityType, PilotAdapterBinding>> = O
       entityType: 'goal',
       objectId: g.goalId,
       required: true,
+    })),
+  ),
+  task_scenario: mapped(TaskScenarioRecordMapper, (record) =>
+    TaskScenarioRecordMapper.fromRecord({ ...record, version: 1 }).actionIds.map((objectId) => ({
+      entityType: 'life_action',
+      objectId,
+      required: false,
     })),
   ),
   user_settings: {

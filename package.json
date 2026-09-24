@@ -1,7 +1,7 @@
 {
   "name": "lifeos-app",
   "private": true,
-  "version": "1.0.13",
+  "version": "1.0.18",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -20,7 +20,8 @@
     "verify": "npm run typecheck && npm run lint && npm run test && npm run test:infra && npm run test:alpha && npm run build && npm run format:check && git diff --check",
     "verify:full": "npm run verify && npm run test:e2e",
     "test:alpha": "node scripts/run-vitest.mjs alpha",
-    "test:release": "node --test scripts/release-publish.node-test.mjs",
+    "test:release": "node --test scripts/release-publish.node-test.mjs scripts/release-windows.node-test.mjs",
+    "release:windows": "node scripts/release-windows.mjs",
     "release:publish": "node scripts/release-publish.mjs"
   },
   "dependencies": {

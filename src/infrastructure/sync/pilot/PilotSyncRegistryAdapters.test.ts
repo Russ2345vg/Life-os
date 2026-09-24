@@ -37,6 +37,21 @@ const goal = {
 };
 
 describe('PilotSyncRegistryAdapters', () => {
+  it('round-trips scenario links without requiring tasks to still exist', () => {
+    const wire = normalizePilotRecord('task_scenario', structuredSyncFixtures().task_scenario);
+    expect(wire.version).toBeUndefined();
+    expect(pilotRelationshipReferences('task_scenario', wire)).toEqual([
+      { entityType: 'life_action', objectId: 'sync04-life_action', required: false },
+    ]);
+    expect(prepareRemotePilotRecord('task_scenario', wire)).toMatchObject({
+      actionIds: ['sync04-life_action'],
+      date: null,
+      archived: false,
+    });
+    expect(() =>
+      normalizePilotRecord('task_scenario', { ...wire, actionIds: ['a', 'b', 'c', 'd'] }),
+    ).toThrow();
+  });
   it.each(['sphere', 'direction'] as const)(
     'compares %s residual objects independently of key order while preserving array order',
     (type) => {
@@ -161,7 +176,7 @@ describe('PilotSyncRegistryAdapters', () => {
   );
 
   it('uses the complete real dependency order and excludes Goal covers', () => {
-    expect(PILOT_DEPENDENCY_ORDER).toHaveLength(33);
+    expect(PILOT_DEPENDENCY_ORDER).toHaveLength(34);
     expect(PILOT_DEPENDENCY_ORDER.indexOf('sphere')).toBeLessThan(
       PILOT_DEPENDENCY_ORDER.indexOf('direction'),
     );
@@ -191,7 +206,7 @@ describe('PilotSyncRegistryAdapters', () => {
     expect(runtime.map(({ registration }) => registration.entityType)).toEqual(
       PILOT_DEPENDENCY_ORDER,
     );
-    expect(runtime).toHaveLength(33);
+    expect(runtime).toHaveLength(34);
   });
 
   it('preserves a local Goal cover while applying structured remote data without Outbox echo', async () => {

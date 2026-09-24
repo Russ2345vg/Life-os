@@ -1,0 +1,87 @@
+.planner-scenarios {
+  margin-block: var(--space-6);
+  padding: var(--space-4);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-medium);
+  background: var(--surface-1);
+  min-width: 0;
+}
+.planner-scenarios-heading,
+.planner-scenario-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.planner-scenarios-heading h2,
+.planner-scenarios-heading h3 {
+  margin: var(--space-2) 0;
+}
+.planner-scenarios-heading p {
+  margin-top: 0;
+}
+.planner-scenarios label {
+  display: block;
+  margin-block: var(--space-3) var(--space-2);
+}
+.planner-scenarios select {
+  width: 100%;
+  min-width: 0;
+}
+.planner-scenario-form,
+.planner-scenario-picker {
+  margin-top: var(--space-4);
+}
+.planner-scenarios .planner-scenario-reuse {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.planner-scenario-reuse input {
+  min-width: var(--control-sm);
+  min-height: var(--control-sm);
+}
+.planner-scenario-picker ul {
+  max-height: 320px;
+  overflow-y: auto;
+}
+.planner-scenario-picker li,
+.planner-scenario-unavailable {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-block: var(--space-2);
+}
+.planner-scenario-picker li > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.planner-scenario-picker small {
+  display: block;
+}
+.planner-scenario-notice {
+  color: var(--success);
+}
+.planner-scenarios h3 {
+  overflow-wrap: anywhere;
+}
+.planner-scenarios button {
+  min-height: var(--control-sm);
+}
+@media (max-width: 760px) {
+  .planner-scenarios-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .planner-scenario-buttons {
+    justify-content: flex-start;
+  }
+  .planner-scenarios .planner-action-row {
+    flex-wrap: wrap;
+  }
+  .planner-scenarios .planner-action-copy {
+    min-width: 0;
+  }
+}

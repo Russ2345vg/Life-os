@@ -27,6 +27,7 @@ export type PlannerRoute =
       readonly date?: string;
       readonly parentActionId?: string;
       readonly returnToGoal?: boolean;
+      readonly returnToGoals?: boolean;
     };
 
 export function parsePlannerRoute(hash: string): PlannerRoute | null {
@@ -112,6 +113,7 @@ export function parsePlannerRoute(hash: string): PlannerRoute | null {
     ...(params.get('date') ? { date: params.get('date')! } : {}),
     ...(params.get('parentActionId') ? { parentActionId: params.get('parentActionId')! } : {}),
     ...(params.get('returnToGoal') === '1' ? { returnToGoal: true } : {}),
+    ...(params.get('returnToGoals') === '1' ? { returnToGoals: true } : {}),
   };
 }
 
@@ -152,5 +154,6 @@ export function buildPlannerRoute(route: PlannerRoute): string {
   if (route.date) params.set('date', route.date);
   if (route.parentActionId) params.set('parentActionId', route.parentActionId);
   if (route.returnToGoal) params.set('returnToGoal', '1');
+  if (route.returnToGoals) params.set('returnToGoals', '1');
   return `#/v2/actions/new${params.size > 0 ? `?${params}` : ''}`;
 }

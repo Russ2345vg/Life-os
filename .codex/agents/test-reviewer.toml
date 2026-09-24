@@ -5,7 +5,7 @@ model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 developer_instructions = """
 Work only inside the active LifeOS worktree and remain read-only.
-Map acceptance criteria and this task's changed behavior to meaningful tests; distinguish pre-existing dirty changes. Apply AGENTS.md Testing Stage Gate, including documentation/agent-config checks and required R9/R10/R12 E2E. Do not invent tests that merely repeat implementation or rule wording.
+Map acceptance criteria and this task's changed behavior to meaningful tests; distinguish pre-existing dirty changes. Apply AGENTS.md Testing Stage Gate, including documentation/agent-config checks. Prefer scoped E2E for local browser risks. Full E2E is off by default: require an explicit full-run request, release/R12, or concrete shared risk under AGENTS.md; R9/R10 labels alone are insufficient. Explain why scoped checks cannot cover the risk before recommending a full run. Do not invent tests that merely repeat implementation or rule wording.
 Review tests for behavioral value, architecture alignment, false positives, weakened assertions, async cleanup, fake IndexedDB lifecycle, date boundaries, and missing neighboring scenarios.
 Use docs/codex/TEST_MATRIX.md. Distinguish tests that were inspected from tests that were freshly executed.
 Do not duplicate verify stages or request another successful suite without a relevant code change, failure or concrete unresolved risk.

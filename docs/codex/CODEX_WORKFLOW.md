@@ -97,7 +97,7 @@
 viewports и допустимые расхождения. Используй `lifeos-ui-fidelity`:
 
 ```text
-Figma/reference → current component → implementation → browser check → comparison → refinement
+current browser baseline + components/CSS cascade → task reference → implementation → browser check → comparison
 ```
 
 `ui-auditor` проводит read-only проверку композиции, responsive, keyboard/focus, accessibility и
@@ -105,7 +105,7 @@ browser evidence. Главный агент вносит согласованн�
 desktop и затронутые mobile-размеры, основной сценарий и console/page errors.
 
 Если rendered comparison недоступен, результат содержит `Требуется ручная визуальная проверка`.
-Утверждённое изображение является полноценным reference. Отсутствие основного Figma-файла не
+Изображение, утверждённое для текущей задачи, является полноценным reference. Старое approval не делает исторический макет актуальным для всех будущих задач; применяй приоритет источников из AGENTS.md. До создания даже демонстрационного макета проверь текущую оболочку и эффективные стили. Отсутствие основного Figma-файла не
 блокирует задачу с approved screenshot или аудит согласованности существующего UI. Read-only
 аудит завершается findings; изменение интерфейса требует запроса на изменение.
 
@@ -135,8 +135,13 @@ npm run verify                 # один gate без E2E после стаби�
 
 `npm run verify` последовательно выполняет typecheck, lint, полный Vitest, self-tests тестовой
 инфраструктуры, alpha, build, format и `git diff --check`; E2E в него не входит. Полный E2E
-добавляется по Testing Stage Gate, в том числе обязательно для R9/R10/R12. `npm run verify:full`
-выполняет verify, затем E2E. У этапов есть deadline; текущая npm-цепочка не имеет общего deadline
+по умолчанию не запускается. Для локального browser-риска выбери scoped E2E по `TEST_MATRIX.md`.
+Полный набор нужен только при прямом запросе, подготовке релиза/R12 или общем риске из раздела
+«Когда нужен полный E2E» в `AGENTS.md`; R9/R10 сами по себе его не требуют. Перед полным запуском
+объясни, почему scoped-проверок недостаточно. `npm run verify:full` выполняет verify, затем E2E;
+если актуальный verify уже прошёл, запускай только необходимый E2E. В отчёте кратко укажи
+выбранный объём и причину запуска или пропуска полного набора.
+У этапов есть deadline; текущая npm-цепочка не имеет общего deadline
 и останавливается на первом ненулевом exit code без retry.
 Прямые `npm run typecheck`, `npm run lint`, `npm run build` и `npm run format:check` используют тот
 же bounded process runner и также не могут ждать бесконечно вне `verify`.

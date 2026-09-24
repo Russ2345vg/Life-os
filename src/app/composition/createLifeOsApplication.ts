@@ -32,6 +32,8 @@ import { PeriodPlanning } from '../../application/planner/PeriodPlanning';
 import { PlannerCatalog } from '../../application/planner/PlannerCatalog';
 import { PlannerFocus } from '../../application/planner/PlannerFocus';
 import { PlannerInbox } from '../../application/planner/PlannerInbox';
+import { PlannerScenarios } from '../../application/planner/PlannerScenarios';
+import { IndexedDbTaskScenarioRepository } from '../../infrastructure/persistence/IndexedDbTaskScenarioRepository';
 import { RecurringActions } from '../../application/planner/RecurringActions';
 import { GetDirections } from '../../application/queries/GetDirections';
 import { GetGoals } from '../../application/queries/GetGoals';
@@ -223,6 +225,12 @@ export async function createLifeOsApplication(
       balance,
       planning,
       plannerInbox,
+      plannerScenarios: new PlannerScenarios(
+        new IndexedDbTaskScenarioRepository(database),
+        lifeActionRepository,
+        clock,
+        idGenerator,
+      ),
       plannerFocus,
       plannerCatalog,
       createLifeActionDraft,

@@ -3,11 +3,15 @@ import {
   PREPARATION_COMPLETION_KIND,
   PREPARATION_ITEM_KIND,
   SLEEP_SCHEDULE_ID,
+  SLEEP_EVENT_KIND,
+  WAKE_RESULT_KIND,
   WAKE_OCCURRENCE_STATUS,
   type PreparationSnapshotStatus,
   type PreparationCompletionKind,
   type PreparationItemKind,
   type SleepScheduleState,
+  type SleepEventKind,
+  type WakeResultKind,
   type WakeOccurrenceStatus,
 } from '../../../domain/sleep/SleepSchedule';
 import { createDefaultPreparationCatalog } from '../../../domain/sleep/SleepSchedule';
@@ -18,6 +22,8 @@ import {
   invalidRecord,
   readBoolean,
   readIsoDate,
+  readOptionalNullableIsoDate,
+  readOptionalNullableString,
   readNumber,
   readRecordArray,
   readString,
@@ -56,6 +62,15 @@ export class SleepScheduleRecordMapper {
       alarmExceptions: state.alarmExceptions.map((exception) => ({
         ...exception,
         createdAt: exception.createdAt.toISOString(),
+      })),
+      sleepEvents: state.sleepEvents.map((event) => ({
+        ...event,
+        occurredAt: event.occurredAt.toISOString(),
+      })),
+      wakeResults: state.wakeResults.map((result) => ({
+        ...result,
+        recordedAt: result.recordedAt.toISOString(),
+        waterCompletedAt: result.waterCompletedAt?.toISOString() ?? null,
       })),
     };
   }
@@ -131,6 +146,26 @@ export class SleepScheduleRecordMapper {
           createdAt: readIsoDate(exception, 'createdAt'),
         };
       }),
+      sleepEvents: Array.isArray(value.sleepEvents)
+        ? readRecordArray(value, 'sleepEvents').map((event) => ({
+            id: readString(event, 'id'),
+            cycleDate: readString(event, 'cycleDate'),
+            kind: readSleepEventKind(event),
+            occurredAt: readIsoDate(event, 'occurredAt'),
+          }))
+        : [],
+      wakeResults: Array.isArray(value.wakeResults)
+        ? readRecordArray(value, 'wakeResults').map((result) => ({
+            id: readString(result, 'id'),
+            occurrenceId: readString(result, 'occurrenceId'),
+            cycleDate: readString(result, 'cycleDate'),
+            kind: readWakeResultKind(result),
+            recordedAt: readIsoDate(result, 'recordedAt'),
+            emergencyReason: readOptionalNullableString(result, 'emergencyReason'),
+            emergencyComment: readOptionalNullableString(result, 'emergencyComment'),
+            waterCompletedAt: readOptionalNullableIsoDate(result, 'waterCompletedAt'),
+          }))
+        : [],
     };
   }
 }
@@ -166,10 +201,28 @@ function readSettings(record: UnknownRecord) {
     wakeTime: readString(record, 'wakeTime'),
     timeZone: readString(record, 'timeZone'),
     enabled: readBoolean(record, 'enabled'),
+    quietModeEnabled:
+      record.quietModeEnabled === undefined ? false : readBoolean(record, 'quietModeEnabled'),
     alarmSound,
     version: readInteger(record, 'version'),
     updatedAt: readIsoDate(record, 'updatedAt'),
   };
+}
+
+function readSleepEventKind(record: UnknownRecord): SleepEventKind {
+  const kind = readString(record, 'kind');
+  if (!Object.values(SLEEP_EVENT_KIND).includes(kind as SleepEventKind)) {
+    throw invalidRecord('Запись содержит неизвестный тип события сна.');
+  }
+  return kind as SleepEventKind;
+}
+
+function readWakeResultKind(record: UnknownRecord): WakeResultKind {
+  const kind = readString(record, 'kind');
+  if (!Object.values(WAKE_RESULT_KIND).includes(kind as WakeResultKind)) {
+    throw invalidRecord('Запись содержит неизвестный результат пробуждения.');
+  }
+  return kind as WakeResultKind;
 }
 
 function readAlarmSound(record: UnknownRecord) {

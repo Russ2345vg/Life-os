@@ -39,11 +39,14 @@ export function EntityContextMenu({
   const popup = useRef<HTMLDivElement>(null);
   const working = useRef(false);
   const moreButton = useRef<HTMLButtonElement>(null);
+  const openedAnchor = useRef<Readonly<{ top: number; left: number }> | null>(null);
   const cancelButton = useRef<HTMLButtonElement>(null);
   const confirmButton = useRef<HTMLButtonElement>(null);
   const touchPointerActive = useRef(false);
   const openMenu = useCallback(() => {
     if (working.current) return;
+    const rect = moreButton.current?.getBoundingClientRect();
+    openedAnchor.current = rect ? { top: rect.top, left: rect.left } : null;
     setPortalTarget(root.current?.closest('.planner-v2') ?? document.body);
     setOpen(true);
   }, []);
@@ -73,6 +76,18 @@ export function EntityContextMenu({
     };
     const scroll = (event: Event) => {
       if (event.target instanceof Node && popup.current?.contains(event.target)) return;
+      const initial = openedAnchor.current;
+      const current = moreButton.current?.getBoundingClientRect();
+      // A queued scroll from before opening must not close the menu or clear
+      // the held-touch click suppression. Real movement and resize still cancel.
+      if (
+        event.type === 'scroll' &&
+        initial &&
+        current &&
+        initial.top === current.top &&
+        initial.left === current.left
+      )
+        return;
       gesture.current?.cancel();
       setOpen(false);
     };
@@ -88,6 +103,7 @@ export function EntityContextMenu({
     };
   }, [open, confirm]);
   useLayoutEffect(() => {
+    if (!open) openedAnchor.current = null;
     const menu = popup.current;
     const anchor = moreButton.current;
     if (!open || !menu || !anchor) return;

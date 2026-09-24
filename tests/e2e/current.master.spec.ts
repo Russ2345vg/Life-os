@@ -122,6 +122,8 @@ test('MASTER hierarchy creates and edits linked records through contextual panel
   await expect(sphereCard.getByText('Нет оценки', { exact: true })).toBeVisible();
   await sphereCard.getByRole('button', { name: 'Оценить сферу' }).click();
   panel = page.getByRole('dialog');
+  await expect(panel.getByLabel('Ручная оценка · 0–10')).toBeFocused();
+  await panel.getByText('Другие параметры сферы', { exact: true }).click();
   await expect(panel.getByLabel('Описание', { exact: true })).toHaveValue('Уют и порядок');
   await panel.getByLabel('Ручная оценка · 0–10').fill('4');
   await panel.getByLabel('Включить в колесо').check();
@@ -203,7 +205,11 @@ test('MASTER hierarchy creates and edits linked records through contextual panel
   await expect(
     page.getByRole('link', { name: 'Снять квартиру MASTER', exact: true }),
   ).toBeVisible();
-  await page.getByRole('button', { name: 'Квартал', exact: true }).click();
+  await page.getByRole('button', { name: 'Фильтры', exact: true }).click();
+  await page
+    .getByRole('combobox', { name: 'Плановый период', exact: true })
+    .selectOption('quarter');
+  await page.getByRole('button', { name: /^Показать:/ }).click();
   await expect(
     page.getByRole('link', { name: 'Снять квартиру MASTER', exact: true }),
   ).toBeVisible();
@@ -226,9 +232,9 @@ test('MASTER hierarchy creates and edits linked records through contextual panel
 test('MASTER filters, views and existing measurement editor retain real data', async ({ page }) => {
   await seedResponsive(page);
   await page.goto('/#/v2/actions');
+  await page.getByRole('button', { name: 'Фильтры', exact: true }).click();
   await page.getByRole('button', { name: 'Без цели', exact: true }).click();
   await expect(page.locator('.planner-action-row--catalog')).toHaveCount(1);
-  await page.getByRole('button', { name: 'Фильтр', exact: true }).click();
   await page.getByRole('combobox', { name: 'Сфера', exact: true }).selectOption('master-sphere');
   await expect(page.locator('.planner-action-row--catalog')).toHaveCount(0);
   await page.getByRole('button', { name: 'Сбросить фильтры', exact: true }).click();
@@ -294,7 +300,7 @@ test('MASTER goal conflict preserves the draft and the newer saved record', asyn
   await expect(page.getByText('Внешнее изменение', { exact: true })).toBeVisible();
 });
 
-for (const width of [360, 375, 390, 393, 412, 430, 1024, 1280, 1366, 1440, 1600, 1920]) {
+for (const width of [320, 360, 375, 390, 393, 412, 430, 730, 1024, 1280, 1366, 1440, 1600, 1920]) {
   test(`MASTER responsive populated screens at ${width}px`, async ({ page }, info) => {
     await page.setViewportSize({ width, height: 900 });
     const errors: string[] = [];
@@ -322,7 +328,7 @@ for (const width of [360, 375, 390, 393, 412, 430, 1024, 1280, 1366, 1440, 1600,
       if (width === 390 || width === 1440)
         await page.screenshot({ path: info.outputPath(`${route}-${width}.png`) });
     }
-    await page.getByRole('button', { name: 'Открыть форму нового действия' }).click();
+    await page.getByRole('button', { name: 'Создать с параметрами', exact: true }).click();
     await expect(page.getByRole('dialog')).toBeVisible();
     await page.getByRole('dialog').getByLabel('Название', { exact: true }).fill('Проверка панели');
     await page.setViewportSize({ width, height: 480 });

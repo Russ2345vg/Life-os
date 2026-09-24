@@ -1,4 +1,8 @@
 import { RecurrenceBadge } from './RecurrenceBadge';
+import { AppIcon } from '../components/AppIcon';
+import { PlannerScenariosPanel, type ScenarioService } from './PlannerScenariosPanel';
+import { PlannerOverdueActions } from './PlannerOverdueActions';
+import type { ReactNode } from 'react';
 import {
   selectActionOptions,
   type ActionSelection,
@@ -11,6 +15,7 @@ import type { DayDate, LifeAction } from '../../domain';
 import { VoiceTextInput } from '../voice-input/VoiceTextInput';
 import type { PlannerOption } from './PlannerActionForm';
 import { EntityContextMenu, type EntityMenuAction } from './EntityContextMenu';
+import type { SleepTodayEntry } from '../../application/sleep/SleepTodayEntry';
 
 export function PlannerToday({
   date,
@@ -26,10 +31,13 @@ export function PlannerToday({
   onMainDirection,
   onComplete,
   onPlan,
+  onReschedule,
   onSelectAction,
   onQuickAdd,
   onNewAction,
   onOpenSleep,
+  sleepEntry,
+  scenarios,
   menuForAction,
 }: {
   readonly date: DayDate;
@@ -46,12 +54,16 @@ export function PlannerToday({
   readonly onComplete: (id: string) => void;
   readonly onSelectAction?: (selection: ActionSelection) => void;
   readonly onPlan: (id: string, main: boolean) => void;
+  readonly onReschedule: (id: string, date: string) => Promise<void>;
   readonly onQuickAdd: (title: string) => Promise<void>;
   readonly onNewAction: () => void;
   readonly onOpenSleep: () => void;
+  readonly sleepEntry?: SleepTodayEntry;
+  readonly scenarios?: ScenarioService | undefined;
   readonly menuForAction?: (action: LifeAction) => readonly EntityMenuAction[];
 }) {
   const [title, setTitle] = useState('');
+  const heading = useRef<HTMLHeadingElement>(null);
   const adding = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [choosing, setChoosing] = useState(false);
@@ -86,7 +98,11 @@ export function PlannerToday({
     day: 'numeric',
     month: 'long',
   }).format(new Date(`${date.toString()}T12:00:00`));
-  const row = (action: LifeAction, mode: 'main' | 'today' | 'unscheduled' | 'completed') => {
+  const row = (
+    action: LifeAction,
+    mode: 'main' | 'today' | 'unscheduled' | 'completed' | 'scenario' | 'overdue',
+    extra?: ReactNode,
+  ) => {
     const id = action.id.toString();
     const goal = goals.find((item) => item.id === action.goalId?.toString());
     return (
@@ -123,10 +139,11 @@ export function PlannerToday({
                   <span className="planner-action-note">{action.actualResult.toString()}</span>
                 ) : null}
               </button>
-              {mode === 'completed' && (
+              {mode === 'completed' && extra === undefined && (
                 <PlanningActionDetails action={action} today={date.toString()} />
               )}
             </div>
+            {extra}
             {mode === 'unscheduled' ? (
               <button type="button" disabled={busy} onClick={() => onPlan(id, false)}>
                 {day === 'tomorrow' ? 'На завтра' : 'На сегодня'}
@@ -158,22 +175,28 @@ export function PlannerToday({
       <div className="planner-today-main">
         <header className="planner-page-heading">
           <div>
-            <h1>{day === 'tomorrow' ? 'Завтра' : 'Сегодня'}</h1>
+            <h1 ref={heading} tabIndex={-1}>
+              {day === 'tomorrow' ? 'Завтра' : 'Сегодня'}
+            </h1>
             <p className="planner-eyebrow">{dateLabel}</p>
           </div>
+          <div className="planner-day-switch" role="group" aria-label="План на день">
+            <button
+              type="button"
+              aria-pressed={day === 'today'}
+              onClick={() => onSelectDay('today')}
+            >
+              Сегодня
+            </button>
+            <button
+              type="button"
+              aria-pressed={day === 'tomorrow'}
+              onClick={() => onSelectDay('tomorrow')}
+            >
+              Завтра
+            </button>
+          </div>
         </header>
-        <div className="planner-day-switch" role="group" aria-label="План на день">
-          <button type="button" aria-pressed={day === 'today'} onClick={() => onSelectDay('today')}>
-            Сегодня
-          </button>
-          <button
-            type="button"
-            aria-pressed={day === 'tomorrow'}
-            onClick={() => onSelectDay('tomorrow')}
-          >
-            Завтра
-          </button>
-        </div>
         <section className="planner-main-direction">
           <label htmlFor="planner-main-direction">
             <span>Главное направление</span>
@@ -195,177 +218,218 @@ export function PlannerToday({
             ))}
           </select>
         </section>
-        <form
-          className="planner-quick-add"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (adding.current || busy || !title.trim()) return;
-            adding.current = true;
-            setError(null);
-            void onQuickAdd(title)
-              .then(() => setTitle(''))
-              .catch((reason: unknown) =>
-                setError(
-                  reason instanceof Error ? reason.message : 'Не удалось добавить действие.',
-                ),
-              )
-              .finally(() => {
-                adding.current = false;
-              });
-          }}
+        <section
+          className="planner-day-workspace"
+          aria-label={day === 'tomorrow' ? 'План на завтра' : 'План на сегодня'}
         >
-          <VoiceTextInput
-            id="planner-quick-title"
-            aria-label={
-              day === 'tomorrow' ? 'Новое действие на завтра' : 'Новое действие на сегодня'
-            }
-            placeholder={
-              day === 'tomorrow' ? 'Добавить действие на завтра' : 'Добавить действие на сегодня'
-            }
-            value={title}
-            onValueChange={setTitle}
-            readOnly={busy}
-            required
-            maxLength={200}
-          />
-          <button className="planner-primary" type="submit" disabled={busy || !title.trim()}>
-            Добавить
-          </button>
-          <button
-            type="button"
-            className="planner-quick-options"
-            onClick={onNewAction}
-            aria-label="Открыть форму нового действия"
-            title="Параметры нового действия"
-          >
-            ⋯
-          </button>
-        </form>
-        {day === 'tomorrow' && (
-          <div className="planner-tomorrow-choose">
-            <button
-              type="button"
-              onClick={() => setChoosing((value) => !value)}
-              aria-expanded={choosing}
+          <section className="planner-quick-create" aria-labelledby="planner-quick-create-title">
+            <h2 id="planner-quick-create-title">
+              {day === 'tomorrow' ? 'План на завтра' : 'План на сегодня'}
+            </h2>
+            <form
+              className="planner-quick-add"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (adding.current || busy || !title.trim()) return;
+                adding.current = true;
+                setError(null);
+                void onQuickAdd(title)
+                  .then(() => setTitle(''))
+                  .catch((reason: unknown) =>
+                    setError(
+                      reason instanceof Error ? reason.message : 'Не удалось добавить действие.',
+                    ),
+                  )
+                  .finally(() => {
+                    adding.current = false;
+                  });
+              }}
             >
-              + Выбрать существующее действие
-            </button>
-            {choosing && (
-              <div className="planner-tomorrow-candidates">
-                <VoiceTextInput
-                  id="tomorrow-action-search"
-                  aria-label="Поиск действия"
-                  value={search}
-                  onValueChange={setSearch}
-                />
-                {candidates.length ? (
-                  <ul>
-                    {candidates.map((option) => (
-                      <li key={option.key}>
-                        <span>
-                          {option.title} <RecurrenceBadge rule={option.rule} />
-                        </span>
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => {
-                            if (onSelectAction) onSelectAction(option.selection);
-                            else if (option.selection.kind === 'action')
-                              onPlan(option.selection.actionId, false);
-                            setChoosing(false);
-                          }}
-                        >
-                          На завтра
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="planner-empty">Свободных действий пока нет.</p>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-        {error ? (
-          <p role="alert" className="planner-error">
-            {error}
-          </p>
-        ) : null}
-        {overview.main ? (
-          <section className="planner-main">
-            <h2>Главное действие</h2>
-            <ul>{row(overview.main, 'main')}</ul>
+              <VoiceTextInput
+                id="planner-quick-title"
+                aria-label={
+                  day === 'tomorrow' ? 'Новое действие на завтра' : 'Новое действие на сегодня'
+                }
+                placeholder="Что нужно сделать?"
+                value={title}
+                onValueChange={setTitle}
+                readOnly={busy}
+                required
+                maxLength={200}
+              />
+              <button className="planner-primary" type="submit" disabled={busy || !title.trim()}>
+                Создать
+              </button>
+              <button type="button" className="planner-quick-options" onClick={onNewAction}>
+                Создать с параметрами
+              </button>
+            </form>
           </section>
-        ) : null}
-        <section className="planner-today-list">
-          <h2>
-            {day === 'tomorrow' ? 'На завтра' : overview.main ? 'Ещё на сегодня' : 'На сегодня'}{' '}
-            <span>{overview.actions.length}</span>
-          </h2>
-          {overview.actions.length === 0 ? (
-            <p className="planner-empty">
-              {overview.main
-                ? 'Остальное можно добавить позже.'
-                : day === 'tomorrow'
-                  ? 'На завтра пока ничего не запланировано.'
-                  : overview.completed.length
-                    ? 'Всё выполнено. Можно спокойно завершить день.'
-                    : 'На сегодня пока ничего не запланировано.'}
+          {day === 'tomorrow' && (
+            <div className="planner-tomorrow-choose">
+              <button
+                type="button"
+                onClick={() => setChoosing((value) => !value)}
+                aria-expanded={choosing}
+              >
+                + Выбрать существующее действие
+              </button>
+              {choosing && (
+                <div className="planner-tomorrow-candidates">
+                  <VoiceTextInput
+                    id="tomorrow-action-search"
+                    aria-label="Поиск действия"
+                    value={search}
+                    onValueChange={setSearch}
+                  />
+                  {candidates.length ? (
+                    <ul>
+                      {candidates.map((option) => (
+                        <li key={option.key}>
+                          <span>
+                            {option.title} <RecurrenceBadge rule={option.rule} />
+                          </span>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => {
+                              if (onSelectAction) onSelectAction(option.selection);
+                              else if (option.selection.kind === 'action')
+                                onPlan(option.selection.actionId, false);
+                              setChoosing(false);
+                            }}
+                          >
+                            На завтра
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="planner-empty">Свободных действий пока нет.</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+          {error ? (
+            <p role="alert" className="planner-error">
+              {error}
             </p>
-          ) : (
-            <ul>{overview.actions.map((action) => row(action, 'today'))}</ul>
+          ) : null}
+          <PlannerScenariosPanel
+            key={date.toString()}
+            service={scenarios}
+            date={date.toString()}
+            actions={availableActions}
+            busy={busy}
+            renderAction={(action, remove) =>
+              row(action, action.status === 'completed' ? 'completed' : 'scenario', remove)
+            }
+          >
+            {overview.main ? (
+              <section className="planner-main">
+                <h2>Главное действие</h2>
+                <ul>{row(overview.main, 'main')}</ul>
+              </section>
+            ) : null}
+            <section className="planner-today-list">
+              <h2>
+                {day === 'tomorrow' ? 'На завтра' : overview.main ? 'Ещё на сегодня' : 'На сегодня'}{' '}
+                <span>{overview.actions.length}</span>
+              </h2>
+              {overview.actions.length === 0 ? (
+                <p className="planner-empty">
+                  {overview.main
+                    ? 'Остальное можно добавить позже.'
+                    : day === 'tomorrow'
+                      ? 'На завтра пока ничего не запланировано.'
+                      : overview.completed.length
+                        ? 'Всё выполнено. Можно спокойно завершить день.'
+                        : 'На сегодня пока ничего не запланировано.'}
+                </p>
+              ) : (
+                <ul>{overview.actions.map((action) => row(action, 'today'))}</ul>
+              )}
+            </section>
+            <details className="planner-details planner-completed">
+              <summary>
+                Выполнено <span>{overview.completed.length}</span>
+              </summary>
+              {overview.completed.length ? (
+                <ul>{overview.completed.map((action) => row(action, 'completed'))}</ul>
+              ) : (
+                <p className="planner-empty">Здесь появятся действия, выполненные в этот день.</p>
+              )}
+            </details>
+            {overview.unscheduled.length ? (
+              <details className="planner-details">
+                <summary>
+                  Без даты <span>{overview.unscheduled.length}</span>
+                </summary>
+                <ul>{overview.unscheduled.map((action) => row(action, 'unscheduled'))}</ul>
+              </details>
+            ) : null}
+          </PlannerScenariosPanel>
+          {day === 'today' && (
+            <PlannerOverdueActions
+              actions={overview.overdue}
+              today={date.toString()}
+              busy={busy}
+              onReschedule={onReschedule}
+              onListResolved={() => heading.current?.focus()}
+              renderAction={(action, controls) => row(action, 'overdue', controls)}
+            />
           )}
         </section>
-        <details className="planner-details planner-completed">
-          <summary>
-            Выполнено <span>{overview.completed.length}</span>
-          </summary>
-          {overview.completed.length ? (
-            <ul>{overview.completed.map((action) => row(action, 'completed'))}</ul>
-          ) : (
-            <p className="planner-empty">Здесь появятся действия, выполненные в этот день.</p>
-          )}
-        </details>
-        {overview.unscheduled.length ? (
-          <details className="planner-details">
-            <summary>
-              Без даты <span>{overview.unscheduled.length}</span>
-            </summary>
-            <ul>{overview.unscheduled.map((action) => row(action, 'unscheduled'))}</ul>
-          </details>
-        ) : null}
       </div>
       <aside className="planner-today-sidebar" aria-label="Обзор дня">
         <section className="planner-day-progress">
           <h2>Прогресс дня</h2>
-          <div>
+          <div hidden={!total}>
             <strong>
               {overview.completed.length} из {total}
             </strong>
             <span>{total ? `${percent}%` : 'Пока нет плана'}</span>
           </div>
-          <progress max={100} value={percent} aria-label="Прогресс дня" />
+          {total > 0 && <progress max={100} value={percent} aria-label="Прогресс дня" />}
+          {total === 0 && <div className="planner-progress-empty" aria-hidden="true" />}
           <p className="planner-muted">
-            {total - overview.completed.length} осталось · {overview.completed.length} выполнено
+            {total
+              ? `${total - overview.completed.length} осталось · ${overview.completed.length} выполнено`
+              : 'Добавьте первое действие — здесь появится прогресс дня.'}
           </p>
         </section>
         <section className="planner-day-shortcuts">
           <h2>Быстрые действия</h2>
           <button type="button" onClick={() => onSelectDay(day === 'today' ? 'tomorrow' : 'today')}>
+            <AppIcon name="today" />
             {day === 'today' ? 'Планировать завтра' : 'Вернуться к сегодня'}
           </button>
-          <a href="#/v2/inbox">Открыть входящие →</a>
-          <a href="#/v2/actions?view=calendar">Открыть календарь →</a>
+          <a href="#/v2/inbox">
+            <AppIcon name="history" />
+            Открыть входящие →
+          </a>
+          <a href="#/v2/actions?view=calendar">
+            <AppIcon name="today" />
+            Открыть календарь →
+          </a>
         </section>
         {day === 'today' ? (
-          <button className="planner-sleep-entry" type="button" onClick={onOpenSleep}>
+          <button
+            className={`planner-sleep-entry${sleepEntry?.active ? ' planner-sleep-entry--active' : ''}`}
+            type="button"
+            onClick={onOpenSleep}
+          >
             <span className="planner-sleep-entry__icon" aria-hidden="true">
               ☾
             </span>
             <span>
               <strong>Подготовка ко сну</strong>
-              <small>Настроить вечерний список и отметить готовность</small>
+              <small>
+                {sleepEntry?.active
+                  ? 'Вечерняя подготовка уже доступна'
+                  : 'Настроить вечерний список и отметить готовность'}
+              </small>
             </span>
             <span aria-hidden="true">→</span>
           </button>

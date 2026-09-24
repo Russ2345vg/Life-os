@@ -46,7 +46,9 @@
   "plugins": {
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDlDOEJGNDk2RTU2MEFENQpSV1RWQ2xadVNiL0lDVjJUL2VyQmpkM2Uxbjh2Nm56QnVBcFY4dkU4M3AwREpuc3BMK09xdzE2aQo=",
-      "endpoints": [],
+      "endpoints": [
+        "https://github.com/Russ2345vg/LifeOS-Releases/releases/latest/download/latest.json"
+      ],
       "windows": {
         "installMode": "passive"
       }

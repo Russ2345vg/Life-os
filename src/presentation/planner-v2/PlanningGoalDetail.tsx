@@ -119,9 +119,19 @@ export function GoalDetailContent({
       <section className="planner-goal-result" aria-label="Желаемый результат">
         <p className="planner-eyebrow">Желаемый результат</p>
         <p>{goal.achievementCriteria ?? 'Результат пока не описан.'}</p>
+        {goal.status !== 'achieved' && goal.status !== 'archived' && (
+          <button
+            className="planner-primary planner-goal-achieve"
+            type="button"
+            disabled={operations.busy}
+            onClick={achieve}
+          >
+            Завершить цель
+          </button>
+        )}
       </section>
       {!goal.measurement && <PlannerGoalProgress goal={goal} />}
-      <PlanningProgress key={id} goal={goal} date={today} editable onAchieve={achieve} />
+      <PlanningProgress key={id} goal={goal} date={today} editable />
       {next ? (
         <section className="planner-goal-next" aria-label="Следующее действие">
           <h2>Следующее действие</h2>

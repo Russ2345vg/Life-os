@@ -34,6 +34,22 @@ export const WAKE_OCCURRENCE_STATUS = {
 export type WakeOccurrenceStatus =
   (typeof WAKE_OCCURRENCE_STATUS)[keyof typeof WAKE_OCCURRENCE_STATUS];
 
+export const SLEEP_EVENT_KIND = {
+  reminder60: 'REMINDER_60',
+  reminder15: 'REMINDER_15',
+  bedtime: 'BEDTIME',
+  quietStarted: 'QUIET_STARTED',
+  quietEnded: 'QUIET_ENDED',
+} as const;
+export type SleepEventKind = (typeof SLEEP_EVENT_KIND)[keyof typeof SLEEP_EVENT_KIND];
+
+export const WAKE_RESULT_KIND = {
+  qr: 'QR',
+  emergency: 'EMERGENCY',
+  noResult: 'NO_RESULT',
+} as const;
+export type WakeResultKind = (typeof WAKE_RESULT_KIND)[keyof typeof WAKE_RESULT_KIND];
+
 export interface SleepAlarmSound {
   readonly uri: string | null;
   readonly title: string;
@@ -49,6 +65,7 @@ export interface SleepSettings {
   readonly wakeTime: string;
   readonly timeZone: string;
   readonly enabled: boolean;
+  readonly quietModeEnabled: boolean;
   readonly alarmSound: SleepAlarmSound;
   readonly version: number;
   readonly updatedAt: Date;
@@ -59,6 +76,7 @@ export interface SleepSettingsInput {
   readonly wakeTime: string;
   readonly timeZone: string;
   readonly enabled: boolean;
+  readonly quietModeEnabled?: boolean;
   readonly alarmSound?: SleepAlarmSound;
 }
 
@@ -115,6 +133,40 @@ export interface AlarmException {
   readonly createdAt: Date;
 }
 
+export interface SleepEvent {
+  readonly id: string;
+  readonly cycleDate: string;
+  readonly kind: SleepEventKind;
+  readonly occurredAt: Date;
+}
+
+export interface WakeResult {
+  readonly id: string;
+  readonly occurrenceId: string;
+  readonly cycleDate: string;
+  readonly kind: WakeResultKind;
+  readonly recordedAt: Date;
+  readonly emergencyReason: string | null;
+  readonly emergencyComment: string | null;
+  readonly waterCompletedAt: Date | null;
+}
+
+export interface SleepHistorySummary {
+  readonly qrDismissals: number;
+  readonly emergencyDismissals: number;
+  readonly alarmDisabled: number;
+  readonly withoutTrustworthyResult: number;
+  readonly waterCompleted: number;
+  readonly qrShare: number | null;
+}
+
+export interface SleepHistoryEntry {
+  readonly cycleDate: string;
+  readonly preparation: PreparationCompletionKind | 'NO_MARKS';
+  readonly wakeResult: WakeResultKind | 'ALARM_DISABLED';
+  readonly waterCompleted: boolean;
+}
+
 export interface SleepScheduleState {
   readonly id: typeof SLEEP_SCHEDULE_ID;
   readonly version: number;
@@ -124,6 +176,8 @@ export interface SleepScheduleState {
   readonly nightCycles: readonly NightCycle[];
   readonly wakeOccurrences: readonly WakeOccurrence[];
   readonly alarmExceptions: readonly AlarmException[];
+  readonly sleepEvents: readonly SleepEvent[];
+  readonly wakeResults: readonly WakeResult[];
 }
 
 export interface EnsureNightCycleInput {
@@ -149,6 +203,8 @@ export function createEmptySleepSchedule(): SleepScheduleState {
     nightCycles: [],
     wakeOccurrences: [],
     alarmExceptions: [],
+    sleepEvents: [],
+    wakeResults: [],
   };
 }
 
@@ -358,6 +414,7 @@ export function updateSleepSettings(
     version: state.version + 1,
     settings: {
       ...input,
+      quietModeEnabled: input.quietModeEnabled ?? state.settings?.quietModeEnabled ?? false,
       alarmSound: normalizeAlarmSound(
         input.alarmSound ?? state.settings?.alarmSound ?? DEFAULT_SLEEP_ALARM_SOUND,
       ),
@@ -602,9 +659,185 @@ export function setSleepFeatureEnabled(
   return updateSleepSettings(state, { ...settings, enabled }, updatedAt);
 }
 
+export function setSleepQuietModeEnabled(
+  state: SleepScheduleState,
+  enabled: boolean,
+  updatedAt: Date,
+): SleepScheduleState {
+  const settings = requiredSettings(state);
+  if (settings.quietModeEnabled === enabled) return state;
+  return updateSleepSettings(state, { ...settings, quietModeEnabled: enabled }, updatedAt);
+}
+
+export function importNativeSleepEvents(
+  state: SleepScheduleState,
+  events: readonly SleepEvent[],
+): SleepScheduleState {
+  if (events.length === 0) return state;
+  const byId = new Map(state.sleepEvents.map((event) => [event.id, event]));
+  let changedState = false;
+  for (const event of events) {
+    assertIdentifier(event.id, 'Идентификатор события сна');
+    assertCycleDate(event.cycleDate);
+    assertSleepEventKind(event.kind);
+    assertDate(event.occurredAt, 'Время события сна некорректно.');
+    if (byId.has(event.id)) continue;
+    byId.set(event.id, { ...event, occurredAt: new Date(event.occurredAt) });
+    changedState = true;
+  }
+  if (!changedState) return state;
+  const sleepEvents = [...byId.values()].sort(
+    (left, right) =>
+      left.occurredAt.getTime() - right.occurredAt.getTime() || left.id.localeCompare(right.id),
+  );
+  return changed(state, { sleepEvents });
+}
+
+export function importNativeWakeResults(
+  state: SleepScheduleState,
+  results: readonly WakeResult[],
+): SleepScheduleState {
+  if (results.length === 0) return state;
+  const byId = new Map(state.wakeResults.map((result) => [result.id, result]));
+  let changedState = false;
+  for (const result of results) {
+    const normalized = normalizeWakeResult(result);
+    const existing = byId.get(normalized.id);
+    if (existing !== undefined && !shouldReplaceWakeResult(existing, normalized)) continue;
+    if (existing !== undefined && sameWakeResult(existing, normalized)) continue;
+    byId.set(normalized.id, normalized);
+    changedState = true;
+  }
+  if (!changedState) return state;
+  const wakeResults = [...byId.values()].sort(
+    (left, right) =>
+      left.recordedAt.getTime() - right.recordedAt.getTime() || left.id.localeCompare(right.id),
+  );
+  const deliveredByOccurrence = new Map(
+    wakeResults.map((result) => [result.occurrenceId, result.recordedAt]),
+  );
+  const wakeOccurrences = state.wakeOccurrences.map((occurrence) => {
+    const deliveredAt = deliveredByOccurrence.get(occurrence.id);
+    if (
+      deliveredAt === undefined ||
+      occurrence.status === WAKE_OCCURRENCE_STATUS.delivered ||
+      occurrence.status === WAKE_OCCURRENCE_STATUS.skipped
+    ) {
+      return occurrence;
+    }
+    return {
+      ...occurrence,
+      status: WAKE_OCCURRENCE_STATUS.delivered,
+      updatedAt: new Date(deliveredAt),
+    };
+  });
+  return changed(state, { wakeResults, wakeOccurrences });
+}
+
+export function summarizeSleepHistory(state: SleepScheduleState): SleepHistorySummary {
+  const qrDismissals = state.wakeResults.filter(({ kind }) => kind === WAKE_RESULT_KIND.qr).length;
+  const emergencyDismissals = state.wakeResults.filter(
+    ({ kind }) => kind === WAKE_RESULT_KIND.emergency,
+  ).length;
+  const denominator = qrDismissals + emergencyDismissals;
+  return {
+    qrDismissals,
+    emergencyDismissals,
+    alarmDisabled: state.alarmExceptions.length,
+    withoutTrustworthyResult: state.wakeResults.filter(
+      ({ kind }) => kind === WAKE_RESULT_KIND.noResult,
+    ).length,
+    waterCompleted: state.wakeResults.filter(({ waterCompletedAt }) => waterCompletedAt !== null)
+      .length,
+    qrShare: denominator === 0 ? null : qrDismissals / denominator,
+  };
+}
+
+export function selectSleepHistoryEntries(state: SleepScheduleState): readonly SleepHistoryEntry[] {
+  return [...state.nightCycles]
+    .sort((left, right) => right.cycleDate.localeCompare(left.cycleDate))
+    .map((cycle) => {
+      const result = [...state.wakeResults]
+        .filter(({ cycleDate }) => cycleDate === cycle.cycleDate)
+        .sort((left, right) => right.recordedAt.getTime() - left.recordedAt.getTime())[0];
+      const occurrenceIds = new Set(
+        state.wakeOccurrences
+          .filter(({ cycleDate }) => cycleDate === cycle.cycleDate)
+          .map(({ id }) => id),
+      );
+      const alarmDisabled = state.alarmExceptions.some(({ occurrenceId }) =>
+        occurrenceIds.has(occurrenceId),
+      );
+      return {
+        cycleDate: cycle.cycleDate,
+        preparation: cycle.preparationCompletionKind ?? 'NO_MARKS',
+        wakeResult: result?.kind ?? (alarmDisabled ? 'ALARM_DISABLED' : 'NO_RESULT'),
+        waterCompleted: result?.waterCompletedAt !== null && result !== undefined,
+      };
+    });
+}
+
 function requiredSettings(state: SleepScheduleState): SleepSettings {
   if (state.settings === null) throw new Error('Настройки сна ещё не заданы.');
   return state.settings;
+}
+
+function normalizeWakeResult(result: WakeResult): WakeResult {
+  assertIdentifier(result.id, 'Идентификатор результата пробуждения');
+  assertIdentifier(result.occurrenceId, 'Идентификатор срабатывания результата');
+  assertCycleDate(result.cycleDate);
+  if (!Object.values(WAKE_RESULT_KIND).includes(result.kind)) {
+    throw new TypeError('Неизвестный результат пробуждения.');
+  }
+  assertDate(result.recordedAt, 'Время результата пробуждения некорректно.');
+  if (result.waterCompletedAt !== null) {
+    assertDate(result.waterCompletedAt, 'Время отметки воды некорректно.');
+  }
+  return {
+    ...result,
+    emergencyReason: normalizedOptionalText(result.emergencyReason),
+    emergencyComment: normalizedOptionalText(result.emergencyComment),
+    recordedAt: new Date(result.recordedAt),
+    waterCompletedAt: result.waterCompletedAt === null ? null : new Date(result.waterCompletedAt),
+  };
+}
+
+function shouldReplaceWakeResult(existing: WakeResult, incoming: WakeResult): boolean {
+  const existingTrustworthy = existing.kind !== WAKE_RESULT_KIND.noResult;
+  const incomingTrustworthy = incoming.kind !== WAKE_RESULT_KIND.noResult;
+  if (existingTrustworthy && !incomingTrustworthy) return false;
+  if (!existingTrustworthy && incomingTrustworthy) return true;
+  return incoming.recordedAt.getTime() >= existing.recordedAt.getTime();
+}
+
+function sameWakeResult(left: WakeResult, right: WakeResult): boolean {
+  return (
+    left.id === right.id &&
+    left.occurrenceId === right.occurrenceId &&
+    left.cycleDate === right.cycleDate &&
+    left.kind === right.kind &&
+    left.recordedAt.getTime() === right.recordedAt.getTime() &&
+    left.emergencyReason === right.emergencyReason &&
+    left.emergencyComment === right.emergencyComment &&
+    left.waterCompletedAt?.getTime() === right.waterCompletedAt?.getTime()
+  );
+}
+
+function assertSleepEventKind(value: SleepEventKind): void {
+  if (!Object.values(SLEEP_EVENT_KIND).includes(value)) {
+    throw new TypeError('Неизвестный тип события сна.');
+  }
+}
+
+function assertCycleDate(value: string): void {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new TypeError('Дата цикла сна некорректна.');
+  }
+}
+
+function normalizedOptionalText(value: string | null): string | null {
+  const normalized = value?.trim() ?? '';
+  return normalized.length === 0 ? null : normalized;
 }
 
 function copyPreparationItem(item: PreparationSnapshotItemInput): PreparationSnapshotItem {

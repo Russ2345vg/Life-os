@@ -554,3 +554,31 @@
     padding-inline: var(--space-3);
   }
 }
+.balance-overview--start {
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+.balance-start {
+  padding-block: var(--space-4);
+  max-width: 640px;
+}
+.balance-start p {
+  margin-block: var(--space-3) var(--space-4);
+}
+.balance-overview--start .balance-attention {
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+.balance-overview--start .balance-attention .planner-empty {
+  padding: 0;
+  margin-block: var(--space-2);
+}
+.balance-overview--start .balance-attention > p {
+  margin-block: var(--space-2);
+}
+.balance-wheel-settings:focus-visible {
+  outline: 2px solid var(--planner-accent);
+  outline-offset: var(--space-1);
+}

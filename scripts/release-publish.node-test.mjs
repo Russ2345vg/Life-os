@@ -1,11 +1,28 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   buildAndroidManifest,
   buildWindowsManifest,
   expectedAndroidVersionCode,
   validateReleaseVersion,
+  selectWindowsInstaller,
 } from './release-publish.mjs';
+
+test('never relabels an old installer as a new version', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'lifeos-release-test-'));
+  try {
+    writeFileSync(join(directory, 'LifeOS_1.0.0_x64-setup.exe'), 'old');
+    assert.throws(() => selectWindowsInstaller(directory, '1.0.14'), /was not produced/);
+    const current = join(directory, 'LifeOS_1.0.14_x64-setup.exe');
+    writeFileSync(current, 'new');
+    assert.equal(selectWindowsInstaller(directory, '1.0.14'), current);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
 
 test('maps semantic versions to monotonically increasing Android version codes', () => {
   assert.equal(expectedAndroidVersionCode('1.0.2'), 1_000_002);

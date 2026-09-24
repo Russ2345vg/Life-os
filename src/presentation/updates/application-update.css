@@ -1,0 +1,35 @@
+.application-update {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+  padding: var(--space-4);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-medium);
+  background: var(--surface-glass);
+  color: var(--text-primary);
+}
+.application-update__copy {
+  flex: 1 1 20rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.application-update__copy p {
+  margin: var(--space-1) 0 0;
+  color: var(--text-secondary);
+}
+.application-update__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.planner-v2 .application-update .planner-primary,
+.planner-v2 .application-update .planner-primary:hover:not(:disabled) {
+  background: var(--surface-primary-gold);
+  border-color: var(--border-gold);
+  color: var(--text-on-primary);
+}
+.planner-v2 .application-update button:focus-visible {
+  outline-color: var(--border-gold);
+}

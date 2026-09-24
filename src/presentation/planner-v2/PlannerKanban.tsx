@@ -9,11 +9,13 @@ export function PlannerKanban({
   data,
   kind,
   focusIds,
+  today,
   ...operations
 }: PlannerViewOperations & {
   readonly data: PlannerViews;
   readonly kind: 'goals' | 'actions';
   readonly focusIds: readonly string[];
+  readonly today?: string;
 }) {
   const focused = new Set(focusIds);
   const boardRef = useRef<HTMLDivElement>(null);
@@ -101,6 +103,7 @@ export function PlannerKanban({
                         key={action.id.toString()}
                         action={action}
                         goals={data.goals}
+                        {...(today ? { today } : {})}
                         lazyDetails
                         {...operations}
                       />

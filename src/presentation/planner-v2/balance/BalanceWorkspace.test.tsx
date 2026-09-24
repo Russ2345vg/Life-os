@@ -94,6 +94,67 @@ beforeEach(() => {
   withState(data());
 });
 describe('balance screens and compact editors', () => {
+  it('offers creation when only archived spheres remain', () => {
+    const state = data();
+    withState({
+      ...state,
+      spheres: [state.spheres[0]!.archive(now)],
+      directions: [],
+      indicators: [],
+    });
+    const html = screen({ view: 'spheres' });
+    expect(html).toContain('Создать первую сферу');
+    expect(html).not.toContain('Колесо состояния жизни:');
+    expect(unexpected).not.toHaveBeenCalled();
+  });
+  it('offers selection before rating and distinguishes zero from missing scores', () => {
+    const state = data();
+    const sphere = state.spheres[0]!;
+    withState({
+      ...state,
+      spheres: [sphere.update({ name: sphere.name, includeInBalanceWheel: false }, now)],
+    });
+    expect(screen({ view: 'spheres' })).toContain('Выбрать сферы');
+    withState({ ...state, directions: [], indicators: [] });
+    const empty = screen({ view: 'spheres' });
+    expect(empty).toContain('Оценить первую сферу');
+    expect(empty).toContain('Контекст целей');
+    expect(empty).toContain('Квартал');
+    expect(empty).toContain('Недостаточно данных для сравнения');
+    expect(empty).not.toContain('Колесо состояния жизни:');
+    withState({
+      ...state,
+      directions: [],
+      indicators: [],
+      spheres: [
+        sphere.update({ name: sphere.name, manualScore: 0 }, now),
+        Sphere.create({
+          id: EntityId.create('missing'),
+          name: 'Работа',
+          includeInBalanceWheel: true,
+          now,
+        }),
+      ],
+    });
+    const partial = screen({ view: 'spheres' });
+    expect(partial).toContain('Оценено 1 из 2 сфер');
+    expect(partial).toContain('Оценить следующую сферу');
+    expect(partial).toContain('Здоровье: 0.0 из 10');
+  });
+  it('requires a desired level before declaring no deficit', () => {
+    const state = data();
+    withState({
+      ...state,
+      spheres: [state.spheres[0]!.update({ name: 'Здоровье', desiredLevel: null }, now)],
+    });
+    expect(screen({ view: 'spheres' })).toContain('Недостаточно данных для сравнения');
+    withState({
+      ...state,
+      spheres: [state.spheres[0]!.update({ name: 'Здоровье', desiredLevel: 7 }, now)],
+    });
+    expect(screen({ view: 'spheres' })).toContain('Среди оценённых сфер дефицита не выявлено');
+    expect(screen({ view: 'spheres' })).toContain('Оценено 1 из 1 сфер');
+  });
   it('renders a sphere without directions with only a manual score', () => {
     const state = data();
     withState({

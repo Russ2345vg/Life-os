@@ -16,6 +16,7 @@ class LifeOsAlarmReceiver : BroadcastReceiver() {
     val serviceIntent = Intent(context, LifeOsAlarmRingingService::class.java).apply {
       action = LifeOsAlarmScheduler.ACTION_RING
       putExtra(LifeOsAlarmScheduler.EXTRA_OCCURRENCE_ID, occurrenceId)
+      putExtra(LifeOsAlarmScheduler.EXTRA_CYCLE_DATE, cycleDate)
       putExtra(LifeOsAlarmScheduler.EXTRA_SOUND_URI, intent.getStringExtra(LifeOsAlarmScheduler.EXTRA_SOUND_URI))
       putExtra(
         LifeOsAlarmScheduler.EXTRA_SOUND_TITLE,

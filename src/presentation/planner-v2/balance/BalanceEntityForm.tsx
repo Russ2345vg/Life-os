@@ -6,6 +6,7 @@ import type { DirectionStatus } from '../../../domain/direction/DirectionStatus'
 import { VoiceField } from '../../voice-input/VoiceField';
 import { VoiceTextInput } from '../../voice-input/VoiceTextInput';
 import { VoiceTextArea } from '../../voice-input/VoiceTextArea';
+import { scoreLabel } from './BalanceLabels';
 import { BalanceForm, ImportanceField, ScoreField } from './BalanceFormParts';
 
 export function BalanceEntityForm({
@@ -16,8 +17,10 @@ export function BalanceEntityForm({
   services,
   onSaved,
   onCancel,
+  scoreContext = null,
 }: {
   readonly kind: 'sphere' | 'direction';
+  readonly scoreContext?: { readonly automaticScore: number | null } | null;
   readonly entity: Sphere | Direction | null;
   readonly sphereId: string | null;
   readonly spheres: readonly Sphere[];
@@ -82,12 +85,8 @@ export function BalanceEntityForm({
     if (!result.ok) throw result.error;
     await onSaved();
   };
-  return (
-    <BalanceForm
-      title={entity ? 'Редактирование' : kind === 'sphere' ? 'Новая сфера' : 'Новое направление'}
-      onSave={save}
-      onCancel={onCancel}
-    >
+  const fields = (
+    <>
       <VoiceField>
         <span>Название</span>
         <VoiceTextInput
@@ -96,7 +95,7 @@ export function BalanceEntityForm({
           onValueChange={setName}
           required
           maxLength={120}
-          autoFocus
+          autoFocus={!scoreContext}
         />
       </VoiceField>
       {kind === 'direction' && (
@@ -122,7 +121,7 @@ export function BalanceEntityForm({
           placeholder={kind === 'sphere' ? 'Что входит в эту сферу?' : 'Что вы хотите развивать?'}
         />
       </VoiceField>
-      {kind === 'sphere' && (
+      {kind === 'sphere' && !scoreContext && (
         <ScoreField label="Желаемый уровень · 0–10" value={desired} onChange={setDesired} />
       )}
       <details open={entity !== null}>
@@ -171,8 +170,12 @@ export function BalanceEntityForm({
             </>
           )}
           <ImportanceField value={importance} onChange={setImportance} />
-          <ScoreField label="Ручная оценка · 0–10" value={manual} onChange={setManual} />
-          <p className="planner-muted">Пустая ручная оценка включает автоматический расчёт.</p>
+          {!scoreContext && (
+            <>
+              <ScoreField label="Ручная оценка · 0–10" value={manual} onChange={setManual} />
+              <p className="planner-muted">Пустая ручная оценка включает автоматический расчёт.</p>
+            </>
+          )}
           {kind === 'sphere' && (
             <>
               <label className="balance-check">
@@ -187,6 +190,42 @@ export function BalanceEntityForm({
           )}
         </div>
       </details>
+    </>
+  );
+  return (
+    <BalanceForm
+      title={
+        sphere && scoreContext
+          ? `Оценить «${sphere.name}»`
+          : entity
+            ? 'Редактирование'
+            : kind === 'sphere'
+              ? 'Новая сфера'
+              : 'Новое направление'
+      }
+      onSave={save}
+      onCancel={onCancel}
+    >
+      {sphere && scoreContext ? (
+        <>
+          <ScoreField label="Ручная оценка · 0–10" value={manual} onChange={setManual} />
+          <p className="planner-muted">
+            Введённая оценка заменит автоматический расчёт для этой сферы. Оставьте поле пустым,
+            чтобы использовать автоматический расчёт.
+          </p>
+          <p className="planner-muted">Автоматически: {scoreLabel(scoreContext.automaticScore)}</p>
+          <ScoreField label="Желаемый уровень · 0–10" value={desired} onChange={setDesired} />
+          <p className="planner-muted">
+            Желаемый уровень нужен для сравнения с текущим состоянием.
+          </p>
+          <details>
+            <summary>Другие параметры сферы</summary>
+            {fields}
+          </details>
+        </>
+      ) : (
+        fields
+      )}
     </BalanceForm>
   );
 }

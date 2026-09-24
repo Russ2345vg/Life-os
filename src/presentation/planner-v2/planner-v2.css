@@ -1,15 +1,5 @@
 .planner-v2 {
-  --planner-accent: #48df65;
-  --text-primary: #f5f5f5;
-  --text-secondary: #a0a0a0;
-  --gold-main: var(--planner-accent);
-  --gold-soft: var(--planner-accent);
-  --surface-glass: #0a0a0a;
-  --surface-glass-overlay: #181818;
-  --surface-hover: #181818;
-  --border-soft: #303030;
-  --border-strong: #555;
-  --success: var(--planner-accent);
+  --planner-accent: var(--accent-primary);
   color-scheme: dark;
   display: grid;
   grid-template-columns: 232px minmax(0, 1fr);
@@ -189,6 +179,16 @@
 .planner-sleep-entry small {
   color: var(--text-secondary);
 }
+.planner-v2 .planner-sleep-entry--active {
+  border-color: #2d6a43;
+  background: linear-gradient(135deg, #0b1812, #09100d);
+  box-shadow:
+    inset 0 0 0 1px #43df6b1f,
+    0 0 18px #31d45b0d;
+}
+.planner-v2 .planner-sleep-entry--active small {
+  color: #75d68e;
+}
 .planner-content.planner-content--sleep {
   max-width: 1210px;
   padding: 30px 38px 72px;
@@ -251,7 +251,7 @@
 .sleep-summary-card p {
   margin: 0;
   color: #8f9492;
-  font-size: 11px;
+  font-size: 12px;
 }
 .sleep-topbar-actions {
   display: flex;
@@ -261,7 +261,7 @@
 .sleep-date {
   margin-right: 6px;
   color: #8c918f;
-  font-size: 11px;
+  font-size: 12px;
   text-transform: capitalize;
 }
 .planner-v2 .sleep-topbar-actions button {
@@ -327,7 +327,7 @@
 .sleep-countdown-ring small,
 .sleep-countdown-ring span {
   color: #878d8b;
-  font-size: 9px;
+  font-size: 12px;
   text-align: center;
 }
 .sleep-countdown-ring strong {
@@ -418,7 +418,7 @@
   border: 1px solid #2b3331;
   border-radius: 9px;
   color: #aeb3b1;
-  font-size: 11px;
+  font-size: 12px;
   list-style: none;
 }
 .sleep-settings > summary::-webkit-details-marker {
@@ -474,7 +474,7 @@
 .sleep-check-group > header > span:nth-last-child(2),
 .sleep-check-group > header > span:last-child {
   color: #8b918f;
-  font-size: 11px;
+  font-size: 12px;
 }
 .sleep-group-icon {
   color: #c2c6c4;
@@ -503,7 +503,7 @@
   min-height: 42px;
   padding: 2px 10px;
   color: #d0d3d1;
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
 }
 .sleep-check-group li + li {
@@ -545,7 +545,7 @@
   border-color: #28302e;
   border-radius: 9px;
   color: #acb1ae;
-  font-size: 11px;
+  font-size: 12px;
 }
 .sleep-summary {
   display: grid;
@@ -570,7 +570,7 @@
   padding: 3px 5px;
   border: 0;
   color: #909694;
-  font-size: 9px;
+  font-size: 12px;
 }
 .sleep-summary-card--schedule > div,
 .sleep-summary-card--reminders > div {
@@ -580,7 +580,7 @@
   gap: 8px;
   min-height: 32px;
   color: #afb4b1;
-  font-size: 10px;
+  font-size: 12px;
 }
 .sleep-summary-card--schedule > div > span:first-child {
   font-size: 17px;
@@ -607,11 +607,11 @@
   justify-content: space-between;
   gap: 8px;
   color: #aeb4b1;
-  font-size: 10px;
+  font-size: 12px;
 }
 .sleep-alarm-status__heading strong {
   color: #48e469;
-  font-size: 10px;
+  font-size: 12px;
   text-align: right;
 }
 .sleep-alarm-status--permission_required .sleep-alarm-status__heading strong,
@@ -620,7 +620,7 @@
 }
 .sleep-alarm-status > small {
   color: #858d89;
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.35;
 }
 .sleep-alarm-actions,
@@ -636,7 +636,57 @@
   border-color: #26302d;
   border-radius: 7px;
   color: #b8bfbb;
-  font-size: 9px;
+  font-size: 12px;
+}
+.sleep-dismissal-setup {
+  display: grid;
+  gap: 8px;
+  margin-top: 3px;
+  padding-top: 9px;
+  border-top: 1px solid #1b2421;
+}
+.sleep-dismissal-setup__row,
+.sleep-dismissal-setup__phrase label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.sleep-dismissal-setup__row > span,
+.sleep-dismissal-setup__phrase label > span {
+  display: grid;
+  gap: 1px;
+  color: #c3c9c6;
+  font-size: 12px;
+}
+.sleep-dismissal-setup small {
+  color: #7f8985;
+  font-size: 12px;
+  line-height: 1.35;
+}
+.sleep-dismissal-setup__phrase {
+  display: grid;
+  gap: 6px;
+}
+.sleep-dismissal-setup__phrase input {
+  min-width: 0;
+  width: 126px;
+  height: 28px;
+  padding: 5px 7px;
+  border: 1px solid #26302d;
+  border-radius: 7px;
+  background: #070c0b;
+  color: #e5e9e7;
+  font: inherit;
+  font-size: 12px;
+}
+.planner-v2 .sleep-dismissal-setup button {
+  min-height: 28px;
+  padding: 4px 7px;
+  border-color: #26302d;
+  border-radius: 7px;
+  color: #b8bfbb;
+  font-size: 12px;
 }
 .sleep-summary-card--dnd header {
   align-items: start;
@@ -660,6 +710,11 @@
   border-radius: 999px;
   background: var(--planner-accent);
   box-shadow: 0 0 8px #48df6544;
+  min-width: 29px;
+  min-height: 16px;
+  padding: 0;
+  border: 0;
+  cursor: pointer;
 }
 .sleep-switch::after {
   content: '';
@@ -671,6 +726,23 @@
   border-radius: 50%;
   background: #f5f6f5;
 }
+.sleep-switch--off {
+  background: #29312f;
+  box-shadow: none;
+}
+.sleep-switch--off::after {
+  right: 15px;
+  background: #929996;
+}
+.planner-v2 .sleep-dnd-permission {
+  min-height: 28px;
+  margin: 9px 0 0 29px;
+  padding: 4px 8px;
+  border-color: #2a3431;
+  border-radius: 7px;
+  color: #c8cecb;
+  font-size: 12px;
+}
 .sleep-summary-card--reminders header {
   margin-bottom: 5px;
 }
@@ -679,6 +751,11 @@
   min-height: 28px;
   padding-left: 25px;
 }
+.sleep-summary-card--reminders strong {
+  color: #929b97;
+  font-size: 12px;
+  font-weight: 500;
+}
 .sleep-summary-card--reminders .sleep-switch {
   width: 25px;
   height: 14px;
@@ -686,6 +763,50 @@
 .sleep-summary-card--reminders .sleep-switch::after {
   width: 10px;
   height: 10px;
+}
+.sleep-summary-card--history {
+  display: grid;
+  gap: 9px;
+}
+.sleep-history-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 8px;
+  color: #8e9894;
+  font-size: 12px;
+  line-height: 1.35;
+}
+.sleep-history-list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sleep-history-list li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px 8px;
+  padding: 7px 0;
+  border-top: 1px solid #17201d;
+}
+.sleep-history-list strong {
+  color: #c9cfcc;
+  font-size: 12px;
+  font-weight: 500;
+}
+.sleep-history-list span {
+  color: #abb2af;
+  font-size: 12px;
+  text-align: right;
+}
+.sleep-history-list small {
+  grid-column: 1 / -1;
+  color: #727d78;
+  font-size: 12px;
+}
+.sleep-history-mobile {
+  display: none;
 }
 .sleep-finish-actions {
   display: grid;
@@ -696,7 +817,7 @@
   min-height: 39px;
   padding: 7px 10px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 12px;
 }
 .sleep-sr-only {
   position: absolute;
@@ -1193,7 +1314,7 @@
     grid-template-columns: 70px 160px minmax(180px, 1fr);
   }
 }
-@media (max-width: 700px) {
+@media (max-width: 760px) {
   .planner-v2 {
     display: block;
   }
@@ -1425,11 +1546,11 @@
   }
   .planner-v2 .sleep-title-block h1 {
     margin: 0;
-    font-size: 15px;
+    font-size: 22px;
     letter-spacing: -0.2px;
   }
   .sleep-title-block p {
-    font-size: 9px;
+    font-size: 12px;
   }
   .sleep-topbar-actions {
     justify-content: end;
@@ -1466,7 +1587,7 @@
   }
   .sleep-countdown-ring small,
   .sleep-countdown-ring span {
-    font-size: 6px;
+    font-size: 12px;
   }
   .sleep-countdown-ring strong {
     margin: 1px 0;
@@ -1475,7 +1596,7 @@
   .sleep-hero blockquote {
     justify-self: stretch;
     padding-left: 13px;
-    font-size: 9px;
+    font-size: 12px;
     line-height: 1.35;
   }
   .sleep-hero blockquote span {
@@ -1503,6 +1624,13 @@
     border-radius: 9px;
     background: #080d0c;
   }
+  .sleep-history-mobile {
+    display: block;
+    margin-top: 6px;
+  }
+  .sleep-history-mobile .sleep-summary-card {
+    display: grid;
+  }
   .sleep-section-heading {
     min-height: 32px;
     margin-bottom: 4px;
@@ -1514,7 +1642,7 @@
     gap: 7px;
   }
   .sleep-section-heading > div > span {
-    font-size: 10px;
+    font-size: 12px;
   }
   .planner-v2 .sleep-section-heading > div > button {
     min-width: 28px;
@@ -1549,7 +1677,7 @@
   .sleep-check-group label {
     min-height: 42px;
     padding: 1px 8px;
-    font-size: 10px;
+    font-size: 12px;
   }
   .sleep-add-actions {
     gap: 6px;
@@ -1558,7 +1686,7 @@
   .planner-v2 .sleep-add-actions button {
     min-height: 36px;
     padding: 4px 6px;
-    font-size: 9px;
+    font-size: 12px;
   }
   .sleep-finish-actions {
     gap: 6px;
@@ -1566,7 +1694,7 @@
   }
   .planner-v2 .sleep-finish-actions button {
     min-height: 40px;
-    font-size: 10px;
+    font-size: 12px;
   }
   .sleep-time-form {
     grid-template-columns: 1fr;

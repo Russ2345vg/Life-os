@@ -7,6 +7,7 @@ export interface PlannerTodayOverview {
   readonly actions: readonly LifeAction[];
   readonly completed: readonly LifeAction[];
   readonly unscheduled: readonly LifeAction[];
+  readonly overdue: readonly LifeAction[];
 }
 
 export class GetPlannerToday {
@@ -30,6 +31,9 @@ export class GetPlannerToday {
       main,
       actions: today.filter((action) => action !== main),
       unscheduled: open.filter((action) => action.plannedDate === null),
+      overdue: open
+        .filter((action) => action.plannedDate !== null && action.plannedDate.isBefore(date))
+        .sort((a, b) => a.plannedDate!.toString().localeCompare(b.plannedDate!.toString())),
       completed: all.filter((action) => {
         const at = action.completedAt;
         return (

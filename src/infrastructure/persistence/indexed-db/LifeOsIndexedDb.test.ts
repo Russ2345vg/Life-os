@@ -199,6 +199,7 @@ describe('LifeOsIndexedDb', () => {
       LIFE_OS_SYNC_STORE.quarantine,
       LIFE_OS_SYNC_STORE.settings,
       LIFE_OS_SYNC_STORE.snapshotMeta,
+      LIFE_OS_STORE.taskScenarios,
       LIFE_OS_STORE.tomorrowPlans,
       LIFE_OS_STORE.walkCaptures,
       LIFE_OS_STORE.walks,
@@ -396,7 +397,7 @@ describe('LifeOsIndexedDb', () => {
     const secondConnection = await indexedDb.open();
 
     expect(secondConnection).not.toBe(firstConnection);
-    expect([...secondConnection.objectStoreNames]).toHaveLength(44);
+    expect([...secondConnection.objectStoreNames]).toHaveLength(45);
     indexedDb.close();
   });
 

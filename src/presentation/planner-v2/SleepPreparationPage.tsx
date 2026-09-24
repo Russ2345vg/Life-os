@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import type { SleepScheduleService } from '../../application/sleep/SleepScheduleService';
 import {
   unavailableWakeAlarmStatus,
+  unavailableWakeDismissalSetup,
   type AlarmSound,
   type WakeAlarmPermissionIssue,
   type WakeAlarmStatus,
+  type WakeDismissalSetup,
 } from '../../application/sleep/WakeAlarmGateway';
 import type {
   NightCycle,
@@ -12,6 +14,7 @@ import type {
   SleepPreparationItem,
   SleepScheduleState,
 } from '../../domain/sleep/SleepSchedule';
+import { selectSleepHistoryEntries, summarizeSleepHistory } from '../../domain/sleep/SleepSchedule';
 
 export function SleepPreparationPage({
   service,
@@ -27,6 +30,9 @@ export function SleepPreparationPage({
   const [alarmSounds, setAlarmSounds] = useState<readonly AlarmSound[]>([
     { uri: null, title: 'Системный сигнал' },
   ]);
+  const [dismissalSetup, setDismissalSetup] = useState<WakeDismissalSetup>(
+    unavailableWakeDismissalSetup(),
+  );
 
   useEffect(() => {
     let active = true;
@@ -38,11 +44,15 @@ export function SleepPreparationPage({
           opened.settings === null
             ? { state: opened, alarm: await service.getAlarmStatus() }
             : await service.syncAlarm();
-        const sounds = await service.listAlarmSounds();
+        const [sounds, loadedDismissalSetup] = await Promise.all([
+          service.listAlarmSounds(),
+          service.getWakeDismissalSetup(),
+        ]);
         if (!active) return;
         setState(synchronized.state);
         setAlarmStatus(synchronized.alarm);
         setAlarmSounds(sounds);
+        setDismissalSetup(loadedDismissalSetup);
       } catch (reason: unknown) {
         if (active) setError(messageOf(reason));
       }
@@ -81,6 +91,7 @@ export function SleepPreparationPage({
       error={error}
       alarmStatus={alarmStatus}
       alarmSounds={alarmSounds}
+      dismissalSetup={dismissalSetup}
       onBack={onBack}
       onSaveSettings={(input) =>
         run(async () => {
@@ -118,6 +129,27 @@ export function SleepPreparationPage({
           .catch((reason: unknown) => setError(messageOf(reason)));
       }}
       onSkipNearestAlarm={() => run(() => service.skipNearestWake())}
+      onRegenerateDismissalQr={() => {
+        if (busy) return;
+        setBusy(true);
+        setError(null);
+        void service
+          .regenerateWakeDismissalQr()
+          .then(setDismissalSetup)
+          .catch((reason: unknown) => setError(messageOf(reason)))
+          .finally(() => setBusy(false));
+      }}
+      onSaveEmergencyPhrase={(phrase) => {
+        if (busy) return;
+        setBusy(true);
+        setError(null);
+        void service
+          .saveWakeEmergencyPhrase(phrase)
+          .then(setDismissalSetup)
+          .catch((reason: unknown) => setError(messageOf(reason)))
+          .finally(() => setBusy(false));
+      }}
+      onToggleQuietMode={(enabled) => run(() => service.setQuietModeEnabled(enabled))}
     />
   );
 }
@@ -128,6 +160,7 @@ export function SleepPreparationView({
   error,
   alarmStatus,
   alarmSounds,
+  dismissalSetup,
   onBack,
   onSaveSettings,
   onComplete,
@@ -144,12 +177,16 @@ export function SleepPreparationView({
   onScheduleTestAlarm,
   onOpenAlarmSettings,
   onSkipNearestAlarm,
+  onRegenerateDismissalQr,
+  onSaveEmergencyPhrase,
+  onToggleQuietMode,
 }: {
   readonly state: SleepScheduleState;
   readonly busy: boolean;
   readonly error: string | null;
   readonly alarmStatus: WakeAlarmStatus;
   readonly alarmSounds: readonly AlarmSound[];
+  readonly dismissalSetup: WakeDismissalSetup;
   readonly onBack: () => void;
   readonly onSaveSettings: (input: {
     bedtime: string;
@@ -172,6 +209,9 @@ export function SleepPreparationView({
   readonly onScheduleTestAlarm: () => void;
   readonly onOpenAlarmSettings: (issue: WakeAlarmPermissionIssue) => void;
   readonly onSkipNearestAlarm: () => void;
+  readonly onRegenerateDismissalQr: () => void;
+  readonly onSaveEmergencyPhrase: (phrase: string) => void;
+  readonly onToggleQuietMode: (enabled: boolean) => void;
 }) {
   const timeZone = useMemo(
     () => state.settings?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -270,19 +310,6 @@ export function SleepPreparationView({
         </blockquote>
       </section>
 
-      <div className="sleep-alarm-mobile-status">
-        <AlarmStatusPanel
-          status={alarmStatus}
-          expectedSettingsVersion={state.settings.version}
-          wakeTime={state.settings.wakeTime}
-          timeZone={state.settings.timeZone}
-          busy={busy}
-          onScheduleTest={onScheduleTestAlarm}
-          onOpenSettings={onOpenAlarmSettings}
-          onSkipNearest={onSkipNearestAlarm}
-        />
-      </div>
-
       <div className="sleep-layout">
         <main className="sleep-checklist">
           <div className="sleep-section-heading">
@@ -298,7 +325,7 @@ export function SleepPreparationView({
               open={settingsOpen}
               onToggle={(event) => setSettingsOpen(event.currentTarget.open)}
             >
-              <summary>
+              <summary aria-label="Настроить подготовку">
                 <span aria-hidden="true">
                   <SleepGlyph kind="settings" />
                 </span>
@@ -427,6 +454,9 @@ export function SleepPreparationView({
               onScheduleTest={onScheduleTestAlarm}
               onOpenSettings={onOpenAlarmSettings}
               onSkipNearest={onSkipNearestAlarm}
+              dismissalSetup={dismissalSetup}
+              onRegenerateDismissalQr={onRegenerateDismissalQr}
+              onSaveEmergencyPhrase={onSaveEmergencyPhrase}
             />
           </section>
 
@@ -437,11 +467,33 @@ export function SleepPreparationView({
               </span>
               <div>
                 <h2>Режим «Не беспокоить»</h2>
-                <p>Выключится за 30 минут до сна.</p>
+                <p>{quietModeStatusLabel(state.settings.quietModeEnabled, alarmStatus)}</p>
               </div>
-              <span className="sleep-switch" aria-label="Режим не беспокоить включён" />
+              <button
+                className={`sleep-switch${state.settings.quietModeEnabled ? '' : ' sleep-switch--off'}`}
+                type="button"
+                role="switch"
+                aria-checked={state.settings.quietModeEnabled}
+                aria-label="Режим не беспокоить"
+                disabled={busy}
+                onClick={() => onToggleQuietMode(!state.settings!.quietModeEnabled)}
+              />
             </header>
-            <p>Разрешены будильники и важные уведомления.</p>
+            <p>
+              Разрешены будильники и звонки избранных контактов. Повторные звонки не обходят тишину.
+            </p>
+            {state.settings.quietModeEnabled &&
+            alarmStatus.supported &&
+            !alarmStatus.notificationPolicyAccessGranted ? (
+              <button
+                className="sleep-dnd-permission"
+                type="button"
+                disabled={busy}
+                onClick={() => onOpenAlarmSettings('DND_POLICY')}
+              >
+                Дать доступ Android
+              </button>
+            ) : null}
           </section>
 
           <section className="sleep-summary-card sleep-summary-card--reminders">
@@ -451,13 +503,21 @@ export function SleepPreparationView({
               </span>
               <h2>Напоминания</h2>
             </header>
-            {['За 60 минут до сна', 'За 15 минут до сна', 'Доброе утро'].map((label) => (
-              <div key={label}>
-                <span>{label}</span>
-                <span className="sleep-switch" aria-hidden="true" />
-              </div>
-            ))}
+            <div>
+              <span>За 60 минут до сна</span>
+              <strong>{reminderAvailabilityLabel(alarmStatus)}</strong>
+            </div>
+            <div>
+              <span>За 15 минут до сна</span>
+              <strong>{completed ? 'Не требуется' : 'По условию'}</strong>
+            </div>
+            <div>
+              <span>В момент сна</span>
+              <strong>Всегда</strong>
+            </div>
           </section>
+
+          <SleepHistoryPanel state={state} timeZone={state.settings.timeZone} />
 
           <section className="sleep-finish-actions">
             <button
@@ -478,6 +538,24 @@ export function SleepPreparationView({
           </section>
         </aside>
       </div>
+      <div className="sleep-alarm-mobile-status">
+        <AlarmStatusPanel
+          status={alarmStatus}
+          expectedSettingsVersion={state.settings.version}
+          wakeTime={state.settings.wakeTime}
+          timeZone={state.settings.timeZone}
+          busy={busy}
+          onScheduleTest={onScheduleTestAlarm}
+          onOpenSettings={onOpenAlarmSettings}
+          onSkipNearest={onSkipNearestAlarm}
+          dismissalSetup={dismissalSetup}
+          onRegenerateDismissalQr={onRegenerateDismissalQr}
+          onSaveEmergencyPhrase={onSaveEmergencyPhrase}
+        />
+        <div className="sleep-history-mobile">
+          <SleepHistoryPanel state={state} timeZone={state.settings.timeZone} />
+        </div>
+      </div>
     </section>
   );
 }
@@ -491,6 +569,9 @@ function AlarmStatusPanel({
   onScheduleTest,
   onOpenSettings,
   onSkipNearest,
+  dismissalSetup,
+  onRegenerateDismissalQr,
+  onSaveEmergencyPhrase,
 }: {
   readonly status: WakeAlarmStatus;
   readonly expectedSettingsVersion: number;
@@ -500,6 +581,9 @@ function AlarmStatusPanel({
   readonly onScheduleTest: () => void;
   readonly onOpenSettings: (issue: WakeAlarmPermissionIssue) => void;
   readonly onSkipNearest: () => void;
+  readonly dismissalSetup: WakeDismissalSetup;
+  readonly onRegenerateDismissalQr: () => void;
+  readonly onSaveEmergencyPhrase: (phrase: string) => void;
 }) {
   const label = alarmStatusLabel(status, expectedSettingsVersion, wakeTime, timeZone);
   return (
@@ -534,6 +618,70 @@ function AlarmStatusPanel({
           Пропустить ближайший
         </button>
       </div>
+      {dismissalSetup.supported ? (
+        <WakeDismissalSetupPanel
+          setup={dismissalSetup}
+          busy={busy}
+          onRegenerateQr={onRegenerateDismissalQr}
+          onSaveEmergencyPhrase={onSaveEmergencyPhrase}
+        />
+      ) : null}
+    </section>
+  );
+}
+
+function WakeDismissalSetupPanel({
+  setup,
+  busy,
+  onRegenerateQr,
+  onSaveEmergencyPhrase,
+}: {
+  readonly setup: WakeDismissalSetup;
+  readonly busy: boolean;
+  readonly onRegenerateQr: () => void;
+  readonly onSaveEmergencyPhrase: (phrase: string) => void;
+}) {
+  return (
+    <section className="sleep-dismissal-setup" aria-label="Защита выключения будильника">
+      <div className="sleep-dismissal-setup__row">
+        <span>
+          QR для подъёма
+          <small>{setup.qrConfigured ? 'Настроен' : 'Не настроен'}</small>
+        </span>
+        <button type="button" disabled={busy} onClick={onRegenerateQr}>
+          {setup.qrConfigured ? 'Заменить и сохранить' : 'Создать и сохранить'}
+        </button>
+      </div>
+      {setup.qrSavedTo ? <small>Файл: {setup.qrSavedTo}</small> : null}
+      <form
+        className="sleep-dismissal-setup__phrase"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const data = new FormData(event.currentTarget);
+          onSaveEmergencyPhrase(String(data.get('emergencyPhrase') ?? ''));
+          event.currentTarget.reset();
+        }}
+      >
+        <label>
+          <span>
+            Аварийная фраза
+            <small>{setup.emergencyPhraseConfigured ? 'Настроена' : 'Не настроена'}</small>
+          </span>
+          <input
+            name="emergencyPhrase"
+            type="password"
+            minLength={16}
+            autoComplete="new-password"
+            placeholder="Не менее 16 символов"
+            required
+            disabled={busy}
+          />
+        </label>
+        <button type="submit" disabled={busy}>
+          Сохранить фразу
+        </button>
+      </form>
+      <small>QR и фраза проверяются локально; прежний QR после замены недействителен.</small>
     </section>
   );
 }
@@ -568,7 +716,90 @@ function alarmStatusLabel(
 function alarmIssueLabel(issue: WakeAlarmPermissionIssue): string {
   if (issue === 'EXACT_ALARM') return 'Точные будильники';
   if (issue === 'NOTIFICATIONS') return 'Уведомления';
+  if (issue === 'DND_POLICY') return 'Доступ к режиму «Не беспокоить»';
   return 'Полный экран';
+}
+
+function quietModeStatusLabel(enabled: boolean, status: WakeAlarmStatus): string {
+  if (!enabled) return 'Выключен';
+  if (!status.supported) return 'Настройка применится на Android';
+  if (!status.notificationPolicyAccessGranted) return 'Нужен доступ Android';
+  if (status.quietModeState === 'ACTIVE') return 'Активен до подъёма';
+  if (status.quietModeState === 'OVERRIDDEN') return 'Изменён вручную до следующего цикла';
+  if (status.quietModeState === 'ERROR') return 'Android не подтвердил правило';
+  return 'Включится за 60 минут до сна';
+}
+
+function reminderAvailabilityLabel(status: WakeAlarmStatus): string {
+  if (!status.supported) return 'На Android';
+  if (!status.notificationsGranted) return 'Нет доступа';
+  return status.nextReminderAt === null ? 'Ожидает' : 'Запланировано';
+}
+
+function SleepHistoryPanel({
+  state,
+  timeZone,
+}: {
+  readonly state: SleepScheduleState;
+  readonly timeZone: string;
+}) {
+  const summary = summarizeSleepHistory(state);
+  const entries = selectSleepHistoryEntries(state).slice(0, 3);
+  return (
+    <section className="sleep-summary-card sleep-summary-card--history">
+      <header>
+        <span className="sleep-card-icon" aria-hidden="true">
+          <SleepGlyph kind="history" />
+        </span>
+        <h2>История сна</h2>
+      </header>
+      <div className="sleep-history-stats">
+        <span>QR {summary.qrDismissals}</span>
+        <span>Аварийно {summary.emergencyDismissals}</span>
+        <span>Без результата {summary.withoutTrustworthyResult}</span>
+        <span>Будильник отключён {summary.alarmDisabled}</span>
+        <span>Вода {summary.waterCompleted}</span>
+        <span>
+          Доля QR{' '}
+          {summary.qrShare === null ? 'нет данных' : `${Math.round(summary.qrShare * 100)}%`}
+        </span>
+      </div>
+      {entries.length === 0 ? (
+        <p>Записи появятся после первой ночи.</p>
+      ) : (
+        <ul className="sleep-history-list">
+          {entries.map((entry) => (
+            <li key={entry.cycleDate}>
+              <strong>{formatCycleDate(entry.cycleDate, timeZone)}</strong>
+              <span>{preparationHistoryLabel(entry.preparation)}</span>
+              <small>
+                {wakeHistoryLabel(entry.wakeResult)} · Вода:{' '}
+                {entry.waterCompleted ? 'подтверждена' : 'нет отметки'}
+              </small>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function preparationHistoryLabel(
+  value: ReturnType<typeof selectSleepHistoryEntries>[number]['preparation'],
+): string {
+  if (value === 'ALL_DONE') return 'Все пункты выполнены';
+  if (value === 'WITH_SKIPS') return 'Завершено с пропусками';
+  if (value === 'SKIPPED_TODAY') return 'Подготовка пропущена';
+  return 'Нет отметок';
+}
+
+function wakeHistoryLabel(
+  value: ReturnType<typeof selectSleepHistoryEntries>[number]['wakeResult'],
+): string {
+  if (value === 'QR') return 'Подъём по QR';
+  if (value === 'EMERGENCY') return 'Аварийное отключение';
+  if (value === 'ALARM_DISABLED') return 'Будильник заранее отключён';
+  return 'Нет достоверного результата';
 }
 
 function SettingsForm({
@@ -939,6 +1170,7 @@ type SleepGlyphKind =
   | 'moon'
   | 'dnd'
   | 'reminder'
+  | 'history'
   | 'settings'
   | 'dot';
 
@@ -1027,6 +1259,11 @@ function SleepGlyph({ kind }: { readonly kind: SleepGlyphKind }) {
         <>
           <path d="M6 17h12l-2-3v-3a4 4 0 0 0-8 0v3l-2 3Z" />
           <path d="M10 20h4" />
+        </>
+      ) : kind === 'history' ? (
+        <>
+          <path d="M4 12a8 8 0 1 0 2.3-5.7" />
+          <path d="M4 4v5h5M12 8v4l3 2" />
         </>
       ) : kind === 'settings' ? (
         <>

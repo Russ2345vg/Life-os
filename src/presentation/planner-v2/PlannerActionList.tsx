@@ -1,7 +1,8 @@
+import { plannerDisplayDate } from './plannerDisplayDate';
 import { RecurrenceBadge } from './RecurrenceBadge';
 import { PlanningActionDetails } from './PlanningActionDetails';
 import { editPlannerField, plannerFieldState, type PlannerFieldDraft } from './plannerActionDraft';
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import type { Direction, Goal, LifeAction, Sphere } from '../../domain';
 import { VoiceField } from '../voice-input/VoiceField';
 import { VoiceTextInput } from '../voice-input/VoiceTextInput';
@@ -56,6 +57,55 @@ export function PlannerActionList({
   const [sphereFilter, setSphereFilter] = useState('');
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [sort, setSort] = useState<'date' | 'title'>('date');
+  const filterButton = useRef<HTMLButtonElement>(null);
+  const closeFilters = () => {
+    setFiltersOpen(false);
+    filterButton.current?.focus();
+  };
+  const resetFilters = () => {
+    setView('open');
+    setGoalFilter('');
+    setDirectionFilter('');
+    setSphereFilter('');
+    setOverdueOnly(false);
+    setSort('date');
+  };
+  const activeFilters = [
+    ...(view !== 'open'
+      ? [{ key: 'view', label: actionViewLabels[view], clear: () => setView('open') }]
+      : []),
+    ...(goalFilter
+      ? [
+          {
+            key: 'goal',
+            label: goals.find((g) => g.id.toString() === goalFilter)?.title ?? 'Цель',
+            clear: () => setGoalFilter(''),
+          },
+        ]
+      : []),
+    ...(directionFilter
+      ? [
+          {
+            key: 'direction',
+            label:
+              directions.find((d) => d.id.toString() === directionFilter)?.name ?? 'Направление',
+            clear: () => setDirectionFilter(''),
+          },
+        ]
+      : []),
+    ...(sphereFilter
+      ? [
+          {
+            key: 'sphere',
+            label: spheres.find((s) => s.id.toString() === sphereFilter)?.name ?? 'Сфера',
+            clear: () => setSphereFilter(''),
+          },
+        ]
+      : []),
+    ...(overdueOnly
+      ? [{ key: 'overdue', label: 'Только просроченные', clear: () => setOverdueOnly(false) }]
+      : []),
+  ];
   const visible = filterPlannerActions(actions, view, search, today).filter(
     (action) =>
       (!goalFilter || action.goalId?.toString() === goalFilter) &&
@@ -228,107 +278,144 @@ export function PlannerActionList({
         </VoiceField>
         <button
           type="button"
+          ref={filterButton}
+          aria-controls="action-filters"
+          onKeyDown={(event) => {
+            if (event.key === 'Escape' && filtersOpen) closeFilters();
+          }}
           aria-expanded={filtersOpen}
           onClick={() => setFiltersOpen(!filtersOpen)}
         >
-          Фильтр{goalFilter || directionFilter || sphereFilter || overdueOnly ? ' •' : ''}
+          Фильтры{activeFilters.length ? ` · ${activeFilters.length}` : ''}
         </button>
       </div>
-      <div className="planner-segments" role="group" aria-label="Показать действия">
-        {Object.entries(actionViewLabels).map(([value, label]) => (
-          <button
-            type="button"
-            key={value}
-            aria-pressed={view === value}
-            onClick={() => setView(value as ActionView)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
       {filtersOpen && (
-        <section className="planner-filter-panel" aria-label="Фильтры действий">
-          {spheres.length > 0 && (
-            <label>
-              <span>Сфера</span>
-              <select
-                value={sphereFilter}
-                onChange={(event) => setSphereFilter(event.target.value)}
+        <section
+          id="action-filters"
+          className="planner-filter-panel"
+          aria-label="Фильтры действий"
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.stopPropagation();
+              closeFilters();
+            }
+          }}
+        >
+          <p className="planner-filter-label">Показать действия</p>
+          <div className="planner-segments" role="group" aria-label="Показать действия">
+            {Object.entries(actionViewLabels).map(([value, label]) => (
+              <button
+                type="button"
+                key={value}
+                aria-pressed={view === value}
+                onClick={() => setView(value as ActionView)}
               >
-                <option value="">Все сферы</option>
-                {spheres.map((s) => (
-                  <option key={s.id.toString()} value={s.id.toString()}>
-                    {s.name}
+                {label}
+              </button>
+            ))}
+          </div>
+          {view === 'upcoming' && (
+            <p className="planner-muted">Запланированные на ближайшие 7 дней, начиная с завтра.</p>
+          )}
+          <div className="planner-form-columns">
+            {spheres.length > 0 && (
+              <label>
+                <span>Сфера</span>
+                <select
+                  value={sphereFilter}
+                  onChange={(event) => setSphereFilter(event.target.value)}
+                >
+                  <option value="">Все сферы</option>
+                  {spheres.map((s) => (
+                    <option key={s.id.toString()} value={s.id.toString()}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {directions.length > 0 && (
+              <label>
+                <span>Направление</span>
+                <select
+                  value={directionFilter}
+                  onChange={(event) => setDirectionFilter(event.target.value)}
+                >
+                  <option value="">Все направления</option>
+                  {directions.map((d) => (
+                    <option key={d.id.toString()} value={d.id.toString()}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <label>
+              <span>Цель</span>
+              <select value={goalFilter} onChange={(event) => setGoalFilter(event.target.value)}>
+                <option value="">Все цели</option>
+                {goals.map((goal) => (
+                  <option key={goal.id.toString()} value={goal.id.toString()}>
+                    {goal.title}
                   </option>
                 ))}
               </select>
             </label>
-          )}
-          {directions.length > 0 && (
+            <label className="planner-check-label">
+              <input
+                type="checkbox"
+                checked={overdueOnly}
+                onChange={(event) => setOverdueOnly(event.target.checked)}
+              />
+              Только просроченные
+            </label>
             <label>
-              <span>Направление</span>
+              <span>Сортировка</span>
               <select
-                value={directionFilter}
-                onChange={(event) => setDirectionFilter(event.target.value)}
+                value={sort}
+                onChange={(event) => setSort(event.target.value as 'date' | 'title')}
               >
-                <option value="">Все направления</option>
-                {directions.map((d) => (
-                  <option key={d.id.toString()} value={d.id.toString()}>
-                    {d.name}
-                  </option>
-                ))}
+                <option value="date">По дате</option>
+                <option value="title">По названию</option>
               </select>
             </label>
-          )}
-          <label>
-            <span>Цель</span>
-            <select value={goalFilter} onChange={(event) => setGoalFilter(event.target.value)}>
-              <option value="">Все цели</option>
-              {goals.map((goal) => (
-                <option key={goal.id.toString()} value={goal.id.toString()}>
-                  {goal.title}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="planner-check-label">
-            <input
-              type="checkbox"
-              checked={overdueOnly}
-              onChange={(event) => setOverdueOnly(event.target.checked)}
-            />
-            Только просроченные
-          </label>
-          <label>
-            <span>Сортировка</span>
-            <select
-              value={sort}
-              onChange={(event) => setSort(event.target.value as 'date' | 'title')}
-            >
-              <option value="date">По дате</option>
-              <option value="title">По названию</option>
-            </select>
-          </label>
-          <button
-            type="button"
-            onClick={() => {
-              setGoalFilter('');
-              setDirectionFilter('');
-              setSphereFilter('');
-              setOverdueOnly(false);
-              setSort('date');
-            }}
-          >
-            Сбросить
-          </button>
+          </div>
+          <div className="planner-inline-actions">
+            <button type="button" onClick={resetFilters}>
+              Сбросить
+            </button>
+            <button type="button" className="planner-primary" onClick={closeFilters}>
+              Показать: {activeActions.length + completedActions.length}
+            </button>
+          </div>
         </section>
       )}
+      {activeFilters.length > 0 && (
+        <div className="planner-active-filters" aria-label="Активные фильтры">
+          {activeFilters.map((filter) => (
+            <button
+              key={filter.key}
+              type="button"
+              aria-label={`Убрать фильтр: ${filter.label}`}
+              onClick={() => {
+                filter.clear();
+                filterButton.current?.focus();
+              }}
+            >
+              {filter.label} ×
+            </button>
+          ))}
+        </div>
+      )}
+      {sort === 'title' && <p className="planner-muted">Внутри групп: по названию</p>}
       {visible.length === 0 && (
         <div className="planner-empty">
           <p>
             {search
               ? `По запросу «${search}» ничего не найдено.`
-              : 'В этом списке пока нет действий.'}
+              : activeFilters.length
+                ? 'Нет действий с выбранными условиями.'
+                : 'В этом списке пока нет действий.'}
           </p>
           {(view !== 'open' ||
             search ||
@@ -340,11 +427,8 @@ export function PlannerActionList({
               type="button"
               onClick={() => {
                 setSearch('');
-                setView('open');
-                setGoalFilter('');
-                setDirectionFilter('');
-                setSphereFilter('');
-                setOverdueOnly(false);
+                resetFilters();
+                filterButton.current?.focus();
               }}
             >
               Сбросить фильтры
@@ -576,7 +660,7 @@ export function PlannerActionRow({
                       : 'planner-due'
                   }
                 >
-                  {today && savedDate === today ? 'Сегодня' : savedDate || 'Без даты'}
+                  {today && savedDate === today ? 'Сегодня' : plannerDisplayDate(savedDate || null)}
                 </span>
                 {action.priority && <span>{priorityLabel(action.priority)}</span>}
                 <RecurrenceBadge action={action} label={recurrenceLabel} />
@@ -591,8 +675,14 @@ export function PlannerActionRow({
                     {context || (action.goalId ? 'Связанная цель недоступна' : 'Без цели')}
                   </span>
                 )}
-                <span className="planner-muted">
-                  {action.plannedDate?.toString() ?? 'Без даты'}
+                <span
+                  className={
+                    today && savedDate && savedDate < today && isOpenAction(action)
+                      ? 'planner-due planner-due--overdue'
+                      : 'planner-muted'
+                  }
+                >
+                  {plannerDisplayDate(action.plannedDate?.toString() ?? null)}
                   {goalContext && action.priority === 'high' ? ' · Высокий приоритет' : ''}
 
                   {goalNext ? ' · Следующее' : !goalContext && action.isNext ? ' · Главное' : ''}

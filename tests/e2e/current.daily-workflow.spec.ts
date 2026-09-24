@@ -289,13 +289,19 @@ test('Tomorrow moves an existing ready action, creates with an optional date and
   await expect(page).toHaveURL(/#\/v2\/actions\/daily-action-1$/);
   await expect(page.getByLabel('Плановая дата: Подготовленное действие')).toHaveValue(tomorrow);
   await page.goto('/#/v2/today?day=tomorrow');
-  await page.getByRole('button', { name: 'Открыть форму нового действия' }).click();
+  await page.getByLabel('Новое действие на завтра').fill('Быстрое действие завтра');
+  await page.getByRole('button', { name: 'Создать', exact: true }).click();
+  await expect(page.getByText('Действие добавлено на завтра', { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Быстрое действие завтра', exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Создать с параметрами', exact: true }).click();
   await expect(page.locator('input[name="date"]')).toHaveValue(tomorrow);
   await page.getByLabel('Название', { exact: true }).fill('Действие завтра');
   await page.getByRole('button', { name: 'Создать действие', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Завтра', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Действие завтра', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Открыть форму нового действия' }).click();
+  await page.getByRole('button', { name: 'Создать с параметрами', exact: true }).click();
   await page.getByLabel('Название', { exact: true }).fill('Без даты');
   await page.getByRole('dialog').getByRole('button', { name: 'Без даты', exact: true }).click();
   await page.getByRole('button', { name: 'Создать действие', exact: true }).click();

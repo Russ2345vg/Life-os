@@ -2,6 +2,10 @@ import type { SyncEntityRegistration, SyncRegistry } from '../../application/syn
 import { LIFE_OS_STORE } from '../persistence/indexed-db/LifeOsIndexedDb';
 
 export const LIFE_OS_SYNC_REGISTRY = Object.freeze([
+  registration('task_scenario', LIFE_OS_STORE.taskScenarios, 'IndexedDbTaskScenarioRepository', {
+    dependencies: ['life_action'],
+    deletionMode: 'archive',
+  }),
   registration(
     'direction_indicator',
     LIFE_OS_STORE.directionIndicators,

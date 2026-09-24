@@ -31,6 +31,7 @@ export type SyncEntityType =
   | 'goal'
   | 'inbox_idea'
   | 'focus_period'
+  | 'task_scenario'
   | 'user_settings';
 
 export const SYNC_ENTITY_TYPES: readonly SyncEntityType[] = Object.freeze([
@@ -66,6 +67,7 @@ export const SYNC_ENTITY_TYPES: readonly SyncEntityType[] = Object.freeze([
   'goal',
   'inbox_idea',
   'focus_period',
+  'task_scenario',
   'user_settings',
 ]);
 

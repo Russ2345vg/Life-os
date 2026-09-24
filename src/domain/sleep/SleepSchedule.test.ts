@@ -8,8 +8,12 @@ import {
   deletePreparationItem,
   ensureNightCycle,
   finishPreparation,
+  importNativeSleepEvents,
+  importNativeWakeResults,
   movePreparationItem,
   rebuildWakeSchedule,
+  selectSleepHistoryEntries,
+  summarizeSleepHistory,
   setPreparationItemEnabled,
   setSleepFeatureEnabled,
   skipNearestWakeOccurrence,
@@ -339,6 +343,131 @@ describe('SleepSchedule', () => {
 
     expect(disabled.settings?.enabled).toBe(false);
     expect(disabled.wakeOccurrences[0]?.status).toBe(WAKE_OCCURRENCE_STATUS.cancelled);
+  });
+
+  it('imports native night events idempotently by their stable event id', () => {
+    const state = enabledSchedule();
+    const event = {
+      id: 'REMINDER_60:2026-09-20',
+      cycleDate: '2026-09-20',
+      kind: 'REMINDER_60' as const,
+      occurredAt: new Date('2026-09-20T11:00:00.000Z'),
+    };
+
+    const imported = importNativeSleepEvents(state, [event, event]);
+    const repeated = importNativeSleepEvents(imported, [event]);
+
+    expect(imported.sleepEvents).toEqual([event]);
+    expect(repeated).toBe(imported);
+  });
+
+  it('replaces the provisional wake result with one trustworthy dismissal result', () => {
+    const scheduled = rebuildWakeSchedule(enabledSchedule(), {
+      cycleDates: ['2026-09-20'],
+      now: new Date('2026-09-20T12:00:00.000Z'),
+      nextId: ids('wake'),
+    });
+    const provisional = importNativeWakeResults(scheduled, [
+      {
+        id: 'wake:wake-1',
+        occurrenceId: 'wake-1',
+        cycleDate: '2026-09-20',
+        kind: 'NO_RESULT',
+        recordedAt: new Date('2026-09-20T22:00:00.000Z'),
+        emergencyReason: null,
+        emergencyComment: null,
+        waterCompletedAt: null,
+      },
+    ]);
+    const dismissed = importNativeWakeResults(provisional, [
+      {
+        id: 'wake:wake-1',
+        occurrenceId: 'wake-1',
+        cycleDate: '2026-09-20',
+        kind: 'QR',
+        recordedAt: new Date('2026-09-20T22:03:00.000Z'),
+        emergencyReason: null,
+        emergencyComment: null,
+        waterCompletedAt: new Date('2026-09-20T22:04:00.000Z'),
+      },
+    ]);
+
+    expect(dismissed.wakeResults).toHaveLength(1);
+    expect(dismissed.wakeResults[0]).toMatchObject({ kind: 'QR' });
+    expect(dismissed.wakeOccurrences[0]?.status).toBe(WAKE_OCCURRENCE_STATUS.delivered);
+  });
+
+  it('reports honest dismissal statistics and no QR share without a denominator', () => {
+    const empty = summarizeSleepHistory(createEmptySleepSchedule());
+    const withResults = summarizeSleepHistory({
+      ...createEmptySleepSchedule(),
+      wakeResults: [
+        {
+          id: 'wake:1',
+          occurrenceId: 'wake-1',
+          cycleDate: '2026-09-20',
+          kind: 'QR',
+          recordedAt: new Date('2026-09-20T22:00:00.000Z'),
+          emergencyReason: null,
+          emergencyComment: null,
+          waterCompletedAt: new Date('2026-09-20T22:01:00.000Z'),
+        },
+        {
+          id: 'wake:2',
+          occurrenceId: 'wake-2',
+          cycleDate: '2026-09-21',
+          kind: 'EMERGENCY',
+          recordedAt: new Date('2026-09-21T22:00:00.000Z'),
+          emergencyReason: 'Недомогание',
+          emergencyComment: null,
+          waterCompletedAt: null,
+        },
+        {
+          id: 'wake:3',
+          occurrenceId: 'wake-3',
+          cycleDate: '2026-09-22',
+          kind: 'NO_RESULT',
+          recordedAt: new Date('2026-09-22T22:00:00.000Z'),
+          emergencyReason: null,
+          emergencyComment: null,
+          waterCompletedAt: null,
+        },
+      ],
+      alarmExceptions: [
+        {
+          id: 'skip-1',
+          occurrenceId: 'wake-4',
+          kind: 'SKIP_ONCE',
+          createdAt: new Date('2026-09-22T12:00:00.000Z'),
+        },
+      ],
+    });
+
+    expect(empty.qrShare).toBeNull();
+    expect(withResults).toEqual({
+      qrDismissals: 1,
+      emergencyDismissals: 1,
+      alarmDisabled: 1,
+      withoutTrustworthyResult: 1,
+      waterCompleted: 1,
+      qrShare: 0.5,
+    });
+  });
+
+  it('keeps an opened unfinished evening as no marks in history', () => {
+    const opened = ensureNightCycle(enabledSchedule(), {
+      cycleDate: '2026-09-20',
+      cycleId: 'night-1',
+      createdAt: new Date('2026-09-20T12:00:00.000Z'),
+    }).state;
+
+    expect(selectSleepHistoryEntries(opened)).toEqual([
+      expect.objectContaining({
+        cycleDate: '2026-09-20',
+        preparation: 'NO_MARKS',
+        wakeResult: 'NO_RESULT',
+      }),
+    ]);
   });
 });
 

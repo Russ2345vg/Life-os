@@ -109,6 +109,12 @@ function readSecretEnvironment(path) {
 }
 
 function run(command, args, options = {}) {
+  if (command === 'npm.cmd') {
+    if (args[0] !== 'run' || args[1] !== 'tauri' || args[2] !== '--')
+      throw new Error('Unsupported npm release command.');
+    command = process.execPath;
+    args = [join(ROOT, 'node_modules', '@tauri-apps', 'cli', 'tauri.js'), ...args.slice(3)];
+  }
   const result = spawnSync(command, args, {
     cwd: options.cwd ?? ROOT,
     env: options.env ?? process.env,
@@ -198,8 +204,7 @@ function prepareArtifacts({ owner, version, notes }) {
   });
 
   const nsisDirectory = join(TAURI_DIR, 'target', 'release', 'bundle', 'nsis');
-  const installer = findFiles(nsisDirectory, (path) => path.endsWith('_x64-setup.exe'))[0];
-  if (!installer) throw new Error('Windows NSIS installer was not produced.');
+  const installer = selectWindowsInstaller(nsisDirectory, version);
   const signature = `${installer}.sig`;
   if (!existsSync(signature)) throw new Error('Tauri updater signature was not produced.');
 
@@ -260,6 +265,13 @@ function prepareArtifacts({ owner, version, notes }) {
       checksumPath,
     ],
   };
+}
+
+export function selectWindowsInstaller(directory, version) {
+  validateReleaseVersion(version);
+  const installer = join(directory, `LifeOS_${version}_x64-setup.exe`);
+  if (!existsSync(installer)) throw new Error(`Windows installer ${version} was not produced.`);
+  return installer;
 }
 
 async function verifyPublicAssets(owner, assets) {

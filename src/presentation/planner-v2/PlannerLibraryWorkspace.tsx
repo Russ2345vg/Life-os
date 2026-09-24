@@ -309,7 +309,7 @@ export function PlannerLibraryWorkspace({
     onGoalStatus: async (goal, status) => {
       await run(
         () => changePlannerGoalStatus(services.updateGoal, goal, status, services.archiveGoal),
-        'Состояние цели сохранено',
+        status === 'achieved' ? 'Цель завершена' : 'Состояние цели сохранено',
       );
     },
     onGoalDirection: async (goal, directionId) => {
@@ -436,7 +436,7 @@ export function PlannerLibraryWorkspace({
           <header className="planner-page-heading">
             <h1>{route.section === 'goals' ? 'Цели' : 'Действия'}</h1>
             <button
-              className="planner-add-icon"
+              className="planner-primary"
               aria-label={route.section === 'goals' ? 'Новая цель' : 'Новое действие'}
               type="button"
               onClick={() =>
@@ -447,12 +447,13 @@ export function PlannerLibraryWorkspace({
                 )
               }
             >
-              +
+              + {route.section === 'goals' ? 'Новая цель' : 'Новое действие'}
             </button>
           </header>
           <PlannerViewSwitcher route={route} onNavigate={onNavigate} />
           {route.view === 'kanban' ? (
             <PlannerKanban
+              today={today}
               data={views}
               kind={route.section}
               focusIds={activeFocusIds(data.goals, data.focus)}

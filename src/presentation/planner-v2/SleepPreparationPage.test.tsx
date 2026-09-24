@@ -8,7 +8,7 @@ import {
   type SleepScheduleState,
 } from '../../domain/sleep/SleepSchedule';
 import { SleepPreparationView } from './SleepPreparationPage';
-import type { WakeAlarmStatus } from '../../application/sleep/WakeAlarmGateway';
+import type { WakeAlarmStatus, WakeDismissalSetup } from '../../application/sleep/WakeAlarmGateway';
 
 describe('SleepPreparationView', () => {
   it('asks for user-entered times without pre-filling values from the mock', () => {
@@ -39,11 +39,16 @@ describe('SleepPreparationView', () => {
       exactAlarmGranted: true,
       notificationsGranted: true,
       fullScreenGranted: true,
+      notificationPolicyAccessGranted: true,
       issues: [],
       nextOccurrenceId: 'wake-1',
       nextScheduledAt: new Date('2026-09-20T22:15:00.000Z'),
       acknowledgedSettingsVersion: 1,
       lastDeliveredAt: null,
+      quietModeState: 'READY',
+      nextReminderAt: new Date('2026-09-20T12:30:00.000Z'),
+      sleepEvents: [],
+      wakeResults: [],
       message: null,
     });
 
@@ -72,11 +77,16 @@ describe('SleepPreparationView', () => {
       exactAlarmGranted: false,
       notificationsGranted: false,
       fullScreenGranted: false,
-      issues: ['EXACT_ALARM', 'NOTIFICATIONS', 'FULL_SCREEN'],
+      notificationPolicyAccessGranted: false,
+      issues: ['EXACT_ALARM', 'NOTIFICATIONS', 'FULL_SCREEN', 'DND_POLICY'],
       nextOccurrenceId: null,
       nextScheduledAt: null,
       acknowledgedSettingsVersion: null,
       lastDeliveredAt: null,
+      quietModeState: 'READY',
+      nextReminderAt: null,
+      sleepEvents: [],
+      wakeResults: [],
       message: 'Нужны системные разрешения.',
     });
 
@@ -84,34 +94,100 @@ describe('SleepPreparationView', () => {
     expect(html).toContain('Точные будильники');
     expect(html).toContain('Уведомления');
     expect(html).toContain('Полный экран');
+    expect(html).toContain('Доступ к режиму «Не беспокоить»');
     expect(html).not.toContain('Будильник подтверждён');
+  });
+
+  it('shows the Android QR and emergency phrase setup outside the ringing screen', () => {
+    const configured = updateSleepSettings(
+      createEmptySleepSchedule(),
+      { bedtime: '22:30', wakeTime: '07:15', timeZone: 'Asia/Chita', enabled: true },
+      new Date('2026-09-20T12:00:00.000Z'),
+    );
+    const html = render(configured, undefined, {
+      supported: true,
+      qrConfigured: false,
+      emergencyPhraseConfigured: false,
+      qrSavedTo: null,
+      lastWaterCompletedAt: null,
+    });
+
+    expect(html).toContain('Защита выключения будильника');
+    expect(html).toContain('QR для подъёма');
+    expect(html).toContain('Создать и сохранить');
+    expect(html).toContain('Аварийная фраза');
+    expect(html).toContain('Не менее 16 символов');
+  });
+
+  it('renders the separate quiet-mode control and an honest empty history', () => {
+    const configured = updateSleepSettings(
+      createEmptySleepSchedule(),
+      {
+        bedtime: '22:30',
+        wakeTime: '07:15',
+        timeZone: 'Asia/Chita',
+        enabled: true,
+        quietModeEnabled: true,
+      },
+      new Date('2026-09-20T12:00:00.000Z'),
+    );
+    const opened = ensureNightCycle(configured, {
+      cycleDate: '2026-09-20',
+      cycleId: 'night-1',
+      createdAt: new Date('2026-09-20T12:00:00.000Z'),
+    }).state;
+
+    const html = render(opened);
+
+    expect(html).toContain('role="switch"');
+    expect(html).toContain('aria-checked="true"');
+    expect(html).toContain('За 60 минут до сна');
+    expect(html).toContain('История сна');
+    expect(html).toContain('Нет отметок');
+    expect(html).toContain('нет данных');
+    expect(html).not.toContain('качество сна');
+    expect(html).not.toContain('часов сна');
   });
 });
 
 function render(
   state: SleepScheduleState,
-  alarmStatus: WakeAlarmStatus = {
+  alarmStatus: WakeAlarmStatus | undefined = undefined,
+  dismissalSetup: WakeDismissalSetup = {
+    supported: false,
+    qrConfigured: false,
+    emergencyPhraseConfigured: false,
+    qrSavedTo: null,
+    lastWaterCompletedAt: null,
+  },
+): string {
+  const resolvedAlarmStatus: WakeAlarmStatus = alarmStatus ?? {
     supported: false,
     state: 'UNAVAILABLE',
     exactAlarmGranted: false,
     notificationsGranted: false,
     fullScreenGranted: false,
+    notificationPolicyAccessGranted: false,
     issues: [],
     nextOccurrenceId: null,
     nextScheduledAt: null,
     acknowledgedSettingsVersion: null,
     lastDeliveredAt: null,
+    quietModeState: 'UNAVAILABLE',
+    nextReminderAt: null,
+    sleepEvents: [],
+    wakeResults: [],
     message: 'Постановка подтверждается только приложением LifeOS на Android.',
-  },
-): string {
+  };
   const callback = vi.fn();
   return renderToStaticMarkup(
     createElement(SleepPreparationView, {
       state,
       busy: false,
       error: null,
-      alarmStatus,
+      alarmStatus: resolvedAlarmStatus,
       alarmSounds: [{ uri: null, title: 'Системный сигнал' }],
+      dismissalSetup,
       onBack: callback,
       onSaveSettings: callback,
       onComplete: callback,
@@ -128,6 +204,9 @@ function render(
       onScheduleTestAlarm: callback,
       onOpenAlarmSettings: callback,
       onSkipNearestAlarm: callback,
+      onRegenerateDismissalQr: callback,
+      onSaveEmergencyPhrase: callback,
+      onToggleQuietMode: callback,
     }),
   );
 }

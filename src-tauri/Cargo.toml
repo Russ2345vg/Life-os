@@ -1,6 +1,6 @@
 [package]
 name = "lifeos"
-version = "1.0.13"
+version = "1.0.18"
 description = "LifeOS Windows desktop application"
 authors = ["LifeOS"]
 license = ""

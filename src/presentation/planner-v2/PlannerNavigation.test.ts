@@ -83,6 +83,24 @@ describe('V2 preview routes', () => {
     expect(parsePlannerRoute(buildPlannerRoute(route))).toEqual(route);
     const fromGoal = { view: 'new-action', goalId: 'g', title: null, returnToGoal: true } as const;
     expect(parsePlannerRoute(buildPlannerRoute(fromGoal))).toEqual(fromGoal);
+    const fromList = { view: 'new-action', goalId: 'g', title: null, returnToGoals: true } as const;
+    expect(parsePlannerRoute(buildPlannerRoute(fromList))).toEqual(fromList);
+  });
+  it('keeps the same navigation and marks More for secondary destinations', () => {
+    for (const view of ['sleep', 'inbox', 'spheres', 'account'] as const) {
+      const markup = renderToStaticMarkup(
+        createElement(PlannerWorkspace, {
+          services: {} as PlannerServices,
+          route: { view },
+          currentDate: DayDate.create('2026-09-24'),
+          onNavigate: vi.fn(),
+        }),
+      );
+      const nav = markup.match(/<nav aria-label="Рабочий интерфейс">([\s\S]*?)<\/nav>/)?.[1];
+      expect(nav?.match(/<a /g)).toHaveLength(6);
+      expect(nav).toContain('class="planner-nav-more" type="button" aria-current="page"');
+      expect(markup).toContain('href="#/v2/sleep"');
+    }
   });
   it('offers the working entries without an old-version exit', () => {
     const markup = renderToStaticMarkup(

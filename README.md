@@ -37,6 +37,9 @@ npm run tauri build
 
 Готовый установщик создаётся в `src-tauri/target/release/bundle/nsis/`.
 
+Автоматическая проверка обновлений Windows и выпуск подписанных версий описаны в
+[инструкции обновления](docs/codex/WINDOWS_UPDATES.md).
+
 ## Проверки
 
 ```bash

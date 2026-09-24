@@ -157,7 +157,11 @@ export function PlannerActionForm({
             ) : null}
           </span>
         </label>
-        <div className="planner-segments" role="group" aria-label="Когда выполнить">
+        <div
+          className="planner-segments planner-date-options"
+          role="group"
+          aria-label="Когда выполнить"
+        >
           <button
             type="button"
             aria-pressed={draft.date === currentDate && !specificDate}
