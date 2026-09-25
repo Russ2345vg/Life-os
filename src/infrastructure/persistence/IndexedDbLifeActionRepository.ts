@@ -27,7 +27,8 @@ export class IndexedDbLifeActionRepository
       return null;
     }
 
-    return LifeActionRecordMapper.fromRecord(storedRecord as LifeActionRecord);
+    const action = LifeActionRecordMapper.fromRecord(storedRecord as LifeActionRecord);
+    return action.isDeleted() ? null : action;
   }
 
   public async findByDate(date: DayDate): Promise<readonly LifeAction[]> {
@@ -52,6 +53,7 @@ export class IndexedDbLifeActionRepository
 
     return storedRecords
       .map((record) => LifeActionRecordMapper.fromRecord(record as LifeActionRecord))
+      .filter((lifeAction) => !lifeAction.isDeleted())
       .filter((lifeAction) =>
         lifeAction.decisionId === null ? false : acceptedIds.has(lifeAction.decisionId.toString()),
       );
@@ -66,9 +68,9 @@ export class IndexedDbLifeActionRepository
       (store) => store.getAll(),
     );
 
-    return storedRecords.map((record) =>
-      LifeActionRecordMapper.fromRecord(record as LifeActionRecord),
-    );
+    return storedRecords
+      .map((record) => LifeActionRecordMapper.fromRecord(record as LifeActionRecord))
+      .filter((action) => !action.isDeleted());
   }
 
   public async save(lifeAction: LifeAction): Promise<void> {
@@ -110,8 +112,8 @@ export class IndexedDbLifeActionRepository
       (store) => store.index(indexName).getAll(key),
     );
 
-    return storedRecords.map((record) =>
-      LifeActionRecordMapper.fromRecord(record as LifeActionRecord),
-    );
+    return storedRecords
+      .map((record) => LifeActionRecordMapper.fromRecord(record as LifeActionRecord))
+      .filter((action) => !action.isDeleted());
   }
 }

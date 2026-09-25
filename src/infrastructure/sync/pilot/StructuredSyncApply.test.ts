@@ -30,6 +30,106 @@ const incoming = (
 });
 
 describe('SYNC-04 structured database apply', () => {
+  it.each(['goal', 'life_action', 'recurrence_rule'] as const)(
+    'applies %s trash then restore and rejects older offline upserts without echo',
+    async (type) => {
+      const indexedDb = new LifeOsIndexedDb(new IDBFactory());
+      await enableCapture(indexedDb);
+      const store = new IndexedDbPilotSyncStore(indexedDb);
+      const deletedAt = '2026-09-24T08:00:00.000Z';
+      const restoredAt = '2026-09-25T09:00:00.000Z';
+      const base: Readonly<Record<string, unknown>> = {
+        ...fixtures[type],
+        directionId: null,
+        decisionId: null,
+      };
+      const deleted =
+        type === 'recurrence_rule'
+          ? { ...base, removedAt: deletedAt, paused: true }
+          : { ...base, deletedAt, lastDeletedAt: deletedAt };
+      const restoredFields =
+        type === 'recurrence_rule'
+          ? {
+              removedAt: null,
+              paused: false,
+              lastRemovedAt: deletedAt,
+              restoredFromTrashAt: restoredAt,
+              restorationGeneration: 1,
+              revision: 3,
+              effectiveFrom: '2026-09-25',
+            }
+          : { deletedAt: null, lastDeletedAt: deletedAt, restoredFromTrashAt: restoredAt };
+      const restored = { ...base, ...restoredFields };
+      const payload = (
+        record: Readonly<Record<string, unknown>>,
+        revision: number,
+        eventId: string,
+      ): PilotSyncPayload => ({
+        ...incoming(type, record),
+        eventId,
+        baseRevision: revision - 1,
+        revision,
+        hlc: { wallTime: revision * 100, logical: 0 },
+      });
+      let sequence = 0;
+      const apply = (
+        record: Readonly<Record<string, unknown>>,
+        revision: number,
+        eventId: string,
+      ) =>
+        store.applyPulled(
+          'space',
+          ++sequence,
+          payload(record, revision, eventId),
+          `transport-${type}`,
+          { kind: 'fast_forward', winner: 'incoming' },
+        );
+      await apply(base, 1, 'initial');
+      await apply(deleted, 2, 'deleted');
+      expect((await store.localState(type, String(base.id))).record).toMatchObject(
+        type === 'recurrence_rule' ? { removedAt: deletedAt } : { deletedAt },
+      );
+      await apply(base, 1, 'stale-active');
+      expect((await store.localState(type, String(base.id))).record).toMatchObject(
+        type === 'recurrence_rule' ? { removedAt: deletedAt } : { deletedAt },
+      );
+      await apply(restored, 3, 'restored');
+      await apply(deleted, 2, 'stale-deleted');
+      const state = await store.localState(type, String(base.id));
+      expect(state.record).toMatchObject(restoredFields);
+      expect(state.meta).toMatchObject({ revision: 3, eventId: 'restored', deleted: false });
+      expect(await store.cursor('space')).toBe(5);
+      expect(await store.counts()).toEqual({ pending: 0, conflicts: 0, quarantined: 0 });
+      indexedDb.close();
+    },
+  );
+
+  it('keeps a deleted goal visible to raw sync dependency validation', async () => {
+    const indexedDb = new LifeOsIndexedDb(new IDBFactory());
+    const store = new IndexedDbPilotSyncStore(indexedDb);
+    await store.applyPulled(
+      'space',
+      1,
+      incoming('goal', {
+        ...fixtures.goal,
+        directionId: null,
+        deletedAt: '2026-09-25T08:00:00.000Z',
+      }),
+      'goal-transport',
+      { kind: 'fast_forward', winner: 'incoming' },
+    );
+    await store.applyPulled('space', 2, incoming('decision'), 'decision-transport', {
+      kind: 'fast_forward',
+      winner: 'incoming',
+    });
+    expect((await store.localState('decision', String(fixtures.decision.id))).record).toMatchObject(
+      { projectId: fixtures.goal.id },
+    );
+    expect((await store.localState('goal', String(fixtures.goal.id))).record).toMatchObject({
+      deletedAt: '2026-09-25T08:00:00.000Z',
+    });
+    indexedDb.close();
+  });
   it('rejects a canonical goal tombstone while a decision still references it', async () => {
     const indexedDb = new LifeOsIndexedDb(new IDBFactory());
     const database = await indexedDb.open();

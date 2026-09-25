@@ -37,6 +37,86 @@ const goal = {
 };
 
 describe('PilotSyncRegistryAdapters', () => {
+  it.each(['goal', 'life_action'] as const)(
+    'round-trips %s trash timestamps through the existing mapper',
+    (type) => {
+      const timestamps = {
+        deletedAt: null,
+        lastDeletedAt: '2026-09-24T08:00:00.000Z',
+        restoredFromTrashAt: '2026-09-25T09:00:00.000Z',
+      };
+      const wire = normalizePilotRecord(type, { ...structuredSyncFixtures()[type], ...timestamps });
+      expect(wire).toMatchObject(timestamps);
+      expect(prepareRemotePilotRecord(type, wire)).toMatchObject(timestamps);
+      const deleted = {
+        ...timestamps,
+        deletedAt: timestamps.lastDeletedAt,
+        restoredFromTrashAt: null,
+      };
+      const deletedWire = normalizePilotRecord(type, {
+        ...structuredSyncFixtures()[type],
+        ...deleted,
+      });
+      expect(prepareRemotePilotRecord(type, deletedWire)).toMatchObject(deleted);
+      expect(haveSamePilotSemanticContent(type, wire, deletedWire)).toBe(false);
+    },
+  );
+
+  it('round-trips recurrence restoration and purge fields plus occurrence generation', () => {
+    const fixtures = structuredSyncFixtures();
+    const fields = {
+      removedAt: '2026-09-25T08:00:00.000Z',
+      lastRemovedAt: '2026-09-24T08:00:00.000Z',
+      restoredFromTrashAt: '2026-09-24T09:00:00.000Z',
+      purgedAt: '2026-10-25T08:00:00.000Z',
+      restorationGeneration: 2,
+    };
+    const wire = normalizePilotRecord('recurrence_rule', {
+      ...fixtures.recurrence_rule,
+      ...fields,
+      paused: true,
+    });
+    expect(wire).toMatchObject(fields);
+    expect(prepareRemotePilotRecord('recurrence_rule', wire)).toMatchObject(fields);
+    const occurrence = {
+      ruleId: 'rule',
+      ruleRevision: 4,
+      slot: '2026-09-25',
+      originalDate: '2026-09-25',
+      restorationGeneration: 2,
+    };
+    const actionWire = normalizePilotRecord('life_action', { ...fixtures.life_action, occurrence });
+    expect(actionWire.occurrence).toEqual(occurrence);
+    expect(prepareRemotePilotRecord('life_action', actionWire).occurrence).toEqual(occurrence);
+  });
+
+  it('normalizes legacy records with no trash fields to active defaults', () => {
+    const fixtures = structuredSyncFixtures();
+    for (const type of ['goal', 'life_action'] as const) {
+      const legacy = Object.fromEntries(
+        Object.entries(fixtures[type]).filter(
+          ([key]) => !['deletedAt', 'lastDeletedAt', 'restoredFromTrashAt'].includes(key),
+        ),
+      );
+      expect(prepareRemotePilotRecord(type, normalizePilotRecord(type, legacy))).toMatchObject({
+        deletedAt: null,
+        lastDeletedAt: null,
+        restoredFromTrashAt: null,
+      });
+    }
+    expect(
+      prepareRemotePilotRecord(
+        'recurrence_rule',
+        normalizePilotRecord('recurrence_rule', fixtures.recurrence_rule),
+      ),
+    ).toMatchObject({
+      removedAt: null,
+      lastRemovedAt: null,
+      restoredFromTrashAt: null,
+      purgedAt: null,
+      restorationGeneration: 0,
+    });
+  });
   it('round-trips scenario links without requiring tasks to still exist', () => {
     const wire = normalizePilotRecord('task_scenario', structuredSyncFixtures().task_scenario);
     expect(wire.version).toBeUndefined();

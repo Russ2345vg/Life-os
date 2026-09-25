@@ -27,7 +27,8 @@ export class IndexedDbGoalRepository implements GoalRepository {
       'readonly',
       (store) => store.get(id.toString()),
     );
-    return value === undefined ? null : GoalRecordMapper.fromRecord(value);
+    const goal = value === undefined ? null : GoalRecordMapper.fromRecord(value);
+    return goal?.isDeleted() ? null : goal;
   }
 
   public async findAll(): Promise<readonly Goal[]> {
@@ -38,7 +39,9 @@ export class IndexedDbGoalRepository implements GoalRepository {
       'readonly',
       (store) => store.getAll(),
     );
-    return values.map((value) => GoalRecordMapper.fromRecord(value));
+    return values
+      .map((value) => GoalRecordMapper.fromRecord(value))
+      .filter((goal) => !goal.isDeleted());
   }
 
   public async findByDirectionId(directionId: EntityId): Promise<readonly Goal[]> {
@@ -49,7 +52,9 @@ export class IndexedDbGoalRepository implements GoalRepository {
       'readonly',
       (store) => store.index('byDirectionId').getAll(directionId.toString()),
     );
-    return values.map((value) => GoalRecordMapper.fromRecord(value));
+    return values
+      .map((value) => GoalRecordMapper.fromRecord(value))
+      .filter((goal) => !goal.isDeleted());
   }
 
   public async create(goal: Goal): Promise<boolean> {
@@ -110,19 +115,25 @@ export class IndexedDbGoalRepository implements GoalRepository {
     );
     const store = transaction.objectStore(LIFE_OS_STORE.goals);
     const completion = observeTransaction(transaction);
-    const stored = await observeRequest<GoalRecord | undefined>(store.get(goal.id.toString()));
-    if (stored?.version !== expectedVersion) {
-      transaction.abort();
+    try {
+      const stored = await observeRequest<GoalRecord | undefined>(store.get(goal.id.toString()));
+      if (stored?.version !== expectedVersion) {
+        transaction.abort();
+        await settleTransaction(completion);
+        return false;
+      }
+      const record = { ...stored, ...GoalRecordMapper.toRecord(goal) };
+      await observeRequest(store.put(record));
+      const recorded = await this.mutationRecorder.recordUpsert(transaction, 'goal', record);
+      await this.indexedDb.refreshBalanceSnapshots(transaction, completion);
+      await completion;
+      this.mutationRecorder.notifyCommitted(recorded);
+      return true;
+    } catch (error: unknown) {
+      abortQuietly(transaction);
       await settleTransaction(completion);
-      return false;
+      throw error;
     }
-    const record = { ...stored, ...GoalRecordMapper.toRecord(goal) };
-    await observeRequest(store.put(record));
-    const recorded = await this.mutationRecorder.recordUpsert(transaction, 'goal', record);
-    await this.indexedDb.refreshBalanceSnapshots(transaction, completion);
-    await completion;
-    this.mutationRecorder.notifyCommitted(recorded);
-    return true;
   }
 }
 
