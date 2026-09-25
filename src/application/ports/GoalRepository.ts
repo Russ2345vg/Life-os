@@ -1,6 +1,7 @@
 import type { EntityId, Goal } from '../../domain';
 
 export interface GoalRepository {
+  /** Normal reads exclude deleted goals. Trash commands use TrashRepository raw reads. */
   findById(id: EntityId): Promise<Goal | null>;
   findAll(): Promise<readonly Goal[]>;
   findByDirectionId(directionId: EntityId): Promise<readonly Goal[]>;

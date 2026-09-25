@@ -1,6 +1,7 @@
 import type { DayDate, EntityId, LifeAction } from '../../domain';
 
 export interface LifeActionRepository {
+  /** Normal reads exclude deleted actions. Trash commands use TrashRepository raw reads. */
   findById(id: EntityId): Promise<LifeAction | null>;
   findByDate(date: DayDate): Promise<readonly LifeAction[]>;
   findByDecisionId(decisionId: EntityId): Promise<readonly LifeAction[]>;
