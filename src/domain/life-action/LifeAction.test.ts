@@ -527,6 +527,69 @@ describe('LifeAction', () => {
     });
   });
 
+  describe('корзина', () => {
+    it('мягко удаляет действие, не меняя независимые lifecycle-состояния и связи', () => {
+      const action = createCompleted();
+      action.setGoal(id('goal-trash'));
+      action.setParentAction(id('parent-trash'));
+      action.archive(CHANGED_AT, id('archived-event'));
+      const deletedAt = new Date('2026-09-25T10:00:00.000Z');
+      const version = action.version;
+      const actualResult = action.actualResult;
+      const completedAt = action.completedAt;
+      const archivedAt = action.archivedAt;
+      const goalId = action.goalId;
+      const parentActionId = action.parentActionId;
+
+      action.softDelete(deletedAt);
+
+      expect(action.isDeleted()).toBe(true);
+      expect(action.deletedAt).toEqual(deletedAt);
+      expect(action.lastDeletedAt).toEqual(deletedAt);
+      expect(action.restoredFromTrashAt).toBeNull();
+      expect(action.status).toBe(LIFE_ACTION_STATUS.completed);
+      expect(action.isArchived()).toBe(true);
+      expect(action.archivedAt).toEqual(archivedAt);
+      expect(action.actualResult).toBe(actualResult);
+      expect(action.completedAt).toEqual(completedAt);
+      expect(action.goalId?.toString()).toBe(goalId?.toString());
+      expect(action.parentActionId?.toString()).toBe(parentActionId?.toString());
+      expect(action.version).toBe(version + 1);
+    });
+
+    it('восстанавливает действие из корзины с сохранением статуса и истории удаления', () => {
+      const action = createReady(TOMORROW);
+      const deletedAt = new Date('2026-09-25T10:00:00.000Z');
+      const restoredAt = new Date('2026-09-26T10:00:00.000Z');
+      action.softDelete(deletedAt);
+      const version = action.version;
+
+      action.restoreFromTrash(restoredAt);
+
+      expect(action.isDeleted()).toBe(false);
+      expect(action.deletedAt).toBeNull();
+      expect(action.lastDeletedAt).toEqual(deletedAt);
+      expect(action.restoredFromTrashAt).toEqual(restoredAt);
+      expect(action.status).toBe(LIFE_ACTION_STATUS.ready);
+      expect(action.plannedDate?.toString()).toBe('2026-08-02');
+      expect(action.version).toBe(version + 1);
+    });
+
+    it('отклоняет повторное удаление и восстановление активного действия', () => {
+      const action = createDraft();
+      action.softDelete(new Date('2026-09-25T10:00:00.000Z'));
+
+      expect(() => action.softDelete(new Date('2026-09-25T11:00:00.000Z'))).toThrowError(
+        expect.objectContaining({ code: 'life_action.already_deleted' }),
+      );
+
+      action.restoreFromTrash(new Date('2026-09-26T10:00:00.000Z'));
+      expect(() => action.restoreFromTrash(new Date('2026-09-26T11:00:00.000Z'))).toThrowError(
+        expect.objectContaining({ code: 'life_action.not_deleted' }),
+      );
+    });
+  });
+
   describe('вычисляемые признаки', () => {
     it('определяет действие на переданную дату', () => {
       const action = createReady(TODAY);

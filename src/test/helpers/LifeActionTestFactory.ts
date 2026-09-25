@@ -84,3 +84,17 @@ export function archiveLifeAction(lifeAction: LifeAction): LifeAction {
   }
   return lifeAction;
 }
+
+export function softDeleteLifeAction(lifeAction: LifeAction): LifeAction {
+  if (!lifeAction.isDeleted()) {
+    lifeAction.softDelete(CHANGED_AT);
+  }
+  return lifeAction;
+}
+
+export function restoreLifeActionFromTrash(lifeAction: LifeAction): LifeAction {
+  if (lifeAction.isDeleted()) {
+    lifeAction.restoreFromTrash(CHANGED_AT);
+  }
+  return lifeAction;
+}

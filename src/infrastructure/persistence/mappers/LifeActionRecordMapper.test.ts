@@ -11,6 +11,43 @@ import type { LifeActionRecord } from '../records/LifeActionRecord';
 import { LifeActionRecordMapper } from './LifeActionRecordMapper';
 
 describe('LifeActionRecordMapper', () => {
+  it('round-trips deleted and restored actions with trash timestamps', () => {
+    const deletedAt = time('2026-09-25T10:00:00.000Z');
+    const restoredAt = time('2026-09-26T10:00:00.000Z');
+    const deleted = completedAction();
+    deleted.softDelete(deletedAt);
+    const restored = completedAction();
+    restored.softDelete(deletedAt);
+    restored.restoreFromTrash(restoredAt);
+
+    for (const action of [deleted, restored]) {
+      const record = LifeActionRecordMapper.toRecord(action);
+      const roundTripped = LifeActionRecordMapper.fromRecord(record);
+
+      expect(roundTripped.deletedAt).toEqual(action.deletedAt);
+      expect(roundTripped.lastDeletedAt).toEqual(action.lastDeletedAt);
+      expect(roundTripped.restoredFromTrashAt).toEqual(action.restoredFromTrashAt);
+      expect(roundTripped.status).toBe('completed');
+      expect(roundTripped.plannedDate?.toString()).toBe('2026-08-02');
+    }
+  });
+
+  it('reads legacy action records without trash timestamps as active', () => {
+    const legacyRecord: Record<string, unknown> = {
+      ...LifeActionRecordMapper.toRecord(completedAction()),
+    };
+    delete legacyRecord.deletedAt;
+    delete legacyRecord.lastDeletedAt;
+    delete legacyRecord.restoredFromTrashAt;
+
+    const action = LifeActionRecordMapper.fromRecord(legacyRecord as unknown as LifeActionRecord);
+
+    expect(action.isDeleted()).toBe(false);
+    expect(action.deletedAt).toBeNull();
+    expect(action.lastDeletedAt).toBeNull();
+    expect(action.restoredFromTrashAt).toBeNull();
+  });
+
   it('читает V1 без bridge-полей как null/false и сохраняет все legacy-поля', () => {
     const record = LifeActionRecordMapper.toRecord(completedAction());
     delete (record as { goalId?: string | null }).goalId;

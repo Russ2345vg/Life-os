@@ -18,6 +18,36 @@ describe('LifeAction.rehydrate', () => {
     expect(action.getUncommittedEvents()).toHaveLength(0);
   });
 
+  it('читает legacy-запись без полей корзины как активное действие', () => {
+    const action = LifeAction.rehydrate(completedData());
+
+    expect(action.isDeleted()).toBe(false);
+    expect(action.deletedAt).toBeNull();
+    expect(action.lastDeletedAt).toBeNull();
+    expect(action.restoredFromTrashAt).toBeNull();
+  });
+
+  it('восстанавливает timestamps корзины независимо от completed и archived состояния', () => {
+    const deletedAt = new Date('2026-09-25T10:00:00.000Z');
+    const restoredAt = new Date('2026-09-26T10:00:00.000Z');
+    const action = LifeAction.rehydrate({
+      ...completedData(),
+      deletedAt,
+      lastDeletedAt: deletedAt,
+      restoredFromTrashAt: restoredAt,
+    });
+
+    deletedAt.setFullYear(2030);
+    action.lastDeletedAt?.setFullYear(2031);
+
+    expect(action.isDeleted()).toBe(true);
+    expect(action.deletedAt?.toISOString()).toBe('2026-09-25T10:00:00.000Z');
+    expect(action.lastDeletedAt?.toISOString()).toBe('2026-09-25T10:00:00.000Z');
+    expect(action.restoredFromTrashAt?.toISOString()).toBe('2026-09-26T10:00:00.000Z');
+    expect(action.status).toBe(LIFE_ACTION_STATUS.completed);
+    expect(action.isArchived()).toBe(true);
+  });
+
   it('сохраняет bridge-поля без включения правил следующего шага', () => {
     const action = LifeAction.rehydrate({
       ...completedData(),

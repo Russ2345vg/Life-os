@@ -79,6 +79,9 @@ export interface LifeActionRehydrationData {
   readonly cancelledAt: Date | null;
   readonly cancelReason: ActionCancelReason | null;
   readonly archivedAt: Date | null;
+  readonly deletedAt?: Date | null;
+  readonly lastDeletedAt?: Date | null;
+  readonly restoredFromTrashAt?: Date | null;
   readonly rescheduleCount: number;
   readonly version: number;
 }
@@ -109,6 +112,9 @@ export class LifeAction extends Entity {
   #cancelledAt: Date | null;
   #cancelReason: ActionCancelReason | null;
   #archivedAt: Date | null;
+  #deletedAt: Date | null;
+  #lastDeletedAt: Date | null;
+  #restoredFromTrashAt: Date | null;
   #rescheduleCount: number;
   #version: number;
 
@@ -158,6 +164,9 @@ export class LifeAction extends Entity {
     this.#cancelledAt = copyOptionalDate(data.cancelledAt);
     this.#cancelReason = data.cancelReason;
     this.#archivedAt = copyOptionalDate(data.archivedAt);
+    this.#deletedAt = copyOptionalDate(data.deletedAt ?? null);
+    this.#lastDeletedAt = copyOptionalDate(data.lastDeletedAt ?? null);
+    this.#restoredFromTrashAt = copyOptionalDate(data.restoredFromTrashAt ?? null);
     this.#rescheduleCount = data.rescheduleCount;
     this.#version = data.version;
     this.#domainEvents = domainEvents;
@@ -309,6 +318,9 @@ export class LifeAction extends Entity {
         cancelledAt: null,
         cancelReason: null,
         archivedAt: null,
+        deletedAt: null,
+        lastDeletedAt: null,
+        restoredFromTrashAt: null,
         rescheduleCount: 0,
         version: 1,
       },
@@ -436,6 +448,18 @@ export class LifeAction extends Entity {
 
   public get archivedAt(): Date | null {
     return copyOptionalDate(this.#archivedAt);
+  }
+
+  public get deletedAt(): Date | null {
+    return copyOptionalDate(this.#deletedAt);
+  }
+
+  public get lastDeletedAt(): Date | null {
+    return copyOptionalDate(this.#lastDeletedAt);
+  }
+
+  public get restoredFromTrashAt(): Date | null {
+    return copyOptionalDate(this.#restoredFromTrashAt);
   }
 
   public get rescheduleCount(): number {
@@ -754,6 +778,34 @@ export class LifeAction extends Entity {
     return this.#archivedAt !== null;
   }
 
+  public softDelete(at: Date): void {
+    if (this.#deletedAt !== null) {
+      throw new DomainError('life_action.already_deleted', 'Действие уже находится в корзине.');
+    }
+    assertValidDate(at, 'Время удаления действия');
+    this.#deletedAt = copyDate(at);
+    this.#lastDeletedAt = copyDate(at);
+    this.#restoredFromTrashAt = null;
+    this.#version += 1;
+  }
+
+  public restoreFromTrash(at: Date): void {
+    if (this.#deletedAt === null) {
+      throw new DomainError(
+        'life_action.not_deleted',
+        'Восстановить можно только действие из корзины.',
+      );
+    }
+    assertValidDate(at, 'Время восстановления действия');
+    this.#deletedAt = null;
+    this.#restoredFromTrashAt = copyDate(at);
+    this.#version += 1;
+  }
+
+  public isDeleted(): boolean {
+    return this.#deletedAt !== null;
+  }
+
   public isLinkedToDecision(): boolean {
     return this.#decisionId !== null;
   }
@@ -901,6 +953,9 @@ function assertRehydrationInvariants(data: LifeActionRehydrationData): void {
     data.completedAt,
     data.cancelledAt,
     data.archivedAt,
+    data.deletedAt ?? null,
+    data.lastDeletedAt ?? null,
+    data.restoredFromTrashAt ?? null,
   ]) {
     if (date !== null) {
       assertValidDate(date, 'Временное поле действия');

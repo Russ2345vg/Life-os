@@ -17,6 +17,7 @@ import {
   readNullableDayDate,
   readNullableEntityId,
   readNullableIsoDate,
+  readOptionalNullableIsoDate,
   readNullableString,
   readOptionalNullableEntityId,
   readNumber,
@@ -53,6 +54,9 @@ export class LifeActionRecordMapper {
       cancelledAt: toNullableIsoDate(entity.cancelledAt),
       cancelReason: entity.cancelReason?.toString() ?? null,
       archivedAt: toNullableIsoDate(entity.archivedAt),
+      deletedAt: toNullableIsoDate(entity.deletedAt),
+      lastDeletedAt: toNullableIsoDate(entity.lastDeletedAt),
+      restoredFromTrashAt: toNullableIsoDate(entity.restoredFromTrashAt),
       rescheduleCount: entity.rescheduleCount,
       version: entity.version,
     };
@@ -90,6 +94,9 @@ export class LifeActionRecordMapper {
       cancelledAt: readNullableIsoDate(record, 'cancelledAt'),
       cancelReason: createNullableValueObject(record, 'cancelReason', ActionCancelReason.create),
       archivedAt: readNullableIsoDate(record, 'archivedAt'),
+      deletedAt: readOptionalNullableIsoDate(record, 'deletedAt'),
+      lastDeletedAt: readOptionalNullableIsoDate(record, 'lastDeletedAt'),
+      restoredFromTrashAt: readOptionalNullableIsoDate(record, 'restoredFromTrashAt'),
       rescheduleCount: readNumber(record, 'rescheduleCount'),
       version: readNumber(record, 'version'),
     });

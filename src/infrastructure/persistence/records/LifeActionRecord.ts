@@ -26,6 +26,9 @@ export interface LifeActionRecord {
   readonly cancelledAt: string | null;
   readonly cancelReason: string | null;
   readonly archivedAt: string | null;
+  readonly deletedAt?: string | null;
+  readonly lastDeletedAt?: string | null;
+  readonly restoredFromTrashAt?: string | null;
   readonly rescheduleCount: number;
   readonly version: number;
 }
