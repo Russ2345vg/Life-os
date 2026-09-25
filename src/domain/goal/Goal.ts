@@ -89,6 +89,9 @@ export interface GoalRehydrationData {
   readonly createdAt: Date;
   readonly updatedAt: Date;
   readonly archivedAt: Date | null;
+  readonly deletedAt?: Date | null;
+  readonly lastDeletedAt?: Date | null;
+  readonly restoredFromTrashAt?: Date | null;
   readonly version: number;
 }
 
@@ -117,6 +120,9 @@ export class Goal extends Entity {
   readonly #createdAt: Date;
   readonly #updatedAt: Date;
   readonly #archivedAt: Date | null;
+  readonly #deletedAt: Date | null;
+  readonly #lastDeletedAt: Date | null;
+  readonly #restoredFromTrashAt: Date | null;
 
   private constructor(data: GoalRehydrationData) {
     super(data.id);
@@ -168,6 +174,9 @@ export class Goal extends Entity {
     this.#createdAt = new Date(data.createdAt.getTime());
     this.#updatedAt = new Date(data.updatedAt.getTime());
     this.#archivedAt = copyOptionalDate(data.archivedAt);
+    this.#deletedAt = copyOptionalDate(data.deletedAt ?? null);
+    this.#lastDeletedAt = copyOptionalDate(data.lastDeletedAt ?? null);
+    this.#restoredFromTrashAt = copyOptionalDate(data.restoredFromTrashAt ?? null);
     this.version = data.version;
   }
 
@@ -199,6 +208,9 @@ export class Goal extends Entity {
       createdAt: data.now,
       updatedAt: data.now,
       archivedAt: null,
+      deletedAt: null,
+      lastDeletedAt: null,
+      restoredFromTrashAt: null,
       version: 1,
     });
   }
@@ -269,6 +281,36 @@ export class Goal extends Entity {
     });
   }
 
+  public softDelete(at: Date): Goal {
+    if (this.#deletedAt !== null) {
+      throw new DomainError('goal.already_deleted', 'Цель уже находится в корзине.');
+    }
+    return new Goal({
+      ...this.toRehydrationData(),
+      deletedAt: at,
+      lastDeletedAt: at,
+      updatedAt: at,
+      version: this.version + 1,
+    });
+  }
+
+  public restoreFromTrash(at: Date): Goal {
+    if (this.#deletedAt === null) {
+      throw new DomainError('goal.not_deleted', 'Восстановить можно только цель из корзины.');
+    }
+    return new Goal({
+      ...this.toRehydrationData(),
+      deletedAt: null,
+      restoredFromTrashAt: at,
+      updatedAt: at,
+      version: this.version + 1,
+    });
+  }
+
+  public isDeleted(): boolean {
+    return this.#deletedAt !== null;
+  }
+
   public get createdAt(): Date {
     return new Date(this.#createdAt.getTime());
   }
@@ -279,6 +321,18 @@ export class Goal extends Entity {
 
   public get archivedAt(): Date | null {
     return copyOptionalDate(this.#archivedAt);
+  }
+
+  public get deletedAt(): Date | null {
+    return copyOptionalDate(this.#deletedAt);
+  }
+
+  public get lastDeletedAt(): Date | null {
+    return copyOptionalDate(this.#lastDeletedAt);
+  }
+
+  public get restoredFromTrashAt(): Date | null {
+    return copyOptionalDate(this.#restoredFromTrashAt);
   }
 
   private toRehydrationData(): GoalRehydrationData {
@@ -306,6 +360,9 @@ export class Goal extends Entity {
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
       archivedAt: this.archivedAt,
+      deletedAt: this.deletedAt,
+      lastDeletedAt: this.lastDeletedAt,
+      restoredFromTrashAt: this.restoredFromTrashAt,
       version: this.version,
     };
   }
@@ -467,6 +524,16 @@ function assertLifecycle(data: GoalRehydrationData): void {
   }
   if (!Number.isInteger(data.version) || data.version < 1) {
     throw new DomainError('goal.invalid_version', 'Версия цели указана неверно.');
+  }
+  for (const date of [
+    data.archivedAt,
+    data.deletedAt ?? null,
+    data.lastDeletedAt ?? null,
+    data.restoredFromTrashAt ?? null,
+  ]) {
+    if (date !== null && !isValidDate(date)) {
+      throw new DomainError('goal.invalid_timestamp', 'Дата и время цели указаны неверно.');
+    }
   }
   if (data.status === GOAL_STATUS.archived) {
     if (!isValidDate(data.archivedAt)) {

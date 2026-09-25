@@ -46,5 +46,8 @@ export interface GoalRecord {
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly archivedAt: string | null;
+  readonly deletedAt?: string | null;
+  readonly lastDeletedAt?: string | null;
+  readonly restoredFromTrashAt?: string | null;
   readonly version: number;
 }

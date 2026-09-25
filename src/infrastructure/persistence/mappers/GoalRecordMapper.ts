@@ -23,8 +23,10 @@ import {
   readNullableIsoDate,
   readNullableString,
   readNumber,
+  readOptionalNullableIsoDate,
   readOptionalNullableEntityId,
   readString,
+  toNullableIsoDate,
   type UnknownRecord,
 } from './RecordMapperSupport';
 
@@ -56,6 +58,9 @@ export class GoalRecordMapper {
       createdAt: goal.createdAt.toISOString(),
       updatedAt: goal.updatedAt.toISOString(),
       archivedAt: goal.archivedAt?.toISOString() ?? null,
+      deletedAt: toNullableIsoDate(goal.deletedAt),
+      lastDeletedAt: toNullableIsoDate(goal.lastDeletedAt),
+      restoredFromTrashAt: toNullableIsoDate(goal.restoredFromTrashAt),
       version: goal.version,
     };
   }
@@ -96,6 +101,9 @@ export class GoalRecordMapper {
       createdAt: readIsoDate(record, 'createdAt'),
       updatedAt: readIsoDate(record, 'updatedAt'),
       archivedAt: readNullableIsoDate(record, 'archivedAt'),
+      deletedAt: readOptionalNullableIsoDate(record, 'deletedAt'),
+      lastDeletedAt: readOptionalNullableIsoDate(record, 'lastDeletedAt'),
+      restoredFromTrashAt: readOptionalNullableIsoDate(record, 'restoredFromTrashAt'),
       version: readNumber(record, 'version'),
     });
   }

@@ -134,6 +134,60 @@ describe('Goal', () => {
     expect(archived.archive(new Date('2026-08-26T10:00:00.000Z'))).toBe(archived);
   });
 
+  it('moves a goal to trash without changing its lifecycle state or links', () => {
+    const sphereId = EntityId.create('sphere-trash');
+    const directionId = EntityId.create('direction-trash');
+    const actionId = EntityId.create('action-trash');
+    const goal = Goal.create({
+      id: EntityId.create('goal-trash'),
+      sphereId,
+      directionId,
+      title: 'Цель для корзины',
+      status: GOAL_STATUS.active,
+      stage: GOAL_STAGE.activeGoal,
+      now: CREATED_AT,
+    }).selectNextAction(actionId, new Date('2026-08-24T09:00:00.000Z'));
+    const deletedAt = new Date('2026-09-25T10:00:00.000Z');
+
+    const deleted = goal.softDelete(deletedAt);
+
+    expect(deleted).toMatchObject({
+      status: goal.status,
+      stage: goal.stage,
+      sphereId,
+      directionId,
+      nextActionId: actionId,
+      version: goal.version + 1,
+    });
+    expect(deleted.isDeleted()).toBe(true);
+    expect(deleted.deletedAt).toEqual(deletedAt);
+    expect(deleted.lastDeletedAt).toEqual(deletedAt);
+    expect(deleted.restoredFromTrashAt).toBeNull();
+    expect(deleted.updatedAt).toEqual(deletedAt);
+    expectDomainError(() => deleted.softDelete(deletedAt), 'goal.already_deleted');
+  });
+
+  it('restores a deleted goal while retaining the last deletion time', () => {
+    const deletedAt = new Date('2026-09-25T10:00:00.000Z');
+    const restoredAt = new Date('2026-09-26T10:00:00.000Z');
+    const goal = Goal.create({
+      id: EntityId.create('goal-restore'),
+      title: 'Цель для восстановления',
+      now: CREATED_AT,
+    });
+    const deleted = goal.softDelete(deletedAt);
+
+    const restored = deleted.restoreFromTrash(restoredAt);
+
+    expect(restored.isDeleted()).toBe(false);
+    expect(restored.deletedAt).toBeNull();
+    expect(restored.lastDeletedAt).toEqual(deleted.deletedAt);
+    expect(restored.restoredFromTrashAt).toEqual(restoredAt);
+    expect(restored.updatedAt).toEqual(restoredAt);
+    expect(restored.version).toBe(deleted.version + 1);
+    expectDomainError(() => goal.restoreFromTrash(restoredAt), 'goal.not_deleted');
+  });
+
   it.each([
     [isGoalStatus, Object.values(GOAL_STATUS)],
     [isGoalStage, Object.values(GOAL_STAGE)],
