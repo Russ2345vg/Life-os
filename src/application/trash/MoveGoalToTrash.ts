@@ -14,8 +14,10 @@ export class MoveGoalToTrash {
     private readonly clock: Clock,
   ) {}
 
-  public async execute(id: string): Promise<TrashReceipt> {
-    const goal = await this.trash.findGoalIncludingDeleted(EntityId.create(id));
+  public async execute(inputId: string): Promise<TrashReceipt> {
+    const entityId = EntityId.create(inputId);
+    const id = entityId.toString();
+    const goal = await this.trash.findGoalIncludingDeleted(entityId);
     if (!goal) throw new DomainError('goal.not_found', 'Цель не найдена.');
     const receipt: TrashReceipt = { type: 'goal', id };
     if (goal.isDeleted()) return receipt;

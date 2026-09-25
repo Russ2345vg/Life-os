@@ -19,10 +19,12 @@ export class RestoreTrashItem {
   ) {}
 
   public async execute(input: TrashReceipt): Promise<RestoredTrashItem> {
-    const { type, id } = input;
+    const { type } = input;
     switch (type) {
       case 'goal': {
-        const goal = await this.trash.findGoalIncludingDeleted(EntityId.create(id));
+        const entityId = EntityId.create(input.id);
+        const id = entityId.toString();
+        const goal = await this.trash.findGoalIncludingDeleted(entityId);
         if (!goal) throw expired();
         if (!goal.isDeleted()) return { type, id, entity: goal };
         await this.policy.assertCanRestore(type, id);
@@ -32,7 +34,9 @@ export class RestoreTrashItem {
         return { type, id, entity: restored };
       }
       case 'action': {
-        const action = await this.trash.findActionIncludingDeleted(EntityId.create(id));
+        const entityId = EntityId.create(input.id);
+        const id = entityId.toString();
+        const action = await this.trash.findActionIncludingDeleted(entityId);
         if (!action) throw expired();
         if (action.occurrence)
           throw new DomainError('trash.recurring_occurrence', 'Восстановите всю серию повторений.');
@@ -43,6 +47,7 @@ export class RestoreTrashItem {
         return { type, id, entity: action };
       }
       case 'series': {
+        const { id } = input;
         const rule = await this.trash.findSeriesIncludingRemoved(id);
         if (!rule || rule.purgedAt != null) throw expired();
         if (rule.removedAt == null) return { type, id, entity: rule };

@@ -14,8 +14,10 @@ export class MoveLifeActionToTrash {
     private readonly clock: Clock,
   ) {}
 
-  public async execute(id: string): Promise<TrashReceipt> {
-    const action = await this.trash.findActionIncludingDeleted(EntityId.create(id));
+  public async execute(inputId: string): Promise<TrashReceipt> {
+    const entityId = EntityId.create(inputId);
+    const id = entityId.toString();
+    const action = await this.trash.findActionIncludingDeleted(entityId);
     if (!action) throw new DomainError('life_action.not_found', 'Действие не найдено.');
     if (action.occurrence)
       throw new DomainError(

@@ -47,15 +47,20 @@ function fixture() {
   let rejectGoalWrite = false;
   let blockMove = false;
   let blockRestore = false;
+  let blockedMoveId: string | undefined;
+  let blockedRestoreId: string | undefined;
+  let beforeActionSave: (() => Promise<void>) | undefined;
   const checks: string[] = [];
   const policy: TrashDependencyPolicy = {
     async assertCanMove(type, id) {
       checks.push(`move:${type}:${id}`);
-      if (blockMove) throw new DomainError('sync.delete_blocked', 'Dependent record');
+      if (blockMove || id === blockedMoveId)
+        throw new DomainError('sync.delete_blocked', 'Dependent record');
     },
     async assertCanRestore(type, id) {
       checks.push(`restore:${type}:${id}`);
-      if (blockRestore) throw new DomainError('trash.relationship_conflict', 'Missing target');
+      if (blockRestore || id === blockedRestoreId)
+        throw new DomainError('trash.relationship_conflict', 'Missing target');
     },
   };
   const goalWriter = {
@@ -72,6 +77,7 @@ function fixture() {
   };
   const actionWriter = {
     async save(action: LifeAction) {
+      await beforeActionSave?.();
       state.actions[state.actions.findIndex((a) => a.id.equals(action.id))] = action;
       actionWrites++;
     },
@@ -110,10 +116,116 @@ function fixture() {
     rejectGoalWrite: () => {
       rejectGoalWrite = true;
     },
+    blockMoveFor: (id: string) => {
+      blockedMoveId = id;
+    },
+    blockRestoreFor: (id: string) => {
+      blockedRestoreId = id;
+    },
+    beforeActionSave: (save: () => Promise<void>) => {
+      beforeActionSave = save;
+    },
   };
 }
 
 describe('Trash commands', () => {
+  it.each(['goal', 'action'] as const)(
+    'uses canonical %s id for move policy and receipts, including replay',
+    async (type) => {
+      const f = fixture();
+      const command = type === 'goal' ? f.moveGoal : f.moveAction;
+      const receipt = await command.execute(` ${type} `);
+      expect(f.checks).toEqual([`move:${type}:${type}`]);
+      expect(receipt).toEqual({ type, id: type });
+      expect(await command.execute(` ${type} `)).toEqual(receipt);
+      expect(f.goalWrites + f.actionWrites).toBe(1);
+    },
+  );
+
+  it.each(['goal', 'action'] as const)(
+    'cannot bypass an exact-id move dependency for %s with whitespace',
+    async (type) => {
+      const f = fixture();
+      f.blockMoveFor(type);
+      await expect(
+        (type === 'goal' ? f.moveGoal : f.moveAction).execute(` ${type} `),
+      ).rejects.toMatchObject({ code: 'sync.delete_blocked' });
+      expect((type === 'goal' ? f.state.goals[0]! : f.state.actions[0]!).isDeleted()).toBe(false);
+      expect(f.goalWrites + f.actionWrites).toBe(0);
+    },
+  );
+
+  it.each(['goal', 'action'] as const)(
+    'uses canonical %s id for restore policy and results, including replay',
+    async (type) => {
+      const f = fixture();
+      await (type === 'goal' ? f.moveGoal : f.moveAction).execute(type);
+      const result = await f.restore.execute({ type, id: ` ${type} ` });
+      expect(f.checks).toEqual([`move:${type}:${type}`, `restore:${type}:${type}`]);
+      expect(result).toMatchObject({ type, id: type });
+      expect(result.entity.id.toString()).toBe(type);
+      expect(await f.restore.execute({ type, id: ` ${type} ` })).toMatchObject({ type, id: type });
+      expect(f.goalWrites + f.actionWrites).toBe(2);
+    },
+  );
+
+  it.each(['goal', 'action'] as const)(
+    'cannot bypass an exact-id restore relationship conflict for %s with whitespace',
+    async (type) => {
+      const f = fixture();
+      await (type === 'goal' ? f.moveGoal : f.moveAction).execute(type);
+      f.blockRestoreFor(type);
+      await expect(f.restore.execute({ type, id: ` ${type} ` })).rejects.toMatchObject({
+        code: 'trash.relationship_conflict',
+      });
+      expect((type === 'goal' ? f.state.goals[0]! : f.state.actions[0]!).isDeleted()).toBe(true);
+      expect(f.goalWrites + f.actionWrites).toBe(1);
+    },
+  );
+
+  it.each(['move', 'restore'] as const)(
+    'awaits action save and propagates its rejection during %s',
+    async (operation) => {
+      const f = fixture();
+      if (operation === 'restore') await f.moveAction.execute('action');
+      const writesBefore = f.actionWrites;
+      let rejectSave!: (error: Error) => void;
+      let signalSaveStarted!: () => void;
+      const saveStarted = new Promise<void>((resolve) => {
+        signalSaveStarted = resolve;
+      });
+      const pendingSave = new Promise<void>((_resolve, reject) => {
+        rejectSave = reject;
+      });
+      f.beforeActionSave(() => {
+        signalSaveStarted();
+        return pendingSave;
+      });
+      let settled = false;
+      const command =
+        operation === 'move'
+          ? f.moveAction.execute('action')
+          : f.restore.execute({ type: 'action', id: 'action' });
+      const outcome = command.then(
+        (value) => {
+          settled = true;
+          return value;
+        },
+        (error: unknown) => {
+          settled = true;
+          return error;
+        },
+      );
+      await saveStarted;
+      await Promise.resolve();
+      expect(settled).toBe(false);
+      const failure = new Error('Transaction rejected');
+      rejectSave(failure);
+      expect(await outcome).toBe(failure);
+      expect(f.actionWrites).toBe(writesBefore);
+    },
+  );
+
   it('moves a goal once and replays its committed receipt without another policy check or write', async () => {
     const f = fixture();
     expect(await f.moveGoal.execute('goal')).toEqual({ type: 'goal', id: 'goal' });
