@@ -1,7 +1,7 @@
 import { SetLifeActionPlan } from '../../../application/commands/SetLifeActionPlan';
 import { IDBFactory } from 'fake-indexeddb';
 import { describe, it, expect } from 'vitest';
-import { EntityId, DayDate } from '../../../domain';
+import { EntityId, DayDate, Goal } from '../../../domain';
 import { FakeClock, FakeCurrentDateProvider, FakeIdGenerator } from '../../../test/helpers/Fakes';
 import { RecurrenceRuleRecordMapper } from '../PlanningRecordMappers';
 import { LifeOsIndexedDb } from '../indexed-db/LifeOsIndexedDb';
@@ -31,6 +31,82 @@ const input: RecurrenceInput = {
   schedule: { kind: 'daily' },
 };
 describe('bounded recurring actions', () => {
+  it.each([
+    { schedule: { kind: 'daily' } as const, selectedDate: '2026-09-14' },
+    { schedule: { kind: 'count' } as const, selectedDate: '2026-09-14' },
+    { schedule: { kind: 'interval', days: 1 } as const, selectedDate: '2026-09-15' },
+  ])(
+    'selects the restored $schedule.kind generation without changing linked completed history',
+    async ({ schedule, selectedDate }) => {
+      const db = new LifeOsIndexedDb(new IDBFactory());
+      const repo = new IndexedDbPlanningRepository(db);
+      const clock = new FakeClock(new Date(2026, 8, 14, 10));
+      const ids = new FakeIdGenerator('same-day-restore');
+      const service = new RecurringActions(
+        repo,
+        clock,
+        ids,
+        new FakeCurrentDateProvider(DayDate.create('2026-09-14')),
+      );
+      const links = {
+        goalId: 'practice-goal',
+        directionId: 'practice-direction',
+        sphereId: 'practice-sphere',
+      };
+      try {
+        await repo.change((state) =>
+          state.goals.push(
+            Goal.create({
+              id: EntityId.create(links.goalId),
+              title: 'Практика',
+              status: 'active',
+              now: clock.now(),
+              directionId: EntityId.create(links.directionId),
+              sphereId: EntityId.create(links.sphereId),
+            }),
+          ),
+        );
+        const rule = await service.save({ ...input, ...links, schedule, maxCompletions: 2 });
+        await service.materialize('2026-09-14', '2026-09-14');
+        const first = (await repo.read()).actions[0]!;
+        const complete = new CompleteLifeAction(
+          new IndexedDbLifeActionRepository(db),
+          clock,
+          ids,
+          new IndexedDbJournalUnitOfWork(db),
+        );
+        expect((await complete.execute({ lifeActionId: first.id })).ok).toBe(true);
+        const history = LifeActionRecordMapper.toRecord((await repo.read()).actions[0]!);
+        await service.remove(rule.id);
+        await service.restore(rule.id);
+        expect(await service.materialize('2026-09-14', '2026-09-15')).toBe(1);
+        const current = (await repo.read()).actions.find(
+          (a) => a.occurrence?.restorationGeneration === 1,
+        )!;
+        if (schedule.kind === 'interval') {
+          expect(await service.selectForDate(rule.id, '2026-09-14')).toBeNull();
+        }
+        const selected = await service.selectForDate(rule.id, selectedDate);
+        expect(selected?.id.toString()).toBe(current.id.toString());
+        expect(selected?.status).toBe('draft');
+        expect(selected?.occurrence?.restorationGeneration).toBe(1);
+        expect(selected?.plannedDate?.toString()).toBe(selectedDate);
+        expect(selected?.goalId?.toString()).toBe(links.goalId);
+        expect(selected?.directionId?.toString()).toBe(links.directionId);
+        expect(selected?.sphereId?.toString()).toBe(links.sphereId);
+        const restored = await repo.read();
+        expect(restored.rules[0]).toMatchObject(links);
+        expect(
+          LifeActionRecordMapper.toRecord(restored.actions.find((a) => a.id.equals(first.id))!),
+        ).toEqual(history);
+        expect((await complete.execute({ lifeActionId: selected!.id })).ok).toBe(true);
+        expect(await service.materialize('2026-09-14', '2026-09-16')).toBe(0);
+      } finally {
+        db.close();
+      }
+    },
+  );
+
   it('restores from the authoritative local date with new identities and unchanged history', async () => {
     const factory = new IDBFactory();
     const db = new LifeOsIndexedDb(factory);

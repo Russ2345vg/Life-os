@@ -241,14 +241,15 @@ export class RecurringActions {
   }
   private findOnDate(s: PlanningState, ruleId: string, date: string): LifeAction | null {
     const rule = s.rules.find((r) => r.id === ruleId);
+    if (!rule) return null;
     return (
       s.actions.find(
         (a) =>
-          a.occurrence?.ruleId === ruleId &&
+          this.isCurrentOccurrence(a, rule) &&
           !a.isArchived() &&
           a.status !== 'cancelled' &&
           (a.plannedDate?.toString() === date ||
-            (rule?.schedule.kind === 'count' &&
+            (rule.schedule.kind === 'count' &&
               a.status === 'completed' &&
               !a.plannedDate &&
               a.completedOn === date)),
