@@ -88,9 +88,11 @@ describe('recurrence trash lifecycle', () => {
   });
 
   it.each([undefined, 0])('keeps legacy identities for generation %s', (restorationGeneration) => {
-    expect(
-      occurrenceSlots({ ...rule, restorationGeneration }, '2026-09-14', '2026-09-14', []),
-    ).toEqual([{ id: 'occurrence:rule%3Aone:2026-09-14', slot: '2026-09-14', date: '2026-09-14' }]);
+    const legacyRule =
+      restorationGeneration === undefined ? rule : { ...rule, restorationGeneration };
+    expect(occurrenceSlots(legacyRule, '2026-09-14', '2026-09-14', [])).toEqual([
+      { id: 'occurrence:rule%3Aone:2026-09-14', slot: '2026-09-14', date: '2026-09-14' },
+    ]);
   });
 
   it.each([
