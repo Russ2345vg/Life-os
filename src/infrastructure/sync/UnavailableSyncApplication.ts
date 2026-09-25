@@ -91,6 +91,8 @@ export class UnavailableAccountSync implements AccountSync {
       connection: 'local',
       recoveryMaterial: null,
       pendingMutations: 0,
+      syncState: 'idle',
+      lastSuccessfulSyncAt: null,
       conflicts: 0,
       devices: [],
     };

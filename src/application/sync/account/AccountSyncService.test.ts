@@ -22,6 +22,66 @@ const RECOVERY = 'LIFEOS-RECOVERY-V1:private-material';
 const TIMESTAMP = '2026-09-22T10:00:00.000Z';
 
 describe('AccountSyncService', () => {
+  it('does not confirm an incomplete run using an old successful exchange', async () => {
+    const fixture = createFixture(readyInstallation());
+    fixture.sync.pilotStatus.mockReturnValue({
+      state: 'idle',
+      pendingCount: 0,
+      conflictCount: 0,
+      lastSuccessfulSyncAt: TIMESTAMP,
+    });
+    fixture.sync.syncPilotNow.mockResolvedValue({
+      pending: 0,
+      conflicts: 0,
+      quarantined: 0,
+      lastSequence: null,
+    });
+    await expect(fixture.service.syncNow()).resolves.toMatchObject({ syncState: 'attention' });
+  });
+
+  it('preserves new queued changes observed after the completed run', async () => {
+    const fixture = createFixture(readyInstallation());
+    await expect(fixture.service.syncNow()).resolves.toMatchObject({
+      pendingMutations: 2,
+      conflicts: 1,
+    });
+  });
+
+  it('preserves a failed transfer status even when the server is reachable', async () => {
+    const fixture = createFixture(readyInstallation());
+    fixture.sync.pilotStatus.mockReturnValue({
+      state: 'error',
+      pendingCount: 0,
+      conflictCount: 0,
+      lastSuccessfulSyncAt: TIMESTAMP,
+    });
+    fixture.sync.syncPilotNow.mockResolvedValue({
+      pending: 0,
+      conflicts: 0,
+      quarantined: 0,
+      lastSequence: null,
+    });
+    await expect(fixture.service.syncNow()).resolves.toMatchObject({
+      syncState: 'error',
+      lastSuccessfulSyncAt: TIMESTAMP,
+    });
+  });
+
+  it('uses the completed report counts and exposes quarantined results as attention', async () => {
+    const fixture = createFixture(readyInstallation());
+    fixture.sync.syncPilotNow.mockResolvedValue({
+      pending: 3,
+      conflicts: 2,
+      quarantined: 1,
+      lastSequence: 5,
+    });
+    await expect(fixture.service.syncNow()).resolves.toMatchObject({
+      pendingMutations: 3,
+      conflicts: 2,
+      syncState: 'attention',
+    });
+  });
+
   it('loads a local-only installation without creating an account session', async () => {
     const fixture = createFixture(localInstallation());
 
@@ -334,14 +394,14 @@ function createFixture(initial: SyncInstallation) {
     revokeDevice: vi.fn(async () => syncOverview(installations.value!, 'online')),
     retryPendingRotation: vi.fn(),
     updateDeviceName: vi.fn(),
-    pilotStatus: vi.fn(() => ({
+    pilotStatus: vi.fn<SyncApplication['pilotStatus']>(() => ({
       state: 'idle' as const,
       pendingCount: 2,
       conflictCount: 1,
       lastSuccessfulSyncAt: null,
     })),
     subscribePilotStatus: vi.fn(() => () => undefined),
-    syncPilotNow: vi.fn(async () => ({
+    syncPilotNow: vi.fn<SyncApplication['syncPilotNow']>(async () => ({
       pending: 0,
       conflicts: 0,
       quarantined: 0,

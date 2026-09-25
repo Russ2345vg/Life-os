@@ -33,6 +33,8 @@ describe('current library rendering', () => {
         connection: 'local' as const,
         recoveryMaterial: null,
         pendingMutations: 0,
+        syncState: 'idle',
+        lastSuccessfulSyncAt: null,
         conflicts: 0,
         devices: [],
       }),

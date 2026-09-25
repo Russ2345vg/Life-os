@@ -110,7 +110,7 @@ export function AccountSyncPageView({
     work: () => Promise<AccountOverview>,
     secrets: readonly string[],
     next?: AccountPageStep,
-    success?: string,
+    success?: string | ((updated: AccountOverview) => string | null),
   ) => {
     if (working.current) return;
     working.current = true;
@@ -122,7 +122,7 @@ export function AccountSyncPageView({
       onOverview(updated);
       setEmail(updated.email ?? email);
       setStep(next ?? stepFor(updated));
-      if (success) setNotice(success);
+      if (success) setNotice(typeof success === 'function' ? success(updated) : success);
     } catch (reason: unknown) {
       setError(redactAccountError(reason, secrets));
     } finally {
@@ -443,7 +443,13 @@ export function AccountSyncPageView({
             overview={overview}
             busy={busy}
             onSync={() =>
-              void perform(() => service.syncNow(), [], 'ready', 'Синхронизация завершена.')
+              void perform(
+                () => service.syncNow(),
+                [],
+                'ready',
+                (updated) =>
+                  accountStatus(updated).tone === 'success' ? 'Синхронизация завершена.' : null,
+              )
             }
             onRevoke={(device) =>
               void perform(
@@ -652,6 +658,12 @@ function ReadyAccountPanel({
             <dd>{overview.conflicts}</dd>
           </div>
         </dl>
+        <p className="account-muted">
+          Последний успешный обмен в этом сеансе:{' '}
+          {overview.lastSuccessfulSyncAt
+            ? new Date(overview.lastSuccessfulSyncAt).toLocaleString('ru-RU')
+            : 'ещё не подтверждён'}
+        </p>
         <button
           className="account-button account-button--primary"
           type="button"
@@ -666,6 +678,11 @@ function ReadyAccountPanel({
           <p className="account-eyebrow">Доступ</p>
           <h3 id="account-devices-title">Ваши устройства</h3>
         </div>
+        <p className="account-muted">
+          Чтобы подключить другой компьютер, сначала синхронизируйте изменения здесь. Затем
+          установите LifeOS, войдите с той же почтой и введите ключ восстановления. Ключ можно
+          открыть ниже, в разделе «Безопасность».
+        </p>
         {overview.devices.length === 0 ? (
           <p className="account-muted">Другие устройства ещё не подключены.</p>
         ) : (
@@ -872,19 +889,49 @@ function accountStatus(overview: AccountOverview): {
       description: 'Данные хранятся только на этом устройстве',
       tone: 'local',
     };
-  if (overview.state === 'ready' && overview.connection === 'online')
-    return { label: 'Защищено', description: 'Синхронизировано и защищено', tone: 'success' };
   if (overview.state !== 'ready')
     return {
       label: 'Настройка',
       description: 'Завершите защищённое подключение аккаунта',
       tone: 'pending',
     };
-  if (overview.connection === 'offline')
+  if (overview.connection === 'offline' || overview.syncState === 'offline')
     return {
       label: 'Нет соединения',
       description: 'Офлайн — изменения ожидают отправки',
       tone: 'offline',
+    };
+  if (overview.syncState === 'error')
+    return {
+      label: 'Не удалось синхронизировать',
+      description: 'Обмен данными не завершён. Повторите синхронизацию.',
+      tone: 'pending',
+    };
+  if (overview.syncState === 'syncing')
+    return {
+      label: 'Синхронизация',
+      description: 'Идёт обмен данными. Дождитесь завершения.',
+      tone: 'pending',
+    };
+  if (overview.conflicts > 0 || overview.syncState === 'attention')
+    return {
+      label: 'Требует внимания',
+      description: 'Не все данные согласованы. Проверьте состояние синхронизации.',
+      tone: 'pending',
+    };
+  if (overview.pendingMutations > 0)
+    return {
+      label: 'Ожидает отправки',
+      description: 'На этом устройстве остались неотправленные изменения.',
+      tone: 'pending',
+    };
+  if (overview.connection === 'online' && overview.lastSuccessfulSyncAt !== null)
+    return { label: 'Защищено', description: 'Синхронизировано и защищено', tone: 'success' };
+  if (overview.connection === 'online')
+    return {
+      label: 'Подключено',
+      description: 'Синхронизация в этом сеансе ещё не подтверждена.',
+      tone: 'pending',
     };
   return {
     label: 'Настройка',
@@ -912,6 +959,8 @@ function localOverview(): AccountOverview {
     connection: 'local',
     recoveryMaterial: null,
     pendingMutations: 0,
+    syncState: 'idle',
+    lastSuccessfulSyncAt: null,
     conflicts: 0,
     devices: [],
   };

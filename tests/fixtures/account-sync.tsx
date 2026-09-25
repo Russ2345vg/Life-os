@@ -6,6 +6,8 @@ import { DomainError } from '../../src/shared/errors/DomainError';
 import { AccountSyncPage } from '../../src/presentation/planner-v2/AccountSyncPage';
 import '../../src/presentation/styles/global.css';
 import '../../src/presentation/planner-v2/planner-v2.css';
+import '../../src/presentation/planner-v2/planner-master.css';
+import '../../src/presentation/planner-v2/planner-premium.css';
 
 const EMAIL = 'person@example.com';
 const RECOVERY = 'LIFEOS-RECOVERY-V1:fixture-private-material';
@@ -13,6 +15,7 @@ const RECOVERY = 'LIFEOS-RECOVERY-V1:fixture-private-material';
 class FixtureAccountSync implements AccountSync {
   #overview = localOverview();
   #signOutAttempts = 0;
+  #syncAttempts = 0;
 
   public async load(): Promise<AccountOverview> {
     return structuredClone(this.#overview);
@@ -75,6 +78,16 @@ class FixtureAccountSync implements AccountSync {
   }
 
   public async syncNow(): Promise<AccountOverview> {
+    this.#syncAttempts += 1;
+    if (this.#syncAttempts > 1) {
+      this.#overview = {
+        ...readyOverview(),
+        syncState:
+          this.#syncAttempts === 2 ? 'error' : this.#syncAttempts === 3 ? 'attention' : 'idle',
+        conflicts: this.#syncAttempts === 3 ? 1 : 0,
+      };
+      return this.load();
+    }
     this.#overview = {
       ...readyOverview(),
       connection: 'offline',
@@ -113,6 +126,8 @@ function localOverview(): AccountOverview {
     connection: 'local',
     recoveryMaterial: null,
     pendingMutations: 0,
+    syncState: 'idle',
+    lastSuccessfulSyncAt: null,
     conflicts: 0,
     devices: [],
   };
@@ -126,6 +141,8 @@ function readyOverview(): AccountOverview {
     connection: 'online',
     recoveryMaterial: null,
     pendingMutations: 0,
+    syncState: 'idle',
+    lastSuccessfulSyncAt: '2026-09-25T10:00:00Z',
     conflicts: 0,
     devices: [device('fixture-windows', 'Ноутбук', 'windows')],
   };

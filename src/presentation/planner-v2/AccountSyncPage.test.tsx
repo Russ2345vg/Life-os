@@ -10,6 +10,25 @@ const RECOVERY = 'LIFEOS-RECOVERY-V1:private-material';
 const PASSWORD = 'correct horse battery';
 
 describe('AccountSyncPage', () => {
+  it.each(['error', 'attention', 'syncing', 'offline'] as const)(
+    'never claims success for an online %s transfer',
+    (syncState) => {
+      const html = render({ ...localOverview(), state: 'ready', connection: 'online', syncState });
+      expect(html).not.toContain('Синхронизировано и защищено');
+    },
+  );
+
+  it('requires a confirmed exchange and empty queue before showing success', () => {
+    const overview = { ...localOverview(), state: 'ready' as const, connection: 'online' as const };
+    expect(render(overview)).not.toContain('Синхронизировано и защищено');
+    expect(
+      render({ ...overview, lastSuccessfulSyncAt: '2026-09-25T10:00:00Z', pendingMutations: 1 }),
+    ).not.toContain('Синхронизировано и защищено');
+    expect(
+      render({ ...overview, lastSuccessfulSyncAt: '2026-09-25T10:00:00Z', conflicts: 1 }),
+    ).not.toContain('Синхронизировано и защищено');
+  });
+
   it('shows local storage, registration email and a sign-in choice', () => {
     const html = render(localOverview(), 'register');
 
@@ -100,6 +119,7 @@ describe('AccountSyncPage', () => {
       state: 'ready',
       email: 'person@example.com',
       connection: 'online',
+      lastSuccessfulSyncAt: '2026-09-25T10:00:00Z',
       devices: [device('Ноутбук', 'active'), device('Телефон', 'revoked')],
     });
     expect(ready).toContain('Синхронизировано и защищено');
@@ -186,6 +206,8 @@ function localOverview(): AccountOverview {
     connection: 'local',
     recoveryMaterial: null,
     pendingMutations: 0,
+    syncState: 'idle',
+    lastSuccessfulSyncAt: null,
     conflicts: 0,
     devices: [],
   };

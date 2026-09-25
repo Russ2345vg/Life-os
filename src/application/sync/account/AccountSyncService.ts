@@ -10,7 +10,7 @@ import type {
   SyncInstallationRepository,
 } from '../ports/SyncInstallationRepository';
 import type { SyncTrustTransport } from '../ports/SyncTrustTransport';
-import type { PilotSyncRunResult } from '../pilot/PilotSyncCoordinator';
+import type { PilotSyncRunResult, PilotSyncState } from '../pilot/PilotSyncCoordinator';
 import type { AccountAuth, AccountSession } from './AccountAuth';
 import type { AccountLocalData } from './AccountLocalData';
 
@@ -22,6 +22,8 @@ export interface AccountOverview {
   readonly recoveryMaterial: string | null;
   readonly pendingMutations: number;
   readonly conflicts: number;
+  readonly syncState: PilotSyncState;
+  readonly lastSuccessfulSyncAt: string | null;
   readonly devices: readonly CachedSyncDevice[];
 }
 
@@ -202,8 +204,17 @@ export class AccountSyncService implements AccountSync {
   }
 
   public async syncNow(): Promise<AccountOverview> {
-    await this.dependencies.sync.syncPilotNow();
-    return this.load();
+    const report = await this.dependencies.sync.syncPilotNow();
+    const overview = await this.load();
+    return {
+      ...overview,
+      pendingMutations: Math.max(report.pending, overview.pendingMutations),
+      conflicts: Math.max(report.conflicts, overview.conflicts),
+      syncState:
+        overview.syncState === 'idle' && (report.quarantined > 0 || report.lastSequence === null)
+          ? 'attention'
+          : overview.syncState,
+    };
   }
 
   public async revokeDevice(deviceId: string): Promise<AccountOverview> {
@@ -399,6 +410,8 @@ export class AccountSyncService implements AccountSync {
       recoveryMaterial,
       pendingMutations: report?.pending ?? pilot.pendingCount,
       conflicts: report?.conflicts ?? pilot.conflictCount,
+      syncState: report && report.quarantined > 0 ? 'attention' : pilot.state,
+      lastSuccessfulSyncAt: pilot.lastSuccessfulSyncAt,
       devices: overview.devices,
     };
   }

@@ -1,0 +1,184 @@
+/* Motion decorates existing state changes; no timers, delayed focus or delayed commands. */
+@media (prefers-reduced-motion: no-preference) {
+  .planner-v2 :is(.planner-page-heading, .balance-header, .account-header) {
+    animation: planner-heading-enter var(--motion-page) var(--ease-emphasized);
+  }
+
+  /* Opacity keeps viewport positioning intact for nested fixed notices and menus. */
+  .planner-v2
+    :is(
+      .planner-day-workspace,
+      .planner-today-sidebar,
+      .planner-actions-catalog,
+      .planner-goal-group,
+      .balance-panel,
+      .balance-sphere-grid,
+      .account-hero,
+      .sleep-hero,
+      .planner-board,
+      .planner-month,
+      .planner-focus-hero
+    ) {
+    animation: planner-surface-enter var(--motion-page) var(--ease-standard);
+  }
+
+  .planner-v2 button:active:not(:disabled, [aria-disabled='true']) {
+    transform: scale(0.985);
+    transition-duration: var(--motion-fast);
+  }
+
+  .planner-v2 :is(input:not([type='checkbox'], [type='range']), textarea, select):focus-visible {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-primary) 12%, transparent);
+  }
+
+  /* Native dialog owns focus/resize; never transform it or its fixed resize handle. */
+  .planner-v2 .planner-sheet[open] {
+    animation: planner-surface-enter var(--motion-component) var(--ease-standard);
+  }
+  .planner-v2 .planner-sheet[open]::backdrop {
+    animation: planner-backdrop-enter var(--motion-component) var(--ease-standard);
+  }
+  .planner-v2 .planner-sheet[open] > :is(.planner-form, .balance-form) {
+    animation: planner-sheet-content-enter var(--motion-component) var(--ease-emphasized);
+  }
+
+  /* Popup dimensions are measured on mount: keep scale and layout unchanged. */
+  .planner-v2 .planner-entity-popup,
+  .planner-v2 .planner-more-menu:not([hidden]),
+  .planner-v2 .planner-entity-confirm {
+    animation: planner-surface-enter var(--motion-base) var(--ease-standard);
+  }
+
+  .planner-v2
+    :is(.planner-filter-panel, .planner-tomorrow-candidates, .planner-tree-children:not([hidden])),
+  .planner-v2 details[open] > :not(summary, dialog) {
+    animation: planner-surface-enter var(--motion-component) var(--ease-standard);
+  }
+
+  .planner-v2 .planner-notice {
+    animation: planner-notice-enter var(--motion-component) var(--ease-emphasized);
+  }
+  .planner-v2 :is(.planner-error, .account-feedback) {
+    animation: planner-surface-enter var(--motion-base) var(--ease-standard);
+  }
+  .planner-v2 .planner-goal-success {
+    animation: planner-surface-enter var(--motion-page) var(--ease-standard);
+  }
+
+  /* Native progress retains its value/label; only real value changes interpolate. */
+  .planner-v2 progress::-webkit-progress-value {
+    transition: width var(--motion-page) var(--ease-emphasized);
+  }
+  .planner-v2 progress::-moz-progress-bar {
+    transition: width var(--motion-page) var(--ease-emphasized);
+  }
+
+  .planner-v2 .planner-loading span {
+    animation: planner-loading-breathe var(--motion-loading) ease-in-out infinite alternate;
+  }
+  .planner-v2 .planner-loading span:nth-child(2) {
+    animation-delay: var(--motion-fast);
+  }
+  .planner-v2 .planner-loading span:nth-child(3) {
+    animation-delay: var(--motion-component);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .planner-v2
+      :is(.planner-primary, .account-button--primary):hover:not(:disabled, [aria-disabled='true']) {
+      box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--accent-primary) 35%, transparent),
+        0 4px 18px color-mix(in srgb, var(--accent-primary) 15%, transparent);
+    }
+    .planner-v2 :is(.planner-goal-card, .planner-action-row--catalog, .balance-sphere-card) {
+      transition:
+        background-color var(--motion-base) var(--ease-standard),
+        border-color var(--motion-base) var(--ease-standard),
+        box-shadow var(--motion-base) var(--ease-standard);
+    }
+    .planner-v2 :is(.planner-goal-card, .planner-action-row--catalog, .balance-sphere-card):hover {
+      box-shadow: 0 4px 16px rgb(0 0 0 / 14%);
+    }
+    .planner-v2 .planner-sidebar nav svg {
+      transition: transform var(--motion-base) var(--ease-emphasized);
+    }
+    .planner-v2 .planner-sidebar nav :is(a, button):hover svg {
+      transform: translateY(-1px);
+    }
+  }
+
+  @media (max-width: 760px) {
+    .planner-v2 {
+      --motion-page: 220ms;
+      --motion-component: 180ms;
+    }
+    .planner-v2 .planner-sheet[open] > :is(.planner-form, .balance-form) {
+      animation-name: planner-sheet-content-mobile-enter;
+    }
+  }
+}
+
+@keyframes planner-surface-enter {
+  from {
+    opacity: 0.45;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes planner-backdrop-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes planner-heading-enter {
+  from {
+    opacity: 0.5;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes planner-sheet-content-enter {
+  from {
+    opacity: 0.5;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes planner-sheet-content-mobile-enter {
+  from {
+    opacity: 0.5;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes planner-notice-enter {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%);
+  }
+}
+@keyframes planner-loading-breathe {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
+}

@@ -59,6 +59,8 @@ test('completes registration, recovery confirmation, offline attention and safe 
   await page.getByRole('button', { name: 'Синхронизировать сейчас' }).click();
   await expect(page.getByText('Офлайн — изменения ожидают отправки')).toBeVisible();
   await expect(page.getByText('Ожидают отправки: 2')).toBeVisible();
+  await expect(page.getByText('Синхронизация завершена.', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Синхронизировано и защищено')).toHaveCount(0);
   await expect(page.getByText(/Конфликты: 1/)).toBeVisible();
 
   await page.getByRole('button', { name: 'Выйти на этом устройстве' }).click();
@@ -96,6 +98,20 @@ test('signs in on a new device and requires recovery material before data appear
   await page.getByLabel('Ключ восстановления').fill(RECOVERY);
   await page.getByRole('button', { name: 'Восстановить данные' }).click();
   await expect(page.getByText('Синхронизировано и защищено')).toBeVisible();
+  await expect(page.getByText(/Чтобы подключить другой компьютер/)).toBeVisible();
+  const syncButton = page.getByRole('button', { name: 'Синхронизировать сейчас' });
+  await syncButton.click();
+  await expect(page.getByText('Синхронизация завершена.', { exact: true })).toHaveCount(0);
+  await syncButton.click();
+  await expect(page.getByText('Обмен данными не завершён. Повторите синхронизацию.')).toBeVisible();
+  await expect(page.getByText('Синхронизация завершена.', { exact: true })).toHaveCount(0);
+  await syncButton.click();
+  await expect(
+    page.getByText('Не все данные согласованы. Проверьте состояние синхронизации.'),
+  ).toBeVisible();
+  await expect(page.getByText('Синхронизация завершена.', { exact: true })).toHaveCount(0);
+  await syncButton.click();
+  await expect(page.getByText('Синхронизация завершена.', { exact: true })).toBeVisible();
   expect(await page.locator('body').textContent()).not.toContain(PASSWORD);
   expect(await page.locator('body').textContent()).not.toContain(RECOVERY);
   expect(issues).toEqual([]);
