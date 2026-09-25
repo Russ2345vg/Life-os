@@ -251,7 +251,9 @@ export class LifeAction extends Entity {
         !occurrence.ruleId ||
         !occurrence.slot ||
         !Number.isInteger(occurrence.ruleRevision) ||
-        occurrence.ruleRevision < 1
+        occurrence.ruleRevision < 1 ||
+        !Number.isInteger(occurrence.restorationGeneration ?? 0) ||
+        (occurrence.restorationGeneration ?? 0) < 0
       )
         throw new DomainError('life_action.invalid_occurrence', 'Неверное повторение.');
       DayDate.create(occurrence.originalDate);

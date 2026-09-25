@@ -36,7 +36,11 @@ function mapper<T extends PlanningRecord>(validate: (record: T) => void) {
   };
 }
 export const PlanningPeriodRecordMapper = mapper<PlanningPeriod>(validatePeriod);
-export const RecurrenceRuleRecordMapper = mapper<RecurrenceRule>(validateRule);
+const recurrenceMapper = mapper<RecurrenceRule>(validateRule);
+export const RecurrenceRuleRecordMapper = {
+  toRecord: (record: RecurrenceRule): RecurrenceRule => ({ ...validateRule(record) }),
+  fromRecord: (value: unknown): RecurrenceRule => validateRule(recurrenceMapper.fromRecord(value)),
+};
 export const PeriodMembershipRecordMapper = mapper<PeriodMembership>((r) => {
   requireValue(
     text(r.periodId) &&

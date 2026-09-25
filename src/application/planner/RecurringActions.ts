@@ -7,18 +7,30 @@ import {
 import { addDays } from '../../domain/planner/PlanningPeriod';
 import type { PlanningRepository, PlanningState } from '../ports/PlanningRepository';
 import type { Clock } from '../ports/Clock';
+import type { CurrentDateProvider } from '../ports/CurrentDateProvider';
 import type { IdGenerator } from '../ports/IdGenerator';
 import { DomainError } from '../../shared/errors/DomainError';
 import { put, requireAction, planningJournal, localDate } from './planningSupport';
 export type RecurrenceInput = Omit<
   RecurrenceRule,
-  'id' | 'version' | 'schemaVersion' | 'updatedAt' | 'revision' | 'effectiveFrom' | 'removedAt'
+  | 'id'
+  | 'version'
+  | 'schemaVersion'
+  | 'updatedAt'
+  | 'revision'
+  | 'effectiveFrom'
+  | 'removedAt'
+  | 'lastRemovedAt'
+  | 'restoredFromTrashAt'
+  | 'purgedAt'
+  | 'restorationGeneration'
 >;
 export class RecurringActions {
   constructor(
     readonly repository: PlanningRepository,
     readonly clock: Clock,
     readonly ids: IdGenerator,
+    readonly currentDate?: CurrentDateProvider,
   ) {}
   async save(input: RecurrenceInput, id?: string, actionId?: string) {
     return this.repository.change((s) => {
@@ -26,6 +38,8 @@ export class RecurringActions {
         date = localDate(now),
         ruleId = id ?? (actionId ? `recurrence:${actionId}` : this.ids.generate().toString());
       const previous = s.rules.find((r) => r.id === ruleId);
+      if (previous?.purgedAt != null)
+        throw new DomainError('trash.expired', 'Серия удалена навсегда.');
       if (previous?.removedAt != null)
         throw new DomainError('recurrence.removed', 'Удалённую серию нельзя изменить.');
       if (input.goalId && !s.goals.some((g) => g.id.toString() === input.goalId))
@@ -43,6 +57,11 @@ export class RecurringActions {
           (actionId ? requireAction(s, actionId).sphereId?.toString() : null) ??
           null,
         id: ruleId,
+        removedAt: previous?.removedAt ?? null,
+        lastRemovedAt: previous?.lastRemovedAt ?? null,
+        restoredFromTrashAt: previous?.restoredFromTrashAt ?? null,
+        purgedAt: previous?.purgedAt ?? null,
+        restorationGeneration: previous?.restorationGeneration ?? 0,
         revision: (previous?.revision ?? 0) + 1,
         effectiveFrom: date,
         version: (previous?.version ?? 0) + 1,
@@ -67,6 +86,7 @@ export class RecurringActions {
                 ? 'first'
                 : originalDate,
             ruleRevision: rule.revision,
+            restorationGeneration: rule.restorationGeneration ?? 0,
             originalDate,
           },
         });
@@ -107,7 +127,7 @@ export class RecurringActions {
       let created = 0;
       const now = this.clock.now();
       for (const rule of s.rules.filter(
-        (r) => r.removedAt == null && (!onlyRuleId || r.id === onlyRuleId),
+        (r) => r.removedAt == null && r.purgedAt == null && (!onlyRuleId || r.id === onlyRuleId),
       )) {
         const windowFrom = rule.schedule.kind === 'count' ? localDate(now) : from;
         const windowTo = rule.schedule.kind === 'count' ? addDays(windowFrom, 62) : to;
@@ -117,7 +137,7 @@ export class RecurringActions {
           rule.schedule.kind === 'count' &&
           s.actions.some(
             (a) =>
-              a.occurrence?.ruleId === rule.id &&
+              this.isCurrentOccurrence(a, rule) &&
               !a.isArchived() &&
               a.status !== 'completed' &&
               a.status !== 'cancelled',
@@ -131,13 +151,13 @@ export class RecurringActions {
               completions.length -
               s.actions.filter(
                 (a) =>
-                  a.occurrence?.ruleId === rule.id &&
+                  this.isCurrentOccurrence(a, rule) &&
                   !a.isArchived() &&
                   a.status !== 'completed' &&
                   a.status !== 'cancelled',
               ).length;
         const existing = new Set(
-          s.actions.filter((a) => a.occurrence?.ruleId === rule.id).map((a) => a.occurrence!.slot),
+          s.actions.filter((a) => this.isCurrentOccurrence(a, rule)).map((a) => a.occurrence!.slot),
         );
         for (const slot of occurrenceSlots(rule, windowFrom, windowTo, completions)) {
           if (existing.has(slot.slot) || capacity <= 0) continue;
@@ -162,6 +182,7 @@ export class RecurringActions {
               ruleId: rule.id,
               slot: slot.slot,
               ruleRevision: rule.revision,
+              restorationGeneration: rule.restorationGeneration ?? 0,
               originalDate: slot.date,
             },
           });
@@ -177,7 +198,8 @@ export class RecurringActions {
   async resolveForDate(ruleId: string, date: string): Promise<LifeAction | null> {
     DayDate.create(date);
     const initial = await this.repository.read();
-    if (!initial.rules.some((r) => r.id === ruleId && r.removedAt == null)) return null;
+    if (!initial.rules.some((r) => r.id === ruleId && r.removedAt == null && r.purgedAt == null))
+      return null;
     if (date >= localDate(this.clock.now())) await this.materialize(date, date, ruleId);
     return this.findOnDate(await this.repository.read(), ruleId, date);
   }
@@ -187,10 +209,17 @@ export class RecurringActions {
     return this.repository.change((s) => {
       const rule = s.rules.find((r) => r.id === ruleId);
       const dated = this.findOnDate(s, ruleId, date);
-      if (dated || !rule || rule.schedule.kind !== 'count') return dated;
+      if (
+        dated ||
+        !rule ||
+        rule.removedAt != null ||
+        rule.purgedAt != null ||
+        rule.schedule.kind !== 'count'
+      )
+        return dated;
       const action = s.actions.find(
         (a) =>
-          a.occurrence?.ruleId === ruleId &&
+          this.isCurrentOccurrence(a, rule) &&
           !a.isArchived() &&
           !a.plannedDate &&
           !['completed', 'cancelled'].includes(a.status),
@@ -243,6 +272,7 @@ export class RecurringActions {
         EntityId.create(`skip:${actionId}`),
         ActionCancelReason.create('Повторение пропущено'),
       );
+      action.archive(now, EntityId.create(`archive:skip:${actionId}`));
       s.journal.push(
         planningJournal(`skip:${actionId}`, 'LifeAction', actionId, 'Повторение пропущено', now, {
           ruleId: action.occurrence.ruleId,
@@ -254,6 +284,7 @@ export class RecurringActions {
   async remove(id: string) {
     return this.repository.change((s) => {
       const rule = this.requireRule(s, id);
+      if (rule.purgedAt != null) throw new DomainError('trash.expired', 'Серия удалена навсегда.');
       if (rule.removedAt != null) return;
       const now = this.clock.now();
       const removedAt = now.toISOString();
@@ -264,6 +295,8 @@ export class RecurringActions {
           paused: true,
           pauseUntil: null,
           removedAt,
+          lastRemovedAt: removedAt,
+          restoredFromTrashAt: null,
           revision: rule.revision + 1,
           version: rule.version + 1,
           updatedAt: removedAt,
@@ -274,10 +307,13 @@ export class RecurringActions {
         (candidate) =>
           candidate.occurrence?.ruleId === id &&
           !candidate.isArchived() &&
-          !['completed', 'cancelled'].includes(candidate.status),
+          candidate.status !== 'completed',
       )) {
-        action.cancel(now, this.ids.generate(), ActionCancelReason.create('Серия удалена'));
-        cancelledOccurrences += 1;
+        if (action.status !== 'cancelled') {
+          action.cancel(now, this.ids.generate(), ActionCancelReason.create('Серия удалена'));
+          cancelledOccurrences += 1;
+        }
+        action.archive(now, this.ids.generate());
       }
       for (const membership of s.memberships.filter(
         (candidate) =>
@@ -302,6 +338,50 @@ export class RecurringActions {
       );
     });
   }
+  async restore(id: string): Promise<void> {
+    return this.repository.change((s) => {
+      const rule = this.requireRule(s, id);
+      if (rule.purgedAt != null) throw new DomainError('trash.expired', 'Серия удалена навсегда.');
+      if (rule.removedAt == null)
+        throw new DomainError(
+          'recurrence.not_removed',
+          'Восстановить можно только серию из корзины.',
+        );
+      const now = this.clock.now();
+      const restoredAt = now.toISOString();
+      put(
+        s.rules,
+        validateRule({
+          ...rule,
+          removedAt: null,
+          lastRemovedAt: rule.removedAt,
+          restoredFromTrashAt: restoredAt,
+          restorationGeneration: (rule.restorationGeneration ?? 0) + 1,
+          revision: rule.revision + 1,
+          version: rule.version + 1,
+          updatedAt: restoredAt,
+          effectiveFrom: this.currentDate?.getCurrentDate().toString() ?? localDate(now),
+          paused: false,
+          pauseUntil: null,
+        }),
+      );
+      s.journal.push(
+        planningJournal(
+          this.ids.generate().toString(),
+          'RecurrenceRule',
+          id,
+          'Серия повторений восстановлена',
+          now,
+        ),
+      );
+    });
+  }
+  private isCurrentOccurrence(action: LifeAction, rule: RecurrenceRule): boolean {
+    return (
+      action.occurrence?.ruleId === rule.id &&
+      (action.occurrence.restorationGeneration ?? 0) === (rule.restorationGeneration ?? 0)
+    );
+  }
   private completions(s: PlanningState, id: string) {
     return s.actions
       .filter((a) => a.occurrence?.ruleId === id && a.status === 'completed' && a.completedAt)
@@ -318,6 +398,7 @@ export class RecurringActions {
   }
   private requireActiveRule(s: PlanningState, id: string) {
     const rule = this.requireRule(s, id);
+    if (rule.purgedAt != null) throw new DomainError('trash.expired', 'Серия удалена навсегда.');
     if (rule.removedAt != null) throw new DomainError('recurrence.removed', 'Серия уже удалена.');
     return rule;
   }
@@ -338,7 +419,7 @@ export class RecurringActions {
       );
     const actions = s.actions
       .filter(
-        (a) => a.occurrence?.ruleId === rule.id && !a.isArchived() && a.status !== 'completed',
+        (a) => this.isCurrentOccurrence(a, rule) && !a.isArchived() && a.status !== 'completed',
       )
       .sort(
         (a, b) =>
@@ -419,7 +500,7 @@ export class RecurringActions {
     const open = s.actions
       .filter(
         (a) =>
-          a.occurrence?.ruleId === rule.id &&
+          this.isCurrentOccurrence(a, rule) &&
           !a.isArchived() &&
           a.status !== 'completed' &&
           a.status !== 'cancelled',
@@ -450,8 +531,9 @@ export class RecurringActions {
     if (!desired || open.length) return;
     const cancelled = s.actions.find(
       (a) =>
-        a.occurrence?.ruleId === rule.id &&
-        a.occurrence.slot === desired &&
+        this.isCurrentOccurrence(a, rule) &&
+        !a.isArchived() &&
+        a.occurrence?.slot === desired &&
         a.status === 'cancelled' &&
         a.cancelReason?.toString() === 'Расписание временно недоступно',
     );

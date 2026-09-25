@@ -6,6 +6,7 @@ export interface ActionOccurrence {
   readonly ruleId: string;
   readonly slot: string;
   readonly ruleRevision: number;
+  readonly restorationGeneration?: number;
   readonly originalDate: string;
   readonly manualDate?: boolean;
 }
@@ -28,6 +29,10 @@ export interface RecurrenceRule extends PlanningRecord {
   readonly pauseUntil: string | null;
   /** A removed series remains as a historical reference but cannot produce new occurrences. */
   readonly removedAt?: string | null;
+  readonly lastRemovedAt?: string | null;
+  readonly restoredFromTrashAt?: string | null;
+  readonly purgedAt?: string | null;
+  readonly restorationGeneration?: number;
   readonly schedule: RecurrenceSchedule;
   readonly revision: number;
   readonly effectiveFrom: string;
@@ -38,8 +43,21 @@ export function validateRule(rule: RecurrenceRule): RecurrenceRule {
   DayDate.create(rule.effectiveFrom);
   if (rule.endDate !== null) DayDate.create(rule.endDate);
   if (rule.pauseUntil !== null) DayDate.create(rule.pauseUntil);
-  if (rule.removedAt != null && !Number.isFinite(Date.parse(rule.removedAt)))
-    throw new DomainError('recurrence.invalid_rule', 'Проверьте расписание и границы повторения.');
+  for (const timestamp of [
+    rule.removedAt,
+    rule.lastRemovedAt,
+    rule.restoredFromTrashAt,
+    rule.purgedAt,
+  ])
+    if (
+      timestamp != null &&
+      (typeof timestamp !== 'string' || !Number.isFinite(Date.parse(timestamp)))
+    )
+      throw new DomainError(
+        'recurrence.invalid_rule',
+        'Проверьте расписание и границы повторения.',
+      );
+  const generation = rule.restorationGeneration ?? 0;
   const s = rule.schedule;
   if (
     typeof rule.title !== 'string' ||
@@ -47,6 +65,8 @@ export function validateRule(rule: RecurrenceRule): RecurrenceRule {
     rule.title.length > 200 ||
     !Number.isInteger(rule.revision) ||
     rule.revision < 1 ||
+    !Number.isInteger(generation) ||
+    generation < 0 ||
     typeof rule.paused !== 'boolean' ||
     (rule.removedAt != null && (!rule.paused || rule.pauseUntil !== null)) ||
     (rule.goalId !== null && typeof rule.goalId !== 'string') ||
@@ -70,6 +90,11 @@ export function validateRule(rule: RecurrenceRule): RecurrenceRule {
     throw new DomainError('recurrence.invalid_rule', 'Проверьте расписание и границы повторения.');
   return Object.freeze({
     ...rule,
+    removedAt: rule.removedAt ?? null,
+    lastRemovedAt: rule.lastRemovedAt ?? null,
+    restoredFromTrashAt: rule.restoredFromTrashAt ?? null,
+    purgedAt: rule.purgedAt ?? null,
+    restorationGeneration: generation,
     schedule: Object.freeze({
       ...s,
       ...(s.kind === 'weekdays' ? { weekdays: Object.freeze([...s.weekdays]) } : {}),
@@ -87,7 +112,10 @@ export function occurrenceSlots(
   DayDate.create(to);
   if (to < from || to > addDays(from, 62))
     throw new DomainError('recurrence.window_too_large', 'Выберите окно не длиннее 63 дней.');
-  if (rule.removedAt != null) return [];
+  if (rule.removedAt != null || rule.purgedAt != null) return [];
+  const generation = rule.restorationGeneration ?? 0;
+  const occurrenceId = (slot: string) =>
+    `occurrence:${encodeURIComponent(rule.id)}:${generation > 0 ? `generation:${generation}:` : ''}${encodeURIComponent(slot)}`;
   if (
     rule.maxCompletions !== null &&
     new Set(completions.map((c) => c.key)).size >= rule.maxCompletions
@@ -109,9 +137,7 @@ export function occurrenceSlots(
       .at(-1)!;
     if (date > to || (rule.endDate && date > rule.endDate)) return [];
     const slot = last ? `after:${last.key}` : 'first';
-    return [
-      { id: `occurrence:${encodeURIComponent(rule.id)}:${encodeURIComponent(slot)}`, slot, date },
-    ];
+    return [{ id: occurrenceId(slot), slot, date }];
   }
   const start = [
     from,
@@ -126,7 +152,7 @@ export function occurrenceSlots(
   const add = (date: string, slot = date) => {
     if (date >= start && date <= end)
       slots.push({
-        id: `occurrence:${encodeURIComponent(rule.id)}:${encodeURIComponent(slot)}`,
+        id: occurrenceId(slot),
         slot,
         date,
       });

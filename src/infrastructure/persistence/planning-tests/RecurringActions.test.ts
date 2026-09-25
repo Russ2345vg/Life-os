@@ -2,7 +2,8 @@ import { SetLifeActionPlan } from '../../../application/commands/SetLifeActionPl
 import { IDBFactory } from 'fake-indexeddb';
 import { describe, it, expect } from 'vitest';
 import { EntityId, DayDate } from '../../../domain';
-import { FakeClock, FakeIdGenerator } from '../../../test/helpers/Fakes';
+import { FakeClock, FakeCurrentDateProvider, FakeIdGenerator } from '../../../test/helpers/Fakes';
+import { RecurrenceRuleRecordMapper } from '../PlanningRecordMappers';
 import { LifeOsIndexedDb } from '../indexed-db/LifeOsIndexedDb';
 import { IndexedDbPlanningRepository } from '../IndexedDbPlanningRepository';
 import { IndexedDbLifeActionRepository } from '../IndexedDbLifeActionRepository';
@@ -30,6 +31,152 @@ const input: RecurrenceInput = {
   schedule: { kind: 'daily' },
 };
 describe('bounded recurring actions', () => {
+  it('restores from the authoritative local date with new identities and unchanged history', async () => {
+    const factory = new IDBFactory();
+    const db = new LifeOsIndexedDb(factory);
+    const repo = new IndexedDbPlanningRepository(db);
+    const clock = new FakeClock(new Date('2026-09-14T10:00:00Z'));
+    const dates = new FakeCurrentDateProvider(DayDate.create('2026-09-16'));
+    const ids = new FakeIdGenerator('restore');
+    const service = new RecurringActions(repo, clock, ids, dates);
+    try {
+      const rule = await service.save(input);
+      await service.materialize('2026-09-14', '2026-09-18');
+      const actions = (await repo.read()).actions;
+      const first = actions.find((a) => a.occurrence?.slot === '2026-09-14')!;
+      const skipped = actions.find((a) => a.occurrence?.slot === '2026-09-16')!;
+      const complete = new CompleteLifeAction(
+        new IndexedDbLifeActionRepository(db),
+        clock,
+        ids,
+        new IndexedDbJournalUnitOfWork(db),
+      );
+      expect((await complete.execute({ lifeActionId: first.id })).ok).toBe(true);
+      await service.skip(skipped.id.toString());
+      const completedBefore = LifeActionRecordMapper.toRecord(
+        (await repo.read()).actions.find((a) => a.id.equals(first.id))!,
+      );
+      await service.remove(rule.id);
+      expect((await repo.read()).rules[0]).toMatchObject({
+        lastRemovedAt: '2026-09-14T10:00:00.000Z',
+        restoredFromTrashAt: null,
+      });
+      clock.setTime(new Date('2026-09-15T20:00:00Z'));
+      await service.restore(rule.id);
+      expect((await repo.read()).rules[0]).toMatchObject({
+        id: rule.id,
+        removedAt: null,
+        lastRemovedAt: '2026-09-14T10:00:00.000Z',
+        restoredFromTrashAt: '2026-09-15T20:00:00.000Z',
+        restorationGeneration: 1,
+        revision: 3,
+        version: 3,
+        effectiveFrom: '2026-09-16',
+        paused: false,
+        pauseUntil: null,
+      });
+      expect(await service.materialize('2026-09-14', '2026-09-18')).toBe(3);
+      expect(await service.materialize('2026-09-14', '2026-09-18')).toBe(0);
+      const restored = await repo.read();
+      const fresh = restored.actions.filter((a) => a.status === 'draft');
+      expect(fresh.map((a) => a.plannedDate?.toString())).toEqual([
+        '2026-09-16',
+        '2026-09-17',
+        '2026-09-18',
+      ]);
+      expect(fresh[0]?.id.toString()).toBe('occurrence:restore-1:generation:1:2026-09-16');
+      expect(fresh.every((a) => a.occurrence?.restorationGeneration === 1)).toBe(true);
+      expect(
+        LifeActionRecordMapper.toRecord(restored.actions.find((a) => a.id.equals(first.id))!),
+      ).toEqual(completedBefore);
+      expect(restored.actions.find((a) => a.id.equals(skipped.id))?.isArchived()).toBe(true);
+      await service.save({ ...input, title: 'Обновлённая практика' }, rule.id);
+      expect((await repo.read()).rules[0]).toMatchObject({
+        restorationGeneration: 1,
+        lastRemovedAt: '2026-09-14T10:00:00.000Z',
+        restoredFromTrashAt: '2026-09-15T20:00:00.000Z',
+      });
+      await service.remove(rule.id);
+      await service.restore(rule.id);
+      expect(await service.materialize('2026-09-16', '2026-09-16')).toBe(1);
+      expect(
+        (await repo.read()).actions.find((a) => a.status === 'draft')?.occurrence
+          ?.restorationGeneration,
+      ).toBe(2);
+      db.close();
+      const reopened = new LifeOsIndexedDb(factory);
+      try {
+        const loaded = await new IndexedDbPlanningRepository(reopened).read();
+        expect(loaded.rules[0]?.restorationGeneration).toBe(2);
+        expect(
+          loaded.actions.find((a) => a.status === 'draft')?.occurrence?.restorationGeneration,
+        ).toBe(2);
+      } finally {
+        reopened.close();
+      }
+    } finally {
+      db.close();
+    }
+  });
+
+  it('rejects active and purged restore without changing the persisted rule', async () => {
+    const db = new LifeOsIndexedDb(new IDBFactory());
+    const repo = new IndexedDbPlanningRepository(db);
+    const service = new RecurringActions(
+      repo,
+      new FakeClock(new Date('2026-09-14T10:00:00Z')),
+      new FakeIdGenerator(),
+    );
+    try {
+      const rule = await service.save(input);
+      await expect(service.restore(rule.id)).rejects.toMatchObject({
+        code: 'recurrence.not_removed',
+      });
+      expect((await repo.read()).rules[0]).toEqual(rule);
+      await repo.change((s) => {
+        s.rules[0] = { ...rule, purgedAt: '2026-09-14T10:00:00.000Z' };
+      });
+      await expect(service.restore(rule.id)).rejects.toMatchObject({ code: 'trash.expired' });
+      expect(await service.materialize('2026-09-14')).toBe(0);
+      expect(await service.resolveForDate(rule.id, '2026-09-14')).toBeNull();
+      await expect(service.save(input, rule.id)).rejects.toMatchObject({ code: 'trash.expired' });
+      await expect(service.resume(rule.id)).rejects.toMatchObject({ code: 'trash.expired' });
+    } finally {
+      db.close();
+    }
+  });
+
+  it('normalizes legacy rule fields and round trips trash metadata', () => {
+    const legacy = {
+      ...input,
+      id: 'legacy',
+      version: 1,
+      schemaVersion: 1,
+      updatedAt: '2026-09-14T10:00:00.000Z',
+      effectiveFrom: '2026-09-14',
+      revision: 1,
+    };
+    expect(RecurrenceRuleRecordMapper.fromRecord(legacy)).toMatchObject({
+      removedAt: null,
+      lastRemovedAt: null,
+      restoredFromTrashAt: null,
+      purgedAt: null,
+      restorationGeneration: 0,
+    });
+    const persisted = RecurrenceRuleRecordMapper.fromRecord({
+      ...legacy,
+      removedAt: '2026-09-14T10:00:00.000Z',
+      lastRemovedAt: '2026-09-14T10:00:00.000Z',
+      restoredFromTrashAt: '2026-09-13T10:00:00.000Z',
+      purgedAt: '2026-09-15T10:00:00.000Z',
+      paused: true,
+      restorationGeneration: 2,
+    });
+    expect(
+      RecurrenceRuleRecordMapper.fromRecord(RecurrenceRuleRecordMapper.toRecord(persisted)),
+    ).toEqual(persisted);
+  });
+
   it('removes an entire series, preserves completed history and never materializes it again', async () => {
     const factory = new IDBFactory();
     const db = new LifeOsIndexedDb(factory);
@@ -50,6 +197,16 @@ describe('bounded recurring actions', () => {
       (action) => action.occurrence?.ruleId === rule.id,
     )!;
     expect((await complete.execute({ lifeActionId: first.id })).ok).toBe(true);
+    const skipped = (await repo.read()).actions.find(
+      (action) =>
+        action.occurrence?.ruleId === rule.id && action.id.toString() !== first.id.toString(),
+    )!;
+    await recurring.skip(skipped.id.toString());
+    const skippedAfter = (await repo.read()).actions.find(
+      (action) => action.id.toString() === skipped.id.toString(),
+    )!;
+    expect(skippedAfter.status).toBe('cancelled');
+    expect(skippedAfter.archivedAt).toEqual(clock.now());
 
     await recurring.remove(rule.id);
     const removed = await repo.read();
@@ -68,6 +225,11 @@ describe('bounded recurring actions', () => {
         (action) => action.occurrence?.ruleId === rule.id && action.status === 'draft',
       ),
     ).toHaveLength(0);
+    expect(
+      removed.actions
+        .filter((action) => action.occurrence?.ruleId === rule.id && action.status !== 'completed')
+        .every((action) => action.isArchived()),
+    ).toBe(true);
 
     clock.setTime(new Date('2026-09-21T10:00:00Z'));
     expect(await recurring.materialize('2026-09-21', '2026-09-27')).toBe(0);
