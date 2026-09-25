@@ -575,6 +575,72 @@ describe('LifeAction', () => {
       expect(action.version).toBe(version + 1);
     });
 
+    it('восстанавливает completed и archived действие без потери идентификаторов, дат, результатов и связей', () => {
+      const action = LifeAction.createDraft({
+        id: id('action-restore'),
+        title: LifeActionTitle.create('Восстановить действие'),
+        description: 'Проверить сохранность состояния',
+        decisionId: id('decision-restore'),
+        sphereId: id('sphere-restore'),
+        goalId: id('goal-restore'),
+        directionId: id('direction-restore'),
+        parentActionId: id('parent-restore'),
+        createdAt: CREATED_AT,
+        eventId: id('draft-event'),
+      });
+      action.makeReady({
+        expectedResult: expectedResult(),
+        plannedDate: TOMORROW,
+        occurredAt: READY_AT,
+        eventId: id('ready-event'),
+      });
+      action.markInProgress(STARTED_AT, id('started-event'));
+      action.complete(actualResult(), CHANGED_AT, id('completed-event'));
+      action.archive(CHANGED_AT, id('archived-event'));
+      const preserved = {
+        id: action.id.toString(),
+        title: action.title.toString(),
+        description: action.description,
+        decisionId: action.decisionId?.toString(),
+        sphereId: action.sphereId?.toString(),
+        goalId: action.goalId?.toString(),
+        directionId: action.directionId?.toString(),
+        parentActionId: action.parentActionId?.toString(),
+        status: action.status,
+        expectedResult: action.expectedResult?.toString(),
+        actualResult: action.actualResult?.toString(),
+        plannedDate: action.plannedDate?.toString(),
+        createdAt: action.createdAt.toISOString(),
+        readyAt: action.readyAt?.toISOString(),
+        startedAt: action.startedAt?.toISOString(),
+        completedAt: action.completedAt?.toISOString(),
+        archivedAt: action.archivedAt?.toISOString(),
+      };
+      action.softDelete(new Date('2026-09-25T10:00:00.000Z'));
+
+      action.restoreFromTrash(new Date('2026-09-26T10:00:00.000Z'));
+
+      expect(action.isDeleted()).toBe(false);
+      expect(action.id.toString()).toBe(preserved.id);
+      expect(action.title.toString()).toBe(preserved.title);
+      expect(action.description).toBe(preserved.description);
+      expect(action.decisionId?.toString()).toBe(preserved.decisionId);
+      expect(action.sphereId?.toString()).toBe(preserved.sphereId);
+      expect(action.goalId?.toString()).toBe(preserved.goalId);
+      expect(action.directionId?.toString()).toBe(preserved.directionId);
+      expect(action.parentActionId?.toString()).toBe(preserved.parentActionId);
+      expect(action.status).toBe(preserved.status);
+      expect(action.expectedResult?.toString()).toBe(preserved.expectedResult);
+      expect(action.actualResult?.toString()).toBe(preserved.actualResult);
+      expect(action.plannedDate?.toString()).toBe(preserved.plannedDate);
+      expect(action.createdAt.toISOString()).toBe(preserved.createdAt);
+      expect(action.readyAt?.toISOString()).toBe(preserved.readyAt);
+      expect(action.startedAt?.toISOString()).toBe(preserved.startedAt);
+      expect(action.completedAt?.toISOString()).toBe(preserved.completedAt);
+      expect(action.archivedAt?.toISOString()).toBe(preserved.archivedAt);
+      expect(action.isArchived()).toBe(true);
+    });
+
     it('отклоняет повторное удаление и восстановление активного действия', () => {
       const action = createDraft();
       action.softDelete(new Date('2026-09-25T10:00:00.000Z'));
