@@ -16,6 +16,7 @@ import {
   PLANNER_SHEET_WIDTH_STORAGE_KEY,
   resizePlannerSheetFromPointer,
 } from './PlannerSheetResize';
+import { QuickAccessTrigger } from './QuickAccessContext';
 
 function viewportWidth(): number {
   return typeof window === 'undefined' ? 1280 : window.innerWidth;
@@ -47,10 +48,12 @@ export function PlannerSheet({
   title,
   onClose,
   children,
+  quickAccess = false,
 }: {
   readonly title: string;
   readonly onClose: () => void;
   readonly children: ReactNode;
+  readonly quickAccess?: boolean;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const drag = useRef<{
@@ -63,6 +66,8 @@ export function PlannerSheet({
   useEffect(() => {
     const element = dialog.current;
     const opener = document.activeElement;
+    const previousOverflow = document.documentElement.style.overflow;
+    if (quickAccess) document.documentElement.style.overflow = 'hidden';
     element?.showModal();
     element
       ?.querySelector<HTMLElement>(
@@ -71,9 +76,10 @@ export function PlannerSheet({
       ?.focus();
     return () => {
       element?.close();
+      if (quickAccess) document.documentElement.style.overflow = previousOverflow;
       if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
     };
-  }, []);
+  }, [quickAccess]);
   useEffect(() => {
     const clampToViewport = () =>
       setWidth((current) => clampPlannerSheetWidth(current, viewportWidth()));
@@ -111,43 +117,57 @@ export function PlannerSheet({
   return (
     <dialog
       ref={dialog}
-      className="planner-sheet"
+      className={`planner-sheet${quickAccess ? ' planner-quick-sheet' : ''}`}
       style={{ '--planner-sheet-width': `${width}px` } as CSSProperties}
       aria-label={title}
+      onKeyDown={(event) => {
+        if (quickAccess && event.key === 'Escape' && !event.nativeEvent.isComposing) {
+          event.preventDefault();
+          event.stopPropagation();
+          onClose();
+        }
+      }}
       onCancel={(event) => {
         event.preventDefault();
         onClose();
       }}
     >
-      <div
-        className="planner-sheet-resize"
-        role="separator"
-        aria-label="Изменить ширину панели"
-        aria-orientation="vertical"
-        aria-valuemin={MIN_PLANNER_SHEET_WIDTH}
-        aria-valuemax={MAX_PLANNER_SHEET_WIDTH}
-        aria-valuenow={width}
-        aria-valuetext={`${width} пикселей`}
-        tabIndex={0}
-        onPointerDown={(event) => {
-          if (!event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return;
-          drag.current = {
-            pointerId: event.pointerId,
-            startX: event.clientX,
-            startWidth: width,
-            currentWidth: width,
-          };
-          event.currentTarget.setPointerCapture(event.pointerId);
-        }}
-        onPointerMove={resizeFromPointer}
-        onPointerUp={finishResize}
-        onPointerCancel={finishResize}
-        onKeyDown={resizeFromKeyboard}
-      />
+      {!quickAccess && (
+        <div
+          className="planner-sheet-resize"
+          role="separator"
+          aria-label="Изменить ширину панели"
+          aria-orientation="vertical"
+          aria-valuemin={MIN_PLANNER_SHEET_WIDTH}
+          aria-valuemax={MAX_PLANNER_SHEET_WIDTH}
+          aria-valuenow={width}
+          aria-valuetext={`${width} пикселей`}
+          tabIndex={0}
+          onPointerDown={(event) => {
+            if (!event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return;
+            drag.current = {
+              pointerId: event.pointerId,
+              startX: event.clientX,
+              startWidth: width,
+              currentWidth: width,
+            };
+            event.currentTarget.setPointerCapture(event.pointerId);
+          }}
+          onPointerMove={resizeFromPointer}
+          onPointerUp={finishResize}
+          onPointerCancel={finishResize}
+          onKeyDown={resizeFromKeyboard}
+        />
+      )}
+      {!quickAccess && (
+        <div className="planner-sheet-quick">
+          <QuickAccessTrigger compact />
+        </div>
+      )}
       <button
         type="button"
         className="planner-sheet-close"
-        aria-label="Закрыть панель"
+        aria-label={quickAccess ? 'Закрыть быстрый доступ' : 'Закрыть панель'}
         onClick={onClose}
       >
         ×

@@ -2,7 +2,14 @@ import type { BalanceServices } from '../../application/balance/BalanceServices'
 import { BalanceWorkspace } from './balance/BalanceWorkspace';
 import type { PlanningServices } from '../../application/planner/PlanningServices';
 import { PlanningProvider } from './PlanningContext';
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { QuickAccessPanel } from './QuickAccessPanel';
+import {
+  QuickAccessProvider,
+  QuickAccessTrigger,
+  useQuickAccess,
+  useQuickAccessGuard,
+} from './QuickAccessContext';
 import type {
   CreateGoal,
   CreateLifeActionDraft,
@@ -72,7 +79,14 @@ interface PlannerData {
   readonly sleepEntry: SleepTodayEntry;
 }
 
-export function PlannerWorkspace({
+export function PlannerWorkspace(props: Parameters<typeof PlannerWorkspaceContent>[0]) {
+  return (
+    <QuickAccessProvider>
+      <PlannerWorkspaceContent {...props} />
+    </QuickAccessProvider>
+  );
+}
+function PlannerWorkspaceContent({
   systemNotice,
   services,
   route,
@@ -88,6 +102,9 @@ export function PlannerWorkspace({
   const [data, setData] = useState<PlannerData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const revision = useQuickAccess()?.revision ?? 0;
+  const refreshToken = useMemo(() => ({ data, revision }), [data, revision]);
+  useQuickAccessGuard(() => ({ dirty: false, busy }));
   const working = useRef(false);
   const [createdGoal, setCreatedGoal] = useState<Goal | null>(null);
   const [createdGoalWarning, setCreatedGoalWarning] = useState<string | null>(null);
@@ -178,7 +195,7 @@ export function PlannerWorkspace({
       request.current += 1;
       routeGeneration.current += 1;
     };
-  }, [load, routeKey, report]);
+  }, [load, routeKey, report, revision]);
   const run = async (work: () => Promise<unknown>, message: string, rethrow = false) => {
     if (working.current) return;
     working.current = true;
@@ -336,7 +353,7 @@ export function PlannerWorkspace({
   return (
     <PlanningProvider
       services={services.planning}
-      refreshToken={data}
+      refreshToken={refreshToken}
       today={currentDate.toString()}
     >
       <div className={`planner-v2${route.view === 'sleep' ? ' planner-v2--sleep' : ''}`}>
@@ -361,6 +378,7 @@ export function PlannerWorkspace({
           >
             LifeOS
           </a>
+          <QuickAccessTrigger />
           <nav aria-label="Рабочий интерфейс">
             {navLink({ view: 'today' }, 'Сегодня', 'today')}
             <span className="planner-nav-secondary">
@@ -721,6 +739,11 @@ export function PlannerWorkspace({
             </>
           )}
         </main>
+        <QuickAccessPanel
+          services={services}
+          today={currentDate.toString()}
+          onNavigate={navigate}
+        />
       </div>
     </PlanningProvider>
   );

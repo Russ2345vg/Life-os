@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useQuickAccessGuard, useQuickAccessUncontrolledForm } from './QuickAccessContext';
 import type { SleepScheduleService } from '../../application/sleep/SleepScheduleService';
 import {
   unavailableWakeAlarmStatus,
@@ -26,6 +27,7 @@ export function SleepPreparationPage({
   const [state, setState] = useState<SleepScheduleState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  useQuickAccessGuard(() => ({ dirty: false, busy }));
   const [alarmStatus, setAlarmStatus] = useState<WakeAlarmStatus>(unavailableWakeAlarmStatus());
   const [alarmSounds, setAlarmSounds] = useState<readonly AlarmSound[]>([
     { uri: null, title: 'Системный сигнал' },
@@ -641,6 +643,7 @@ function WakeDismissalSetupPanel({
   readonly onRegenerateQr: () => void;
   readonly onSaveEmergencyPhrase: (phrase: string) => void;
 }) {
+  const phraseForm = useQuickAccessUncontrolledForm(busy);
   return (
     <section className="sleep-dismissal-setup" aria-label="Защита выключения будильника">
       <div className="sleep-dismissal-setup__row">
@@ -655,6 +658,7 @@ function WakeDismissalSetupPanel({
       {setup.qrSavedTo ? <small>Файл: {setup.qrSavedTo}</small> : null}
       <form
         className="sleep-dismissal-setup__phrase"
+        ref={phraseForm}
         onSubmit={(event) => {
           event.preventDefault();
           const data = new FormData(event.currentTarget);
@@ -827,9 +831,11 @@ function SettingsForm({
     alarmSound?: AlarmSound;
   }) => void;
 }) {
+  const settingsForm = useQuickAccessUncontrolledForm(busy);
   return (
     <form
       className="sleep-time-form"
+      ref={settingsForm}
       onSubmit={(event) => {
         event.preventDefault();
         const data = new FormData(event.currentTarget);
@@ -905,8 +911,15 @@ function CatalogEditor({
   readonly onMoveItem: (id: string, groupId: string, position: number) => void;
 }) {
   const orderedGroups = [...groups].sort((left, right) => left.position - right.position);
+  const catalog = useRef<HTMLDivElement>(null);
+  useQuickAccessGuard(() => ({
+    busy,
+    dirty: [
+      ...(catalog.current?.querySelectorAll<HTMLSelectElement>('.sleep-delete-group select') ?? []),
+    ].some((select) => select.value !== ''),
+  }));
   return (
-    <div className="sleep-catalog">
+    <div className="sleep-catalog" ref={catalog}>
       <div className="sleep-catalog-heading">
         <div>
           <h2>Повторяемый список</h2>
@@ -1078,9 +1091,11 @@ function QuickForm({
   readonly busy: boolean;
   readonly onSubmit: (value: string) => void;
 }) {
+  const quickForm = useQuickAccessUncontrolledForm(busy);
   return (
     <form
       className="sleep-quick-form"
+      ref={quickForm}
       aria-label={label}
       onSubmit={(event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();

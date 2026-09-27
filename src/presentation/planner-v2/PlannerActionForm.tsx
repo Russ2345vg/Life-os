@@ -1,4 +1,5 @@
 import { defaultRecurrence, RecurrenceFields } from './RecurrenceFields';
+import { useQuickAccessDraft } from './QuickAccessContext';
 import { addDays } from '../../domain/planner/PlanningPeriod';
 import { usePlanning } from './PlanningContext';
 import { useRef, useState } from 'react';
@@ -49,6 +50,7 @@ export function PlannerActionForm({
     Boolean(initialDate && initialDate !== currentDate && initialDate !== addDays(currentDate, 1)),
   );
   const saving = useRef(false);
+  useQuickAccessDraft(draft, busy);
   const [error, setError] = useState<string | null>(null);
   const goalUnavailable = draft.goalId !== '' && !goals.some((goal) => goal.id === draft.goalId);
   const change = <K extends keyof PlannerActionDraft>(key: K, value: PlannerActionDraft[K]) =>

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useQuickAccessGuard } from './QuickAccessContext';
 import type { AccountOverview, AccountSync } from '../../application';
 import type { CachedSyncDevice } from '../../application/sync/ports/SyncDeviceCacheRepository';
 import { AppIcon } from '../components/AppIcon';
@@ -105,6 +106,7 @@ export function AccountSyncPageView({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const working = useRef(false);
+  useQuickAccessGuard(() => ({ dirty: false, busy }));
 
   const perform = async (
     work: () => Promise<AccountOverview>,
@@ -547,8 +549,25 @@ function AccountForm({
   readonly onSubmit: (form: HTMLFormElement) => void;
   readonly children: React.ReactNode;
 }) {
+  const form = useRef<HTMLFormElement>(null);
+  const initialEmail = useRef('');
+  useEffect(() => {
+    initialEmail.current =
+      form.current?.querySelector<HTMLInputElement>('[name="email"]')?.value ?? '';
+  }, [title]);
+  useQuickAccessGuard(() => ({
+    busy,
+    dirty: [
+      ...(form.current?.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
+        'input:not([type="hidden"]), textarea',
+      ) ?? []),
+    ].some((input) =>
+      input.name === 'email' ? input.value !== initialEmail.current : input.value !== '',
+    ),
+  }));
   return (
     <form
+      ref={form}
       className="account-panel account-form"
       onSubmit={(event) => {
         event.preventDefault();
@@ -639,6 +658,13 @@ function ReadyAccountPanel({
   readonly onSignOut: () => void;
 }) {
   const [newPassword, setNewPassword] = useState('');
+  const passwordForm = useRef<HTMLFormElement>(null);
+  useQuickAccessGuard(() => ({
+    busy,
+    dirty:
+      newPassword !== '' ||
+      Boolean(passwordForm.current?.querySelector<HTMLInputElement>('input')?.value),
+  }));
   return (
     <div className="account-ready-grid">
       <section className="account-panel account-panel--important">
@@ -706,6 +732,7 @@ function ReadyAccountPanel({
         </div>
         <form
           className="account-password-change"
+          ref={passwordForm}
           onSubmit={(event) => {
             event.preventDefault();
             const submitted = readFormValue(event.currentTarget, 'password', newPassword);

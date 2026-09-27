@@ -1,4 +1,5 @@
 import { groupPlannerActions, isOpenAction } from '../plannerCatalogModel';
+import { useQuickAccessGuard } from '../QuickAccessContext';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useBalanceState } from './useBalanceState';
 import type { Goal } from '../../../domain';
@@ -62,6 +63,7 @@ export function BalanceWorkspace({
     [directionSearch, setDirectionSearch] = useState(''),
     [sphereFilter, setSphereFilter] = useState(''),
     [busy, setBusy] = useState(false);
+  useQuickAccessGuard(() => ({ dirty: false, busy }));
   useEffect(() => {
     if (!notice) return;
     const timer = setTimeout(() => setNotice(''), 3500);

@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { useQuickAccessDraft } from './QuickAccessContext';
 import type { Goal } from '../../domain';
 import { GoalMeasurementFields } from './GoalMeasurementFields';
 import { usePlanning } from './PlanningContext';
@@ -23,6 +24,8 @@ export function PlanningProgress({
   const working = useRef(false),
     commandId = useRef<string | null>(null);
   const progress = context?.progress(goal.id.toString(), date) ?? null;
+  const settingsSaved = useQuickAccessDraft({ measurement, dueDate }, busy);
+  const adjustmentSaved = useQuickAccessDraft({ amount, reason }, busy);
   const run = async (work: () => Promise<unknown>) => {
     if (working.current) return;
     working.current = true;
@@ -83,14 +86,15 @@ export function PlanningProgress({
             <button
               type="button"
               onClick={() => {
-                void run(() =>
-                  context.services.progress.configure(
+                void run(async () => {
+                  await context.services.progress.configure(
                     goal.id.toString(),
                     measurement,
                     null,
                     dueDate || null,
-                  ),
-                );
+                  );
+                  settingsSaved();
+                });
               }}
             >
               Сохранить настройки
@@ -123,14 +127,15 @@ export function PlanningProgress({
                   onClick={() => {
                     const id = commandId.current ?? crypto.randomUUID();
                     commandId.current = id;
-                    void run(() =>
-                      context.services.progress.adjust(
+                    void run(async () => {
+                      await context.services.progress.adjust(
                         goal.id.toString(),
                         Number(amount),
                         reason,
                         id,
-                      ),
-                    );
+                      );
+                      adjustmentSaved();
+                    });
                   }}
                 >
                   Добавить корректировку

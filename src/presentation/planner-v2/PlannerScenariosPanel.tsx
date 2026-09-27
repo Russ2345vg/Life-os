@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useQuickAccessGuard } from './QuickAccessContext';
 import type { PlannerScenarios } from '../../application/planner/PlannerScenarios';
 import type { TaskScenario } from '../../domain/planner/TaskScenario';
 import type { LifeAction } from '../../domain';
@@ -91,6 +92,13 @@ export function PlannerScenariosPanel({
   useSyncContentChanged('taskScenarios', reload);
   const selected = sets?.find((s) => s.id === activeId) ?? null;
   const disabled = busy || pending;
+  const edited = sets?.find((scenario) => scenario.id === editing);
+  useQuickAccessGuard(() => ({
+    busy: disabled,
+    dirty:
+      editing !== null &&
+      (title !== (edited?.title ?? '') || reusable !== (edited ? edited.date === null : true)),
+  }));
   const run = async (work: () => Promise<unknown>, message: string, after?: () => void) => {
     if (working.current || busy) return;
     working.current = true;

@@ -1,5 +1,5 @@
 import type { CompleteLifeAction, SetLifeActionPlan } from '../../application';
-import { DayDate, EntityId } from '../../domain';
+import { DayDate, EntityId, type LifeActionStatus } from '../../domain';
 
 export async function completePlannerAction(
   command: Pick<CompleteLifeAction, 'execute'>,
@@ -14,11 +14,13 @@ export async function planPlannerAction(
   id: string,
   date: string,
   isNext?: boolean,
+  allowedStatuses?: readonly LifeActionStatus[],
 ) {
   const result = await command.execute({
     lifeActionId: EntityId.create(id),
     plannedDate: date ? DayDate.create(date) : null,
     ...(isNext === undefined ? {} : { isNext }),
+    ...(allowedStatuses === undefined ? {} : { allowedStatuses }),
   });
   if (!result.ok) throw result.error;
   return result.value;

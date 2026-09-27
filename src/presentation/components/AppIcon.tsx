@@ -1,6 +1,7 @@
 import type { SVGProps } from 'react';
 
 export type AppIconName =
+  | 'search'
   | 'microphone'
   | 'today'
   | 'management'
@@ -53,6 +54,13 @@ export function AppIcon({ name, ...props }: AppIconProps) {
 
 function iconPath(name: AppIconName) {
   switch (name) {
+    case 'search':
+      return (
+        <>
+          <circle cx="10.5" cy="10.5" r="6.5" />
+          <path d="m16 16 5 5" />
+        </>
+      );
     case 'arrow-right':
       return <path d="M4 12h16m-6-6 6 6-6 6" />;
     case 'microphone':

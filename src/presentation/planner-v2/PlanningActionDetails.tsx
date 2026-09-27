@@ -1,4 +1,5 @@
 import { CompletionResult } from './CompletionResult';
+import { useQuickAccessDraft, useQuickAccessGuard } from './QuickAccessContext';
 import { RecurrenceBadge } from './RecurrenceBadge';
 import { useRef, useState } from 'react';
 import type { LifeAction } from '../../domain';
@@ -36,6 +37,9 @@ export function PlanningActionDetails({
     added: number;
     candidates: readonly ProgressContribution[];
   } | null>(null);
+  const recurrenceSaved = useQuickAccessDraft(draft, busy);
+  const linkSaved = useQuickAccessDraft({ goalId, mode, amount }, busy);
+  useQuickAccessGuard(() => ({ dirty: pauseUntil !== '', busy }));
   if (!c?.state) return null;
   const s = c.state;
   const run = async (work: () => Promise<unknown>) => {
@@ -137,13 +141,14 @@ export function PlanningActionDetails({
                 <RecurrenceFields value={draft} onChange={setDraft} />
                 <button
                   onClick={() => {
-                    void run(() =>
-                      c.services.recurrence.save(
+                    void run(async () => {
+                      await c.services.recurrence.save(
                         draft,
                         rule?.id,
                         rule ? undefined : action.id.toString(),
-                      ),
-                    );
+                      );
+                      recurrenceSaved();
+                    });
                   }}
                 >
                   Сохранить расписание
@@ -160,11 +165,12 @@ export function PlanningActionDetails({
                     </label>
                     <button
                       onClick={() => {
-                        void run(() =>
-                          rule.paused
+                        void run(async () => {
+                          await (rule.paused
                             ? c.services.recurrence.resume(rule.id)
-                            : c.services.recurrence.pause(rule.id, pauseUntil || null),
-                        );
+                            : c.services.recurrence.pause(rule.id, pauseUntil || null));
+                          setPauseUntil('');
+                        });
                       }}
                     >
                       {rule.paused ? 'Возобновить' : 'Приостановить'}
@@ -217,9 +223,16 @@ export function PlanningActionDetails({
             <button
               disabled={!goalId || !amount}
               onClick={() => {
-                void run(() =>
-                  c.services.progress.setLink(sourceType, sourceId, goalId, mode, Number(amount)),
-                );
+                void run(async () => {
+                  await c.services.progress.setLink(
+                    sourceType,
+                    sourceId,
+                    goalId,
+                    mode,
+                    Number(amount),
+                  );
+                  linkSaved();
+                });
               }}
             >
               Добавить / обновить связь
@@ -306,6 +319,7 @@ function ActualValue({
 }) {
   const [value, setValue] = useState(fact.amount?.toString() ?? ''),
     [later, setLater] = useState(false);
+  useQuickAccessGuard(() => ({ busy, dirty: value !== (fact.amount?.toString() ?? '') }));
   return (
     <div className="planning-contribution">
       <p>

@@ -1,4 +1,5 @@
 import { PlannerGoalForm } from './PlannerGoalForm';
+import { useQuickAccess, useQuickAccessGuard } from './QuickAccessContext';
 import { PlannerSheet } from './PlannerSheet';
 import { PlanningGoalDetail } from './PlanningGoalDetail';
 import { usePlanning } from './PlanningContext';
@@ -97,6 +98,8 @@ export function PlannerLibraryWorkspace({
     return () => window.clearTimeout(timeout);
   }, [notice]);
   const [busy, setBusy] = useState(false);
+  const revision = useQuickAccess()?.revision ?? 0;
+  useQuickAccessGuard(() => ({ dirty: false, busy }));
   const sequence = useRef(0);
   const working = useRef(false);
   const report = useCallback(
@@ -141,7 +144,7 @@ export function PlannerLibraryWorkspace({
   useEffect(() => {
     void load().catch(report);
     return invalidateLoad;
-  }, [load, report, invalidateLoad]);
+  }, [load, report, invalidateLoad, revision]);
   const refresh = useCallback(() => {
     void load().catch(report);
   }, [load, report]);

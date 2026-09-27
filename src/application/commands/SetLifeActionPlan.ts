@@ -1,5 +1,11 @@
 import { planningJournal } from '../planner/planningSupport';
-import { LIFE_ACTION_STATUS, type DayDate, type EntityId, type LifeAction } from '../../domain';
+import {
+  LIFE_ACTION_STATUS,
+  type DayDate,
+  type EntityId,
+  type LifeAction,
+  type LifeActionStatus,
+} from '../../domain';
 import { DomainError } from '../../shared/errors/DomainError';
 import { success, type Result } from '../../shared/result/Result';
 import type { Clock } from '../ports/Clock';
@@ -14,6 +20,8 @@ export interface SetLifeActionPlanInput {
   readonly lifeActionId: EntityId;
   readonly plannedDate: DayDate | null;
   readonly isNext?: boolean;
+  /** Optional caller policy, validated against the freshly loaded action. */
+  readonly allowedStatuses?: readonly LifeActionStatus[];
 }
 
 export class SetLifeActionPlan {
@@ -28,6 +36,11 @@ export class SetLifeActionPlan {
     const action = await this.repository.findById(input.lifeActionId);
     if (action === null) return lifeActionNotFound();
     try {
+      if (input.allowedStatuses && !input.allowedStatuses.includes(action.status))
+        throw new DomainError(
+          'life_action.status_changed',
+          'Состояние действия изменилось. Обновите список и повторите попытку.',
+        );
       const expectedVersion = action.version;
       const previousDate = action.plannedDate?.toString() ?? null;
       const completed = action.status === LIFE_ACTION_STATUS.completed;

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQuickAccessDraft } from '../QuickAccessContext';
 import type { Goal } from '../../../domain';
 import type { BalanceServices } from '../../../application/balance/BalanceServices';
 import type { IndicatorDraft } from '../../../application/balance/BalanceIndicators';
@@ -41,6 +42,10 @@ export function BalanceIndicatorForm({
       indicator?.target?.kind === 'range' ? String(indicator.target.max) : '',
     );
   const compatible = goals.filter((g) => g.measurement);
+  useQuickAccessDraft(
+    { name, type, value, importance, source, goalId, condition, target, min, max },
+    false,
+  );
   return (
     <BalanceForm
       title={indicator ? 'Изменить показатель' : 'Новый показатель'}

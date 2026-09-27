@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { useQuickAccessGuard } from './QuickAccessContext';
 import type { LifeAction } from '../../domain';
 import { usePlanning } from './PlanningContext';
 import { VoiceField } from '../voice-input/VoiceField';
@@ -37,6 +38,7 @@ function ResultForm({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const working = useRef(false);
+  useQuickAccessGuard(() => ({ dirty: text !== (action.actualResult?.toString() ?? ''), busy }));
   return (
     <details className="planner-details planner-completion-result">
       <summary>{action.actualResult ? 'Результат выполнения' : 'Добавить результат'}</summary>

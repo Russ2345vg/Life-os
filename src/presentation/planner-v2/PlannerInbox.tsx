@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { useQuickAccessGuard } from './QuickAccessContext';
 import type { InboxIdea } from '../../domain/planner/InboxIdea';
 import { VoiceField } from '../voice-input/VoiceField';
 import { VoiceTextInput } from '../voice-input/VoiceTextInput';
@@ -22,6 +23,7 @@ export function PlannerInbox({
   const [error, setError] = useState<string | null>(null);
   const saving = useRef(false);
   const [pending, setPending] = useState(false);
+  useQuickAccessGuard(() => ({ dirty: title !== '' || note !== '', busy: busy || pending }));
   const [selected, setSelected] = useState<string | null>(null);
   const inbox = ideas.filter((i) => i.status === 'inbox');
   const history = ideas.filter((i) => i.status !== 'inbox');

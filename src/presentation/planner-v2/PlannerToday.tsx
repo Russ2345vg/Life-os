@@ -1,4 +1,5 @@
 import { RecurrenceBadge } from './RecurrenceBadge';
+import { useQuickAccessGuard } from './QuickAccessContext';
 import { AppIcon } from '../components/AppIcon';
 import { PlannerScenariosPanel, type ScenarioService } from './PlannerScenariosPanel';
 import { PlannerOverdueActions } from './PlannerOverdueActions';
@@ -65,6 +66,7 @@ export function PlannerToday({
   const [title, setTitle] = useState('');
   const heading = useRef<HTMLHeadingElement>(null);
   const adding = useRef(false);
+  useQuickAccessGuard(() => ({ dirty: title !== '', busy: busy || adding.current }));
   const [error, setError] = useState<string | null>(null);
   const [choosing, setChoosing] = useState(false);
   const planning = usePlanning();

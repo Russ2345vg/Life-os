@@ -1,4 +1,5 @@
 import { GoalMeasurementFields } from './GoalMeasurementFields';
+import { useQuickAccessDraft } from './QuickAccessContext';
 import { useRef, useState } from 'react';
 import { GOAL_HORIZON, type Goal, type GoalHorizon } from '../../domain';
 import { VoiceField } from '../voice-input/VoiceField';
@@ -50,6 +51,7 @@ export function PlannerGoalForm({
   );
   const [busy, setBusy] = useState(false);
   const saving = useRef(false);
+  useQuickAccessDraft(draft, busy);
   const [error, setError] = useState<string | null>(null);
   const change = <K extends keyof PlannerGoalDraft>(key: K, value: PlannerGoalDraft[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));

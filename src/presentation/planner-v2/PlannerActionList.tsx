@@ -1,4 +1,5 @@
 import { plannerDisplayDate } from './plannerDisplayDate';
+import { useQuickAccessGuard } from './QuickAccessContext';
 import { RecurrenceBadge } from './RecurrenceBadge';
 import { PlanningActionDetails } from './PlanningActionDetails';
 import { editPlannerField, plannerFieldState, type PlannerFieldDraft } from './plannerActionDraft';
@@ -188,7 +189,7 @@ export function PlannerActionList({
             />
             {(selected.status === 'draft' || selected.status === 'ready') && operations.onEdit && (
               <PlannerActionEdit
-                key={`${selected.id.toString()}:${selected.version}`}
+                key={selected.id.toString()}
                 action={selected}
                 onSave={operations.onEdit}
               />
@@ -508,9 +509,20 @@ function PlannerActionEdit({
   readonly action: LifeAction;
   readonly onSave: (action: LifeAction, title: string, description: string) => Promise<void>;
 }) {
-  const [title, setTitle] = useState(action.title.toString());
-  const [description, setDescription] = useState(action.description ?? '');
+  const [titleDraft, setTitleDraft] = useState<PlannerFieldDraft | null>(null);
+  const [descriptionDraft, setDescriptionDraft] = useState<PlannerFieldDraft | null>(null);
+  const savedTitle = action.title.toString();
+  const savedDescription = action.description ?? '';
+  const titleState = plannerFieldState(titleDraft, savedTitle);
+  const descriptionState = plannerFieldState(descriptionDraft, savedDescription);
+  const title = titleState.value;
+  const description = descriptionState.value;
+  const conflict = titleState.conflict || descriptionState.conflict;
   const [busy, setBusy] = useState(false);
+  useQuickAccessGuard(() => ({
+    dirty: title !== action.title.toString() || description !== (action.description ?? ''),
+    busy,
+  }));
   const [error, setError] = useState<string | null>(null);
   return (
     <details className="planner-action-edit">
@@ -518,10 +530,14 @@ function PlannerActionEdit({
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          if (busy) return;
+          if (busy || conflict) return;
           setBusy(true);
           setError(null);
           void onSave(action, title, description)
+            .then(() => {
+              setTitleDraft(null);
+              setDescriptionDraft(null);
+            })
             .catch((reason: unknown) =>
               setError(reason instanceof Error ? reason.message : 'Не удалось сохранить действие.'),
             )
@@ -535,7 +551,9 @@ function PlannerActionEdit({
             required
             maxLength={200}
             disabled={busy}
-            onChange={(event) => setTitle(event.target.value)}
+            onChange={(event) =>
+              setTitleDraft((current) => editPlannerField(current, savedTitle, event.target.value))
+            }
           />
         </label>
         <label>
@@ -543,10 +561,28 @@ function PlannerActionEdit({
           <textarea
             value={description}
             disabled={busy}
-            onChange={(event) => setDescription(event.target.value)}
+            onChange={(event) =>
+              setDescriptionDraft((current) =>
+                editPlannerField(current, savedDescription, event.target.value),
+              )
+            }
           />
         </label>
-        <button type="submit" disabled={busy || !title.trim()}>
+        {conflict && (
+          <p role="alert">
+            Действие изменилось. Ваш текст сохранён в форме.{' '}
+            <button
+              type="button"
+              onClick={() => {
+                setTitleDraft(null);
+                setDescriptionDraft(null);
+              }}
+            >
+              Загрузить сохранённое
+            </button>
+          </p>
+        )}
+        <button type="submit" disabled={busy || conflict || !title.trim()}>
           Сохранить
         </button>
         {error && (
@@ -597,6 +633,10 @@ export function PlannerActionRow({
   const goalId = goalState.value;
   const conflict = dateState.conflict || goalState.conflict;
   const [pending, setPending] = useState(false);
+  useQuickAccessGuard(() => ({
+    dirty: date !== savedDate || goalId !== savedGoal || conflict,
+    busy: busy || pending,
+  }));
   const [error, setError] = useState<string | null>(null);
   const goal = goals.find((g) => g.id.toString() === action.goalId?.toString());
   const direction = directions.find(

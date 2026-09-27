@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQuickAccessDraft } from '../QuickAccessContext';
 import { EntityId, type Sphere, type Direction } from '../../../domain';
 import type { BalanceServices } from '../../../application/balance/BalanceServices';
 import type { BalanceImportance, DirectionMode } from '../../../domain/balance/BalanceImportance';
@@ -42,6 +43,22 @@ export function BalanceEntityForm({
     [future, setFuture] = useState(direction?.desiredState ?? ''),
     [mode, setMode] = useState<DirectionMode>(direction?.mode ?? 'develop'),
     [status, setStatus] = useState<DirectionStatus>(direction?.status ?? 'active');
+  useQuickAccessDraft(
+    {
+      name,
+      description,
+      importance,
+      manual,
+      desired,
+      include,
+      owner,
+      current,
+      future,
+      mode,
+      status,
+    },
+    false,
+  );
   const save = async () => {
     const common = {
       name,

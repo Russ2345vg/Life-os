@@ -1,4 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react';
+import { useQuickAccessGuard } from '../QuickAccessContext';
 import type { BalanceImportance } from '../../../domain/balance/BalanceImportance';
 import { balanceImportanceLabels } from './BalanceLabels';
 export function ImportanceField({
@@ -59,6 +60,7 @@ export function BalanceForm({
   const [busy, setBusy] = useState(false),
     [error, setError] = useState<string | null>(null);
   const working = useRef(false);
+  useQuickAccessGuard(() => ({ dirty: false, busy }));
   return (
     <form
       className="planner-form balance-form"

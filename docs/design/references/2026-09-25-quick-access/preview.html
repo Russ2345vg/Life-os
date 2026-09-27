@@ -1,0 +1,841 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>LifeOS · Быстрый доступ · Макет</title>
+    <link rel="stylesheet" href="/src/presentation/styles/global.css" />
+    <link rel="stylesheet" href="/src/presentation/planner-v2/planner-v2.css" />
+    <link rel="stylesheet" href="/src/presentation/planner-v2/planner-master.css" />
+    <link rel="stylesheet" href="/src/presentation/planner-v2/planner-premium.css" />
+    <style>
+      body {
+        margin: 0;
+      }
+      .qa-entry {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+      }
+      kbd {
+        color: var(--text-muted);
+        font: inherit;
+        font-size: 12px;
+        border: 1px solid var(--border-soft);
+        border-radius: var(--radius-small);
+        padding: 2px 6px;
+      }
+      .qa-heading {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: var(--space-4);
+      }
+      .qa-heading h1 {
+        margin: 0;
+      }
+      .qa-muted {
+        color: var(--text-secondary);
+      }
+      .qa-demo {
+        font-size: 13px;
+        color: var(--text-muted);
+        margin-top: var(--space-8);
+      }
+      .qa-underlying {
+        margin-top: var(--space-8);
+        background: var(--surface-1);
+        border: 1px solid var(--border-soft);
+        border-radius: var(--radius-large);
+        padding: var(--space-6);
+      }
+      .qa-underlying label {
+        display: block;
+        margin-bottom: var(--space-2);
+      }
+      .qa-underlying input {
+        width: 100%;
+      }
+      .qa-underlying p {
+        margin-top: var(--space-6);
+      }
+      .planner-v2 .qa-dialog {
+        position: fixed;
+        inset: 0 0 0 auto;
+        margin: 0;
+        width: min(560px, 100vw);
+        max-width: 100vw;
+        height: 100dvh;
+        max-height: 100dvh;
+        padding: 0;
+        border: 0;
+        border-left: 1px solid var(--border-soft);
+        border-radius: 0;
+        background: var(--surface-1);
+        color: var(--text-primary);
+        box-shadow: var(--shadow-deep);
+        overflow: auto;
+      }
+      .qa-dialog::backdrop {
+        background: rgb(0 0 0 / 24%);
+      }
+      .qa-top {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: var(--surface-1);
+        padding: var(--space-6);
+        border-bottom: 1px solid var(--border-soft);
+      }
+      .qa-top header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-4);
+        margin-bottom: var(--space-4);
+      }
+      .qa-top h2 {
+        margin: 0;
+        font-size: 22px;
+        letter-spacing: -0.02em;
+      }
+      .qa-dialog button {
+        min-height: 44px;
+      }
+      .qa-close {
+        min-width: 44px;
+      }
+      .qa-tabs {
+        display: flex;
+        gap: var(--space-2);
+        margin-bottom: var(--space-4);
+      }
+      .qa-tabs button[aria-pressed='true'] {
+        background: var(--surface-selected);
+        border-color: var(--border-accent);
+        color: var(--accent-primary);
+      }
+      .qa-label {
+        display: block;
+        margin-bottom: var(--space-2);
+        font-size: 13px;
+        color: var(--text-secondary);
+      }
+      .qa-search {
+        width: 100%;
+      }
+      .qa-body {
+        padding: var(--space-4) var(--space-6) var(--space-6);
+      }
+      .qa-results {
+        list-style: none;
+        padding: 0;
+        margin: var(--space-3) 0;
+      }
+      .qa-result {
+        display: flex;
+        gap: var(--space-3);
+        align-items: center;
+        border-bottom: 1px solid var(--border-soft);
+        padding: var(--space-2) 0;
+      }
+      .qa-result .qa-open {
+        flex: 1;
+        min-width: 0;
+        text-align: left;
+        background: transparent;
+        border: 0;
+        display: grid;
+        gap: var(--space-1);
+        padding: var(--space-3);
+        line-height: 1.4;
+      }
+      .qa-result .qa-open:hover,
+      .qa-result .qa-open:focus-visible {
+        background: var(--surface-hover);
+      }
+      .qa-title {
+        font-weight: 600;
+      }
+      .qa-context {
+        font-size: 13px;
+        color: var(--text-secondary);
+      }
+      .qa-date {
+        font-size: 13px;
+        flex: none;
+      }
+      .qa-count {
+        font-size: 13px;
+        color: var(--text-muted);
+        margin: 0;
+      }
+      .qa-empty {
+        padding: var(--space-6) 0;
+      }
+      .qa-empty h3 {
+        font-size: 18px;
+      }
+      .qa-date-panel {
+        padding: var(--space-4);
+        background: var(--surface-2);
+        border-radius: var(--radius-medium);
+        margin-top: var(--space-4);
+      }
+      .qa-date-panel h3 {
+        font-size: 16px;
+        margin: 0 0 var(--space-3);
+      }
+      .qa-dates {
+        display: flex;
+        gap: var(--space-2);
+        flex-wrap: wrap;
+      }
+      .qa-dates button[aria-pressed='true'] {
+        border-color: var(--border-accent);
+        color: var(--accent-primary);
+        background: var(--surface-selected);
+      }
+      .qa-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-3);
+        flex-wrap: wrap;
+        margin-top: var(--space-6);
+      }
+      .qa-form label {
+        display: block;
+        margin-bottom: var(--space-2);
+      }
+      .qa-form input {
+        width: 100%;
+        margin-bottom: var(--space-6);
+      }
+      .qa-form p {
+        font-size: 13px;
+        color: var(--text-secondary);
+      }
+      .qa-feedback {
+        color: var(--accent-primary);
+        margin: var(--space-3) 0;
+        font-size: 14px;
+      }
+      .qa-help {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-top: var(--space-4);
+      }
+      .qa-error {
+        color: var(--danger);
+      }
+      [hidden] {
+        display: none !important;
+      }
+      @media (max-width: 760px) {
+        .qa-heading {
+          align-items: flex-start;
+          flex-wrap: wrap;
+        }
+        .qa-entry kbd {
+          display: none;
+        }
+        .planner-v2 .qa-dialog {
+          width: 100%;
+          max-width: 100vw;
+          height: 100dvh;
+          max-height: 100dvh;
+          border-radius: 0;
+          border: 0;
+        }
+        .qa-top {
+          padding: var(--space-4);
+        }
+        .qa-body {
+          padding: var(--space-4);
+        }
+        .qa-result {
+          align-items: flex-start;
+          gap: var(--space-1);
+        }
+        .qa-result .qa-open {
+          padding: var(--space-3) var(--space-1);
+        }
+        .qa-help {
+          display: none;
+        }
+        .qa-date {
+          padding-inline: var(--space-2);
+        }
+        .qa-top h2 {
+          font-size: 20px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="planner-v2">
+      <aside class="planner-sidebar">
+        <a class="planner-brand" href="#/v2/today">LifeOS</a>
+        <nav aria-label="Рабочий интерфейс">
+          <a href="#/v2/today"
+            ><svg
+              viewBox="0 0 24 24"
+              width="1.25em"
+              height="1.25em"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <rect x="3" y="5" width="18" height="16" rx="2"></rect>
+              <path d="M8 3v4M16 3v4M3 10h18"></path>
+              <path d="M8 14h3M8 17h6"></path></svg
+            ><span>Сегодня</span></a
+          ><span class="planner-nav-secondary"
+            ><a href="#/v2/spheres"
+              ><svg
+                viewBox="0 0 24 24"
+                width="1.25em"
+                height="1.25em"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <circle cx="12" cy="12" r="8"></circle>
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M12 4V2M12 22v-2M4 12H2M22 12h-2"></path></svg
+              ><span>Сферы</span></a
+            ></span
+          ><a href="#/v2/directions"
+            ><svg
+              viewBox="0 0 24 24"
+              width="1.25em"
+              height="1.25em"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <circle cx="12" cy="12" r="8"></circle>
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M12 4V2M12 22v-2M4 12H2M22 12h-2"></path></svg
+            ><span>Направления</span></a
+          ><a href="#/v2/goals"
+            ><svg
+              viewBox="0 0 24 24"
+              width="1.25em"
+              height="1.25em"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <circle cx="12" cy="12" r="8"></circle>
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M12 4V2M12 22v-2M4 12H2M22 12h-2"></path></svg
+            ><span>Цели</span></a
+          ><a href="#/v2/actions"
+            ><svg
+              viewBox="0 0 24 24"
+              width="1.25em"
+              height="1.25em"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <path d="M13 2 4.5 13H11l-1 9 8.5-11H12l1-9Z"></path></svg
+            ><span>Действия</span></a
+          ><span class="planner-nav-secondary"
+            ><a href="#/v2/inbox"
+              ><svg
+                viewBox="0 0 24 24"
+                width="1.25em"
+                height="1.25em"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path>
+                <path d="M3 3v5h5M12 7v5l3 2"></path></svg
+              ><span>Входящие</span></a
+            ></span
+          ><button
+            class="planner-nav-more"
+            type="button"
+            aria-expanded="false"
+            aria-controls="planner-more-menu"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="1.25em"
+              height="1.25em"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path>
+              <path d="M3 3v5h5M12 7v5l3 2"></path></svg
+            ><span>Ещё</span>
+          </button>
+        </nav>
+        <div id="planner-more-menu" class="planner-more-menu" hidden="">
+          <a href="#/v2/spheres"
+            ><svg
+              viewBox="0 0 24 24"
+              width="1.25em"
+              height="1.25em"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <circle cx="12" cy="12" r="8"></circle>
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M12 4V2M12 22v-2M4 12H2M22 12h-2"></path></svg
+            ><span>Сферы</span></a
+          ><a href="#/v2/inbox"
+            ><svg
+              viewBox="0 0 24 24"
+              width="1.25em"
+              height="1.25em"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path>
+              <path d="M3 3v5h5M12 7v5l3 2"></path></svg
+            ><span>Входящие</span></a
+          ><a href="#/v2/sleep"
+            ><svg
+              viewBox="0 0 24 24"
+              width="1.25em"
+              height="1.25em"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <rect x="3" y="5" width="18" height="16" rx="2"></rect>
+              <path d="M8 3v4M16 3v4M3 10h18"></path>
+              <path d="M8 14h3M8 17h6"></path></svg
+            ><span>Подготовка ко сну</span></a
+          ><a href="#/v2/account"
+            ><svg
+              viewBox="0 0 24 24"
+              width="1.25em"
+              height="1.25em"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <circle cx="12" cy="8" r="4"></circle>
+              <path d="M4.5 21a7.5 7.5 0 0 1 15 0"></path></svg
+            ><span>Аккаунт и синхронизация</span></a
+          >
+        </div>
+      </aside>
+
+      <main class="planner-content">
+        <header class="qa-heading planner-page-heading">
+          <div>
+            <h1>Сегодня</h1>
+            <p class="qa-muted">Пятница, 25 сентября</p>
+          </div>
+          <button class="qa-entry" id="open-access">Поиск и добавление <kbd>Ctrl K</kbd></button>
+        </header>
+        <section class="qa-underlying">
+          <h2>План на сегодня</h2>
+          <label for="underlying-draft">Черновик на текущем экране</label
+          ><input id="underlying-draft" placeholder="Например, обсудить идею проекта" />
+          <p class="qa-muted">Откройте быстрый доступ и закройте его — текст останется на месте.</p>
+          <p id="background-notice" role="status"></p>
+        </section>
+        <p class="qa-demo">
+          Интерактивный макет · вымышленные данные · изменения хранятся только до перезагрузки.
+        </p>
+        <label class="qa-demo" for="demo-state">Состояние поиска</label
+        ><select id="demo-state">
+          <option value="ready">Есть данные</option>
+          <option value="empty">Нет данных</option>
+          <option value="loading">Загрузка</option>
+          <option value="error">Ошибка загрузки</option>
+        </select>
+      </main>
+      <dialog class="qa-dialog" id="quick-access" aria-labelledby="qa-title">
+        <div class="qa-top">
+          <header>
+            <h2 id="qa-title">Быстрый доступ</h2>
+            <button class="qa-close" id="close-access" aria-label="Закрыть быстрый доступ">
+              ×
+            </button>
+          </header>
+          <div class="qa-tabs" aria-label="Режим быстрого доступа">
+            <button id="mode-search" aria-pressed="true">Найти</button
+            ><button id="mode-create" aria-pressed="false">Добавить задачу</button>
+          </div>
+          <div id="search-input">
+            <label class="qa-label" for="query">Задачи, цели, направления и сферы</label
+            ><input
+              class="qa-search"
+              id="query"
+              type="search"
+              placeholder="Что найти?"
+              autocomplete="off"
+            />
+          </div>
+        </div>
+        <div class="qa-body">
+          <div id="search-pane">
+            <p class="qa-count" id="result-count" role="status"></p>
+            <ul class="qa-results" id="results" aria-label="Результаты поиска"></ul>
+            <div id="search-state"></div>
+            <section class="qa-date-panel" id="date-panel" hidden>
+              <h3 id="date-title">Когда выполнить</h3>
+              <div class="qa-dates">
+                <button data-move="Сегодня">Сегодня</button
+                ><button data-move="Завтра">Завтра</button
+                ><button data-move="Без даты">Без даты</button>
+              </div>
+              <p class="qa-help">Изменение применяется только после нажатия выбранной даты.</p>
+              <button id="cancel-date">Отмена</button>
+            </section>
+          </div>
+          <form class="qa-form" id="create-pane" hidden>
+            <label for="task-title">Название задачи</label
+            ><input
+              id="task-title"
+              placeholder="Что нужно сделать?"
+              required
+              maxlength="200"
+              autocomplete="off"
+            /><label>Когда</label>
+            <div class="qa-dates" id="create-dates">
+              <button type="button" data-date="Сегодня" aria-pressed="false">Сегодня</button
+              ><button type="button" data-date="Завтра" aria-pressed="false">Завтра</button
+              ><button type="button" data-date="Без даты" aria-pressed="true">Без даты</button>
+            </div>
+            <p>Без даты задача сохранится для дальнейшего планирования.</p>
+            <div class="qa-footer">
+              <button class="planner-primary" type="submit">Создать задачу</button
+              ><button type="button" id="back-search">Вернуться к поиску</button>
+            </div>
+          </form>
+          <section id="leave-warning" class="qa-date-panel" hidden aria-label="Несохранённый текст">
+            <h3>В открытой форме есть несохранённый текст</h3>
+            <p>При переходе к записи он будет потерян. Можно остаться и закончить форму.</p>
+            <div class="qa-dates">
+              <button id="stay-here">Остаться</button
+              ><button id="leave-form">Перейти без сохранения</button>
+            </div>
+          </section>
+          <p class="qa-feedback" id="feedback" role="status"></p>
+          <p class="qa-help">Enter — открыть результат · Tab — выбрать действие · Esc — закрыть</p>
+        </div>
+      </dialog>
+    </div>
+    <script>
+      const byId = (id) => document.getElementById(id);
+      const dialog = byId('quick-access');
+      dialog.addEventListener('close', () => {
+        byId('leave-warning').hidden = true;
+        byId('date-panel').hidden = true;
+      });
+      let pendingOpen = null;
+      function openResult(item) {
+        dialog.close();
+        byId('background-notice').textContent =
+          'В приложении откроется запись «' + item.title + '». Здесь показан только макет.';
+      }
+      byId('stay-here').onclick = () => {
+        byId('leave-warning').hidden = true;
+        pendingOpen = null;
+        byId('query').focus();
+      };
+      byId('leave-form').onclick = () => {
+        if (!pendingOpen) return;
+        byId('underlying-draft').value = '';
+        byId('leave-warning').hidden = true;
+        openResult(pendingOpen);
+        pendingOpen = null;
+      };
+      const items = [
+        {
+          id: 1,
+          kind: 'Задача',
+          title: 'Подготовить презентацию проекта',
+          context: 'Работа · Запустить проект',
+          date: 'Сегодня',
+          movable: true,
+        },
+        {
+          id: 2,
+          kind: 'Цель',
+          title: 'Запустить личный проект',
+          context: 'Работа · Развитие',
+          date: null,
+        },
+        {
+          id: 3,
+          kind: 'Задача',
+          title: 'Обсудить проект с командой',
+          context: 'Работа · Запустить проект',
+          date: 'Завтра',
+          movable: true,
+        },
+        { id: 4, kind: 'Направление', title: 'Личные проекты', context: 'Работа', date: null },
+        { id: 5, kind: 'Сфера', title: 'Работа и развитие', context: 'Сфера жизни', date: null },
+        {
+          id: 6,
+          kind: 'Задача',
+          title: 'Прочитать главу книги',
+          context: 'Личное развитие · Повтор',
+          date: 'Сегодня',
+          movable: false,
+        },
+      ];
+      let date = 'Без даты',
+        selected = null,
+        mode = 'search',
+        state = 'ready';
+      function setMode(next) {
+        mode = next;
+        byId('mode-search').setAttribute('aria-pressed', String(mode === 'search'));
+        byId('mode-create').setAttribute('aria-pressed', String(mode === 'create'));
+        byId('search-input').hidden = mode !== 'search';
+        byId('search-pane').hidden = mode !== 'search';
+        byId('create-pane').hidden = mode !== 'create';
+        byId('feedback').textContent = '';
+        byId('date-panel').hidden = true;
+        (mode === 'search' ? byId('query') : byId('task-title')).focus();
+      }
+      function openAccess() {
+        if (dialog.open) return;
+        dialog.showModal();
+        render();
+        (mode === 'search' ? byId('query') : byId('task-title')).focus();
+      }
+      byId('open-access').onclick = openAccess;
+      byId('close-access').onclick = () => dialog.close();
+      byId('mode-search').onclick = () => setMode('search');
+      byId('back-search').onclick = () => setMode('search');
+      byId('mode-create').onclick = () => setMode('create');
+      document.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.code === 'KeyK' && !e.isComposing) {
+          e.preventDefault();
+          openAccess();
+        }
+      });
+      byId('query').oninput = () => {
+        byId('date-panel').hidden = true;
+        render();
+      };
+      byId('query').onkeydown = (e) => {
+        if (e.isComposing) return;
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          byId('results').querySelector('button')?.focus();
+        }
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          byId('results').querySelector('.qa-open')?.click();
+        }
+      };
+      function normalize(text) {
+        return text.toLocaleLowerCase('ru').replaceAll('ё', 'е').trim();
+      }
+      function render() {
+        const list = byId('results');
+        list.replaceChildren();
+        byId('search-state').replaceChildren();
+        byId('result-count').textContent = '';
+        if (state === 'loading') {
+          byId('result-count').textContent = 'Загружаем записи…';
+          return;
+        }
+        if (state === 'error') {
+          const p = document.createElement('p');
+          p.className = 'qa-error';
+          p.textContent = 'Не удалось загрузить записи. Попробуйте ещё раз.';
+          const b = document.createElement('button');
+          b.textContent = 'Повторить загрузку';
+          b.onclick = () => {
+            state = 'ready';
+            byId('demo-state').value = 'ready';
+            render();
+          };
+          byId('search-state').append(p, b);
+          return;
+        }
+        const query = normalize(byId('query').value);
+        const results =
+          state === 'empty'
+            ? []
+            : items.filter((item) =>
+                query
+                  .split(/\s+/)
+                  .every((word) => normalize(item.title + ' ' + item.context).includes(word)),
+              );
+        byId('result-count').textContent = results.length
+          ? 'Найдено: ' + results.length
+          : state === 'empty' || !query
+            ? 'Пока нет записей'
+            : 'Ничего не найдено';
+        for (const item of results) {
+          const li = document.createElement('li');
+          li.className = 'qa-result';
+          const b = document.createElement('button');
+          b.className = 'qa-open';
+          const title = document.createElement('span');
+          title.className = 'qa-title';
+          title.textContent = item.title;
+          const meta = document.createElement('span');
+          meta.className = 'qa-context';
+          meta.textContent =
+            item.kind + ' · ' + item.context + (item.date ? ' · ' + item.date : '');
+          b.append(title, meta);
+          b.onclick = () => {
+            if (byId('underlying-draft').value.trim()) {
+              pendingOpen = item;
+              byId('leave-warning').hidden = false;
+              byId('stay-here').focus();
+            } else openResult(item);
+          };
+          li.append(b);
+          if (item.movable) {
+            const move = document.createElement('button');
+            move.className = 'qa-date';
+            move.textContent = 'Дата';
+            move.setAttribute('aria-label', 'Изменить дату: ' + item.title);
+            move.onclick = () => {
+              selected = item;
+              byId('date-title').textContent = 'Когда выполнить: ' + item.title;
+              byId('date-panel').hidden = false;
+              byId('date-panel').querySelector('button').focus();
+            };
+            li.append(move);
+          }
+          list.append(li);
+        }
+        if (!results.length) {
+          const p = document.createElement('p');
+          p.className = 'qa-muted';
+          p.textContent = 'Можно уточнить запрос или сохранить новую задачу.';
+          const b = document.createElement('button');
+          b.textContent = 'Добавить задачу';
+          b.onclick = () => {
+            if (!byId('task-title').value.trim()) byId('task-title').value = byId('query').value;
+            setMode('create');
+          };
+          byId('search-state').append(p, b);
+        }
+      }
+      byId('cancel-date').onclick = () => {
+        byId('date-panel').hidden = true;
+        byId('query').focus();
+      };
+      document.querySelectorAll('[data-move]').forEach(
+        (b) =>
+          (b.onclick = () => {
+            if (!selected) return;
+            selected.date = b.dataset.move;
+            byId('feedback').textContent =
+              'Дата изменена: ' + selected.title + ' · ' + selected.date;
+            byId('date-panel').hidden = true;
+            render();
+            byId('query').focus();
+          }),
+      );
+      document.querySelectorAll('[data-date]').forEach(
+        (b) =>
+          (b.onclick = () => {
+            date = b.dataset.date;
+            document
+              .querySelectorAll('[data-date]')
+              .forEach((btn) => btn.setAttribute('aria-pressed', String(btn === b)));
+          }),
+      );
+      byId('create-pane').onsubmit = (e) => {
+        e.preventDefault();
+        const title = byId('task-title').value.trim();
+        if (!title) {
+          byId('task-title').focus();
+          return;
+        }
+        items.unshift({
+          id: Date.now(),
+          kind: 'Задача',
+          title,
+          context: 'Без цели',
+          date,
+          movable: true,
+        });
+        byId('task-title').value = '';
+        byId('query').value = title;
+        state = 'ready';
+        byId('demo-state').value = 'ready';
+        setMode('search');
+        render();
+        byId('feedback').textContent = 'Задача создана · ' + date;
+      };
+      byId('demo-state').onchange = (e) => {
+        state = e.target.value;
+        setMode('search');
+        openAccess();
+        render();
+      };
+      document.querySelectorAll('.planner-sidebar a').forEach(
+        (a) =>
+          (a.onclick = (e) => {
+            e.preventDefault();
+            byId('background-notice').textContent =
+              'Навигация приложения в макете не меняет страницу.';
+          }),
+      );
+      document.querySelector('.planner-nav-more').onclick = () => {
+        const menu = byId('planner-more-menu');
+        menu.hidden = !menu.hidden;
+      };
+      render();
+    </script>
+  </body>
+</html>

@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { BalanceState } from '../../../application/ports/BalanceRepository';
 import type { BalanceServices } from '../../../application/balance/BalanceServices';
 import { useSyncContentChanged } from '../../sync/SyncStatusContext';
+import { useQuickAccess } from '../QuickAccessContext';
 export function useBalanceState(services: BalanceServices, today: string) {
+  const revision = useQuickAccess()?.revision ?? 0;
   const [state, setState] = useState<BalanceState | null>(null),
     [error, setError] = useState<string | null>(null);
   const generation = useRef(0);
@@ -34,7 +36,7 @@ export function useBalanceState(services: BalanceServices, today: string) {
       active = false;
       requests.current++;
     };
-  }, [refresh, today]);
+  }, [refresh, today, revision]);
   useSyncContentChanged(
     'spheres|directions|goals|lifeActions|directionIndicators|balanceMonthlySnapshots|progressContributions|periodMemberships|periodDecisions|planningPeriods',
     refresh,
