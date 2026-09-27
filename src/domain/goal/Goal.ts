@@ -1,3 +1,4 @@
+import { normalizeEntityNeed } from '../shared/EntityNeed';
 import { DayDate } from '../day/DayDate';
 import { validateMeasurement, type GoalMeasurement } from '../planner/GoalMeasurement';
 import { DomainError } from '../../shared/errors/DomainError';
@@ -32,6 +33,7 @@ export interface GoalCreationData {
   readonly id: EntityId;
   readonly directionId?: EntityId | null;
   readonly title: string;
+  readonly need?: string | null;
   readonly description?: string | null;
   readonly whyImportant?: string | null;
   readonly whyNow?: string | null;
@@ -52,6 +54,7 @@ export interface GoalDetails {
   readonly sphereId?: EntityId | null;
   readonly directionId?: EntityId | null;
   readonly title: string;
+  readonly need?: string | null;
   readonly description?: string | null;
   readonly whyImportant?: string | null;
   readonly whyNow?: string | null;
@@ -75,6 +78,7 @@ export interface GoalRehydrationData {
   readonly id: EntityId;
   readonly directionId: EntityId | null;
   readonly title: string;
+  readonly need?: string | null;
   readonly description: string | null;
   readonly whyImportant: string | null;
   readonly whyNow: string | null;
@@ -104,6 +108,7 @@ export class Goal extends Entity {
   public readonly nextActionId: EntityId | null;
   public readonly directionId: EntityId | null;
   public readonly title: string;
+  public readonly need: string | null;
   public readonly description: string | null;
   public readonly whyImportant: string | null;
   public readonly whyNow: string | null;
@@ -138,6 +143,7 @@ export class Goal extends Entity {
     }
     this.directionId = data.directionId;
     this.title = normalizeGoalTitle(data.title);
+    this.need = normalizeEntityNeed(data.need);
     this.description = normalizeOptionalText(
       data.description,
       MAX_GOAL_DESCRIPTION_LENGTH,
@@ -194,6 +200,7 @@ export class Goal extends Entity {
       sphereId: data.sphereId ?? null,
       directionId: data.directionId ?? null,
       title: data.title,
+      need: data.need ?? null,
       description: data.description === undefined ? null : data.description,
       whyImportant: data.whyImportant === undefined ? null : data.whyImportant,
       whyNow: data.whyNow === undefined ? null : data.whyNow,
@@ -236,6 +243,7 @@ export class Goal extends Entity {
       measurement: details.measurement === undefined ? this.measurement : details.measurement,
       dueDate: details.dueDate === undefined ? this.dueDate : details.dueDate,
       title: details.title,
+      need: details.need === undefined ? this.need : details.need,
       description: details.description === undefined ? this.description : details.description,
       whyImportant: details.whyImportant === undefined ? this.whyImportant : details.whyImportant,
       whyNow: details.whyNow === undefined ? this.whyNow : details.whyNow,
@@ -346,6 +354,7 @@ export class Goal extends Entity {
       id: this.id,
       directionId: this.directionId,
       title: this.title,
+      need: this.need,
       description: this.description,
       whyImportant: this.whyImportant,
       whyNow: this.whyNow,

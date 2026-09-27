@@ -46,6 +46,10 @@ export class RecurringActions {
         throw new DomainError('goal.not_found', 'Цель не найдена.');
       const rule = validateRule({
         ...input,
+        need:
+          input.need === undefined
+            ? (previous?.need ?? (actionId ? requireAction(s, actionId).need : null))
+            : input.need,
         directionId:
           input.directionId ??
           previous?.directionId ??
@@ -91,7 +95,7 @@ export class RecurringActions {
           },
         });
       }
-      if (previous) this.reconcileFuture(s, rule, date);
+      if (previous) this.reconcileFuture(s, rule, date, previous.need ?? null);
       return rule;
     });
   }
@@ -169,6 +173,7 @@ export class RecurringActions {
           const action = LifeAction.createDraft({
             id: EntityId.create(slot.id),
             title: LifeActionTitle.create(rule.title),
+            need: rule.need ?? null,
             directionId: rule.directionId ? EntityId.create(rule.directionId) : null,
             sphereId: rule.sphereId ? EntityId.create(rule.sphereId) : null,
             goalId: rule.goalId ? EntityId.create(rule.goalId) : null,
@@ -403,9 +408,14 @@ export class RecurringActions {
     if (rule.removedAt != null) throw new DomainError('recurrence.removed', 'Серия уже удалена.');
     return rule;
   }
-  private reconcileFuture(s: PlanningState, rule: RecurrenceRule, date: string) {
+  private reconcileFuture(
+    s: PlanningState,
+    rule: RecurrenceRule,
+    date: string,
+    previousNeed?: string | null,
+  ) {
     if (rule.schedule.kind === 'count') {
-      this.reconcileCount(s, rule, date);
+      this.reconcileCount(s, rule, date, previousNeed);
       return;
     }
     const occurrenceDate = (action: LifeAction) =>
@@ -468,6 +478,10 @@ export class RecurringActions {
             rule.priority,
             DayDate.create(slot.date),
             rule.revision,
+            !action.occurrence?.needOverride &&
+              (previousNeed === undefined || action.need === previousNeed)
+              ? (rule.need ?? null)
+              : action.need,
           );
       }
       if (valid && action.status !== 'cancelled') {
@@ -495,7 +509,12 @@ export class RecurringActions {
     }
   }
 
-  private reconcileCount(s: PlanningState, rule: RecurrenceRule, date: string) {
+  private reconcileCount(
+    s: PlanningState,
+    rule: RecurrenceRule,
+    date: string,
+    previousNeed?: string | null,
+  ) {
     const desired = occurrenceSlots(rule, date, addDays(date, 62), this.completions(s, rule.id))[0]
       ?.slot;
     const open = s.actions
@@ -527,6 +546,20 @@ export class RecurringActions {
           now,
           { ruleId: rule.id, slot: action.occurrence!.slot },
         ),
+      );
+    }
+    if (
+      desired &&
+      open[0]?.status === 'draft' &&
+      open[0].occurrence!.ruleRevision !== rule.revision
+    ) {
+      const action = open[0];
+      action.reviseRecurrenceNeed(
+        !action.occurrence?.needOverride &&
+          (previousNeed === undefined || action.need === previousNeed)
+          ? (rule.need ?? null)
+          : action.need,
+        rule.revision,
       );
     }
     if (!desired || open.length) return;

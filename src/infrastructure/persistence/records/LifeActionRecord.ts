@@ -8,6 +8,7 @@ export interface LifeActionRecord {
   readonly schemaVersion: 1;
   readonly id: string;
   readonly title: string;
+  readonly need?: string | null;
   readonly description: string | null;
   readonly expectedResult: string | null;
   readonly actualResult: string | null;

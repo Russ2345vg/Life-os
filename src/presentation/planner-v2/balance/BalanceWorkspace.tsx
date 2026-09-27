@@ -1,3 +1,4 @@
+import { EntityNeedText } from '../EntityNeedText';
 import { groupPlannerActions, isOpenAction } from '../plannerCatalogModel';
 import { useQuickAccessGuard } from '../QuickAccessContext';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -879,6 +880,14 @@ export function BalanceWorkspace({
               </div>
             </header>
           </EntityContextMenu>
+          <details className="planner-details">
+            <summary>Потребность</summary>
+            <EntityNeedText
+              need={
+                direction.direction.need ? { text: direction.direction.need, source: 'own' } : null
+              }
+            />
+          </details>
           <div className="balance-state-text">
             <div>
               <h2>Сейчас</h2>

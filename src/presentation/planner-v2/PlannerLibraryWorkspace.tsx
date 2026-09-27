@@ -336,7 +336,7 @@ export function PlannerLibraryWorkspace({
           await run(() => services.planning!.progress.reopen(id), 'Действие возвращено в работу');
         }
       : undefined,
-    onEdit: async (action, title, description) => {
+    onEdit: async (action, title, description, need) => {
       await run(async () => {
         const result =
           action.status === 'draft'
@@ -344,11 +344,13 @@ export function PlannerLibraryWorkspace({
                 lifeActionId: action.id,
                 title,
                 description,
+                ...(need === undefined ? {} : { need }),
               })
             : await services.updateLifeActionDetails.execute({
                 lifeActionId: action.id,
                 title,
                 description,
+                ...(need === undefined ? {} : { need }),
                 expectedResult: action.expectedResult?.toString() ?? '',
               });
         if (!result.ok) throw result.error;
@@ -415,6 +417,7 @@ export function PlannerLibraryWorkspace({
                       horizon: draft.horizon || null,
                       nextProgress: draft.firstStep,
                       description: draft.description,
+                      need: draft.need,
                       whyImportant: draft.whyImportant,
                       whyNow: draft.whyNow,
                     });

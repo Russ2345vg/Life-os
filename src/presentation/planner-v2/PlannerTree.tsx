@@ -20,6 +20,7 @@ export function PlannerTree({
           key={action.id.toString()}
           action={action}
           goals={data.goals}
+          directions={data.directions}
           lazyDetails
           {...operations}
         />
@@ -68,6 +69,7 @@ export function PlannerTree({
                     ? 'На паузе'
                     : 'Активно'}
               </p>
+              {direction.need && <p>Потребность: {direction.need}</p>}
               {direction.description && <p>{direction.description}</p>}
               {direction.strategicIntent && <p>Замысел: {direction.strategicIntent}</p>}
               {direction.desiredState && <p>Желаемое состояние: {direction.desiredState}</p>}

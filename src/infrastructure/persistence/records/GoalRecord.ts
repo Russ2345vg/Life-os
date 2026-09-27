@@ -27,6 +27,7 @@ export interface GoalRecord {
   readonly id: string;
   readonly directionId: string | null;
   readonly title: string;
+  readonly need?: string | null;
   readonly description: string | null;
   readonly whyImportant: string | null;
   readonly whyNow: string | null;

@@ -1,3 +1,4 @@
+import { normalizeEntityNeed } from '../shared/EntityNeed';
 import type { ActionPriority, ActionOccurrence } from '../planner/RecurrenceRule';
 import { DomainError } from '../../shared/errors/DomainError';
 import { DayDate } from '../day/DayDate';
@@ -24,6 +25,7 @@ import {
 export interface LifeActionDraftInput {
   readonly id: EntityId;
   readonly title: LifeActionTitle;
+  readonly need?: string | null;
   readonly description?: string;
   readonly decisionId?: EntityId;
   readonly sphereId?: EntityId | null;
@@ -46,6 +48,7 @@ export interface LifeActionReadyInput {
 
 export interface LifeActionDetailsUpdateInput {
   readonly title: LifeActionTitle;
+  readonly need?: string | null;
   readonly description: string | null;
   readonly expectedResult: ActionExpectedResult;
   readonly sphereId?: EntityId | null;
@@ -61,6 +64,7 @@ export interface LifeActionRehydrationData {
   readonly completedOn?: string | null;
   readonly id: EntityId;
   readonly title: LifeActionTitle;
+  readonly need?: string | null;
   readonly description: string | null;
   readonly expectedResult: ActionExpectedResult | null;
   readonly actualResult: ActionActualResult | null;
@@ -93,6 +97,7 @@ export class LifeAction extends Entity {
   #expectedContributions: readonly { id: string; goalId: string }[] | null;
   #completedOn: string | null;
   #title: LifeActionTitle;
+  #need: string | null;
   #description: string | null;
   readonly #decisionId: EntityId | null;
   #sphereId: EntityId | null;
@@ -141,6 +146,7 @@ export class LifeAction extends Entity {
     this.#priority = data.priority ?? null;
     this.#occurrence = data.occurrence ? Object.freeze({ ...data.occurrence }) : null;
     this.#title = data.title;
+    this.#need = normalizeEntityNeed(data.need);
     this.#description = normalizeOptionalDescription(data.description);
     this.#expectedResult = data.expectedResult;
     this.#actualResult = data.actualResult;
@@ -195,11 +201,13 @@ export class LifeAction extends Entity {
     priority: ActionPriority | null,
     date: DayDate,
     revision: number,
+    need?: string | null,
   ): void {
     if (!this.#occurrence || this.#status !== LIFE_ACTION_STATUS.draft) return;
     assertLifeActionTitle(title);
     assertDayDate(date);
     this.#title = title;
+    if (need !== undefined) this.#need = normalizeEntityNeed(need);
     this.setGoal(goalId);
     if (!this.#occurrence.manualDate) this.setPlan(date, this.#isNext);
     this.setPlanningMetadata({
@@ -207,6 +215,15 @@ export class LifeAction extends Entity {
       occurrence: { ...this.#occurrence, ruleRevision: revision },
     });
     this.#version++;
+  }
+  public reviseRecurrenceNeed(need: string | null, revision: number): void {
+    if (!this.#occurrence || this.#status !== LIFE_ACTION_STATUS.draft) return;
+    const nextNeed = normalizeEntityNeed(need);
+    if (this.#need !== nextNeed) {
+      this.#need = nextNeed;
+      this.#version++;
+    }
+    this.setPlanningMetadata({ occurrence: { ...this.#occurrence, ruleRevision: revision } });
   }
   public get completedOn(): string | null {
     return this.#completedOn;
@@ -253,7 +270,8 @@ export class LifeAction extends Entity {
         !Number.isInteger(occurrence.ruleRevision) ||
         occurrence.ruleRevision < 1 ||
         !Number.isInteger(occurrence.restorationGeneration ?? 0) ||
-        (occurrence.restorationGeneration ?? 0) < 0
+        (occurrence.restorationGeneration ?? 0) < 0 ||
+        (occurrence.needOverride !== undefined && typeof occurrence.needOverride !== 'boolean')
       )
         throw new DomainError('life_action.invalid_occurrence', 'Неверное повторение.');
       DayDate.create(occurrence.originalDate);
@@ -302,6 +320,7 @@ export class LifeAction extends Entity {
       {
         id: input.id,
         title: input.title,
+        need: input.need ?? null,
         description: input.description ?? null,
         expectedResult: null,
         actualResult: null,
@@ -349,6 +368,10 @@ export class LifeAction extends Entity {
 
   public get title(): LifeActionTitle {
     return this.#title;
+  }
+
+  public get need(): string | null {
+    return this.#need;
   }
 
   public get description(): string | null {
@@ -400,7 +423,11 @@ export class LifeAction extends Entity {
     return true;
   }
 
-  public updateDraftDetails(title: LifeActionTitle, description: string | null): boolean {
+  public updateDraftDetails(
+    title: LifeActionTitle,
+    description: string | null,
+    need?: string | null,
+  ): boolean {
     this.assertNotArchived();
     if (this.#status !== LIFE_ACTION_STATUS.draft)
       throw new DomainError(
@@ -409,7 +436,19 @@ export class LifeAction extends Entity {
       );
     assertLifeActionTitle(title);
     const normalized = normalizeOptionalDescription(description);
-    if (this.#title.equals(title) && this.#description === normalized) return false;
+    const nextNeed = need === undefined ? this.#need : normalizeEntityNeed(need);
+    const needOverride =
+      need !== undefined && this.#occurrence !== null && !this.#occurrence.needOverride;
+    if (
+      this.#title.equals(title) &&
+      this.#description === normalized &&
+      this.#need === nextNeed &&
+      !needOverride
+    )
+      return false;
+    this.#need = nextNeed;
+    if (needOverride)
+      this.#occurrence = Object.freeze({ ...this.#occurrence!, needOverride: true });
     this.#title = title;
     this.#description = normalized;
     this.#version += 1;
@@ -583,11 +622,16 @@ export class LifeAction extends Entity {
     assertLifeActionTitle(input.title);
     assertExpectedResult(input.expectedResult);
     const description = normalizeOptionalDescription(input.description);
+    const need = input.need === undefined ? this.#need : normalizeEntityNeed(input.need);
+    const needOverride =
+      input.need !== undefined && this.#occurrence !== null && !this.#occurrence.needOverride;
     const sphereId = input.sphereId === undefined ? this.#sphereId : input.sphereId;
 
     if (
       this.#title.equals(input.title) &&
       this.#description === description &&
+      this.#need === need &&
+      !needOverride &&
       this.#expectedResult?.equals(input.expectedResult) &&
       sameOptionalEntityId(this.#sphereId, sphereId)
     ) {
@@ -597,6 +641,9 @@ export class LifeAction extends Entity {
     assertValidDate(input.occurredAt, 'Время изменения действия');
     this.#title = input.title;
     this.#description = description;
+    this.#need = need;
+    if (needOverride)
+      this.#occurrence = Object.freeze({ ...this.#occurrence!, needOverride: true });
     this.#expectedResult = input.expectedResult;
     this.#sphereId = sphereId;
     this.#version += 1;

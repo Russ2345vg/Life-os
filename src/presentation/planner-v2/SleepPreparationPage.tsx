@@ -65,14 +65,16 @@ export function SleepPreparationPage({
   }, [service]);
 
   const run = async (work: () => Promise<SleepScheduleState>) => {
-    if (busy) return;
+    if (busy) return false;
     setBusy(true);
     setError(null);
     try {
       setState(await work());
       setAlarmStatus(await service.getAlarmStatus());
+      return true;
     } catch (reason: unknown) {
       setError(messageOf(reason));
+      return false;
     } finally {
       setBusy(false);
     }
@@ -199,12 +201,12 @@ export function SleepPreparationView({
   }) => void;
   readonly onComplete: (itemId: string, done: boolean) => void;
   readonly onFinish: (kind: 'WITH_SKIPS' | 'SKIPPED_TODAY') => void;
-  readonly onAddGroup: (title: string) => void;
-  readonly onRenameGroup: (id: string, title: string) => void;
+  readonly onAddGroup: (title: string) => void | Promise<boolean>;
+  readonly onRenameGroup: (id: string, title: string) => void | Promise<boolean>;
   readonly onMoveGroup: (id: string, position: number) => void;
   readonly onDeleteGroup: (id: string, targetGroupId?: string) => void;
-  readonly onAddItem: (groupId: string, title: string) => void;
-  readonly onRenameItem: (id: string, title: string) => void;
+  readonly onAddItem: (groupId: string, title: string) => void | Promise<boolean>;
+  readonly onRenameItem: (id: string, title: string) => void | Promise<boolean>;
   readonly onEnableItem: (id: string, enabled: boolean) => void;
   readonly onDeleteItem: (id: string) => void;
   readonly onMoveItem: (id: string, groupId: string, position: number) => void;
@@ -900,12 +902,12 @@ function CatalogEditor({
   readonly groups: readonly SleepPreparationGroup[];
   readonly items: readonly SleepPreparationItem[];
   readonly busy: boolean;
-  readonly onAddGroup: (title: string) => void;
-  readonly onRenameGroup: (id: string, title: string) => void;
+  readonly onAddGroup: (title: string) => void | Promise<boolean>;
+  readonly onRenameGroup: (id: string, title: string) => void | Promise<boolean>;
   readonly onMoveGroup: (id: string, position: number) => void;
   readonly onDeleteGroup: (id: string, targetGroupId?: string) => void;
-  readonly onAddItem: (groupId: string, title: string) => void;
-  readonly onRenameItem: (id: string, title: string) => void;
+  readonly onAddItem: (groupId: string, title: string) => void | Promise<boolean>;
+  readonly onRenameItem: (id: string, title: string) => void | Promise<boolean>;
   readonly onEnableItem: (id: string, enabled: boolean) => void;
   readonly onDeleteItem: (id: string) => void;
   readonly onMoveItem: (id: string, groupId: string, position: number) => void;
@@ -923,7 +925,10 @@ function CatalogEditor({
       <div className="sleep-catalog-heading">
         <div>
           <h2>Повторяемый список</h2>
-          <p>Изменения применятся к следующей новой ночи.</p>
+          <p>
+            Новые пункты появятся и в текущей незавершённой подготовке. Остальные изменения — со
+            следующей ночи.
+          </p>
         </div>
         <QuickForm
           label="Новая группа"
@@ -1089,20 +1094,28 @@ function QuickForm({
   readonly value?: string;
   readonly button?: string;
   readonly busy: boolean;
-  readonly onSubmit: (value: string) => void;
+  readonly onSubmit: (value: string) => void | Promise<boolean>;
 }) {
   const quickForm = useQuickAccessUncontrolledForm(busy);
+  const submitting = useRef(false);
   return (
     <form
       className="sleep-quick-form"
       ref={quickForm}
       aria-label={label}
-      onSubmit={(event: FormEvent<HTMLFormElement>) => {
+      onSubmit={async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
+        if (busy || submitting.current) return;
         const input = event.currentTarget.elements.namedItem('title');
         if (!(input instanceof HTMLInputElement) || !input.value.trim()) return;
-        onSubmit(input.value.trim());
-        if (value === undefined) input.value = '';
+        const entered = input.value;
+        submitting.current = true;
+        try {
+          const saved = await onSubmit(entered.trim());
+          if (saved !== false && value === undefined && input.value === entered) input.value = '';
+        } finally {
+          submitting.current = false;
+        }
       }}
     >
       <input

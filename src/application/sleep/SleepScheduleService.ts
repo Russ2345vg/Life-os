@@ -141,9 +141,16 @@ export class SleepScheduleService {
 
   public async addCustomItem(groupId: string, title: string): Promise<SleepScheduleState> {
     const id = this.#idGenerator.generate().toString();
-    return this.#repository.update((current) =>
-      addCustomPreparationItem(current ?? createEmptySleepSchedule(), { id, groupId, title }),
-    );
+    const now = this.#clock.now();
+    return this.#repository.update((current) => {
+      const state = current ?? createEmptySleepSchedule();
+      return addCustomPreparationItem(state, {
+        id,
+        groupId,
+        title,
+        ...(state.settings === null ? {} : { currentCycleDate: currentCycleDate(state, now) }),
+      });
+    });
   }
 
   public async renameItem(itemId: string, title: string): Promise<SleepScheduleState> {

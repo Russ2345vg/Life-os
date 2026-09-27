@@ -309,26 +309,51 @@ export function deletePreparationGroup(
 
 export function addCustomPreparationItem(
   state: SleepScheduleState,
-  input: { readonly id: string; readonly groupId: string; readonly title: string },
+  input: {
+    readonly id: string;
+    readonly groupId: string;
+    readonly title: string;
+    readonly currentCycleDate?: string;
+  },
 ): SleepScheduleState {
   assertIdentifier(input.id, 'Идентификатор пункта подготовки');
-  requiredPreparationGroup(state, input.groupId);
+  const group = requiredPreparationGroup(state, input.groupId);
   if (state.preparationItems.some(({ id }) => id === input.id)) {
     throw new Error('Пункт подготовки с таким идентификатором уже существует.');
   }
   const position = state.preparationItems.filter(({ groupId }) => groupId === input.groupId).length;
+  const title = normalizedTitle(input.title);
   return changed(state, {
     preparationItems: [
       ...state.preparationItems,
       {
         id: input.id,
         groupId: input.groupId,
-        title: normalizedTitle(input.title),
+        title,
         position,
         kind: PREPARATION_ITEM_KIND.custom,
         enabled: true,
       },
     ],
+    nightCycles: state.nightCycles.map((cycle) => {
+      if (cycle.cycleDate !== input.currentCycleDate || cycle.preparationCompletionKind !== null)
+        return cycle;
+      const groupItems = cycle.preparationItems.filter(({ groupId }) => groupId === input.groupId);
+      return {
+        ...cycle,
+        preparationItems: [
+          ...cycle.preparationItems,
+          {
+            id: input.id,
+            groupId: input.groupId,
+            groupTitle: groupItems[0]?.groupTitle ?? group.title,
+            title,
+            position: Math.max(-1, ...groupItems.map((item) => item.position)) + 1,
+            status: PREPARATION_SNAPSHOT_STATUS.pending,
+          },
+        ],
+      };
+    }),
   });
 }
 

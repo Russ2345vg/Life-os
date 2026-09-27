@@ -103,6 +103,7 @@ export function PlannerKanban({
                         key={action.id.toString()}
                         action={action}
                         goals={data.goals}
+                        directions={data.directions}
                         {...(today ? { today } : {})}
                         lazyDetails
                         {...operations}

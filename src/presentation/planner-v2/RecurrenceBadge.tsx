@@ -28,7 +28,7 @@ export function RecurrenceBadge({
       >
         <path d="M20 7H7a4 4 0 0 0-4 4m17-4-4-4m4 4-4 4M4 17h13a4 4 0 0 0 4-4M4 17l4 4m-4-4 4-4" />
       </svg>
-      {label ?? recurrenceLabel(selected)}
+      <span className="planner-recurrence-label">{label ?? recurrenceLabel(selected)}</span>
     </span>
   );
 }

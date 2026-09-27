@@ -19,6 +19,7 @@ import {
   readNullableIsoDate,
   readOptionalNullableIsoDate,
   readNullableString,
+  readOptionalNullableString,
   readOptionalNullableEntityId,
   readNumber,
   readString,
@@ -36,6 +37,7 @@ export class LifeActionRecordMapper {
       schemaVersion: 1,
       id: entity.id.toString(),
       title: entity.title.toString(),
+      need: entity.need,
       description: entity.description,
       expectedResult: entity.expectedResult?.toString() ?? null,
       actualResult: entity.actualResult?.toString() ?? null,
@@ -72,6 +74,7 @@ export class LifeActionRecordMapper {
       completionGeneration: record.completionGeneration ?? 0,
       id: readEntityId(record, 'id'),
       title: createValueObject(record, 'title', LifeActionTitle.create),
+      need: readOptionalNullableString(record, 'need'),
       description: readNullableString(record, 'description'),
       expectedResult: createNullableValueObject(
         record,

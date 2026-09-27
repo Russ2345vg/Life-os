@@ -1,3 +1,4 @@
+import { normalizeEntityNeed } from '../shared/EntityNeed';
 import { DomainError } from '../../shared/errors/DomainError';
 import { DayDate } from '../day/DayDate';
 import { addDays, assertPlanningRecord, type PlanningRecord } from './PlanningPeriod';
@@ -9,6 +10,7 @@ export interface ActionOccurrence {
   readonly restorationGeneration?: number;
   readonly originalDate: string;
   readonly manualDate?: boolean;
+  readonly needOverride?: boolean;
 }
 export type RecurrenceSchedule =
   | { readonly kind: 'count' }
@@ -18,6 +20,7 @@ export type RecurrenceSchedule =
   | { readonly kind: 'monthly'; readonly day: number };
 export interface RecurrenceRule extends PlanningRecord {
   readonly title: string;
+  readonly need?: string | null;
   readonly goalId: string | null;
   readonly directionId?: string | null;
   readonly sphereId?: string | null;
@@ -90,6 +93,7 @@ export function validateRule(rule: RecurrenceRule): RecurrenceRule {
     throw new DomainError('recurrence.invalid_rule', 'Проверьте расписание и границы повторения.');
   return Object.freeze({
     ...rule,
+    ...(rule.need === undefined ? {} : { need: normalizeEntityNeed(rule.need) }),
     removedAt: rule.removedAt ?? null,
     lastRemovedAt: rule.lastRemovedAt ?? null,
     restoredFromTrashAt: rule.restoredFromTrashAt ?? null,

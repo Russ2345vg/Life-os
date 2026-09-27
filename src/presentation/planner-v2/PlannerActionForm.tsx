@@ -322,6 +322,16 @@ export function PlannerActionForm({
           <summary>Дополнительно</summary>
           <div className="planner-details-body">
             <VoiceField>
+              <span>Потребность</span>
+              <VoiceTextInput
+                id="planner-action-need"
+                value={draft.need}
+                onValueChange={(value) => change('need', value)}
+                maxLength={500}
+                placeholder="Необязательно · пустое поле использует потребность родителя"
+              />
+            </VoiceField>
+            <VoiceField>
               <span>Описание / заметки</span>
               <VoiceTextArea
                 id="planner-action-description"

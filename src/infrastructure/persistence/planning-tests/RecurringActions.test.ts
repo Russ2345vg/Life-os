@@ -31,6 +31,82 @@ const input: RecurrenceInput = {
   schedule: { kind: 'daily' },
 };
 describe('bounded recurring actions', () => {
+  it.each(['daily', 'count'] as const)(
+    'preserves an individual need when editing the %s series template',
+    async (kind) => {
+      const db = new LifeOsIndexedDb(new IDBFactory());
+      const repo = new IndexedDbPlanningRepository(db);
+      const service = new RecurringActions(
+        repo,
+        new FakeClock(new Date(2026, 8, 14, 10)),
+        new FakeIdGenerator('override'),
+      );
+      try {
+        const rule = await service.save({
+          ...input,
+          need: 'Энергия',
+          schedule: { kind },
+          maxCompletions: kind === 'count' ? 3 : null,
+        });
+        await service.materialize('2026-09-14', '2026-09-15');
+        await repo.change((state) => {
+          const action = state.actions[0]!;
+          action.updateDraftDetails(action.title, action.description, 'Энергия');
+        });
+        await service.save(
+          {
+            ...input,
+            need: 'Свобода',
+            schedule: { kind },
+            maxCompletions: kind === 'count' ? 4 : null,
+          },
+          rule.id,
+        );
+        const state = await repo.read();
+        expect(state.actions[0]!.need).toBe('Энергия');
+        expect(state.actions.slice(1).every((action) => action.need === 'Свобода')).toBe(true);
+      } finally {
+        await db.close();
+      }
+    },
+  );
+
+  it.each(['daily', 'count'] as const)(
+    'persists own needs in %s occurrences and applies clearing to open future occurrences',
+    async (kind) => {
+      const db = new LifeOsIndexedDb(new IDBFactory());
+      const repo = new IndexedDbPlanningRepository(db);
+      const service = new RecurringActions(
+        repo,
+        new FakeClock(new Date(2026, 8, 14, 10)),
+        new FakeIdGenerator('needs'),
+      );
+      try {
+        const rule = await service.save({
+          ...input,
+          need: 'Энергия',
+          schedule: { kind },
+          maxCompletions: kind === 'count' ? 3 : null,
+        });
+        await service.materialize('2026-09-14', '2026-09-15');
+        const before = (await repo.read()).actions;
+        expect(before.length).toBeGreaterThan(0);
+        expect(before.every((a) => a.need === 'Энергия')).toBe(true);
+        await service.save(
+          { ...input, need: null, schedule: { kind }, maxCompletions: kind === 'count' ? 3 : null },
+          rule.id,
+        );
+        const after = (await repo.read()).actions;
+        expect(after.map((a) => a.id.toString())).toEqual(before.map((a) => a.id.toString()));
+        expect(after.every((a) => a.need === null)).toBe(true);
+        await service.materialize('2026-09-16', '2026-09-16');
+        expect((await repo.read()).actions.every((a) => a.need === null)).toBe(true);
+      } finally {
+        await db.close();
+      }
+    },
+  );
+
   it.each([
     { schedule: { kind: 'daily' } as const, selectedDate: '2026-09-14' },
     { schedule: { kind: 'count' } as const, selectedDate: '2026-09-14' },

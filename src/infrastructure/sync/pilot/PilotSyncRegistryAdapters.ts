@@ -94,6 +94,7 @@ function mapped<TDomain, TRecord extends object>(
         'version',
         ...(preserveUnknown
           ? [
+              'need',
               'priority',
               'occurrence',
               'completionGeneration',
@@ -192,7 +193,7 @@ const PILOT_BINDINGS: Readonly<Record<PilotEntityType, PilotAdapterBinding>> = O
   ]),
   direction: balanceMapped(
     DirectionRecordMapper,
-    ['importance', 'manualScore', 'mode', 'currentStateText'],
+    ['importance', 'manualScore', 'mode', 'currentStateText', 'need'],
     (record) => optional(record, 'sphereId', 'sphere'),
   ),
   project: mapped(ProjectRecordMapper, (record) => [
@@ -475,9 +476,15 @@ function normalizeGoalWireRecord(value: unknown): Readonly<Record<string, unknow
   return isRecord(value)
     ? withoutFields(
         { ...withoutFields(asRecord(value), ['coverImage', 'version']), ...normalized },
-        ['sphereId', 'isMain', 'legacyProjectId', 'measurement', 'dueDate', 'nextActionId'].filter(
-          (field) => !Object.hasOwn(value, field),
-        ),
+        [
+          'sphereId',
+          'isMain',
+          'legacyProjectId',
+          'measurement',
+          'dueDate',
+          'nextActionId',
+          'need',
+        ].filter((field) => !Object.hasOwn(value, field)),
       )
     : normalized;
 }

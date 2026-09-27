@@ -58,6 +58,26 @@
   color: var(--text-on-primary);
   font-weight: 650;
 }
+.planner-v2 .planner-recurrence-badge {
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-small);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font-size: var(--planner-font-meta);
+  line-height: 1.35;
+}
+.planner-v2 .planner-recurrence-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.planner-v2 .planner-action-meta .planner-recurrence-badge::before {
+  content: none;
+}
 .planner-v2 :is(input, textarea)::placeholder {
   color: var(--text-muted);
   opacity: 1;
@@ -454,4 +474,8 @@
     grid-column: 1;
     grid-row: auto;
   }
+}
+
+.planner-v2 .planner-entity-need {
+  overflow-wrap: anywhere;
 }

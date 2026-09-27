@@ -106,6 +106,7 @@ export function PlannerCalendar({
                 key={a.id.toString()}
                 action={a}
                 goals={data.goals}
+                directions={data.directions}
                 lazyDetails
                 {...operations}
               />
@@ -135,6 +136,7 @@ export function PlannerCalendar({
                   key={a.id.toString()}
                   action={a}
                   goals={data.goals}
+                  directions={data.directions}
                   lazyDetails
                   {...operations}
                 />

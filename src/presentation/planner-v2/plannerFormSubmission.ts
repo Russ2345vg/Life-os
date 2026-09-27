@@ -13,6 +13,7 @@ export const emptyActionDraft = (goalId: string | null = null, title: string | n
   parentActionId: '',
   date: '',
   description: '',
+  need: '',
   isNext: false,
   recurrence: null as RecurrenceInput | null,
   contributions: [] as ActionContributionInput[],
@@ -29,6 +30,7 @@ export const emptyGoalDraft = () => ({
   measurement: null as GoalMeasurement | null,
   dueDate: '',
   description: '',
+  need: '',
   whyImportant: '',
   whyNow: '',
 });
@@ -46,6 +48,7 @@ export async function submitPlannerAction(
   const result = await command.execute({
     title: LifeActionTitle.create(draft.title),
     description: draft.description,
+    need: draft.need,
     goalId: goalId ? EntityId.create(goalId) : null,
     directionId: draft.directionId ? EntityId.create(draft.directionId) : null,
     parentActionId: parentActionId ? EntityId.create(parentActionId) : null,
@@ -71,6 +74,7 @@ export async function submitPlannerGoal(
     horizon: draft.horizon || null,
     nextProgress: draft.firstStep,
     description: draft.description,
+    need: draft.need,
     whyImportant: draft.whyImportant,
     whyNow: draft.whyNow,
     ...(draft.measurement ? { measurement: draft.measurement } : {}),

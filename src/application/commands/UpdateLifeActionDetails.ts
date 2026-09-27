@@ -1,3 +1,4 @@
+import { normalizeEntityNeed } from '../../domain/shared/EntityNeed';
 import {
   ActionExpectedResult,
   LIFE_ACTION_STATUS,
@@ -15,6 +16,7 @@ import { lifeActionDomainFailure, lifeActionNotFound } from './lifeActionCommand
 export interface UpdateLifeActionDetailsInput {
   readonly lifeActionId: EntityId;
   readonly title: string;
+  readonly need?: string | null;
   readonly description?: string;
   readonly expectedResult: string;
   readonly sphereId?: EntityId | null;
@@ -62,8 +64,13 @@ export class UpdateLifeActionDetails {
       const expectedResult = ActionExpectedResult.create(input.expectedResult);
 
       if (
+        (input.need === undefined ||
+          !lifeAction.occurrence ||
+          lifeAction.occurrence.needOverride === true) &&
         lifeAction.title.equals(title) &&
         lifeAction.description === description &&
+        lifeAction.need ===
+          (input.need === undefined ? lifeAction.need : normalizeEntityNeed(input.need)) &&
         lifeAction.expectedResult?.equals(expectedResult) &&
         sameOptionalEntityId(lifeAction.sphereId, input.sphereId ?? lifeAction.sphereId)
       ) {
@@ -73,6 +80,7 @@ export class UpdateLifeActionDetails {
       lifeAction.updateDetails({
         title,
         description,
+        ...(input.need === undefined ? {} : { need: input.need }),
         expectedResult,
         ...(input.sphereId === undefined ? {} : { sphereId: input.sphereId }),
         occurredAt: this.#clock.now(),

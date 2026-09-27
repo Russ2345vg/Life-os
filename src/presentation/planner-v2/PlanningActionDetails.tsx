@@ -24,7 +24,8 @@ export function PlanningActionDetails({
     [amount, setAmount] = useState('1'),
     [pauseUntil, setPauseUntil] = useState('');
   const working = useRef(false);
-  const storedRule = c?.state?.rules.find((r) => r.id === action.occurrence?.ruleId);
+  const storedAction = c?.state?.actions.find((item) => item.id.equals(action.id)) ?? action;
+  const storedRule = c?.state?.rules.find((r) => r.id === storedAction.occurrence?.ruleId);
   const rule = storedRule?.removedAt == null ? storedRule : undefined;
   const [draft, setDraft] = useState<RecurrenceInput>(
     () =>
@@ -139,11 +140,36 @@ export function PlanningActionDetails({
               <details>
                 <summary>{rule ? 'Изменить будущие повторения' : 'Сделать повторяющимся'}</summary>
                 <RecurrenceFields value={draft} onChange={setDraft} />
+                <label>
+                  <span>Потребность повторений</span>
+                  <input
+                    maxLength={500}
+                    value={
+                      draft.need === undefined
+                        ? rule
+                          ? (rule.need ?? '')
+                          : (action.need ?? '')
+                        : (draft.need ?? '')
+                    }
+                    onChange={(event) =>
+                      setDraft((current) => ({ ...current, need: event.target.value }))
+                    }
+                    placeholder="Пустое поле использует потребность родителя"
+                  />
+                </label>
                 <button
                   onClick={() => {
                     void run(async () => {
                       await c.services.recurrence.save(
-                        draft,
+                        {
+                          ...draft,
+                          need:
+                            draft.need === undefined
+                              ? rule
+                                ? (rule.need ?? null)
+                                : action.need
+                              : draft.need,
+                        },
                         rule?.id,
                         rule ? undefined : action.id.toString(),
                       );

@@ -25,6 +25,35 @@ const action = LifeAction.createDraft({
   eventId: EntityId.create('e'),
 });
 describe('current library rendering', () => {
+  it('exposes all linked actions from a goal even without a selected next step', () => {
+    const unselectedGoal = Goal.create({
+      id: EntityId.create('goal-with-actions'),
+      title: 'Цель с действиями',
+      status: 'active',
+      now,
+    });
+    const actions = ['Без даты', 'На сегодня', 'На потом'].map((title, index) =>
+      LifeAction.createDraft({
+        id: EntityId.create(`linked-${index}`),
+        title: LifeActionTitle.create(title),
+        goalId: unselectedGoal.id,
+        plannedDate: index === 0 ? null : DayDate.create(`2026-09-${14 + index}`),
+        createdAt: now,
+        eventId: EntityId.create(`linked-event-${index}`),
+      }),
+    );
+    const html = renderToStaticMarkup(
+      createElement(PlannerGoalList, {
+        today: '2026-09-14',
+        goals: [unselectedGoal],
+        actions,
+        directions: [],
+        spheres: [],
+        focusIds: [],
+      }),
+    );
+    expect(html).toContain('href="#/v2/goals/goal-with-actions">Действия · 3</a>');
+  });
   it('renders the account route before planner data is available', () => {
     const accountSync = {
       load: async () => ({

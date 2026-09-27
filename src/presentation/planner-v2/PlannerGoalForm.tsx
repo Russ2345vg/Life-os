@@ -44,6 +44,7 @@ export function PlannerGoalForm({
           measurement: initialGoal.measurement,
           dueDate: initialGoal.dueDate ?? '',
           description: initialGoal.description ?? '',
+          need: initialGoal.need ?? '',
           whyImportant: initialGoal.whyImportant ?? '',
           whyNow: initialGoal.whyNow ?? '',
         }
@@ -190,6 +191,16 @@ export function PlannerGoalForm({
                 ))}
               </select>
             </label>
+            <VoiceField>
+              <span>Потребность</span>
+              <VoiceTextInput
+                id="planner-goal-need"
+                value={draft.need}
+                onValueChange={(value) => change('need', value)}
+                maxLength={500}
+                placeholder="Необязательно · пустое поле использует потребность родителя"
+              />
+            </VoiceField>
             <VoiceField>
               <span>Описание / заметки</span>
               <VoiceTextArea

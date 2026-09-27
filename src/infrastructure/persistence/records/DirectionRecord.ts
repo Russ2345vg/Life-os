@@ -4,6 +4,7 @@ export interface DirectionRecord extends DirectionBalanceSettings {
   readonly id: string;
   readonly sphereId: string | null;
   readonly name: string;
+  readonly need?: string | null;
   readonly description: string | null;
   readonly strategicIntent?: string | null;
   readonly desiredState?: string | null;

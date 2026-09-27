@@ -19,6 +19,7 @@ export class EditPlannerActionDraft {
   public async execute(input: {
     readonly lifeActionId: EntityId;
     readonly title: string;
+    readonly need?: string | null;
     readonly description: string;
   }): Promise<Result<LifeAction, DomainError>> {
     const action = await this.repository.findById(input.lifeActionId);
@@ -26,7 +27,13 @@ export class EditPlannerActionDraft {
     try {
       const expectedVersion = action.version;
       const previousTitle = action.title.toString();
-      if (!action.updateDraftDetails(LifeActionTitle.create(input.title), input.description))
+      if (
+        !action.updateDraftDetails(
+          LifeActionTitle.create(input.title),
+          input.description,
+          input.need,
+        )
+      )
         return success(action);
       const now = this.clock.now();
       await this.unitOfWork.commit({

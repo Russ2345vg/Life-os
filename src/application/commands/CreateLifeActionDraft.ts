@@ -28,6 +28,7 @@ export interface CreateLifeActionDraftInput {
   readonly recurrence?: RecurrenceInput | null;
   readonly contributions?: readonly ActionContributionInput[];
   readonly title: LifeActionTitle;
+  readonly need?: string | null;
   readonly description?: string;
   readonly decisionId?: EntityId;
   readonly sphereId?: EntityId | null;
@@ -126,6 +127,7 @@ export class CreateLifeActionDraft {
       const lifeAction = LifeAction.createDraft({
         id: this.#idGenerator.generate(),
         title: input.title,
+        ...(input.need === undefined ? {} : { need: input.need }),
         ...(input.description === undefined ? {} : { description: input.description }),
         ...(input.decisionId === undefined ? {} : { decisionId: input.decisionId }),
         sphereId:

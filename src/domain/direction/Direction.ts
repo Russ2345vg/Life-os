@@ -1,3 +1,4 @@
+import { normalizeEntityNeed } from '../shared/EntityNeed';
 import { DomainError } from '../../shared/errors/DomainError';
 import { Entity } from '../shared/Entity';
 import {
@@ -19,6 +20,7 @@ export interface DirectionCreationData extends DirectionBalanceSettings {
   readonly id: EntityId;
   readonly sphereId?: EntityId | null;
   readonly name: string;
+  readonly need?: string | null;
   readonly description?: string | null;
   readonly strategicIntent?: string | null;
   readonly desiredState?: string | null;
@@ -32,6 +34,7 @@ export interface DirectionDetails extends DirectionBalanceSettings {
   readonly status?: DirectionStatus;
   readonly sphereId?: EntityId | null;
   readonly name: string;
+  readonly need?: string | null;
   readonly description?: string | null;
   readonly strategicIntent?: string | null;
   readonly desiredState?: string | null;
@@ -43,6 +46,7 @@ export interface DirectionRehydrationData extends DirectionBalanceSettings {
   readonly id: EntityId;
   readonly sphereId: EntityId | null;
   readonly name: string;
+  readonly need?: string | null;
   readonly description: string | null;
   readonly strategicIntent: string | null;
   readonly desiredState: string | null;
@@ -62,6 +66,7 @@ export class Direction extends Entity {
   public readonly mode: DirectionMode;
   public readonly sphereId: EntityId | null;
   public readonly name: string;
+  public readonly need: string | null;
   public readonly description: string | null;
   public readonly strategicIntent: string | null;
   public readonly desiredState: string | null;
@@ -89,6 +94,7 @@ export class Direction extends Entity {
       'direction.name_required',
       'direction.name_too_long',
     );
+    this.need = normalizeEntityNeed(data.need);
     this.description = normalizeOptionalText(
       data.description,
       MAX_DIRECTION_DESCRIPTION_LENGTH,
@@ -133,6 +139,7 @@ export class Direction extends Entity {
       id: data.id,
       sphereId: data.sphereId ?? null,
       name: data.name,
+      need: data.need ?? null,
       description: data.description ?? null,
       strategicIntent: data.strategicIntent ?? null,
       desiredState: data.desiredState ?? null,
@@ -162,6 +169,7 @@ export class Direction extends Entity {
       isMain: (details.status ?? this.status) === 'active' && this.isMain,
       sphereId: details.sphereId === undefined ? this.sphereId : details.sphereId,
       name: details.name,
+      need: details.need === undefined ? this.need : details.need,
       description: details.description === undefined ? this.description : details.description,
       strategicIntent:
         details.strategicIntent === undefined ? this.strategicIntent : details.strategicIntent,
@@ -231,6 +239,7 @@ export class Direction extends Entity {
       id: this.id,
       sphereId: this.sphereId,
       name: this.name,
+      need: this.need,
       description: this.description,
       strategicIntent: this.strategicIntent,
       desiredState: this.desiredState,

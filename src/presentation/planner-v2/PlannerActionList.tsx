@@ -1,3 +1,5 @@
+import { resolveActionNeed } from '../../domain/planner/resolveEntityNeed';
+import { EntityNeedText } from './EntityNeedText';
 import { plannerDisplayDate } from './plannerDisplayDate';
 import { useQuickAccessGuard } from './QuickAccessContext';
 import { RecurrenceBadge } from './RecurrenceBadge';
@@ -25,7 +27,8 @@ export interface PlannerActionOperations {
   readonly menuForAction?: (action: LifeAction) => readonly EntityMenuAction[];
   readonly onReopen?: ((id: string) => Promise<void>) | undefined;
   readonly onEdit?:
-    ((action: LifeAction, title: string, description: string) => Promise<void>) | undefined;
+    | ((action: LifeAction, title: string, description: string, need?: string) => Promise<void>)
+    | undefined;
   readonly onUnlink?: ((id: string) => Promise<void>) | undefined;
 }
 export function PlannerActionList({
@@ -507,20 +510,32 @@ function PlannerActionEdit({
   onSave,
 }: {
   readonly action: LifeAction;
-  readonly onSave: (action: LifeAction, title: string, description: string) => Promise<void>;
+  readonly onSave: (
+    action: LifeAction,
+    title: string,
+    description: string,
+    need?: string,
+  ) => Promise<void>;
 }) {
   const [titleDraft, setTitleDraft] = useState<PlannerFieldDraft | null>(null);
   const [descriptionDraft, setDescriptionDraft] = useState<PlannerFieldDraft | null>(null);
+  const [needDraft, setNeedDraft] = useState<PlannerFieldDraft | null>(null);
+  const savedNeed = action.need ?? '';
+  const needState = plannerFieldState(needDraft, savedNeed);
+  const need = needState.value;
   const savedTitle = action.title.toString();
   const savedDescription = action.description ?? '';
   const titleState = plannerFieldState(titleDraft, savedTitle);
   const descriptionState = plannerFieldState(descriptionDraft, savedDescription);
   const title = titleState.value;
   const description = descriptionState.value;
-  const conflict = titleState.conflict || descriptionState.conflict;
+  const conflict = titleState.conflict || descriptionState.conflict || needState.conflict;
   const [busy, setBusy] = useState(false);
   useQuickAccessGuard(() => ({
-    dirty: title !== action.title.toString() || description !== (action.description ?? ''),
+    dirty:
+      title !== action.title.toString() ||
+      description !== (action.description ?? '') ||
+      need !== savedNeed,
     busy,
   }));
   const [error, setError] = useState<string | null>(null);
@@ -533,10 +548,11 @@ function PlannerActionEdit({
           if (busy || conflict) return;
           setBusy(true);
           setError(null);
-          void onSave(action, title, description)
+          void onSave(action, title, description, needDraft === null ? undefined : need)
             .then(() => {
               setTitleDraft(null);
               setDescriptionDraft(null);
+              setNeedDraft(null);
             })
             .catch((reason: unknown) =>
               setError(reason instanceof Error ? reason.message : 'Не удалось сохранить действие.'),
@@ -553,6 +569,18 @@ function PlannerActionEdit({
             disabled={busy}
             onChange={(event) =>
               setTitleDraft((current) => editPlannerField(current, savedTitle, event.target.value))
+            }
+          />
+        </label>
+        <label>
+          <span>Потребность</span>
+          <input
+            value={need}
+            maxLength={500}
+            disabled={busy}
+            placeholder="Пустое поле использует потребность родителя"
+            onChange={(event) =>
+              setNeedDraft((current) => editPlannerField(current, savedNeed, event.target.value))
             }
           />
         </label>
@@ -576,6 +604,7 @@ function PlannerActionEdit({
               onClick={() => {
                 setTitleDraft(null);
                 setDescriptionDraft(null);
+                setNeedDraft(null);
               }}
             >
               Загрузить сохранённое
@@ -761,6 +790,7 @@ export function PlannerActionRow({
                     </button>
                   </div>
                 )}
+                <EntityNeedText need={resolveActionNeed(action, goals, directions)} />
                 {action.description && <p className="planner-action-note">{action.description}</p>}
                 {action.completedAt && (
                   <p className="planner-muted">

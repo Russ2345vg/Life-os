@@ -17,6 +17,30 @@ const DATE = DayDate.create('2026-08-02');
 const NOW = new Date('2026-08-02T12:00:00.000+09:00');
 
 describe('UpdateLifeActionDetails', () => {
+  it('saves a ready occurrence own need even when the text matches its template, and preserves omitted needs', async () => {
+    const action = createReadyLifeAction('need', DATE);
+    action.setPlanningMetadata({
+      occurrence: { ruleId: 'rule', slot: 'first', ruleRevision: 1, originalDate: DATE.toString() },
+    });
+    const context = createContext(action);
+    const input = {
+      lifeActionId: action.id,
+      title: action.title.toString(),
+      description: action.description ?? '',
+      expectedResult: action.expectedResult!.toString(),
+    };
+    expect((await context.command.execute({ ...input, need: 'Энергия' })).ok).toBe(true);
+    expect(action.need).toBe('Энергия');
+    expect(action.occurrence?.needOverride).toBe(true);
+    expect(context.repository.saveCount).toBe(1);
+    expect((await context.command.execute(input)).ok).toBe(true);
+    expect(action.need).toBe('Энергия');
+    expect(context.repository.saveCount).toBe(1);
+    expect((await context.command.execute({ ...input, need: '' })).ok).toBe(true);
+    expect(action.need).toBeNull();
+    expect(context.repository.saveCount).toBe(2);
+  });
+
   it('редактирует ready-действие, нормализует поля и сохраняет только изменяемые сведения', async () => {
     const action = createReadyLifeAction('editable', DATE, {
       decisionId: EntityId.create('decision-editable'),

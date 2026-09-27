@@ -369,7 +369,8 @@ export function PlannerGoalList({
             </h2>
             <ul className="planner-list">
               {group.goals.map((goal) => {
-                const next = selectGoalCardActions(goal, actions).next;
+                const { next, open, completed } = selectGoalCardActions(goal, actions);
+                const detailHref = `#/v2/goals/${encodeURIComponent(goal.id.toString())}`;
                 const periods = planning?.state?.periods.filter(
                   (period) =>
                     period.startDate <= today &&
@@ -396,13 +397,16 @@ export function PlannerGoalList({
                       actions={menuForGoal?.(goal) ?? []}
                     >
                       <div className="planner-goal-card-main">
-                        <a
-                          className="planner-goal-title"
-                          href={`#/v2/goals/${encodeURIComponent(goal.id.toString())}`}
-                        >
+                        <a className="planner-goal-title" href={detailHref}>
                           {goal.title}
                         </a>
                         <PlannerGoalContext goal={goal} directions={directions} spheres={spheres} />
+                        {(open.length > 0 || completed.length > 0) && (
+                          <a className="planner-text-link" href={detailHref}>
+                            Действия · {open.length}
+                            {completed.length > 0 && ` · выполнено ${completed.length}`}
+                          </a>
+                        )}
                         {next || goal.nextProgress ? (
                           <p className="planner-goal-next-link">
                             Следующий шаг:{' '}
@@ -417,9 +421,13 @@ export function PlannerGoalList({
                         ) : (
                           <a
                             className="planner-text-link"
-                            href={`#/v2/actions/new?${new URLSearchParams({ goalId: goal.id.toString(), returnToGoals: '1' })}`}
+                            href={
+                              open.length > 0
+                                ? detailHref
+                                : `#/v2/actions/new?${new URLSearchParams({ goalId: goal.id.toString(), returnToGoals: '1' })}`
+                            }
                           >
-                            Добавить следующий шаг
+                            {open.length > 0 ? 'Выбрать следующий шаг' : 'Добавить следующий шаг'}
                           </a>
                         )}
                       </div>

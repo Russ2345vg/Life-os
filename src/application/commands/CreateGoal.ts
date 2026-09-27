@@ -24,6 +24,7 @@ export interface CreateGoalInput {
   readonly sphereId?: EntityId | null;
   readonly directionId?: EntityId | null;
   readonly title: string;
+  readonly need?: string | null;
   readonly description?: string | null;
   readonly whyImportant?: string | null;
   readonly whyNow?: string | null;
@@ -61,6 +62,7 @@ export class CreateGoal {
         title: input.title,
         measurement: input.measurement ?? null,
         dueDate: input.dueDate ?? null,
+        ...(input.need === undefined ? {} : { need: input.need }),
         ...(input.description === undefined ? {} : { description: input.description }),
         ...(input.whyImportant === undefined ? {} : { whyImportant: input.whyImportant }),
         ...(input.whyNow === undefined ? {} : { whyNow: input.whyNow }),

@@ -10,6 +10,7 @@ import { directionFailure } from './directionCommandSupport';
 export interface CreateDirectionInput extends DirectionBalanceSettings {
   readonly sphereId?: EntityId | null;
   readonly name: string;
+  readonly need?: string | null;
   readonly description?: string | null;
   readonly strategicIntent?: string | null;
   readonly desiredState?: string | null;
@@ -31,6 +32,7 @@ export class CreateDirection {
         id: this.idGenerator.generate(),
         ...(input.sphereId === undefined ? {} : { sphereId: input.sphereId }),
         name: input.name,
+        ...(input.need === undefined ? {} : { need: input.need }),
         ...(input.description === undefined ? {} : { description: input.description }),
         ...(input.strategicIntent === undefined ? {} : { strategicIntent: input.strategicIntent }),
         ...(input.desiredState === undefined ? {} : { desiredState: input.desiredState }),

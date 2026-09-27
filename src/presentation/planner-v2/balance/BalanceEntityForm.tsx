@@ -33,6 +33,7 @@ export function BalanceEntityForm({
     sphere = entity && 'desiredLevel' in entity ? entity : null;
   const [expectedVersion] = useState(entity?.version ?? 0);
   const [name, setName] = useState(entity?.name ?? ''),
+    [need, setNeed] = useState(direction?.need ?? ''),
     [description, setDescription] = useState(entity?.description ?? ''),
     [importance, setImportance] = useState<BalanceImportance>(entity?.importance ?? 'normal'),
     [manual, setManual] = useState(entity?.manualScore?.toString() ?? ''),
@@ -47,6 +48,7 @@ export function BalanceEntityForm({
     {
       name,
       description,
+      ...(kind === 'direction' ? { need } : {}),
       importance,
       manual,
       desired,
@@ -63,6 +65,7 @@ export function BalanceEntityForm({
     const common = {
       name,
       description,
+      ...(kind === 'direction' ? { need } : {}),
       importance,
       manualScore: manual === '' ? null : Number(manual),
     };
@@ -84,6 +87,7 @@ export function BalanceEntityForm({
         : direction
           ? await services.updateDirection.execute({
               ...common,
+              need,
               id: direction.id,
               expectedVersion,
               sphereId: owner ? EntityId.create(owner) : null,
@@ -94,6 +98,7 @@ export function BalanceEntityForm({
             })
           : await services.createDirection.execute({
               ...common,
+              need,
               sphereId: owner ? EntityId.create(owner) : null,
               currentStateText: current,
               desiredState: future,
@@ -146,6 +151,16 @@ export function BalanceEntityForm({
         <div className="balance-fields">
           {kind === 'direction' && (
             <>
+              <VoiceField>
+                <span>Потребность</span>
+                <VoiceTextInput
+                  id="balance-direction-need"
+                  value={need}
+                  onValueChange={setNeed}
+                  maxLength={500}
+                  placeholder="Какую потребность поддерживает направление"
+                />
+              </VoiceField>
               <VoiceField>
                 <span>Текущее состояние</span>
                 <VoiceTextArea

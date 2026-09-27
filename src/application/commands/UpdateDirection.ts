@@ -14,6 +14,7 @@ export interface UpdateDirectionInput extends DirectionBalanceSettings {
   readonly expectedVersion: number;
   readonly sphereId?: EntityId | null;
   readonly name: string;
+  readonly need?: string | null;
   readonly description?: string | null;
   readonly strategicIntent?: string | null;
   readonly desiredState?: string | null;
@@ -52,6 +53,7 @@ export class UpdateDirection {
           ...input,
           name: input.name,
           ...(input.sphereId === undefined ? {} : { sphereId: input.sphereId }),
+          ...(input.need === undefined ? {} : { need: input.need }),
           ...(input.description === undefined ? {} : { description: input.description }),
           ...(input.strategicIntent === undefined
             ? {}

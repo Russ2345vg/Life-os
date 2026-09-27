@@ -28,6 +28,7 @@ export interface UpdateGoalInput {
   readonly expectedVersion: number;
   readonly directionId?: EntityId | null;
   readonly title: string;
+  readonly need?: string | null;
   readonly description?: string | null;
   readonly whyImportant?: string | null;
   readonly whyNow?: string | null;
@@ -95,6 +96,7 @@ export class UpdateGoal {
           title: input.title,
           directionId,
           sphereId,
+          ...(input.need === undefined ? {} : { need: input.need }),
           ...(input.description === undefined ? {} : { description: input.description }),
           ...(input.whyImportant === undefined ? {} : { whyImportant: input.whyImportant }),
           ...(input.whyNow === undefined ? {} : { whyNow: input.whyNow }),

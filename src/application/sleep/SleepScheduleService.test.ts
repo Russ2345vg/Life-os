@@ -103,7 +103,7 @@ describe('SleepScheduleService', () => {
     );
   });
 
-  it('persists list settings and keeps an already opened snapshot unchanged', async () => {
+  it('adds a custom item to the current unfinished night and future nights without resetting completed items', async () => {
     const repository = new InMemorySleepScheduleRepository();
     const clock = new FakeClock(new Date('2026-09-20T12:00:00.000Z'));
     const service = new SleepScheduleService(repository, clock, new FakeIdGenerator('sleep'));
@@ -114,6 +114,7 @@ describe('SleepScheduleService', () => {
       enabled: true,
     });
     await service.openCurrentNight();
+    await service.completeItem('base-room-air');
 
     await service.addCustomItem('personal', 'Подготовить сумку');
     const state = await service.getState();
@@ -122,7 +123,48 @@ describe('SleepScheduleService', () => {
       title: 'Подготовить сумку',
       kind: 'CUSTOM',
     });
-    expect(state.nightCycles[0]?.preparationItems).toHaveLength(4);
+    expect(state.nightCycles[0]?.preparationItems).toHaveLength(5);
+    expect(
+      state.nightCycles[0]?.preparationItems.find(({ id }) => id === 'base-room-air')?.status,
+    ).toBe('DONE');
+    expect(state.nightCycles[0]?.preparationItems.at(-1)).toMatchObject({
+      title: 'Подготовить сумку',
+      groupId: 'personal',
+      groupTitle: 'Личное',
+      status: 'PENDING',
+    });
+    const reopened = new SleepScheduleService(repository, clock, new FakeIdGenerator('reopen'));
+    expect((await reopened.openCurrentNight()).nightCycles[0]?.preparationItems).toEqual(
+      state.nightCycles[0]?.preparationItems,
+    );
+    clock.setTime(new Date('2026-09-21T12:00:00.000Z'));
+    const tomorrow = await reopened.openCurrentNight();
+    expect(tomorrow.nightCycles[1]?.preparationItems.at(-1)).toMatchObject({
+      title: 'Подготовить сумку',
+      status: 'PENDING',
+    });
+  });
+
+  it('leaves past unfinished nights and the completed current night unchanged when adding an item', async () => {
+    const repository = new InMemorySleepScheduleRepository();
+    const clock = new FakeClock(new Date('2026-09-19T12:00:00.000Z'));
+    const service = new SleepScheduleService(repository, clock, new FakeIdGenerator('sleep'));
+    await service.saveSettings({
+      bedtime: '22:00',
+      wakeTime: '07:00',
+      timeZone: 'Asia/Chita',
+      enabled: true,
+    });
+    await service.openCurrentNight();
+    clock.setTime(new Date('2026-09-20T12:00:00.000Z'));
+    await service.openCurrentNight();
+    const before = await service.finish('WITH_SKIPS');
+    const after = await service.addCustomItem('personal', 'Подготовить документы');
+    expect(after.nightCycles).toEqual(before.nightCycles);
+    expect(after.preparationItems.at(-1)?.title).toBe('Подготовить документы');
+    clock.setTime(new Date('2026-09-21T12:00:00.000Z'));
+    const next = await service.openCurrentNight();
+    expect(next.nightCycles[2]?.preparationItems.at(-1)?.title).toBe('Подготовить документы');
   });
 
   it('reconciles the next concrete wake occurrence after settings are saved', async () => {

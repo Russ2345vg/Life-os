@@ -1,3 +1,5 @@
+import { resolveGoalNeed } from '../../domain/planner/resolveEntityNeed';
+import { EntityNeedText } from './EntityNeedText';
 import type { Direction, Goal, LifeAction, Sphere } from '../../domain';
 import type { ProgressContribution } from '../../domain/planner/ProgressContribution';
 import type { RecurrenceRule } from '../../domain/planner/RecurrenceRule';
@@ -138,6 +140,7 @@ export function GoalDetailContent({
           <PlannerActionRow
             action={next}
             goals={[goal]}
+            directions={directions}
             {...operations}
             lazyDetails
             goalContext
@@ -178,6 +181,7 @@ export function GoalDetailContent({
                 <PlannerActionRow
                   action={action}
                   goals={[goal]}
+                  directions={directions}
                   {...operations}
                   lazyDetails
                   goalContext
@@ -204,6 +208,7 @@ export function GoalDetailContent({
               <PlannerActionRow
                 action={action}
                 goals={[goal]}
+                directions={directions}
                 {...operations}
                 lazyDetails
                 goalContext
@@ -233,6 +238,7 @@ export function GoalDetailContent({
       <GoalPeriodMembership goalId={id} today={today} periods={periods} memberships={memberships} />
       <details className="planner-goal-details">
         <summary>Детали</summary>
+        <EntityNeedText need={resolveGoalNeed(goal, directions)} />
         <p>{goal.description || 'Описание пока не добавлено.'}</p>
         {goal.whyImportant && <p>Почему важно: {goal.whyImportant}</p>}
         {goal.whyNow && <p>Почему сейчас: {goal.whyNow}</p>}
