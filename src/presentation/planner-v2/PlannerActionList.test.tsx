@@ -81,7 +81,7 @@ describe('PlannerActionList', () => {
     expect(html).not.toContain('Открыть и изменить');
   });
 
-  it('hides completed actions in the unassigned list', () => {
+  it('keeps completed actions in a separate block from active actions', () => {
     const html = renderToStaticMarkup(
       createElement(PlannerActionList, {
         actions: [
@@ -97,8 +97,9 @@ describe('PlannerActionList', () => {
       }),
     );
 
-    expect(html).toContain('Активное действие');
-    expect(html).not.toContain('Готово');
-    expect(html).not.toContain('planner-action-group--completed');
+    expect(html).toContain('Выполненные');
+    const completedSection = html.indexOf('planner-action-group--completed');
+    expect(completedSection).toBeGreaterThan(html.indexOf('Активное действие'));
+    expect(completedSection).toBeLessThan(html.indexOf('Готово'));
   });
 });
