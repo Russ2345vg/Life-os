@@ -27,6 +27,9 @@ const operations = {
   onGoalStatus: async () => {},
   onGoalDirection: async () => {},
   onGoalNextAction: async () => {},
+  capacity: [null, null, null, null, null, null, null],
+  onSetTime: async () => {},
+  onSetCapacity: async () => {},
 };
 const data = buildPlannerViews({ goals: [goal], actions: [action], directions: [], spheres: [] });
 describe('V2 views rendering', () => {
@@ -69,11 +72,11 @@ describe('V2 views rendering', () => {
     expect(html).toContain('data-goal-status="archived"');
     expect(html).toContain('draggable="false"');
   });
-  it('renders a month, selected day, undated goals, and completed controls', () => {
+  it('renders the default week, selected day, undated goals, and completed actions', () => {
     const html = renderToStaticMarkup(
       createElement(PlannerCalendar, { data, today: '2026-09-13', ...operations }),
     );
-    expect(html).toContain('сентябрь 2026');
+    expect(html).toContain('Расписание недели');
     expect(html).toContain('aria-pressed="true"');
     expect(html).toContain('Без даты');
     expect(html).toContain('Самостоятельное действие');
@@ -81,7 +84,6 @@ describe('V2 views rendering', () => {
     const completed = renderToStaticMarkup(
       createElement(PlannerCalendar, { data, today: '2026-09-13', ...operations }),
     );
-    expect(completed).toContain('checked=""');
     expect(completed).toContain('Выполнено');
   });
   it('renders orphan groups as accessible disclosure controls without changing data', () => {
@@ -99,6 +101,6 @@ describe('V2 views rendering', () => {
       createElement(PlannerCalendar, { data: empty, today: '2026-09-13', ...operations }),
       createElement(PlannerTree, { data: empty, ...operations }),
     ])
-      expect(renderToStaticMarkup(component)).toContain('Добавить');
+      expect(renderToStaticMarkup(component)).toMatch(/Добавить|Создайте/);
   });
 });

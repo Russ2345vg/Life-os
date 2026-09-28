@@ -23,6 +23,44 @@ const action = LifeAction.createDraft({
   eventId: EntityId.create('e'),
 });
 describe('current catalogue projections', () => {
+  it('hides achieved goals by default and exposes them through completion filters', () => {
+    const achieved = goal.update(
+      { title: 'Уже достигнута', status: 'achieved', stage: 'achieved' },
+      now,
+    );
+    const goals = [goal, achieved];
+    expect(filterPlannerGoals(goals, emptyGoalFilters(), '', [], [])).toEqual([goal]);
+    expect(
+      filterPlannerGoals(goals, { ...emptyGoalFilters(), showCompleted: true }, '', [], []),
+    ).toEqual(goals);
+    expect(
+      filterPlannerGoals(goals, { ...emptyGoalFilters(), status: 'achieved' }, '', [], []),
+    ).toEqual([achieved]);
+    expect(
+      filterPlannerGoals(
+        goals,
+        { ...emptyGoalFilters(), showCompleted: true },
+        'испанский',
+        [],
+        [],
+      ),
+    ).toEqual([goal]);
+  });
+  it('hides completed standalone actions unless the completed view is selected', () => {
+    const completed = LifeAction.createDraft({
+      id: EntityId.create('completed'),
+      title: LifeActionTitle.create('Готово'),
+      createdAt: now,
+      eventId: EntityId.create('completed-created'),
+    });
+    completed.complete(null, now, EntityId.create('completed-event'));
+    expect(filterPlannerActions([action, completed], 'unassigned', '', '2026-09-13')).toEqual([
+      action,
+    ]);
+    expect(filterPlannerActions([action, completed], 'completed', '', '2026-09-13')).toEqual([
+      completed,
+    ]);
+  });
   it('excludes goals with a deadline from the undated filter', () => {
     const dated = goal.update({ title: goal.title, dueDate: '2026-10-01' }, now);
     expect(

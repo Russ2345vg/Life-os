@@ -177,7 +177,7 @@ describe('SYNC-04 structured database apply', () => {
     const records = await request<SyncOutboxRecord[]>(
       read.objectStore(LIFE_OS_SYNC_STORE.outbox).getAll(),
     );
-    expect(records).toHaveLength(33);
+    expect(records).toHaveLength(34);
     for (const record of records) {
       const payload = parsePilotSyncPayload(record.serializedPayload);
       const identityRead = connection.transaction(IDENTITY_READ_STORES);
@@ -258,7 +258,7 @@ describe('SYNC-04 structured database apply', () => {
       ).toBe(true);
     }
     expect(await store.counts()).toEqual({ pending: 1, conflicts: 0, quarantined: 0 });
-    expect(await store.cursor('space')).toBe(34);
+    expect(await store.cursor('space')).toBe(35);
     indexedDb.close();
   });
 
@@ -266,13 +266,13 @@ describe('SYNC-04 structured database apply', () => {
     const indexedDb = new LifeOsIndexedDb(new IDBFactory());
     const store = new IndexedDbPilotSyncStore(indexedDb, () => 'must-not-commit');
     await expect(
-      store.applyPulled('space', 1, incoming('action_session'), 'transport', {
+      store.applyPulled('space', 1, incoming('period_membership'), 'transport', {
         kind: 'conflict',
         winner: 'incoming',
       }),
     ).rejects.toThrow('parent has not arrived');
     expect(await store.counts()).toEqual({ pending: 0, conflicts: 0, quarantined: 0 });
-    expect(await store.hasApplied('remote-action_session')).toBe(false);
+    expect(await store.hasApplied('remote-period_membership')).toBe(false);
     expect(await store.cursor('space')).toBe(0);
     indexedDb.close();
   });

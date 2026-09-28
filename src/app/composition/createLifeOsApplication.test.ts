@@ -75,8 +75,19 @@ describe('createLifeOsApplication', () => {
 
     expect(goal.ok).toBe(true);
     expect(action.ok).toBe(true);
-    await expect(application.getGoals.execute()).resolves.toHaveLength(1);
-    await expect(application.plannerCatalog.actions()).resolves.toHaveLength(1);
+    if (!action.ok) throw action.error;
+    const started = await application.workSessions.start(action.value.id.toString());
+    await application.timeCapacity.setWeekday(0, 360);
     application.close();
+    const reopened = await createLifeOsApplication({ database });
+    expect(
+      (await reopened.workSessions.list()).find((session) => session.id.equals(started.id))?.status,
+    ).toBe('running');
+    expect((await reopened.timeCapacity.get())[0]).toBe(360);
+    await reopened.workSessions.finish(started.id.toString(), started.version);
+    expect((await reopened.plannerCatalog.actions())[0]?.status).toBe('draft');
+    await expect(reopened.getGoals.execute()).resolves.toHaveLength(1);
+    await expect(reopened.plannerCatalog.actions()).resolves.toHaveLength(1);
+    reopened.close();
   });
 });

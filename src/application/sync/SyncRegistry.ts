@@ -10,6 +10,7 @@ export type SyncEntityType =
   | 'day'
   | 'decision'
   | 'life_action'
+  | 'time_capacity'
   | 'action_session'
   | 'routine_block'
   | 'routine_occurrence_override'
@@ -46,6 +47,7 @@ export const SYNC_ENTITY_TYPES: readonly SyncEntityType[] = Object.freeze([
   'day',
   'decision',
   'life_action',
+  'time_capacity',
   'action_session',
   'routine_block',
   'routine_occurrence_override',

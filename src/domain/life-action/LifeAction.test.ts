@@ -25,6 +25,80 @@ const CHANGED_AT = new Date('2026-08-01T10:00:00.000+09:00');
 const DECISION_ID = id('decision-1');
 
 describe('LifeAction', () => {
+  describe('планирование времени', () => {
+    it('сохраняет оценку и плановый блок у датированного черновика', () => {
+      const action = createDraft();
+      action.setPlan(TODAY, false);
+      const version = action.version;
+
+      expect(
+        action.setTimePlanning({
+          estimateMinutes: 90,
+          scheduledStartMinute: 600,
+          scheduledDurationMinutes: 60,
+        }),
+      ).toBe(true);
+      expect(action.estimateMinutes).toBe(90);
+      expect(action.scheduledStartMinute).toBe(600);
+      expect(action.scheduledDurationMinutes).toBe(60);
+      expect(action.version).toBe(version + 1);
+      expect(
+        action.setTimePlanning({
+          estimateMinutes: 90,
+          scheduledStartMinute: 600,
+          scheduledDurationMinutes: 60,
+        }),
+      ).toBe(false);
+    });
+
+    it('при переносе сохраняет время суток, а при удалении даты убирает блок', () => {
+      const action = createDraft();
+      action.setPlan(TODAY, false);
+      action.setTimePlanning({
+        estimateMinutes: 90,
+        scheduledStartMinute: 600,
+        scheduledDurationMinutes: 60,
+      });
+
+      action.setPlan(TOMORROW, false);
+      expect(action.scheduledStartMinute).toBe(600);
+      action.setPlan(null, false);
+      expect(action.estimateMinutes).toBe(90);
+      expect(action.scheduledStartMinute).toBeNull();
+      expect(action.scheduledDurationMinutes).toBeNull();
+    });
+
+    it('не принимает неполные, выходящие за день и бездата блоки', () => {
+      const action = createDraft();
+      expect(() =>
+        action.setTimePlanning({
+          estimateMinutes: null,
+          scheduledStartMinute: 600,
+          scheduledDurationMinutes: 60,
+        }),
+      ).toThrowError();
+      action.setPlan(TODAY, false);
+      for (const input of [
+        { estimateMinutes: 0, scheduledStartMinute: null, scheduledDurationMinutes: null },
+        { estimateMinutes: null, scheduledStartMinute: 600, scheduledDurationMinutes: null },
+        { estimateMinutes: null, scheduledStartMinute: 1380, scheduledDurationMinutes: 90 },
+        { estimateMinutes: null, scheduledStartMinute: -1, scheduledDurationMinutes: 30 },
+      ])
+        expect(() => action.setTimePlanning(input)).toThrowError();
+    });
+
+    it('не перепланирует завершённое действие', () => {
+      const action = createCompleted();
+      expect(() =>
+        action.setTimePlanning({
+          estimateMinutes: 45,
+          scheduledStartMinute: null,
+          scheduledDurationMinutes: null,
+        }),
+      ).toThrowError();
+    });
+  });
+
   describe('черновик', () => {
     it('создаёт валидный draft с нормализованным описанием, версией и событием', () => {
       const action = createDraft({ description: '  Описать ключевые сценарии  ' });

@@ -16,12 +16,105 @@ import {
   summarizeSleepHistory,
   setPreparationItemEnabled,
   setSleepFeatureEnabled,
+  setNearestWakeTime,
+  clearNearestWakeTime,
   skipNearestWakeOccurrence,
   updateSleepSettings,
   WAKE_OCCURRENCE_STATUS,
 } from './SleepSchedule';
 
 describe('SleepSchedule', () => {
+  it('rejects stale confirmations instead of changing or skipping the following morning', () => {
+    const scheduled = rebuildWakeSchedule(enabledSchedule(), {
+      cycleDates: ['2026-09-20', '2026-09-21'],
+      now: new Date('2026-09-20T12:00:00Z'),
+      nextId: ids('confirmed'),
+    });
+    const now = new Date('2026-09-20T22:01:00Z');
+    expect(() => setNearestWakeTime(scheduled, '08:00', now, 'confirmed-1')).toThrow('изменился');
+    expect(() =>
+      skipNearestWakeOccurrence(scheduled, {
+        now,
+        exceptionId: 'stale',
+        expectedOccurrenceId: 'confirmed-1',
+      }),
+    ).toThrow('изменился');
+    expect(scheduled.alarmExceptions).toHaveLength(0);
+  });
+  it('changes only the nearest wake and returns to the regular time next night', () => {
+    const now = new Date('2026-09-20T10:00:00Z');
+    const scheduled = rebuildWakeSchedule(enabledSchedule(), {
+      cycleDates: ['2026-09-20', '2026-09-21'],
+      now,
+      nextId: ids('once'),
+    });
+    const changed = rebuildWakeSchedule(setNearestWakeTime(scheduled, '06:30', now), {
+      cycleDates: ['2026-09-20', '2026-09-21'],
+      now,
+      nextId: ids('changed'),
+    });
+    expect(changed.settings?.wakeTime).toBe('07:00');
+    expect(
+      changed.wakeOccurrences
+        .filter(({ status }) => status === 'SCHEDULED')
+        .map(({ scheduledAt }) => scheduledAt.toISOString()),
+    ).toEqual(['2026-09-20T21:30:00.000Z', '2026-09-21T22:00:00.000Z']);
+    const restored = rebuildWakeSchedule(clearNearestWakeTime(changed, now), {
+      cycleDates: ['2026-09-20', '2026-09-21'],
+      now,
+      nextId: ids('restored'),
+    });
+    expect(
+      restored.wakeOccurrences
+        .filter(({ status }) => status === 'SCHEDULED')
+        .map(({ scheduledAt }) => scheduledAt.toISOString()),
+    ).toEqual(['2026-09-20T22:00:00.000Z', '2026-09-21T22:00:00.000Z']);
+  });
+
+  it('retains a late one-time wake when the regular time has already passed', () => {
+    const now = new Date('2026-09-20T10:00:00Z');
+    const scheduled = rebuildWakeSchedule(enabledSchedule(), {
+      cycleDates: ['2026-09-20', '2026-09-21'],
+      now,
+      nextId: ids('late'),
+    });
+    const changed = setNearestWakeTime(scheduled, '09:00', now);
+    const refreshed = rebuildWakeSchedule(changed, {
+      cycleDates: ['2026-09-21', '2026-09-22'],
+      now: new Date('2026-09-20T23:00:00Z'),
+      nextId: ids('refresh'),
+    });
+    expect(
+      refreshed.wakeOccurrences
+        .filter(({ status }) => status === 'SCHEDULED')[0]
+        ?.scheduledAt.toISOString(),
+    ).toBe('2026-09-21T00:00:00.000Z');
+    expect(() => clearNearestWakeTime(refreshed, new Date('2026-09-20T23:00:00Z'))).toThrow(
+      'прошло',
+    );
+  });
+
+  it('rejects a past replacement and never restores a skipped night', () => {
+    const now = new Date('2026-09-20T21:45:00Z');
+    const scheduled = rebuildWakeSchedule(enabledSchedule(), {
+      cycleDates: ['2026-09-20', '2026-09-21'],
+      now,
+      nextId: ids('skip'),
+    });
+    expect(() => setNearestWakeTime(scheduled, '06:30', now)).toThrow('прошло');
+    const skipped = skipNearestWakeOccurrence(scheduled, { now, exceptionId: 'skip-once' });
+    const changed = rebuildWakeSchedule(setNearestWakeTime(skipped, '06:30', now), {
+      cycleDates: ['2026-09-20', '2026-09-21'],
+      now,
+      nextId: ids('next'),
+    });
+    expect(changed.settings?.wakeOverride?.cycleDate).toBe('2026-09-21');
+    expect(
+      changed.wakeOccurrences.some(
+        ({ cycleDate, status }) => cycleDate === '2026-09-20' && status === 'SCHEDULED',
+      ),
+    ).toBe(false);
+  });
   it('seeds the approved groups and four protected base items', () => {
     const state = createEmptySleepSchedule();
 

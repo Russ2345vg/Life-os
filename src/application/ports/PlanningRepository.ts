@@ -1,4 +1,5 @@
 import type { Goal, LifeAction, JournalEntry } from '../../domain';
+import type { TimeWindowPolicy } from '../../domain/life-action/ActionTimeWindows';
 import type {
   PlanningPeriod,
   PeriodMembership,
@@ -25,5 +26,5 @@ export interface PlanningState {
 }
 export interface PlanningRepository {
   read(): Promise<PlanningState>;
-  change<T>(work: (state: PlanningState) => T): Promise<T>;
+  change<T>(work: (state: PlanningState) => T, timePolicy?: TimeWindowPolicy): Promise<T>;
 }

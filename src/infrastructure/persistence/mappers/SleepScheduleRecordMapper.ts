@@ -198,6 +198,17 @@ function readSettings(record: UnknownRecord) {
       : readAlarmSound(asRecord(alarmSoundValue, 'alarmSound'));
   return {
     bedtime: readString(record, 'bedtime'),
+    ...(record.wakeOverride === undefined
+      ? {}
+      : {
+          wakeOverride:
+            record.wakeOverride === null
+              ? null
+              : {
+                  cycleDate: readString(asRecord(record.wakeOverride, 'wakeOverride'), 'cycleDate'),
+                  wakeTime: readString(asRecord(record.wakeOverride, 'wakeOverride'), 'wakeTime'),
+                },
+        }),
     wakeTime: readString(record, 'wakeTime'),
     timeZone: readString(record, 'timeZone'),
     enabled: readBoolean(record, 'enabled'),

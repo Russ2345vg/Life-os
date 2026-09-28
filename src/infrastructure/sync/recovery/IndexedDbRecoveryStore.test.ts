@@ -22,6 +22,13 @@ import { PILOT_RUNTIME_REGISTRY } from '../pilot/PilotSyncRegistryAdapters';
 import { WalkRecordMapper } from '../../persistence/mappers/WalkRecordMapper';
 import { LifeActionRecordMapper } from '../../persistence/mappers/LifeActionRecordMapper';
 import type { LifeActionRecord } from '../../persistence/records/LifeActionRecord';
+import { LIFE_OS_SYNC_REGISTRY } from '../LifeOsSyncRegistry';
+import { IndexedDbTimeCapacityRepository } from '../../persistence/IndexedDbTimeCapacityRepository';
+import { IndexedDbActionSessionRepository } from '../../persistence/IndexedDbActionSessionRepository';
+import { IndexedDbLifeActionRepository } from '../../persistence/IndexedDbLifeActionRepository';
+import { IndexedDbJournalUnitOfWork } from '../../persistence/IndexedDbJournalUnitOfWork';
+import { WorkSessions } from '../../../application/time/WorkSessions';
+import { FakeClock, FakeIdGenerator } from '../../../test/helpers/Fakes';
 
 async function fixture() {
   const factory = new IDBFactory();
@@ -48,6 +55,129 @@ async function fixture() {
   return { db, connection, recorder, goal, store: new IndexedDbRecoveryStore(db, recorder) };
 }
 describe('IndexedDB recovery transactions', () => {
+  it('restores work history even when the original action is no longer present', async () => {
+    const f = await fixture();
+    try {
+      const original = await f.store.readState();
+      const session: Record<string, unknown> = {
+        ...structuredSyncFixtures().action_session,
+        goalIdAtStart: null,
+      };
+      await f.store.apply(
+        { schemaVersion: 1, items: [{ entityType: 'action_session', record: session }] },
+        JSON.stringify(original),
+        true,
+      );
+      expect(
+        (await f.store.readState()).items.find((item) => item.entityType === 'action_session')
+          ?.record.lifeActionId,
+      ).toBe(session.lifeActionId);
+    } finally {
+      f.db.close();
+    }
+  });
+  it('captures capacity and work sessions and exactly restores old and modern snapshots', async () => {
+    const f = await fixture();
+    try {
+      f.db.configureSyncMutationCapture(f.recorder, LIFE_OS_SYNC_REGISTRY);
+      const action: Record<string, unknown> = {
+        ...structuredSyncFixtures().life_action,
+        decisionId: null,
+        goalId: f.goal.id,
+      };
+      const seed = (await f.db.open()).transaction('lifeActions', 'readwrite');
+      seed.objectStore('lifeActions').put(action);
+      await done(seed);
+      const work = new WorkSessions(
+        new IndexedDbActionSessionRepository(f.db),
+        new IndexedDbLifeActionRepository(f.db),
+        new IndexedDbJournalUnitOfWork(f.db, f.recorder),
+        new FakeClock(new Date('2026-09-28T08:00:00Z')),
+        new FakeIdGenerator('snapshot-work'),
+      );
+      const session = await work.start(String(action.id));
+      await new IndexedDbTimeCapacityRepository(f.db).save(
+        [360, null, null, null, null, null, null],
+        null,
+      );
+      const modern = await f.store.readState();
+      const queued = await request<SyncOutboxRecord[]>(
+        f.connection
+          .transaction(LIFE_OS_SYNC_STORE.outbox)
+          .objectStore(LIFE_OS_SYNC_STORE.outbox)
+          .getAll(),
+      );
+      expect(queued.map((row) => parsePilotSyncPayload(row.serializedPayload).entityType)).toEqual(
+        expect.arrayContaining(['action_session', 'time_capacity']),
+      );
+      const old = {
+        schemaVersion: 1 as const,
+        items: modern.items
+          .filter((item) => item.entityType !== 'time_capacity')
+          .map((item) => {
+            if (item.entityType !== 'action_session') return item;
+            const record = { ...item.record };
+            delete record.goalIdAtStart;
+            return { ...item, record };
+          }),
+      };
+      await f.store.apply(old, JSON.stringify(modern), true);
+      expect(await new IndexedDbTimeCapacityRepository(f.db).get()).toBeNull();
+      expect(
+        (await new IndexedDbActionSessionRepository(f.db).findById(session.id))?.goalIdAtStart,
+      ).toBeNull();
+      await f.store.apply(modern, JSON.stringify(await f.store.readState()), true);
+      expect((await new IndexedDbTimeCapacityRepository(f.db).get())?.weekdays[0]).toBe(360);
+      expect(
+        (
+          await new IndexedDbActionSessionRepository(f.db).findById(session.id)
+        )?.goalIdAtStart?.toString(),
+      ).toBe(f.goal.id);
+    } finally {
+      f.db.close();
+    }
+  });
+  it('exactly restores an old action snapshot without keeping later time fields', async () => {
+    const f = await fixture();
+    try {
+      const timed = {
+        ...structuredSyncFixtures().life_action,
+        decisionId: null,
+        goalId: null,
+        directionId: null,
+        sphereId: null,
+        plannedDate: '2026-09-28',
+        estimateMinutes: 90,
+        scheduledStartMinute: 600,
+        scheduledDurationMinutes: 60,
+      };
+      const seed = f.connection.transaction('lifeActions', 'readwrite');
+      seed.objectStore('lifeActions').put(timed);
+      await done(seed);
+      const current = await f.store.readState();
+      const oldItems = current.items.map((item) => {
+        if (item.entityType !== 'life_action') return item;
+        const record = { ...item.record } as Record<string, unknown>;
+        delete record.estimateMinutes;
+        delete record.scheduledStartMinute;
+        delete record.scheduledDurationMinutes;
+        return { ...item, record };
+      });
+      await f.store.apply({ schemaVersion: 1, items: oldItems }, JSON.stringify(current), true);
+      const stored = await request<LifeActionRecord>(
+        f.connection
+          .transaction('lifeActions')
+          .objectStore('lifeActions')
+          .get(String((timed as Record<string, unknown>).id)),
+      );
+      expect(stored.estimateMinutes).toBeNull();
+      expect(stored.scheduledStartMinute).toBeNull();
+      expect(stored.scheduledDurationMinutes).toBeNull();
+    } finally {
+      f.db.close();
+    }
+  });
+
   it('restores an indicator together with current snapshots and queues the new history', async () => {
     const f = await fixture(),
       records = structuredSyncFixtures(),
@@ -266,7 +396,7 @@ describe('IndexedDB recovery transactions', () => {
         );
       await completion;
       const state = await f.store.readState();
-      expect(new Set(state.items.map((item) => item.entityType)).size).toBe(32);
+      expect(new Set(state.items.map((item) => item.entityType)).size).toBe(33);
       expect(state.items.find((item) => item.entityType === 'life_action')?.record).toMatchObject(
         expectedFields,
       );

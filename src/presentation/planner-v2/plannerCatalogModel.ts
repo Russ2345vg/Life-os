@@ -29,6 +29,7 @@ export const statusLabels: Record<GoalStatus, string> = {
 };
 export const emptyGoalFilters = () => ({
   status: '' as GoalStatus | '',
+  showCompleted: false,
   unassigned: false,
   undated: false,
   sphereId: '',
@@ -76,7 +77,9 @@ export function filterPlannerGoals(
   return goals.filter((goal) => {
     const direction = directions.find((d) => d.id.toString() === goal.directionId?.toString());
     return (
-      (filter.status ? goal.status === filter.status : true) &&
+      (filter.status
+        ? goal.status === filter.status
+        : filter.showCompleted || goal.status !== 'achieved') &&
       (!filter.unassigned || goal.directionId === null) &&
       (!filter.undated || goal.dueDate === null) &&
       (!filter.sphereId ||
@@ -118,11 +121,8 @@ export function filterPlannerActions(
     .filter(
       (a) =>
         !a.isArchived() &&
-        (view === 'completed'
-          ? a.status === 'completed'
-          : view === 'unassigned'
-            ? a.goalId === null && a.status !== 'cancelled'
-            : isOpenAction(a)) &&
+        (view === 'completed' ? a.status === 'completed' : isOpenAction(a)) &&
+        (view !== 'unassigned' || a.goalId === null) &&
         (view !== 'undated' || a.plannedDate === null) &&
         (view !== 'today' || a.plannedDate?.toString() === today) &&
         (view !== 'upcoming' ||

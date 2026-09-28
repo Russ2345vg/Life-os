@@ -76,13 +76,18 @@ test('direction context, sphere filtering and optional completion result survive
     page.getByRole('paragraph').filter({ hasText: 'Восстановление QA / Сон QA' }),
   ).toBeVisible();
   await page.getByRole('checkbox', { name: /Выполнить: Подготовить спальню/ }).click();
-  await page.getByText('Добавить результат', { exact: true }).click();
-  const result = page.getByLabel('Результат и заметка', { exact: true });
+  await page
+    .getByRole('dialog', { name: 'Итог задачи', exact: true })
+    .getByRole('button', { name: 'Пропустить', exact: true })
+    .click();
+  const summary = page.locator('.planner-completion-result');
+  await summary.locator('summary').click();
+  const result = summary.getByLabel('Итог задачи', { exact: true });
   await result.fill('Сделано: проветрил комнату. Результат: прохладно. Заметка: лёг раньше.');
-  await page.getByRole('button', { name: 'Сохранить результат', exact: true }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Результат сохранён' })).toBeVisible();
+  await summary.getByRole('button', { name: 'Сохранить итог', exact: true }).click();
+  await expect(summary.getByRole('status').filter({ hasText: 'Итог сохранён' })).toBeVisible();
   await page.reload();
-  await page.getByText('Результат выполнения', { exact: true }).click();
+  await summary.locator('summary').click();
   await expect(result).toHaveValue(/проветрил/);
   await result.focus();
   await expect(result).toBeFocused();

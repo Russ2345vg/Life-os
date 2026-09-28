@@ -61,6 +61,7 @@ export const DEFAULT_SLEEP_ALARM_SOUND: SleepAlarmSound = {
 };
 
 export interface SleepSettings {
+  readonly wakeOverride?: { readonly cycleDate: string; readonly wakeTime: string } | null;
   readonly bedtime: string;
   readonly wakeTime: string;
   readonly timeZone: string;
@@ -439,6 +440,10 @@ export function updateSleepSettings(
     version: state.version + 1,
     settings: {
       ...input,
+      wakeOverride:
+        state.settings?.wakeTime === input.wakeTime && state.settings.timeZone === input.timeZone
+          ? (state.settings.wakeOverride ?? null)
+          : null,
       quietModeEnabled: input.quietModeEnabled ?? state.settings?.quietModeEnabled ?? false,
       alarmSound: normalizeAlarmSound(
         input.alarmSound ?? state.settings?.alarmSound ?? DEFAULT_SLEEP_ALARM_SOUND,
@@ -566,8 +571,15 @@ export function rebuildWakeSchedule(
   const nowMs = input.now.getTime();
   const desired = new Map<string, { cycleDate: string; scheduledAt: Date }>();
   if (settings.enabled) {
-    for (const cycleDate of new Set(input.cycleDates)) {
-      const { plannedWakeAt } = calculateNightWindow({ cycleDate, ...settings });
+    for (const cycleDate of new Set([
+      ...input.cycleDates,
+      ...(settings.wakeOverride == null ? [] : [settings.wakeOverride.cycleDate]),
+    ])) {
+      const wakeTime =
+        settings.wakeOverride?.cycleDate === cycleDate
+          ? settings.wakeOverride.wakeTime
+          : settings.wakeTime;
+      const { plannedWakeAt } = calculateNightWindow({ ...settings, cycleDate, wakeTime });
       if (plannedWakeAt.getTime() <= nowMs) continue;
       desired.set(cycleDate, {
         cycleDate,
@@ -632,9 +644,77 @@ export function rebuildWakeSchedule(
     : { ...state, version: state.version + 1, wakeOccurrences: occurrences };
 }
 
+export function setNearestWakeTime(
+  state: SleepScheduleState,
+  wakeTime: string,
+  now: Date,
+  expectedOccurrenceId?: string,
+): SleepScheduleState {
+  assertDate(now, 'Время изменения подъёма некорректно.');
+  const settings = requiredSettings(state);
+  if (!settings.enabled) throw new Error('Сначала включите будильник.');
+  const nearest = state.wakeOccurrences
+    .filter(
+      ({ status, scheduledAt }) => status === 'SCHEDULED' && scheduledAt.getTime() > now.getTime(),
+    )
+    .sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime())[0];
+  if (nearest === undefined) throw new Error('Нет ближайшего запланированного сигнала подъёма.');
+  if (expectedOccurrenceId !== undefined && nearest.id !== expectedOccurrenceId)
+    throw new Error('Ближайший подъём изменился. Проверьте дату и повторите действие.');
+  const { plannedWakeAt } = calculateNightWindow({
+    ...settings,
+    cycleDate: nearest.cycleDate,
+    wakeTime,
+  });
+  if (plannedWakeAt.getTime() <= now.getTime())
+    throw new Error('Это время подъёма уже прошло. Выберите будущее время.');
+  return {
+    ...state,
+    version: state.version + 1,
+    settings: {
+      ...settings,
+      wakeOverride: { cycleDate: nearest.cycleDate, wakeTime },
+      version: settings.version + 1,
+      updatedAt: new Date(now),
+    },
+  };
+}
+
+export function clearNearestWakeTime(state: SleepScheduleState, now: Date): SleepScheduleState {
+  const settings = requiredSettings(state);
+  if (settings.wakeOverride == null) return state;
+  assertDate(now, 'Время изменения подъёма некорректно.');
+  const { plannedWakeAt } = calculateNightWindow({
+    ...settings,
+    cycleDate: settings.wakeOverride.cycleDate,
+  });
+  const pending = state.wakeOccurrences.some(
+    ({ cycleDate, status, scheduledAt }) =>
+      cycleDate === settings.wakeOverride?.cycleDate &&
+      status === 'SCHEDULED' &&
+      scheduledAt.getTime() > now.getTime(),
+  );
+  if (pending && plannedWakeAt.getTime() <= now.getTime())
+    throw new Error('Обычное время уже прошло. Измените разовое время или пропустите подъём.');
+  return {
+    ...state,
+    version: state.version + 1,
+    settings: {
+      ...settings,
+      wakeOverride: null,
+      version: settings.version + 1,
+      updatedAt: new Date(now),
+    },
+  };
+}
+
 export function skipNearestWakeOccurrence(
   state: SleepScheduleState,
-  input: { readonly now: Date; readonly exceptionId: string },
+  input: {
+    readonly now: Date;
+    readonly exceptionId: string;
+    readonly expectedOccurrenceId?: string;
+  },
 ): SleepScheduleState {
   assertDate(input.now, 'Время пропуска сигнала некорректно.');
   assertIdentifier(input.exceptionId, 'Идентификатор исключения');
@@ -649,6 +729,8 @@ export function skipNearestWakeOccurrence(
         left.scheduledAt.getTime() - right.scheduledAt.getTime() || left.id.localeCompare(right.id),
     )[0];
   if (nearest === undefined) throw new Error('Нет ближайшего запланированного сигнала подъёма.');
+  if (input.expectedOccurrenceId !== undefined && nearest.id !== input.expectedOccurrenceId)
+    throw new Error('Ближайший подъём изменился. Проверьте дату и повторите действие.');
 
   return {
     ...state,

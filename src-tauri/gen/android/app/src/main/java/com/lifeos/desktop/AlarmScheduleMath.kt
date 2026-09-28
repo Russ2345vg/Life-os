@@ -6,6 +6,14 @@ import java.util.Locale
 import java.util.TimeZone
 
 object AlarmScheduleMath {
+  fun restoredTrigger(storedAt: Long, now: Long, regularTrigger: () -> Long): Long =
+    if (storedAt > now) storedAt else regularTrigger()
+
+  fun restoredCycle(storedCycle: String, storedAt: Long, wakeTime: String, timeZone: String, now: Long): String =
+    if (storedAt > now) storedCycle else firstFutureCycle(
+      if (storedAt > 0L) nextCycleDate(storedCycle, timeZone) else storedCycle,
+      wakeTime, timeZone, now,
+    )
   private val cycleDatePattern = Regex("^\\d{4}-\\d{2}-\\d{2}$")
   private val timePattern = Regex("^(\\d{2}):(\\d{2})$")
 

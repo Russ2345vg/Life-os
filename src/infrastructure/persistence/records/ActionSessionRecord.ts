@@ -7,6 +7,7 @@ export interface ActionSessionRecord {
   readonly schemaVersion: 1;
   readonly id: string;
   readonly lifeActionId: string;
+  readonly goalIdAtStart?: string | null;
   readonly status: 'running' | 'paused' | 'completed';
   readonly startedAt: string;
   readonly pausedAt: string | null;

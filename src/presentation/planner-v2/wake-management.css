@@ -1,0 +1,138 @@
+.planner-v2 .sleep-page .wake-management {
+  display: block;
+  margin: 20px 0 28px;
+  padding: 28px;
+  background: var(--surface-1);
+  border: 1px solid var(--border-soft);
+  border-radius: 20px;
+}
+.wake-management__overview {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  align-items: center;
+}
+.wake-management__time {
+  display: block;
+  font-size: clamp(56px, 8vw, 88px);
+  line-height: 1.1;
+  font-weight: 500;
+  letter-spacing: -0.055em;
+  font-variant-numeric: tabular-nums;
+}
+.wake-management__date {
+  margin: 12px 0 8px;
+  text-transform: capitalize;
+  color: var(--text-primary);
+}
+.wake-management__status {
+  margin: 0;
+  color: var(--text-secondary);
+}
+.wake-management__schedule {
+  display: grid;
+  gap: 12px;
+  color: var(--text-secondary);
+}
+.wake-management__once {
+  display: grid;
+  gap: 8px;
+}
+.wake-management__once > strong {
+  color: var(--accent-primary);
+}
+.wake-management__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 20px;
+}
+.planner-v2 .wake-management button {
+  min-height: 44px;
+  padding: 10px 14px;
+  white-space: normal;
+}
+.wake-management__confirmation {
+  margin-top: 18px;
+  padding: 18px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+}
+.wake-management__confirmation p {
+  line-height: 1.6;
+}
+.wake-management__confirmation label {
+  display: grid;
+  gap: 8px;
+  max-width: 240px;
+}
+.wake-management input {
+  min-height: 44px;
+}
+.wake-management .sleep-alarm-status {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border-soft);
+}
+.wake-management .sleep-alarm-status__heading {
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.planner-v2 .wake-management .sleep-alarm-status__heading strong {
+  color: var(--text-secondary);
+}
+.wake-management .sleep-alarm-status small {
+  display: block;
+  margin-top: 10px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.wake-management details {
+  margin-top: 20px;
+  border-top: 1px solid var(--border-soft);
+  padding-top: 12px;
+}
+.wake-management summary {
+  min-height: 44px;
+  cursor: pointer;
+  line-height: 1.5;
+  padding: 10px 0;
+}
+.wake-management .sleep-dismissal-setup__row {
+  flex-wrap: wrap;
+}
+.wake-management .wake-probe-verified {
+  color: var(--accent-primary);
+}
+.wake-management .wake-management__confirmation button:focus-visible,
+.wake-management button:focus-visible,
+.wake-management summary:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 3px;
+}
+@media (max-width: 760px) {
+  .planner-v2 .sleep-page .wake-management {
+    padding: 20px;
+    margin-top: 16px;
+  }
+  .wake-management__overview {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+  .wake-management__schedule {
+    border-top: 1px solid var(--border-soft);
+    padding-top: 16px;
+  }
+  .wake-management__confirmation {
+    padding: 14px;
+  }
+}
+@media (max-width: 380px) {
+  .wake-management__actions {
+    flex-direction: column;
+  }
+  .wake-management__actions button {
+    width: 100%;
+  }
+}

@@ -63,8 +63,11 @@ export const LIFE_OS_SYNC_REGISTRY = Object.freeze([
     deletionMode: 'archive',
     dependencies: ['decision', 'sphere', 'direction', 'goal', 'recurrence_rule', 'life_action'],
   }),
+  registration('time_capacity', LIFE_OS_STORE.timeCapacity, 'IndexedDbTimeCapacityRepository', {
+    idSource: 'fixed_or_crypto_uuid',
+  }),
   registration('action_session', LIFE_OS_STORE.actionSessions, 'IndexedDbActionSessionRepository', {
-    dependencies: ['life_action'],
+    dependencies: ['life_action', 'goal'],
   }),
   registration('routine_block', LIFE_OS_STORE.routineBlocks, 'IndexedDbRoutineBlockRepository', {
     deletionMode: 'guarded_delete',

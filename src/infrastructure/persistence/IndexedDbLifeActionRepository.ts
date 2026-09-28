@@ -4,6 +4,7 @@ import { executeIndexedDbRequest } from './indexed-db/IndexedDbRequest';
 import { LIFE_OS_STORE, LifeOsIndexedDb } from './indexed-db/LifeOsIndexedDb';
 import { LifeActionRecordMapper } from './mappers/LifeActionRecordMapper';
 import type { LifeActionRecord } from './records/LifeActionRecord';
+import { assertChangedActionTimeWindows } from '../../domain/life-action/ActionTimeWindows';
 
 export class IndexedDbLifeActionRepository
   implements LifeActionRepository, LifeActionsByDecisionIdsReader
@@ -86,9 +87,20 @@ export class IndexedDbLifeActionRepository
       tx.oncomplete = () => resolve();
       tx.onabort = () => reject(tx.error);
       tx.onerror = () => reject(tx.error);
-      const get = store.get(record.id);
+      const get = store.getAll();
       get.onsuccess = () => {
-        const put = store.put({ ...get.result, ...record });
+        const previous = get.result as LifeActionRecord[];
+        const final = new Map(previous.map((action) => [action.id, action]));
+        const merged = { ...final.get(record.id), ...record };
+        final.set(record.id, merged);
+        try {
+          assertChangedActionTimeWindows(previous, [...final.values()]);
+        } catch (error: unknown) {
+          reject(error);
+          tx.abort();
+          return;
+        }
+        const put = store.put(merged);
         put.onsuccess = () => {
           void this.#indexedDb.refreshBalanceSnapshots(tx).catch((error: unknown) => {
             try {

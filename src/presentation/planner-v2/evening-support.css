@@ -1,0 +1,56 @@
+.planner-v2 .sleep-day-closure {
+  margin-top: var(--space-6);
+  padding: var(--space-4);
+  background: var(--surface-1);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+}
+.sleep-day-closure summary {
+  min-height: var(--control-md);
+  display: list-item;
+  cursor: pointer;
+  font-weight: 650;
+  line-height: var(--control-md);
+}
+.sleep-day-closure h3 {
+  margin-top: var(--space-6);
+}
+.sleep-day-closure form {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+}
+.sleep-day-closure textarea {
+  width: 100%;
+  min-height: 88px;
+  padding: var(--space-3);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+}
+.sleep-closure-list {
+  list-style: none;
+  padding: 0;
+}
+.sleep-closure-list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: space-between;
+  padding-block: var(--space-3);
+  border-bottom: 1px solid var(--border-soft);
+}
+.sleep-closure-list li > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  flex: 1 1 160px;
+}
+.sleep-day-closure :is(button, a) {
+  min-height: var(--control-md);
+  padding: var(--space-2) var(--space-3);
+}
+.sleep-day-closure [role='status'] {
+  color: var(--success);
+}

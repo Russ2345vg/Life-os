@@ -1,3 +1,8 @@
+import {
+  CompletionResultPrompt,
+  completionSummaryTarget,
+  type CompletionSummaryTarget,
+} from './CompletionResult';
 import type { BalanceServices } from '../../application/balance/BalanceServices';
 import { BalanceWorkspace } from './balance/BalanceWorkspace';
 import type { PlanningServices } from '../../application/planner/PlanningServices';
@@ -41,6 +46,7 @@ import { useSyncContentChanged } from '../sync/SyncStatusContext';
 import { finishPlannerSubmission } from './plannerRouteSubmission';
 import './planner-v2.css';
 import { PlannerLibraryWorkspace, type PlannerLibraryServices } from './PlannerLibraryWorkspace';
+import { usePlannerWorkTime } from './usePlannerWorkTime';
 import type { EntityMenuAction } from './EntityContextMenu';
 import { DomainError } from '../../shared/errors/DomainError';
 import { SleepPreparationPage } from './SleepPreparationPage';
@@ -53,6 +59,8 @@ import {
 } from '../../application/sleep/SleepTodayEntry';
 
 import './planner-premium.css';
+import type { LifeActionDateUndoReceipt } from '../../application/commands/SetLifeActionPlan';
+import './planner-date-undo.css';
 
 export interface PlannerServices extends PlannerLibraryServices {
   readonly plannerScenarios?: ScenarioService;
@@ -61,7 +69,7 @@ export interface PlannerServices extends PlannerLibraryServices {
   readonly createLifeActionDraft: Pick<CreateLifeActionDraft, 'execute'>;
   readonly createGoal: Pick<CreateGoal, 'execute'>;
   readonly completeLifeAction: Pick<CompleteLifeAction, 'execute'>;
-  readonly setLifeActionPlan: Pick<SetLifeActionPlan, 'execute'>;
+  readonly setLifeActionPlan: Pick<SetLifeActionPlan, 'execute' | 'changeDate' | 'undoDate'>;
   readonly getPlannerToday: Pick<GetPlannerToday, 'execute'>;
   readonly getGoals: Pick<GetGoals, 'execute'>;
   readonly getDirections: Pick<GetDirections, 'execute'>;
@@ -77,6 +85,7 @@ interface PlannerData {
   readonly mainDirectionId: string | null;
   readonly directionChoices: readonly PlannerOption[];
   readonly sleepEntry: SleepTodayEntry;
+  readonly timeCapacity: readonly (number | null)[];
 }
 
 export function PlannerWorkspace(props: Parameters<typeof PlannerWorkspaceContent>[0]) {
@@ -99,16 +108,42 @@ function PlannerWorkspaceContent({
   readonly currentDate: DayDate;
   readonly onNavigate: (route: PlannerRoute) => void;
 }) {
+  const workTime = usePlannerWorkTime(services.workSessions);
+  const [completionSummary, setCompletionSummary] = useState<CompletionSummaryTarget | null>(null);
+  const promptedCompletions = useRef(new Set<string>());
+  const promptForResult = (action: LifeAction) => {
+    const target = completionSummaryTarget(action);
+    if (!services.planning || !target || promptedCompletions.current.has(target.completionKey))
+      return;
+    promptedCompletions.current.add(target.completionKey);
+    setCompletionSummary(target);
+  };
+
   const [data, setData] = useState<PlannerData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const revision = useQuickAccess()?.revision ?? 0;
   const refreshToken = useMemo(() => ({ data, revision }), [data, revision]);
-  useQuickAccessGuard(() => ({ dirty: false, busy }));
+  useQuickAccessGuard(() => ({ dirty: false, busy: busy || workTime.busy }));
   const working = useRef(false);
   const [createdGoal, setCreatedGoal] = useState<Goal | null>(null);
   const [createdGoalWarning, setCreatedGoalWarning] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [dateUndo, setDateUndo] = useState<{
+    receipt: LifeActionDateUndoReceipt;
+    title: string;
+  } | null>(null);
+  const [dateRevision, setDateRevision] = useState(0);
+  const changeDate = async (id: string, date: string) => {
+    const result = await services.setLifeActionPlan.changeDate({
+      lifeActionId: EntityId.create(id),
+      plannedDate: date ? DayDate.create(date) : null,
+    });
+    if (!result.ok) throw result.error;
+    if (result.value.receipt)
+      setDateUndo({ receipt: result.value.receipt, title: result.value.action.title.toString() });
+    return result.value.action;
+  };
   useEffect(() => {
     if (!notice) return;
     const timer = setTimeout(() => setNotice(null), 3500);
@@ -144,8 +179,9 @@ function PlannerWorkspaceContent({
       services.dailyDirection.get(date),
       services.getSpheres.execute(),
       services.sleepSchedule.getState(),
+      services.timeCapacity?.get() ?? Promise.resolve([null, null, null, null, null, null, null]),
     ])
-      .then(([overview, goals, directions, actions, day, spheres, sleepState]) => {
+      .then(([overview, goals, directions, actions, day, spheres, sleepState, timeCapacity]) => {
         if (sequence !== request.current) return;
         setData({
           overview,
@@ -168,6 +204,7 @@ function PlannerWorkspaceContent({
               title: `${spheres.active.find((sphere) => sphere.id.toString() === direction.sphereId?.toString())?.name ?? 'Без сферы'} → ${direction.name}`,
             })),
           sleepEntry: selectSleepTodayEntry(sleepState, new Date()),
+          timeCapacity,
         });
         setError(null);
       })
@@ -187,7 +224,7 @@ function PlannerWorkspaceContent({
   const refresh = useCallback(() => {
     void load().catch(report);
   }, [load, report]);
-  useSyncContentChanged('lifeActions|goals|directions|days', refresh);
+  useSyncContentChanged('lifeActions|timeCapacity|goals|directions|days', refresh);
   useEffect(() => {
     routeGeneration.current += 1;
     void load().catch(report);
@@ -196,7 +233,7 @@ function PlannerWorkspaceContent({
       routeGeneration.current += 1;
     };
   }, [load, routeKey, report, revision]);
-  const run = async (work: () => Promise<unknown>, message: string, rethrow = false) => {
+  const run = async (work: () => Promise<unknown>, message: string | null, rethrow = false) => {
     if (working.current) return;
     working.current = true;
     setBusy(true);
@@ -334,8 +371,8 @@ function PlannerWorkspaceContent({
         (target.view === 'directions' && route.view === 'direction') ||
         ('section' in route && route.section === target.view) ||
         (target.view === 'goals' &&
-          ['focus', 'new-goal', 'goal', 'planning'].includes(route.view)) ||
-        (target.view === 'actions' && ['action', 'new-action'].includes(route.view))
+          ['focus', 'review', 'new-goal', 'goal', 'planning'].includes(route.view)) ||
+        (target.view === 'actions' && ['action', 'new-action', 'time'].includes(route.view))
           ? 'page'
           : undefined
       }
@@ -420,6 +457,40 @@ function PlannerWorkspaceContent({
           tabIndex={-1}
         >
           {systemNotice}
+          {dateUndo && (
+            <div className="planner-date-undo" role="status">
+              <span>Дата изменена · {dateUndo.title}</span>
+              <button
+                className="planner-primary"
+                type="button"
+                disabled={busy}
+                aria-label="Отменить изменение даты"
+                onClick={() =>
+                  void run(async () => {
+                    const result = await services.setLifeActionPlan.undoDate(dateUndo.receipt);
+                    if (!result.ok)
+                      throw new DomainError(
+                        'life_action.undo_failed',
+                        'Не удалось отменить перенос: действие уже изменилось или прежнее главное дело дня занято. Обновите список.',
+                      );
+                    setDateUndo(null);
+                    setDateRevision((value) => value + 1);
+                    document.getElementById('planner-main-content')?.focus();
+                  }, 'Прежняя дата восстановлена')
+                }
+              >
+                Отменить
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                aria-label="Закрыть уведомление об изменении даты"
+                onClick={() => setDateUndo(null)}
+              >
+                Закрыть
+              </button>
+            </div>
+          )}
           {notice ? (
             <p className="planner-notice" role="status">
               {notice}
@@ -457,10 +528,15 @@ function PlannerWorkspaceContent({
           ) : route.view === 'sleep' ? (
             <SleepPreparationPage
               service={services.sleepSchedule}
+              plannerServices={services}
+              calendarDate={currentDate.toString()}
               onBack={() => navigate({ view: 'today' })}
             />
           ) : route.view === 'planning' ? (
             <PlannerLibraryWorkspace
+              onActionCompleted={promptForResult}
+              onChangeDate={changeDate}
+              dateRevision={dateRevision}
               services={services}
               route={{
                 view: 'goals',
@@ -474,17 +550,23 @@ function PlannerWorkspaceContent({
               'goal',
               'goals',
               'focus',
+              'review',
               'actions',
               'action',
               'inbox',
               'kanban',
               'calendar',
+              'time',
               'tree',
             ].includes(route.view) ? (
             <PlannerLibraryWorkspace
+              onActionCompleted={promptForResult}
+              onChangeDate={changeDate}
+              dateRevision={dateRevision}
               key={buildPlannerRoute(route)}
               services={services}
               route={route}
+              workTime={workTime}
               today={currentDate.toString()}
               onNavigate={navigate}
             />
@@ -505,6 +587,11 @@ function PlannerWorkspaceContent({
               scenarios={services.plannerScenarios}
               goals={data.goals}
               availableActions={data.actions}
+              capacityMinutes={
+                data.timeCapacity[
+                  (new Date(`${selectedDate.toString()}T12:00:00Z`).getUTCDay() + 6) % 7
+                ] ?? null
+              }
               mainDirectionId={data.mainDirectionId}
               directionChoices={data.directionChoices}
               busy={busy}
@@ -530,10 +617,10 @@ function PlannerWorkspaceContent({
               onOpenSleep={() => navigate({ view: 'sleep' })}
               sleepEntry={data.sleepEntry}
               onComplete={(id) => {
-                void run(
-                  () => completePlannerAction(services.completeLifeAction, id),
-                  'Действие выполнено',
-                );
+                void run(async () => {
+                  const action = await completePlannerAction(services.completeLifeAction, id);
+                  promptForResult(action);
+                }, 'Действие выполнено');
               }}
               onSelectAction={(selection) => {
                 void run(async () => {
@@ -572,13 +659,7 @@ function PlannerWorkspaceContent({
                   main ? 'Главное действие выбрано' : 'План сохранён',
                 );
               }}
-              onReschedule={(id, date) =>
-                run(
-                  () => planPlannerAction(services.setLifeActionPlan, id, date, false),
-                  date ? 'План сохранён' : 'Действие убрано из плана и сохранено без даты',
-                  true,
-                )
-              }
+              onReschedule={(id, date) => run(() => changeDate(id, date), null, true)}
               onQuickAdd={async (title) => {
                 setBusy(true);
                 try {
@@ -601,6 +682,9 @@ function PlannerWorkspaceContent({
           ) : route.view === 'new-action' ? (
             <>
               <PlannerLibraryWorkspace
+                onActionCompleted={promptForResult}
+                onChangeDate={changeDate}
+                dateRevision={dateRevision}
                 services={services}
                 route={{ view: 'actions' }}
                 today={currentDate.toString()}
@@ -701,6 +785,9 @@ function PlannerWorkspaceContent({
           ) : (
             <>
               <PlannerLibraryWorkspace
+                onActionCompleted={promptForResult}
+                onChangeDate={changeDate}
+                dateRevision={dateRevision}
                 services={services}
                 route={{ view: 'goals' }}
                 today={currentDate.toString()}
@@ -739,6 +826,17 @@ function PlannerWorkspaceContent({
             </>
           )}
         </main>
+        {completionSummary && (
+          <CompletionResultPrompt
+            key={completionSummary.completionKey}
+            target={completionSummary}
+            onClose={() =>
+              setCompletionSummary((current) =>
+                current?.completionKey === completionSummary.completionKey ? null : current,
+              )
+            }
+          />
+        )}
         <QuickAccessPanel
           services={services}
           today={currentDate.toString()}

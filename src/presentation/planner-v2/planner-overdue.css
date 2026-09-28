@@ -2,6 +2,18 @@
   margin-top: var(--space-8);
 }
 
+.planner-plan-review > .planner-overdue {
+  margin-top: var(--space-4);
+}
+.planner-plan-review {
+  margin-bottom: var(--space-6);
+}
+.planner-plan-review > summary {
+  min-height: var(--control-md);
+  padding-block: var(--space-3);
+  overflow-wrap: anywhere;
+}
+
 .planner-overdue h2 span {
   color: var(--text-secondary);
 }

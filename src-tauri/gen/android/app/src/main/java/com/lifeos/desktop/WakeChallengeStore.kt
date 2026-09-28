@@ -1,6 +1,7 @@
 package com.lifeos.desktop
 
 import android.content.ContentValues
+import androidx.core.content.FileProvider
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
@@ -47,19 +48,47 @@ class WakeChallengeStore(context: Context) {
   fun regenerateQr(): WakeDismissalSetupStatus {
     val token = ByteArray(32).also(random::nextBytes)
     val payload = "$QR_PREFIX${Base64.encodeToString(token, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)}"
-    preferences.getString(KEY_QR_MEDIA_URI, null)?.let { previous ->
-      runCatching { storageContext.contentResolver.delete(Uri.parse(previous), null, null) }
+    val previous = preferences.getString(KEY_QR_SAVED_TO, null)?.let {
+      SavedQrFile(it, preferences.getString(KEY_QR_MEDIA_URI, null))
     }
-    val saved = saveQrBitmap(payload)
-    preferences.edit()
+    val previousValues = listOf(KEY_QR_DIGEST, KEY_QR_SAVED_TO, KEY_QR_MEDIA_URI)
+      .associateWith { preferences.getString(it, null) }
+    WakeQrTransaction.replace(previous, { saveQrBitmap(payload) }, { saved -> preferences.edit()
       .putString(KEY_QR_DIGEST, encode(WakeChallengeVerifier.qrDigest(payload)))
       .putString(KEY_QR_SAVED_TO, saved.location)
       .apply {
         if (saved.mediaUri == null) remove(KEY_QR_MEDIA_URI)
         else putString(KEY_QR_MEDIA_URI, saved.mediaUri)
       }
-      .apply()
+      .commit()
+    }, ::deleteQrFile, {
+      val editor = preferences.edit()
+      previousValues.forEach { (key, value) ->
+        if (value == null) editor.remove(key) else editor.putString(key, value)
+      }
+      editor.commit()
+    })
     return status()
+  }
+
+  fun exportUri(context: Context): Uri {
+    check(status().qrConfigured) { "Сначала создайте QR для подъёма." }
+    val location = preferences.getString(KEY_QR_SAVED_TO, null)
+      ?: error("Файл QR не найден. Создайте новый QR отдельным действием.")
+    val uri = preferences.getString(KEY_QR_MEDIA_URI, null)?.let(Uri::parse)
+      ?: FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", File(location))
+    try {
+      context.contentResolver.openFileDescriptor(uri, "r")?.use { }
+        ?: error("QR недоступен")
+    } catch (_: Exception) {
+      error("Файл QR не найден. Замените QR и распечатайте новую копию; текущий ключ не изменён.")
+    }
+    return uri
+  }
+
+  private fun deleteQrFile(file: SavedQrFile) {
+    if (file.mediaUri != null) storageContext.contentResolver.delete(Uri.parse(file.mediaUri), null, null)
+    else File(file.location).delete()
   }
 
   fun saveEmergencyPhrase(phrase: String): WakeDismissalSetupStatus {
@@ -138,9 +167,10 @@ class WakeChallengeStore(context: Context) {
       setPixels(pixels, 0, QR_SIZE, 0, 0, QR_SIZE, QR_SIZE)
     }
     return try {
+      val fileName = "lifeos-wake-qr-${System.currentTimeMillis()}.png"
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         val values = ContentValues().apply {
-          put(MediaStore.Downloads.DISPLAY_NAME, QR_FILE_NAME)
+          put(MediaStore.Downloads.DISPLAY_NAME, fileName)
           put(MediaStore.Downloads.MIME_TYPE, "image/png")
           put(MediaStore.Downloads.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/LifeOS")
           put(MediaStore.Downloads.IS_PENDING, 1)
@@ -149,20 +179,30 @@ class WakeChallengeStore(context: Context) {
           MediaStore.Downloads.EXTERNAL_CONTENT_URI,
           values,
         ) ?: error("Не удалось создать файл QR.")
+        try {
         storageContext.contentResolver.openOutputStream(uri)?.use {
           check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
         } ?: error("Не удалось сохранить QR.")
         values.clear()
         values.put(MediaStore.Downloads.IS_PENDING, 0)
-        storageContext.contentResolver.update(uri, values, null, null)
-        SavedQrFile("Загрузки/LifeOS/$QR_FILE_NAME", uri.toString())
+        check(storageContext.contentResolver.update(uri, values, null, null) > 0)
+        SavedQrFile("Загрузки/LifeOS/$fileName", uri.toString())
+        } catch (error: Exception) {
+          runCatching { storageContext.contentResolver.delete(uri, null, null) }
+          throw error
+        }
       } else {
         val directory = File(
           storageContext.getExternalFilesDir(Environment.DIRECTORY_PICTURES),
           "LifeOS",
         ).apply { mkdirs() }
-        val file = File(directory, QR_FILE_NAME)
-        file.outputStream().use { check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
+        val file = File(directory, fileName)
+        try {
+          file.outputStream().use { check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
+        } catch (error: Exception) {
+          file.delete()
+          throw error
+        }
         SavedQrFile(file.absolutePath, null)
       }
     } finally {
@@ -180,7 +220,6 @@ class WakeChallengeStore(context: Context) {
     const val PREFERENCES = "lifeos-wake-challenge-v1"
     const val QR_PREFIX = "lifeos://wake/"
     const val QR_SIZE = 1024
-    const val QR_FILE_NAME = "lifeos-wake-qr.png"
     const val MINIMUM_PHRASE_LENGTH = 16
     const val KEY_QR_DIGEST = "qrDigest"
     const val KEY_QR_SAVED_TO = "qrSavedTo"

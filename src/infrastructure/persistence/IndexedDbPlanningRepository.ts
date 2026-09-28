@@ -3,6 +3,11 @@ import { LifeOsIndexedDb, LIFE_OS_STORE } from './indexed-db/LifeOsIndexedDb';
 import { GoalRecordMapper } from './mappers/GoalRecordMapper';
 import { LifeActionRecordMapper } from './mappers/LifeActionRecordMapper';
 import { JournalEntryRecordMapper } from './mappers/JournalEntryRecordMapper';
+import {
+  assertChangedActionTimeWindows,
+  type TimeWindowPolicy,
+} from '../../domain/life-action/ActionTimeWindows';
+import type { LifeActionRecord } from './records/LifeActionRecord';
 import { FocusPeriodRecordMapper } from './PlannerRecordMappers';
 import {
   PlanningPeriodRecordMapper,
@@ -40,10 +45,14 @@ export class IndexedDbPlanningRepository implements PlanningRepository {
   async read(): Promise<PlanningState> {
     return this.run('readonly', (s) => s);
   }
-  async change<T>(work: (state: PlanningState) => T): Promise<T> {
-    return this.run('readwrite', work);
+  async change<T>(work: (state: PlanningState) => T, timePolicy?: TimeWindowPolicy): Promise<T> {
+    return this.run('readwrite', work, timePolicy);
   }
-  private async run<T>(mode: IDBTransactionMode, work: (state: PlanningState) => T): Promise<T> {
+  private async run<T>(
+    mode: IDBTransactionMode,
+    work: (state: PlanningState) => T,
+    timePolicy?: TimeWindowPolicy,
+  ): Promise<T> {
     const db = await this.database.open();
     const tx = db.transaction(
       this.database.balanceTransactionStores([
@@ -87,6 +96,11 @@ export class IndexedDbPlanningRepository implements PlanningRepository {
       const result = work(state);
       let changed = false;
       if (mode === 'readwrite') {
+        assertChangedActionTimeWindows(
+          (raw.find(([key]) => key === 'actions')?.[1] ?? []) as LifeActionRecord[],
+          state.actions.map((action) => LifeActionRecordMapper.toRecord(action)),
+          timePolicy,
+        );
         for (const [key, previous] of raw) {
           if (key === 'legacyFocus') continue;
           const store = tx.objectStore(bindings[key].store);

@@ -258,7 +258,26 @@ export class IndexedDbRecoveryStore implements RecoveryDataStore {
             'local',
             id.localObjectId,
           );
-          let prepared = prepareRemotePilotRecord(item.entityType, translated, id.existing);
+          const restoringLegacyAction = exact && item.entityType === 'life_action';
+          const restoreInput = restoringLegacyAction
+            ? {
+                ...translated,
+                ...(!Object.hasOwn(item.record, 'estimateMinutes')
+                  ? { estimateMinutes: null }
+                  : {}),
+                ...(!Object.hasOwn(item.record, 'scheduledStartMinute')
+                  ? { scheduledStartMinute: null }
+                  : {}),
+                ...(!Object.hasOwn(item.record, 'scheduledDurationMinutes')
+                  ? { scheduledDurationMinutes: null }
+                  : {}),
+              }
+            : exact &&
+                item.entityType === 'action_session' &&
+                !Object.hasOwn(item.record, 'goalIdAtStart')
+              ? { ...translated, goalIdAtStart: null }
+              : translated;
+          let prepared = prepareRemotePilotRecord(item.entityType, restoreInput, id.existing);
           prepared = await registerRemoteAttachment(
             tx,
             item.entityType,

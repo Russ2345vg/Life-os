@@ -20,6 +20,8 @@ class LifeOsAlarmRingingService : Service() {
   private var player: MediaPlayer? = null
   private var wakeLock: PowerManager.WakeLock? = null
   private var vibrator: Vibrator? = null
+  private var activeOccurrenceId: String? = null
+  private var activeIsTest = false
 
   override fun onCreate() {
     super.onCreate()
@@ -28,6 +30,10 @@ class LifeOsAlarmRingingService : Service() {
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     if (intent?.action == LifeOsAlarmScheduler.ACTION_STOP) {
+      val expectedId = intent.getStringExtra(LifeOsAlarmScheduler.EXTRA_OCCURRENCE_ID)
+      val expectedIsTest = intent.getBooleanExtra(LifeOsAlarmScheduler.EXTRA_IS_TEST, false)
+      if (!AlarmDeliveryPolicy.canStop(activeOccurrenceId, activeIsTest, expectedId, expectedIsTest) ||
+        expectedId == null || !LifeOsAlarmScheduler.matchesCurrentDelivery(this, expectedId, expectedIsTest)) return START_NOT_STICKY
       stopSignal()
       return START_NOT_STICKY
     }
@@ -37,6 +43,8 @@ class LifeOsAlarmRingingService : Service() {
     val soundTitle =
       intent.getStringExtra(LifeOsAlarmScheduler.EXTRA_SOUND_TITLE) ?: "Системный сигнал"
     val isTest = intent.getBooleanExtra(LifeOsAlarmScheduler.EXTRA_IS_TEST, false)
+    activeOccurrenceId = occurrenceId
+    activeIsTest = isTest
     startForeground(NOTIFICATION_ID, notification(occurrenceId, cycleDate, soundTitle, isTest))
     if (player?.isPlaying != true) {
       acquireWakeLock()
@@ -145,6 +153,7 @@ class LifeOsAlarmRingingService : Service() {
   }
 
   private fun stopSignal() {
+    activeOccurrenceId = null
     releaseSignal()
     LifeOsAlarmScheduler.markRinging(this, false)
     LifeOsAlarmScheduler.cancelTest(this)

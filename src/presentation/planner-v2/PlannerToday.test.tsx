@@ -10,6 +10,51 @@ import {
 } from '../../test/helpers/LifeActionTestFactory';
 
 describe('Planner Today', () => {
+  it('shows scheduled hours, known workload and remaining unknown estimates', () => {
+    const date = DayDate.create('2026-09-13');
+    const timed = createLifeActionDraft('today-timed');
+    timed.setPlan(date, false);
+    timed.setTimePlanning({
+      estimateMinutes: 90,
+      scheduledStartMinute: 600,
+      scheduledDurationMinutes: 60,
+    });
+    const unknown = createLifeActionDraft('today-unknown');
+    unknown.setPlan(date, false);
+    const html = renderToStaticMarkup(
+      createElement(PlannerToday, {
+        date,
+        day: 'today',
+        overview: {
+          main: null,
+          actions: [timed, unknown],
+          unscheduled: [],
+          completed: [],
+          overdue: [],
+        },
+        goals: [],
+        availableActions: [timed, unknown],
+        mainDirectionId: null,
+        directionChoices: [],
+        busy: false,
+        capacityMinutes: 120,
+        onSelectDay: vi.fn(),
+        onOpenAction: vi.fn(),
+        onMainDirection: vi.fn(),
+        onComplete: vi.fn(),
+        onPlan: vi.fn(),
+        onReschedule: async () => {},
+        onQuickAdd: async () => {},
+        onNewAction: vi.fn(),
+        onOpenSleep: vi.fn(),
+      }),
+    );
+    expect(html).toContain('10:00–11:00');
+    expect(html).toContain('План: 1 ч');
+    expect(html).toContain('Доступно: 2 ч');
+    expect(html).toContain('Без оценки: 1');
+    expect(html).toContain('#/v2/actions?view=calendar');
+  });
   it('renders an optional main, collapsed completed and an accessible quick add', () => {
     const html = renderToStaticMarkup(
       createElement(PlannerToday, {
@@ -150,6 +195,8 @@ describe('Today unfinished previous days', () => {
   it('exposes previous tasks with three decisions without counting them in today progress', () => {
     const html = render('today');
     expect(html).toContain('Осталось с прошлых дней');
+    expect(html).toContain('Разобрать план');
+    expect(html).toContain('planner-plan-review');
     expect(html).toContain('Действие past-draft');
     expect(html).toContain('23 сентября 2026 г.');
     expect(html).toContain('На сегодня');

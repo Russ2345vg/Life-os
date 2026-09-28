@@ -4,9 +4,15 @@ import type { PlanningServices } from '../../application/planner/PlanningService
 import type { DayDate } from '../../domain';
 import type { PlannerServices } from '../../presentation/planner-v2/PlannerWorkspace';
 import type { PlannerScenarios } from '../../application/planner/PlannerScenarios';
+import type { WorkSessions } from '../../application/time/WorkSessions';
+import type { TimeCapacityService } from '../../application/time/TimeCapacityService';
+import type { SetLifeActionTime } from '../../application/commands/SetLifeActionTime';
 
 /** The application surface consumed by the current LifeOS workspace. */
 export interface LifeOsApplication extends PlannerServices {
+  readonly workSessions: WorkSessions;
+  readonly timeCapacity: TimeCapacityService;
+  readonly setLifeActionTime: SetLifeActionTime;
   readonly plannerScenarios: PlannerScenarios;
   readonly balance: BalanceServices;
   readonly planning: PlanningServices;

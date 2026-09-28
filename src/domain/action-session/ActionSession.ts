@@ -17,6 +17,7 @@ import {
 export interface ActionSessionStartInput {
   readonly id: EntityId;
   readonly lifeActionId: EntityId;
+  readonly goalIdAtStart?: EntityId | null;
   readonly startedAt: Date;
   readonly eventId: EntityId;
 }
@@ -31,6 +32,7 @@ export interface ActionSessionCompletionInput {
 export interface ActionSessionRehydrationData {
   readonly id: EntityId;
   readonly lifeActionId: EntityId;
+  readonly goalIdAtStart?: EntityId | null;
   readonly status: ActionSessionStatus;
   readonly startedAt: Date;
   readonly pausedAt: Date | null;
@@ -43,6 +45,7 @@ export interface ActionSessionRehydrationData {
 
 export class ActionSession extends Entity {
   readonly #lifeActionId: EntityId;
+  readonly #goalIdAtStart: EntityId | null;
   readonly #startedAt: Date;
   readonly #domainEvents: DomainEvent[];
   #status: ActionSessionStatus;
@@ -56,6 +59,7 @@ export class ActionSession extends Entity {
   private constructor(data: ActionSessionRehydrationData, domainEvents: DomainEvent[]) {
     super(data.id);
     this.#lifeActionId = data.lifeActionId;
+    this.#goalIdAtStart = data.goalIdAtStart ?? null;
     this.#status = data.status;
     this.#startedAt = copyDate(data.startedAt);
     this.#pausedAt = copyOptionalDate(data.pausedAt);
@@ -70,6 +74,7 @@ export class ActionSession extends Entity {
   public static start(input: ActionSessionStartInput): ActionSession {
     assertEntityId(input.id, 'Идентификатор сессии');
     assertEntityId(input.lifeActionId, 'Идентификатор действия');
+    if (input.goalIdAtStart != null) assertEntityId(input.goalIdAtStart, 'Идентификатор цели');
     assertEntityId(input.eventId, 'Идентификатор события');
     assertValidDate(input.startedAt, 'Время начала сессии');
 
@@ -77,6 +82,7 @@ export class ActionSession extends Entity {
       {
         id: input.id,
         lifeActionId: input.lifeActionId,
+        goalIdAtStart: input.goalIdAtStart ?? null,
         status: ACTION_SESSION_STATUS.running,
         startedAt: input.startedAt,
         pausedAt: null,
@@ -103,6 +109,10 @@ export class ActionSession extends Entity {
 
   public get lifeActionId(): EntityId {
     return this.#lifeActionId;
+  }
+
+  public get goalIdAtStart(): EntityId | null {
+    return this.#goalIdAtStart;
   }
 
   public get status(): ActionSessionStatus {
@@ -339,6 +349,7 @@ export class ActionSession extends Entity {
 function assertRehydrationInvariants(data: ActionSessionRehydrationData): void {
   assertEntityId(data.id, 'Идентификатор сессии');
   assertEntityId(data.lifeActionId, 'Идентификатор действия');
+  if (data.goalIdAtStart != null) assertEntityId(data.goalIdAtStart, 'Идентификатор цели');
   assertSessionStatus(data.status);
   assertValidDate(data.startedAt, 'Время начала сессии');
 

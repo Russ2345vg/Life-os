@@ -57,6 +57,9 @@ export interface LifeActionDetailsUpdateInput {
 }
 
 export interface LifeActionRehydrationData {
+  readonly estimateMinutes?: number | null;
+  readonly scheduledStartMinute?: number | null;
+  readonly scheduledDurationMinutes?: number | null;
   readonly priority?: ActionPriority | null;
   readonly occurrence?: ActionOccurrence | null;
   readonly completionGeneration?: number;
@@ -91,6 +94,9 @@ export interface LifeActionRehydrationData {
 }
 
 export class LifeAction extends Entity {
+  #estimateMinutes: number | null;
+  #scheduledStartMinute: number | null;
+  #scheduledDurationMinutes: number | null;
   #priority: ActionPriority | null;
   #occurrence: ActionOccurrence | null;
   #completionGeneration: number;
@@ -163,6 +169,9 @@ export class LifeAction extends Entity {
       );
     this.#isNext = data.isNext ?? false;
     this.#plannedDate = data.plannedDate;
+    this.#estimateMinutes = data.estimateMinutes ?? null;
+    this.#scheduledStartMinute = data.scheduledStartMinute ?? null;
+    this.#scheduledDurationMinutes = data.scheduledDurationMinutes ?? null;
     this.#createdAt = copyDate(data.createdAt);
     this.#readyAt = copyOptionalDate(data.readyAt);
     this.#startedAt = copyOptionalDate(data.startedAt);
@@ -296,12 +305,15 @@ export class LifeAction extends Entity {
     this.assertNotArchived();
     assertValidDate(occurredAt, 'Время повторного открытия');
     if (this.#status !== LIFE_ACTION_STATUS.completed) return;
-    this.#status = LIFE_ACTION_STATUS.draft;
+    this.#status =
+      this.#expectedResult !== null && this.#readyAt !== null
+        ? LIFE_ACTION_STATUS.ready
+        : LIFE_ACTION_STATUS.draft;
     this.#actualResult = null;
     this.#completedAt = null;
     this.#completedOn = null;
     this.#startedAt = null;
-    this.#readyAt = null;
+    // Keep the preparation tuple intact so the reopened action remains readable.
     this.#completionGeneration += 1;
     this.#expectedContributions = null;
     this.#version += 1;
@@ -463,6 +475,46 @@ export class LifeAction extends Entity {
     return this.#plannedDate;
   }
 
+  public get estimateMinutes(): number | null {
+    return this.#estimateMinutes;
+  }
+
+  public get scheduledStartMinute(): number | null {
+    return this.#scheduledStartMinute;
+  }
+
+  public get scheduledDurationMinutes(): number | null {
+    return this.#scheduledDurationMinutes;
+  }
+
+  public setTimePlanning(input: {
+    readonly estimateMinutes: number | null;
+    readonly scheduledStartMinute: number | null;
+    readonly scheduledDurationMinutes: number | null;
+  }): boolean {
+    this.assertNotArchived();
+    if (
+      this.isDeleted() ||
+      (this.#status !== LIFE_ACTION_STATUS.draft && this.#status !== LIFE_ACTION_STATUS.ready)
+    )
+      throw new DomainError(
+        'life_action.time_requires_open',
+        'Планировать время можно только у открытого действия.',
+      );
+    assertTimePlanning(input, this.#plannedDate);
+    if (
+      this.#estimateMinutes === input.estimateMinutes &&
+      this.#scheduledStartMinute === input.scheduledStartMinute &&
+      this.#scheduledDurationMinutes === input.scheduledDurationMinutes
+    )
+      return false;
+    this.#estimateMinutes = input.estimateMinutes;
+    this.#scheduledStartMinute = input.scheduledStartMinute;
+    this.#scheduledDurationMinutes = input.scheduledDurationMinutes;
+    this.#version += 1;
+    return true;
+  }
+
   public get createdAt(): Date {
     return copyDate(this.#createdAt);
   }
@@ -557,6 +609,10 @@ export class LifeAction extends Entity {
     if (sameDate && this.#isNext === isNext) return false;
     this.#plannedDate = plannedDate;
     this.#isNext = isNext;
+    if (plannedDate === null) {
+      this.#scheduledStartMinute = null;
+      this.#scheduledDurationMinutes = null;
+    }
     this.#version += 1;
     return true;
   }
@@ -898,6 +954,7 @@ function assertRehydrationInvariants(data: LifeActionRehydrationData): void {
   }
 
   assertOptionalValueTypes(data);
+  assertTimePlanning(data, data.plannedDate);
 
   const hasAnyReadyField = data.expectedResult !== null || data.readyAt !== null;
   const hasAllReadyFields =
@@ -1028,6 +1085,38 @@ function assertOptionalValueTypes(data: LifeActionRehydrationData): void {
   if (data.plannedDate !== null) {
     assertDayDate(data.plannedDate);
   }
+}
+
+function assertTimePlanning(
+  input: {
+    readonly estimateMinutes?: number | null;
+    readonly scheduledStartMinute?: number | null;
+    readonly scheduledDurationMinutes?: number | null;
+  },
+  plannedDate: DayDate | null,
+): void {
+  const estimate = input.estimateMinutes ?? null;
+  const start = input.scheduledStartMinute ?? null;
+  const duration = input.scheduledDurationMinutes ?? null;
+  if (estimate !== null && (!Number.isInteger(estimate) || estimate < 1 || estimate > 1440))
+    throw new DomainError('life_action.invalid_estimate', 'Оценка должна быть от 1 до 1440 минут.');
+  if ((start === null) !== (duration === null))
+    throw new DomainError('life_action.invalid_time_block', 'Укажите начало и длительность блока.');
+  if (start === null || duration === null) return;
+  if (plannedDate === null)
+    throw new DomainError('life_action.time_requires_date', 'Для планового блока выберите дату.');
+  if (
+    !Number.isInteger(start) ||
+    start < 0 ||
+    start >= 1440 ||
+    !Number.isInteger(duration) ||
+    duration < 1 ||
+    start + duration > 1440
+  )
+    throw new DomainError(
+      'life_action.invalid_time_block',
+      'Плановый блок должен помещаться в один день.',
+    );
 }
 
 function assertLifeActionStatus(status: LifeActionStatus): void {

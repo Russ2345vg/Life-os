@@ -1,0 +1,108 @@
+.planner-weekly-review {
+  margin-top: var(--space-6);
+}
+.weekly-period {
+  margin-bottom: var(--space-6);
+  flex-wrap: wrap;
+}
+.weekly-summary,
+.weekly-grid > section {
+  background: var(--surface-1);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-large);
+  padding: var(--space-6);
+  min-width: 0;
+}
+.weekly-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+}
+.weekly-stats > div {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: var(--space-2);
+}
+.weekly-stats dt {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+.weekly-stats dd {
+  margin: 0;
+  font-size: 1.5rem;
+  color: var(--planner-accent);
+}
+.weekly-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--space-6);
+  margin-block: var(--space-6);
+}
+.weekly-goal {
+  padding-block: var(--space-6);
+  border-bottom: 1px solid var(--border-soft);
+}
+.weekly-goal:last-child {
+  border-bottom: 0;
+}
+.weekly-step form {
+  display: grid;
+  gap: var(--space-3);
+  margin-block: var(--space-4);
+}
+.weekly-step :is(select, input) {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--control-md);
+}
+.weekly-goal h3 {
+  margin: 0;
+}
+.weekly-summary h2 {
+  font-size: 1.375rem;
+  margin-top: 0;
+}
+.weekly-grid h2 {
+  font-size: 1.125rem;
+}
+.weekly-goal h3 .planner-action-title {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+}
+.weekly-next .planner-overdue {
+  margin-top: var(--space-6);
+}
+.weekly-next .planner-overdue li {
+  padding-block: var(--space-4);
+}
+.weekly-next .planner-inline-actions {
+  flex-wrap: wrap;
+}
+.planner-weekly-review button,
+.planner-weekly-review summary {
+  min-height: var(--control-md);
+}
+.planner-weekly-review :is(p, button, li, strong) {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 900px) {
+  .weekly-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 480px) {
+  .weekly-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-6) var(--space-4);
+  }
+  .weekly-period {
+    display: grid;
+    grid-template-columns: var(--control-md) minmax(0, 1fr) var(--control-md);
+  }
+  .weekly-period > span {
+    grid-column: 1 / -1;
+  }
+}

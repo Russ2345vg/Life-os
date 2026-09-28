@@ -58,7 +58,8 @@ describe('SleepPreparationView', () => {
     expect(html).toContain('Завершить подготовку');
     expect(html).toContain('Пропустить на сегодня');
     expect(html).toContain('Будильник Android');
-    expect(html).toContain('Установлен на 07:15');
+    expect(html).toContain('Ожидает постановки на 07:15');
+    expect(html.match(/aria-label="Управление подъёмом"/g)).toHaveLength(1);
     expect(html).toContain('Пробный сигнал');
     expect(html).toContain('Пропустить ближайший');
     expect(html).toContain('Повторяемый список');

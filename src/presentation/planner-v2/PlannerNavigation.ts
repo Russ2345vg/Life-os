@@ -14,7 +14,9 @@ export type PlannerRoute =
       readonly period?: 'year' | 'quarter' | 'thirty_days' | 'week' | 'none';
     }
   | { readonly view: 'focus' }
+  | { readonly view: 'review'; readonly week?: string }
   | { readonly view: 'actions' }
+  | { readonly view: 'time'; readonly actionId?: string }
   | { readonly view: 'inbox' }
   | { readonly view: 'kanban' | 'calendar' | 'tree'; readonly section: 'goals' | 'actions' }
   | { readonly view: 'action'; readonly id: string }
@@ -65,6 +67,10 @@ export function parsePlannerRoute(hash: string): PlannerRoute | null {
   if (path === '#/v2/sleep') return { view: 'sleep' };
   if (path === '#/v2/account') return { view: 'account' };
   if (path === '#/v2/goals') {
+    if (view === 'review') {
+      const week = new URLSearchParams(query).get('week');
+      return { view: 'review', ...(week ? { week } : {}) };
+    }
     const period = new URLSearchParams(query).get('period');
     return {
       view: 'goals',
@@ -75,7 +81,13 @@ export function parsePlannerRoute(hash: string): PlannerRoute | null {
     };
   }
   if (path === '#/v2/goals/focus') return { view: 'focus' };
-  if (path === '#/v2/actions') return { view: 'actions' };
+  if (path === '#/v2/actions') {
+    if (view === 'time') {
+      const actionId = new URLSearchParams(query).get('actionId')?.trim();
+      return { view: 'time', ...(actionId ? { actionId } : {}) };
+    }
+    return { view: 'actions' };
+  }
   if (path === '#/v2/inbox') return { view: 'inbox' };
   if (path?.startsWith('#/v2/actions/') && path !== '#/v2/actions/new') {
     try {
@@ -142,8 +154,12 @@ export function buildPlannerRoute(route: PlannerRoute): string {
     return `#/v2/goals${params.size ? `?${params}` : ''}`;
   }
   if (route.view === 'focus') return '#/v2/goals/focus';
+  if (route.view === 'review')
+    return `#/v2/goals?view=review${route.week ? `&${new URLSearchParams({ week: route.week })}` : ''}`;
   if (route.view === 'inbox') return '#/v2/inbox';
   if (route.view === 'actions') return '#/v2/actions';
+  if (route.view === 'time')
+    return `#/v2/actions?view=time${route.actionId ? `&${new URLSearchParams({ actionId: route.actionId })}` : ''}`;
   if (route.view === 'goal')
     return `#/v2/goals/${encodeURIComponent(route.id)}${route.edit ? '?edit=1' : ''}`;
   if (route.view === 'action') return `#/v2/actions/${encodeURIComponent(route.id)}`;

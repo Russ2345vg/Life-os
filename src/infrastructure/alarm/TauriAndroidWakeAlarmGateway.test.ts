@@ -2,6 +2,14 @@ import { describe, expect, it, vi } from 'vitest';
 import { TauriAndroidWakeAlarmGateway } from './TauriAndroidWakeAlarmGateway';
 
 describe('TauriAndroidWakeAlarmGateway', () => {
+  it('exports the configured QR without requesting replacement and reports export failure', async () => {
+    const invoke = vi.fn().mockResolvedValue(undefined);
+    const gateway = new TauriAndroidWakeAlarmGateway(invoke, () => true);
+    await gateway.exportDismissalQr();
+    expect(invoke.mock.calls).toEqual([['android_alarm_export_dismissal_qr']]);
+    invoke.mockRejectedValue(new Error('Файл QR не найден'));
+    await expect(gateway.exportDismissalQr()).rejects.toThrow('Файл QR не найден');
+  });
   it('serializes the concrete occurrence and normalizes the acknowledged Android status', async () => {
     const scheduledAt = new Date('2026-11-14T23:00:00.000Z');
     const invoke = vi.fn().mockResolvedValue({

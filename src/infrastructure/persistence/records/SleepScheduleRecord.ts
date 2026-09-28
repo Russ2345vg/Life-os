@@ -35,6 +35,7 @@ export interface SleepPreparationItemRecord {
 }
 
 export interface SleepSettingsRecord {
+  readonly wakeOverride?: { readonly cycleDate: string; readonly wakeTime: string } | null;
   readonly bedtime: string;
   readonly wakeTime: string;
   readonly timeZone: string;

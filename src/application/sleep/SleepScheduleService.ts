@@ -17,6 +17,8 @@ import {
   reopenPreparationItem,
   setPreparationItemEnabled,
   setSleepFeatureEnabled,
+  setNearestWakeTime,
+  clearNearestWakeTime,
   setSleepQuietModeEnabled,
   skipNearestWakeOccurrence,
   updateSleepSettings,
@@ -230,7 +232,7 @@ export class SleepScheduleService {
     return state;
   }
 
-  public async skipNearestWake(): Promise<SleepScheduleState> {
+  public async skipNearestWake(expectedOccurrenceId?: string): Promise<SleepScheduleState> {
     await this.syncAlarm();
     const now = this.#clock.now();
     const exceptionId = this.#idGenerator.generate().toString();
@@ -238,6 +240,7 @@ export class SleepScheduleService {
       skipNearestWakeOccurrence(current ?? createEmptySleepSchedule(), {
         now,
         exceptionId,
+        ...(expectedOccurrenceId === undefined ? {} : { expectedOccurrenceId }),
       }),
     );
     await this.#reconcileNative(state);
@@ -246,9 +249,53 @@ export class SleepScheduleService {
 
   public async setEnabled(enabled: boolean): Promise<SleepScheduleState> {
     const now = this.#clock.now();
-    const state = await this.#repository.update((current) =>
-      setSleepFeatureEnabled(current ?? createEmptySleepSchedule(), enabled, now),
+    const state = await this.#repository.update((current) => {
+      const updated = setSleepFeatureEnabled(current ?? createEmptySleepSchedule(), enabled, now);
+      const settings = requiredSettings(updated);
+      return rebuildWakeSchedule(updated, {
+        cycleDates: upcomingCycleDates(
+          resolveSleepCycleDate(now, settings.timeZone, settings.wakeTime),
+          NATIVE_SCHEDULE_HORIZON_DAYS,
+        ),
+        now,
+        nextId: () => this.#idGenerator.generate().toString(),
+      });
+    });
+    await this.#reconcileNative(state);
+    return state;
+  }
+
+  public async setNearestWakeTime(
+    wakeTime: string,
+    expectedOccurrenceId?: string,
+  ): Promise<SleepScheduleState> {
+    await this.syncAlarm();
+    return this.#updateWakeOverride((state, now) =>
+      setNearestWakeTime(state, wakeTime, now, expectedOccurrenceId),
     );
+  }
+
+  public async clearNearestWakeTime(): Promise<SleepScheduleState> {
+    await this.syncAlarm();
+    return this.#updateWakeOverride(clearNearestWakeTime);
+  }
+
+  async #updateWakeOverride(
+    update: (state: SleepScheduleState, now: Date) => SleepScheduleState,
+  ): Promise<SleepScheduleState> {
+    const now = this.#clock.now();
+    const state = await this.#repository.update((current) => {
+      const updated = update(current ?? createEmptySleepSchedule(), now);
+      const settings = requiredSettings(updated);
+      return rebuildWakeSchedule(updated, {
+        cycleDates: upcomingCycleDates(
+          resolveSleepCycleDate(now, settings.timeZone, settings.wakeTime),
+          NATIVE_SCHEDULE_HORIZON_DAYS,
+        ),
+        now,
+        nextId: () => this.#idGenerator.generate().toString(),
+      });
+    });
     await this.#reconcileNative(state);
     return state;
   }
@@ -314,6 +361,10 @@ export class SleepScheduleService {
 
   public async regenerateWakeDismissalQr(): Promise<WakeDismissalSetup> {
     return this.#alarmGateway.regenerateDismissalQr();
+  }
+
+  public async exportWakeDismissalQr(): Promise<void> {
+    await this.#alarmGateway.exportDismissalQr();
   }
 
   public async saveWakeEmergencyPhrase(phrase: string): Promise<WakeDismissalSetup> {

@@ -18,6 +18,8 @@ import { GoalPeriodMembership } from './GoalPeriodMembership';
 import { EntityContextMenu, type EntityMenuAction } from './EntityContextMenu';
 import type { PlanningPeriod, PeriodMembership } from '../../domain/planner/PlanningPeriod';
 import './planning.css';
+import { buildGoalDynamics } from '../../application/queries/GetGoalDynamics';
+import { GoalDynamics } from './GoalDynamics';
 
 export function PlanningGoalDetail({
   id,
@@ -83,6 +85,7 @@ export function GoalDetailContent({
 }) {
   const { open, completed, next } = selectGoalCardActions(goal, actions);
   const id = goal.id.toString();
+  const dynamics = buildGoalDynamics({ goals: [goal], actions, contributions: facts }, id, today);
   const recurrenceLabel = (action: LifeAction): string | null => {
     const rule = rules.find((item) => item.id === action.occurrence?.ruleId);
     if (rule?.schedule.kind !== 'count' || rule.maxCompletions === null) return null;
@@ -134,6 +137,7 @@ export function GoalDetailContent({
       </section>
       {!goal.measurement && <PlannerGoalProgress goal={goal} />}
       <PlanningProgress key={id} goal={goal} date={today} editable />
+      {dynamics && <GoalDynamics model={dynamics} />}
       {next ? (
         <section className="planner-goal-next" aria-label="Следующее действие">
           <h2>Следующее действие</h2>

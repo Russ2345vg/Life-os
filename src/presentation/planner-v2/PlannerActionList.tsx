@@ -18,6 +18,8 @@ import {
   type ActionView,
 } from './plannerCatalogModel';
 import { selectRecurringActionRepresentatives } from '../../application/planner/actionSelection';
+import { PlannerActionTimeSheet, type SetActionTime } from './PlannerActionTimeSheet';
+import { clockTime, durationLabel } from './timePresentation';
 
 export interface PlannerActionOperations {
   readonly busy: boolean;
@@ -41,6 +43,7 @@ export function PlannerActionList({
   selectedId,
   viewSwitcher,
   initialView = 'open',
+  onSetTime,
   ...operations
 }: PlannerActionOperations & {
   readonly actions: readonly LifeAction[];
@@ -52,9 +55,11 @@ export function PlannerActionList({
   readonly selectedId: string | null;
   readonly viewSwitcher?: ReactNode;
   readonly initialView?: ActionView;
+  readonly onSetTime?: SetActionTime | undefined;
 }) {
   const [view, setView] = useState<ActionView>(initialView);
   const [search, setSearch] = useState('');
+  const [timeOpen, setTimeOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [goalFilter, setGoalFilter] = useState('');
   const [directionFilter, setDirectionFilter] = useState('');
@@ -198,6 +203,40 @@ export function PlannerActionList({
               />
             )}
             <PlanningActionDetails action={selected} today={today} />
+            <section className="planner-subactions" aria-label="Время действия">
+              <h2>Время</h2>
+              <a
+                className="planner-text-link"
+                href={`#/v2/actions?view=time&${new URLSearchParams({ actionId: selected.id.toString() })}`}
+              >
+                Рабочее время
+              </a>
+              <p className="planner-muted">
+                Оценка:{' '}
+                {selected.estimateMinutes === null
+                  ? 'не задана'
+                  : durationLabel(selected.estimateMinutes)}
+                {selected.scheduledStartMinute !== null && (
+                  <>
+                    {' '}
+                    · {clockTime(selected.scheduledStartMinute)}–
+                    {clockTime(selected.scheduledStartMinute + selected.scheduledDurationMinutes!)}
+                  </>
+                )}
+              </p>
+              {(selected.status === 'draft' || selected.status === 'ready') && onSetTime && (
+                <button type="button" disabled={operations.busy} onClick={() => setTimeOpen(true)}>
+                  Планировать время
+                </button>
+              )}
+              {timeOpen && onSetTime && (
+                <PlannerActionTimeSheet
+                  action={selected}
+                  onSave={onSetTime}
+                  onClose={() => setTimeOpen(false)}
+                />
+              )}
+            </section>
             {selected.parentActionId ? (
               <div className="planner-inline-actions">
                 <a
@@ -798,7 +837,7 @@ export function PlannerActionRow({
                   </p>
                 )}
                 {action.actualResult && (
-                  <p className="planner-action-note">Результат: {action.actualResult.toString()}</p>
+                  <p className="planner-action-note">Итог: {action.actualResult.toString()}</p>
                 )}
                 <div className="planner-form-columns">
                   {(isOpenAction(action) || action.status === 'completed') && (

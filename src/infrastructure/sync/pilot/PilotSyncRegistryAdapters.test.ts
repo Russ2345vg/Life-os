@@ -37,6 +37,89 @@ const goal = {
 };
 
 describe('PilotSyncRegistryAdapters', () => {
+  it('keeps the historical session goal when an old peer does not know the field', () => {
+    const existing = { ...structuredSyncFixtures().action_session, goalIdAtStart: 'goal-original' };
+    const legacy = { ...existing } as Record<string, unknown>;
+    delete legacy.goalIdAtStart;
+    const wire = normalizePilotRecord('action_session', legacy);
+    expect(wire).not.toHaveProperty('goalIdAtStart');
+    expect(prepareRemotePilotRecord('action_session', wire, existing)).toMatchObject({
+      goalIdAtStart: 'goal-original',
+    });
+    expect(
+      prepareRemotePilotRecord('action_session', { ...wire, goalIdAtStart: null }, existing),
+    ).toMatchObject({ goalIdAtStart: null });
+  });
+  it('validates and round-trips weekday capacity through sync', () => {
+    const fixture = structuredSyncFixtures().time_capacity;
+    const wire = normalizePilotRecord('time_capacity', fixture);
+    expect(wire.version).toBeUndefined();
+    expect(prepareRemotePilotRecord('time_capacity', wire)).toMatchObject({
+      id: 'time-capacity',
+      weekdays: [360, 360, 360, 360, 300, null, null],
+      version: 1,
+    });
+    expect(() =>
+      normalizePilotRecord('time_capacity', {
+        ...fixture,
+        weekdays: [0, null, null, null, null, null, null],
+      }),
+    ).toThrow();
+  });
+
+  it('preserves scheduled time when an old peer omits new fields and clears it on an explicit null date', () => {
+    const existing = {
+      ...structuredSyncFixtures().life_action,
+      plannedDate: '2026-09-28',
+      estimateMinutes: 90,
+      scheduledStartMinute: 600,
+      scheduledDurationMinutes: 60,
+    };
+    const oldWire = { ...existing } as Record<string, unknown>;
+    delete oldWire.estimateMinutes;
+    delete oldWire.scheduledStartMinute;
+    delete oldWire.scheduledDurationMinutes;
+    const normalized = normalizePilotRecord('life_action', oldWire);
+    expect(normalized.estimateMinutes).toBeUndefined();
+    expect(normalized.scheduledStartMinute).toBeUndefined();
+    expect(prepareRemotePilotRecord('life_action', normalized, existing)).toMatchObject({
+      estimateMinutes: 90,
+      scheduledStartMinute: 600,
+      scheduledDurationMinutes: 60,
+    });
+    expect(
+      prepareRemotePilotRecord('life_action', { ...normalized, plannedDate: null }, existing),
+    ).toMatchObject({
+      estimateMinutes: 90,
+      scheduledStartMinute: null,
+      scheduledDurationMinutes: null,
+    });
+    expect(
+      prepareRemotePilotRecord(
+        'life_action',
+        { ...normalized, scheduledStartMinute: null, scheduledDurationMinutes: null },
+        existing,
+      ),
+    ).toMatchObject({
+      scheduledStartMinute: null,
+      scheduledDurationMinutes: null,
+    });
+  });
+
+  it('accepts an old peer clearing the date while retaining unknown block fields', () => {
+    const staleBlock = {
+      ...structuredSyncFixtures().life_action,
+      plannedDate: null,
+      scheduledStartMinute: 600,
+      scheduledDurationMinutes: 60,
+    };
+    expect(normalizePilotRecord('life_action', staleBlock)).toMatchObject({
+      plannedDate: null,
+      scheduledStartMinute: null,
+      scheduledDurationMinutes: null,
+    });
+  });
+
   it.each(['goal', 'life_action'] as const)(
     'round-trips %s trash timestamps through the existing mapper',
     (type) => {
@@ -256,7 +339,7 @@ describe('PilotSyncRegistryAdapters', () => {
   );
 
   it('uses the complete real dependency order and excludes Goal covers', () => {
-    expect(PILOT_DEPENDENCY_ORDER).toHaveLength(34);
+    expect(PILOT_DEPENDENCY_ORDER).toHaveLength(35);
     expect(PILOT_DEPENDENCY_ORDER.indexOf('sphere')).toBeLessThan(
       PILOT_DEPENDENCY_ORDER.indexOf('direction'),
     );
@@ -286,7 +369,7 @@ describe('PilotSyncRegistryAdapters', () => {
     expect(runtime.map(({ registration }) => registration.entityType)).toEqual(
       PILOT_DEPENDENCY_ORDER,
     );
-    expect(runtime).toHaveLength(34);
+    expect(runtime).toHaveLength(35);
   });
 
   it('preserves a local Goal cover while applying structured remote data without Outbox echo', async () => {

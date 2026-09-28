@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LifeOS — предложение вечернего обновления</title>
+    <link rel="stylesheet" href="/src/presentation/styles/global.css" />
+    <link rel="stylesheet" href="/src/presentation/planner-v2/planner-v2.css" />
+    <link rel="stylesheet" href="/src/presentation/planner-v2/planner-master.css" />
+    <link rel="stylesheet" href="/src/presentation/planner-v2/planner-premium.css" />
+    <style>
+      .evening-preview {
+        max-width: 1120px;
+        margin: auto;
+      }
+      .preview-notice {
+        color: var(--text-secondary);
+        font-size: var(--planner-font-meta);
+      }
+      .preview-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr);
+        gap: var(--space-6);
+      }
+      .preview-stack {
+        display: grid;
+        align-content: start;
+        gap: var(--space-6);
+        min-width: 0;
+      }
+      .preview-panel {
+        padding: var(--space-6);
+        border-radius: var(--radius-md);
+        background: var(--surface-1);
+        border: 1px solid var(--border-soft);
+      }
+      .preview-panel h2 {
+        margin: 0 0 var(--space-4);
+        font-size: var(--planner-font-heading);
+      }
+      .preview-panel p {
+        color: var(--text-secondary);
+      }
+      .preview-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-3);
+        padding-block: var(--space-3);
+        border-bottom: 1px solid var(--border-soft);
+      }
+      .preview-row label {
+        display: flex;
+        gap: var(--space-3);
+        align-items: center;
+        min-height: var(--control-md);
+      }
+      .preview-row input {
+        accent-color: var(--accent-primary);
+        width: 20px;
+        height: 20px;
+      }
+      .preview-row button {
+        color: var(--text-primary);
+        background: var(--surface-2);
+        padding-inline: var(--space-3);
+      }
+      .preview-panel textarea {
+        width: 100%;
+        min-height: 88px;
+        margin-block: var(--space-2) var(--space-3);
+        background: var(--surface-2);
+        color: var(--text-primary);
+        border: 1px solid var(--border-soft);
+        border-radius: var(--radius-sm);
+        padding: var(--space-3);
+      }
+      .preview-panel .planner-primary {
+        padding-inline: var(--space-4);
+      }
+      .preview-stat {
+        font-size: 28px;
+        color: var(--text-primary);
+        margin-right: var(--space-2);
+      }
+      .preview-status {
+        color: var(--success);
+        min-height: var(--control-md);
+      }
+      .preview-panel summary {
+        cursor: pointer;
+        min-height: var(--control-md);
+        font-weight: 650;
+      }
+      [hidden] {
+        display: none !important;
+      }
+      @media (max-width: 760px) {
+        .preview-grid {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .preview-panel {
+          padding: var(--space-4);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="planner-v2 planner-v2--sleep">
+      <aside class="planner-sidebar">
+        <strong class="planner-brand">LifeOS</strong>
+        <nav aria-label="Разделы">
+          <a href="/#/v2/today">Сегодня</a><a href="/#/v2/goals">Цели</a
+          ><a href="/#/v2/actions">Действия</a><a href="/#/v2/inbox">Входящие</a
+          ><a href="/#/v2/sleep" aria-current="page">Подготовка ко сну</a>
+        </nav>
+      </aside>
+      <main class="planner-content evening-preview">
+        <p class="preview-notice">
+          МАКЕТ ДЛЯ ОБСУЖДЕНИЯ · Все данные демонстрационные · Ничего не сохраняется
+        </p>
+        <header class="planner-page-heading">
+          <div>
+            <p class="planner-eyebrow">Вечер · Сон в 22:30 · Подъём в 07:15</p>
+            <h1>Подготовка ко сну</h1>
+            <p>Завершить день в своём темпе</p>
+          </div>
+        </header>
+        <div class="preview-grid">
+          <div class="preview-stack">
+            <section class="preview-panel" aria-labelledby="checklist-title">
+              <h2 id="checklist-title">Список подготовки</h2>
+              <div class="preview-row">
+                <label><input type="checkbox" checked />Проветрить комнату</label>
+              </div>
+              <div class="preview-row">
+                <label><input type="checkbox" />Подготовить кровать</label>
+              </div>
+              <div class="preview-row">
+                <label><input type="checkbox" />Подготовить одежду</label>
+              </div>
+              <div class="preview-row">
+                <label><input type="checkbox" />Поставить стакан воды</label>
+              </div>
+              <button type="button" class="planner-primary" id="finish">
+                Завершить подготовку
+              </button>
+              <p class="preview-status" id="finish-status" role="status"></p>
+            </section>
+            <details class="preview-panel">
+              <summary>Закрыть день</summary>
+              <p>Можно разобрать дела и оставить мысли на завтра.</p>
+              <h3>Осталось сегодня</h3>
+              <div class="preview-row">
+                <span>Ответить на письмо</span><button type="button" id="move">На завтра</button>
+              </div>
+              <p id="move-status" role="status"></p>
+              <label for="thought">Что осталось в голове?</label>
+              <textarea
+                id="thought"
+                placeholder="Запиши мысль, чтобы не держать её в голове"
+              ></textarea>
+              <button type="button" id="capture">Во входящие</button>
+              <p id="capture-status" role="status"></p>
+              <h3>Главное на завтра</h3>
+              <p>Сейчас главное не выбрано.</p>
+              <div class="preview-row">
+                <span>Подготовить предложение</span
+                ><button type="button" id="priority">Сделать главным</button>
+              </div>
+              <p id="priority-status" role="status"></p>
+            </details>
+          </div>
+          <aside class="preview-stack">
+            <section class="preview-panel">
+              <h2>Последние 14 вечеров</h2>
+              <p class="preview-notice">Пример для макета, не твоя статистика</p>
+              <p><strong class="preview-stat">8 / 10</strong>подготовок завершено</p>
+              <p><strong class="preview-stat">6 / 8</strong>до времени сна</p>
+              <p>Есть записи за 10 вечеров. За остальные четыре данных нет.</p>
+              <h3>Что стоит пересмотреть</h3>
+              <p>«Подготовить одежду» осталось невыполненным в 4 из 8 завершённых подготовок.</p>
+              <p>Возможно, удобнее сделать это раньше или упростить пункт.</p>
+              <button type="button" id="review">Пересмотреть список</button>
+              <p id="review-status" role="status"></p>
+            </section>
+          </aside>
+        </div>
+      </main>
+    </div>
+    <script>
+      document.getElementById('finish').addEventListener('click', () => {
+        const pending = [...document.querySelectorAll('.preview-row input')].some(
+          (item) => !item.checked,
+        );
+        document.getElementById('finish-status').textContent = pending
+          ? 'Пример: подготовка завершена с пропусками.'
+          : 'Пример: подготовка завершена.';
+      });
+      document.getElementById('move').addEventListener('click', () => {
+        document.getElementById('move-status').textContent = 'Пример: дело перенесено на завтра.';
+      });
+      document.getElementById('capture').addEventListener('click', () => {
+        document.getElementById('capture-status').textContent = document
+          .getElementById('thought')
+          .value.trim()
+          ? 'Пример: мысль сохранена во входящие.'
+          : 'Сначала запиши мысль.';
+      });
+      document.getElementById('priority').addEventListener('click', () => {
+        document.getElementById('priority-status').textContent =
+          'Пример: главное на завтра выбрано.';
+      });
+      document.getElementById('review').addEventListener('click', () => {
+        document.getElementById('review-status').textContent =
+          'В приложении откроется существующая настройка списка.';
+      });
+    </script>
+  </body>
+</html>

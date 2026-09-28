@@ -20,6 +20,7 @@ describe('ActionSessionRecordMapper', () => {
       schemaVersion: 1,
       id: 'session-1',
       lifeActionId: 'action-1',
+      goalIdAtStart: null,
       status: 'completed',
       startedAt: '2026-08-02T09:00:00.000Z',
       pausedAt: null,
@@ -77,6 +78,23 @@ describe('ActionSessionRecordMapper', () => {
       source.workedDurationAt(calculationTime),
     );
     expect(restored.getUncommittedEvents()).toHaveLength(0);
+  });
+
+  it('сохраняет историческую цель и читает старые сессии без неё', () => {
+    const session = ActionSession.start({
+      id: id('session-goal'),
+      lifeActionId: id('action-goal'),
+      goalIdAtStart: id('goal-original'),
+      startedAt: time('09:00'),
+      eventId: id('event-goal'),
+    });
+    const record = ActionSessionRecordMapper.toRecord(session);
+    expect(ActionSessionRecordMapper.fromRecord(record).goalIdAtStart?.toString()).toBe(
+      'goal-original',
+    );
+    const legacy = { ...record };
+    delete legacy.goalIdAtStart;
+    expect(ActionSessionRecordMapper.fromRecord(legacy).goalIdAtStart).toBeNull();
   });
 
   it('отклоняет неподдерживаемую schemaVersion и некорректный EntityId', () => {

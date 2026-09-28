@@ -13,7 +13,7 @@
   /><link rel="stylesheet" href="/src/presentation/planner-v2/planner-views.css" /><link
     rel="stylesheet"
     href="/src/presentation/planner-v2/planner-master.css"
-  /><style>
+  /><link rel="stylesheet" href="/src/presentation/planner-v2/planner-premium.css" /><style>
     body {
       margin: 0;
     }
@@ -84,15 +84,22 @@
       gap: 24px;
       margin-top: 24px;
     }
+    .grid > section {
+      background: var(--surface-1);
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-large);
+      padding: var(--space-4);
+    }
     .grid h2 {
       font-size: 18px;
     }
     .goal {
       padding: 20px 16px;
-      border: 1px solid var(--border-soft);
-      border-radius: var(--radius-large);
-      background: var(--surface-1);
-      margin: 12px 0;
+      border: 0;
+      border-bottom: 1px solid var(--border-soft);
+      border-radius: 0;
+      background: transparent;
+      margin: 0;
     }
     .goal h3,
     .side h3 {
@@ -140,6 +147,19 @@
     }
     .side {
       padding: 0 0 0 8px;
+    }
+    .hero {
+      border-color: var(--border-soft);
+    }
+    .hero h2 {
+      color: var(--text-primary);
+    }
+    .stat strong {
+      color: var(--planner-accent);
+    }
+    .bar {
+      border-radius: var(--radius-small);
+      overflow: hidden;
     }
     .side article {
       padding: 20px 0;
@@ -557,7 +577,7 @@
           </select></label
         >
       </div>
-      <dialog id="dialog">
+      <dialog id="dialog" aria-labelledby="dialogTitle">
         <h2 id="dialogTitle"></h2>
         <p>
           В приложении здесь откроется существующая форма цели или выбора действия. После сохранения

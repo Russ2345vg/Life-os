@@ -1,5 +1,8 @@
 import type { ActionPriority, ActionOccurrence } from '../../../domain/planner/RecurrenceRule';
 export interface LifeActionRecord {
+  readonly estimateMinutes?: number | null;
+  readonly scheduledStartMinute?: number | null;
+  readonly scheduledDurationMinutes?: number | null;
   readonly priority?: ActionPriority | null;
   readonly occurrence?: ActionOccurrence | null;
   readonly completionGeneration?: number;

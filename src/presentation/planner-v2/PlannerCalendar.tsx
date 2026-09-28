@@ -7,8 +7,61 @@ import {
   type PlannerViews,
 } from './plannerViewsModel';
 import { PlannerBatch, PlannerGoalCard, type PlannerViewOperations } from './PlannerViewParts';
+import { PlannerTimeCalendar } from './PlannerTimeCalendar';
 
 export function PlannerCalendar({
+  data,
+  today,
+  onSetTime,
+  capacity,
+  onSetCapacity,
+  ...operations
+}: PlannerViewOperations & {
+  readonly data: PlannerViews;
+  readonly today: string;
+  readonly capacity: readonly (number | null)[];
+  readonly onSetTime: (
+    id: string,
+    estimateMinutes: number | null,
+    scheduledStartMinute: number | null,
+    scheduledDurationMinutes: number | null,
+    expectedVersion: number,
+  ) => Promise<void>;
+  readonly onSetCapacity: (weekday: number, minutes: number | null) => Promise<void>;
+}) {
+  const [mode, setMode] = useState<'week' | 'day' | 'month'>('week');
+  return (
+    <section aria-label="Календарь">
+      <div className="planner-time-modes" aria-label="Масштаб календаря">
+        {(['week', 'day', 'month'] as const).map((item) => (
+          <button
+            key={item}
+            type="button"
+            aria-pressed={mode === item}
+            onClick={() => setMode(item)}
+          >
+            {{ week: 'Неделя', day: 'День', month: 'Месяц' }[item]}
+          </button>
+        ))}
+      </div>
+      {mode === 'month' ? (
+        <PlannerMonthCalendar data={data} today={today} {...operations} />
+      ) : (
+        <PlannerTimeCalendar
+          data={data}
+          today={today}
+          mode={mode}
+          busy={operations.busy}
+          capacity={capacity}
+          onSetTime={onSetTime}
+          onSetCapacity={onSetCapacity}
+        />
+      )}
+    </section>
+  );
+}
+
+function PlannerMonthCalendar({
   data,
   today,
   ...operations

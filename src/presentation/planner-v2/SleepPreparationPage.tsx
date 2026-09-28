@@ -16,13 +16,22 @@ import type {
   SleepScheduleState,
 } from '../../domain/sleep/SleepSchedule';
 import { selectSleepHistoryEntries, summarizeSleepHistory } from '../../domain/sleep/SleepSchedule';
+import { summarizeEveningHistory } from './eveningHistoryModel';
+import { EveningDayClosure, type EveningPlannerServices } from './EveningDayClosure';
+import { WakeManagementPanel } from './WakeManagementPanel';
+import { isWakeScheduleAcknowledged, wakeProbeLabel } from './wakeManagementModel';
+import './evening-support.css';
 
 export function SleepPreparationPage({
   service,
   onBack,
+  plannerServices,
+  calendarDate,
 }: {
   readonly service: SleepScheduleService;
   readonly onBack: () => void;
+  readonly plannerServices?: EveningPlannerServices;
+  readonly calendarDate?: string;
 }) {
   const [state, setState] = useState<SleepScheduleState | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -35,9 +44,15 @@ export function SleepPreparationPage({
   const [dismissalSetup, setDismissalSetup] = useState<WakeDismissalSetup>(
     unavailableWakeDismissalSetup(),
   );
+  const busyRef = useRef(busy);
+  const loadedRef = useRef(false);
+  useEffect(() => {
+    busyRef.current = busy;
+  }, [busy]);
 
   useEffect(() => {
     let active = true;
+    loadedRef.current = false;
     void (async () => {
       try {
         const loaded = await service.getState();
@@ -55,6 +70,7 @@ export function SleepPreparationPage({
         setAlarmStatus(synchronized.alarm);
         setAlarmSounds(sounds);
         setDismissalSetup(loadedDismissalSetup);
+        loadedRef.current = true;
       } catch (reason: unknown) {
         if (active) setError(messageOf(reason));
       }
@@ -64,8 +80,55 @@ export function SleepPreparationPage({
     };
   }, [service]);
 
+  useEffect(() => {
+    let active = true;
+    let pending = false;
+    const refresh = () => {
+      if (
+        !active ||
+        pending ||
+        busyRef.current ||
+        !loadedRef.current ||
+        document.visibilityState === 'hidden'
+      )
+        return;
+      pending = true;
+      busyRef.current = true;
+      setBusy(true);
+      void (async () => {
+        try {
+          const [synchronized, setup] = await Promise.all([
+            service.syncAlarm(),
+            service.getWakeDismissalSetup(),
+          ]);
+          if (active) {
+            setState(synchronized.state);
+            setAlarmStatus(synchronized.alarm);
+            setDismissalSetup(setup);
+          }
+        } catch (reason: unknown) {
+          if (active) setError(messageOf(reason));
+        } finally {
+          pending = false;
+          if (active) {
+            busyRef.current = false;
+            setBusy(false);
+          }
+        }
+      })();
+    };
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      active = false;
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [service]);
+
   const run = async (work: () => Promise<SleepScheduleState>) => {
-    if (busy) return false;
+    if (busyRef.current) return false;
+    busyRef.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -74,8 +137,16 @@ export function SleepPreparationPage({
       return true;
     } catch (reason: unknown) {
       setError(messageOf(reason));
+      try {
+        const [current, alarm] = await Promise.all([service.getState(), service.getAlarmStatus()]);
+        setState(current);
+        setAlarmStatus(alarm);
+      } catch {
+        /* Keep the original command error when storage is unavailable. */
+      }
       return false;
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   };
@@ -90,6 +161,8 @@ export function SleepPreparationPage({
 
   return (
     <SleepPreparationView
+      {...(plannerServices ? { plannerServices } : {})}
+      {...(calendarDate ? { calendarDate } : {})}
       state={state}
       busy={busy}
       error={error}
@@ -117,14 +190,18 @@ export function SleepPreparationPage({
       onDeleteItem={(id) => run(() => service.deleteItem(id))}
       onMoveItem={(id, groupId, position) => run(() => service.moveItem(id, groupId, position))}
       onScheduleTestAlarm={() => {
-        if (busy) return;
+        if (busyRef.current) return;
+        busyRef.current = true;
         setBusy(true);
         setError(null);
         void service
           .scheduleTestAlarm()
           .then(setAlarmStatus)
           .catch((reason: unknown) => setError(messageOf(reason)))
-          .finally(() => setBusy(false));
+          .finally(() => {
+            busyRef.current = false;
+            setBusy(false);
+          });
       }}
       onOpenAlarmSettings={(issue) => {
         setError(null);
@@ -132,26 +209,54 @@ export function SleepPreparationPage({
           .openAlarmSettings(issue)
           .catch((reason: unknown) => setError(messageOf(reason)));
       }}
-      onSkipNearestAlarm={() => run(() => service.skipNearestWake())}
+      onSkipNearestAlarm={(id) => run(() => service.skipNearestWake(id))}
+      onSetNearestTime={(time, id) => run(() => service.setNearestWakeTime(time, id))}
+      onClearNearestTime={() => run(() => service.clearNearestWakeTime())}
+      onSetEnabled={(enabled) => run(() => service.setEnabled(enabled))}
+      onSyncAlarm={() => run(async () => (await service.syncAlarm()).state)}
+      onExportDismissalQr={() => {
+        if (busyRef.current) return;
+        busyRef.current = true;
+        setBusy(true);
+        setError(null);
+        void service
+          .exportWakeDismissalQr()
+          .catch((reason: unknown) => setError(messageOf(reason)))
+          .finally(() => {
+            busyRef.current = false;
+            setBusy(false);
+          });
+      }}
       onRegenerateDismissalQr={() => {
-        if (busy) return;
+        if (busyRef.current) return;
+        busyRef.current = true;
         setBusy(true);
         setError(null);
         void service
           .regenerateWakeDismissalQr()
-          .then(setDismissalSetup)
+          .then(async (setup) => {
+            setDismissalSetup(setup);
+            if (setup.qrConfigured) await service.exportWakeDismissalQr();
+          })
           .catch((reason: unknown) => setError(messageOf(reason)))
-          .finally(() => setBusy(false));
+          .finally(() => {
+            busyRef.current = false;
+            setBusy(false);
+          });
       }}
       onSaveEmergencyPhrase={(phrase) => {
-        if (busy) return;
+        if (busyRef.current) return;
+        busyRef.current = true;
         setBusy(true);
         setError(null);
         void service
           .saveWakeEmergencyPhrase(phrase)
           .then(setDismissalSetup)
           .catch((reason: unknown) => setError(messageOf(reason)))
-          .finally(() => setBusy(false));
+          .finally(() => {
+            busyRef.current = false;
+            setBusy(false);
+          });
       }}
       onToggleQuietMode={(enabled) => run(() => service.setQuietModeEnabled(enabled))}
     />
@@ -159,6 +264,8 @@ export function SleepPreparationPage({
 }
 
 export function SleepPreparationView({
+  plannerServices,
+  calendarDate,
   state,
   busy,
   error,
@@ -184,7 +291,14 @@ export function SleepPreparationView({
   onRegenerateDismissalQr,
   onSaveEmergencyPhrase,
   onToggleQuietMode,
+  onSetNearestTime,
+  onClearNearestTime,
+  onSetEnabled,
+  onSyncAlarm,
+  onExportDismissalQr,
 }: {
+  readonly plannerServices?: EveningPlannerServices;
+  readonly calendarDate?: string;
   readonly state: SleepScheduleState;
   readonly busy: boolean;
   readonly error: string | null;
@@ -212,7 +326,12 @@ export function SleepPreparationView({
   readonly onMoveItem: (id: string, groupId: string, position: number) => void;
   readonly onScheduleTestAlarm: () => void;
   readonly onOpenAlarmSettings: (issue: WakeAlarmPermissionIssue) => void;
-  readonly onSkipNearestAlarm: () => void;
+  readonly onSkipNearestAlarm: (id: string) => void | Promise<boolean>;
+  readonly onSetNearestTime?: (time: string, id: string) => void | Promise<boolean>;
+  readonly onClearNearestTime?: () => void | Promise<boolean>;
+  readonly onSetEnabled?: (enabled: boolean) => void;
+  readonly onSyncAlarm?: () => void;
+  readonly onExportDismissalQr?: () => void;
   readonly onRegenerateDismissalQr: () => void;
   readonly onSaveEmergencyPhrase: (phrase: string) => void;
   readonly onToggleQuietMode: (enabled: boolean) => void;
@@ -224,6 +343,12 @@ export function SleepPreparationView({
   const cycle = latestCycle(state.nightCycles);
   const completed = cycle?.preparationCompletionKind !== null && cycle !== undefined;
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsRef = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    if (!settingsOpen) return;
+    settingsRef.current?.scrollIntoView({ block: 'start' });
+    settingsRef.current?.querySelector('input')?.focus({ preventScroll: true });
+  }, [settingsOpen]);
 
   if (state.settings === null) {
     return (
@@ -265,8 +390,8 @@ export function SleepPreparationView({
           ←
         </button>
         <div className="sleep-title-block">
-          <h1>Подготовка ко сну</h1>
-          <p>Спокойный вечер — лёгкое утро</p>
+          <h1>Сон и подъём</h1>
+          <p>Ближайший сигнал и спокойная подготовка</p>
         </div>
         <div className="sleep-topbar-actions">
           <span className="sleep-date">
@@ -287,35 +412,35 @@ export function SleepPreparationView({
         </p>
       ) : null}
 
-      <section className="sleep-hero" aria-label="Время до сна">
-        <span className="sleep-hero__moon" aria-hidden="true">
-          <SleepMoonIcon />
-        </span>
-        <div className="sleep-countdown-ring">
-          <div>
-            <small>До сна осталось</small>
-            <strong>{countdownLabel(cycle)}</strong>
-            <span>
-              Ложиться около
-              <br />
-              {state.settings.bedtime}
-            </span>
-          </div>
-        </div>
-        <blockquote>
-          Хороший сон
-          <br />
-          сегодня — больше
-          <br />
-          сил для важных дел
-          <br />
-          завтра.
-          <span aria-hidden="true" />
-        </blockquote>
-      </section>
+      <WakeManagementPanel
+        state={state}
+        status={alarmStatus}
+        busy={busy}
+        {...(onSetNearestTime ? { onSetNearestTime } : {})}
+        {...(onClearNearestTime ? { onClearNearestTime } : {})}
+        {...(onSetEnabled ? { onSetEnabled } : {})}
+        onSkipNearest={onSkipNearestAlarm}
+        onEditSettings={() => setSettingsOpen(true)}
+      >
+        <AlarmStatusPanel
+          status={alarmStatus}
+          expectedSettingsVersion={state.settings.version}
+          wakeTime={state.settings.wakeTime}
+          timeZone={state.settings.timeZone}
+          busy={busy}
+          scheduleAcknowledged={isWakeScheduleAcknowledged(state, alarmStatus, new Date())}
+          onScheduleTest={onScheduleTestAlarm}
+          onOpenSettings={onOpenAlarmSettings}
+          {...(onSyncAlarm ? { onSyncAlarm } : {})}
+          dismissalSetup={dismissalSetup}
+          onRegenerateDismissalQr={onRegenerateDismissalQr}
+          {...(onExportDismissalQr ? { onExportDismissalQr } : {})}
+          onSaveEmergencyPhrase={onSaveEmergencyPhrase}
+        />
+      </WakeManagementPanel>
 
       <div className="sleep-layout">
-        <main className="sleep-checklist">
+        <main className="sleep-checklist" aria-label="Подготовка ко сну">
           <div className="sleep-section-heading">
             <div>
               <h2>Список подготовки</h2>
@@ -325,6 +450,7 @@ export function SleepPreparationView({
               </button>
             </div>
             <details
+              ref={settingsRef}
               className="sleep-settings"
               open={settingsOpen}
               onToggle={(event) => setSettingsOpen(event.currentTarget.open)}
@@ -425,6 +551,13 @@ export function SleepPreparationView({
               ＋ Добавить группу
             </button>
           </div>
+          {plannerServices && cycle ? (
+            <EveningDayClosure
+              services={plannerServices}
+              cycleDate={cycle.cycleDate}
+              calendarDate={calendarDate ?? cycle.cycleDate}
+            />
+          ) : null}
         </main>
 
         <aside className="sleep-summary">
@@ -449,19 +582,6 @@ export function SleepPreparationView({
               <span>Время подъёма</span>
               <strong>{state.settings.wakeTime}</strong>
             </div>
-            <AlarmStatusPanel
-              status={alarmStatus}
-              expectedSettingsVersion={state.settings.version}
-              wakeTime={state.settings.wakeTime}
-              timeZone={state.settings.timeZone}
-              busy={busy}
-              onScheduleTest={onScheduleTestAlarm}
-              onOpenSettings={onOpenAlarmSettings}
-              onSkipNearest={onSkipNearestAlarm}
-              dismissalSetup={dismissalSetup}
-              onRegenerateDismissalQr={onRegenerateDismissalQr}
-              onSaveEmergencyPhrase={onSaveEmergencyPhrase}
-            />
           </section>
 
           <section className="sleep-summary-card sleep-summary-card--dnd">
@@ -543,19 +663,6 @@ export function SleepPreparationView({
         </aside>
       </div>
       <div className="sleep-alarm-mobile-status">
-        <AlarmStatusPanel
-          status={alarmStatus}
-          expectedSettingsVersion={state.settings.version}
-          wakeTime={state.settings.wakeTime}
-          timeZone={state.settings.timeZone}
-          busy={busy}
-          onScheduleTest={onScheduleTestAlarm}
-          onOpenSettings={onOpenAlarmSettings}
-          onSkipNearest={onSkipNearestAlarm}
-          dismissalSetup={dismissalSetup}
-          onRegenerateDismissalQr={onRegenerateDismissalQr}
-          onSaveEmergencyPhrase={onSaveEmergencyPhrase}
-        />
         <div className="sleep-history-mobile">
           <SleepHistoryPanel state={state} timeZone={state.settings.timeZone} />
         </div>
@@ -572,7 +679,9 @@ function AlarmStatusPanel({
   busy,
   onScheduleTest,
   onOpenSettings,
-  onSkipNearest,
+  scheduleAcknowledged,
+  onSyncAlarm,
+  onExportDismissalQr,
   dismissalSetup,
   onRegenerateDismissalQr,
   onSaveEmergencyPhrase,
@@ -584,19 +693,38 @@ function AlarmStatusPanel({
   readonly busy: boolean;
   readonly onScheduleTest: () => void;
   readonly onOpenSettings: (issue: WakeAlarmPermissionIssue) => void;
-  readonly onSkipNearest: () => void;
+  readonly scheduleAcknowledged: boolean;
+  readonly onSyncAlarm?: () => void;
+  readonly onExportDismissalQr?: () => void;
   readonly dismissalSetup: WakeDismissalSetup;
   readonly onRegenerateDismissalQr: () => void;
   readonly onSaveEmergencyPhrase: (phrase: string) => void;
 }) {
-  const label = alarmStatusLabel(status, expectedSettingsVersion, wakeTime, timeZone);
+  const label = alarmStatusLabel(
+    status,
+    scheduleAcknowledged ? expectedSettingsVersion : -1,
+    wakeTime,
+    timeZone,
+  );
   return (
     <section className={`sleep-alarm-status sleep-alarm-status--${status.state.toLowerCase()}`}>
       <div className="sleep-alarm-status__heading">
         <span>Будильник Android</span>
         <strong>{label}</strong>
       </div>
-      {status.message ? <small>{status.message}</small> : null}
+      {status.supported && status.message ? <small>{status.message}</small> : null}
+      <p
+        className={
+          status.testEvidence?.valid &&
+          status.testEvidence.deliveredAt &&
+          status.testEvidence.confirmedAt
+            ? 'wake-probe-verified'
+            : ''
+        }
+        role="status"
+      >
+        {wakeProbeLabel(status, new Date())}
+      </p>
       {status.issues.length > 0 ? (
         <div className="sleep-alarm-permissions" aria-label="Разрешения Android">
           {status.issues.map((issue) => (
@@ -612,23 +740,34 @@ function AlarmStatusPanel({
           disabled={busy || !status.supported || status.issues.length > 0}
           onClick={onScheduleTest}
         >
-          Пробный сигнал
+          Пробный сигнал · 20 секунд
         </button>
-        <button
-          type="button"
-          disabled={busy || status.state !== 'SCHEDULED'}
-          onClick={onSkipNearest}
-        >
-          Пропустить ближайший
+        <button type="button" disabled={busy || !onSyncAlarm} onClick={onSyncAlarm}>
+          Проверить статус
         </button>
       </div>
+      {status.supported ? (
+        <small>
+          Запустите тест, заблокируйте экран телефона. После звонка нажмите «Я услышал сигнал» на
+          экране теста, затем вернитесь сюда.
+        </small>
+      ) : null}
       {dismissalSetup.supported ? (
-        <WakeDismissalSetupPanel
-          setup={dismissalSetup}
-          busy={busy}
-          onRegenerateQr={onRegenerateDismissalQr}
-          onSaveEmergencyPhrase={onSaveEmergencyPhrase}
-        />
+        <details>
+          <summary>
+            QR и аварийная фраза ·{' '}
+            {dismissalSetup.qrConfigured && dismissalSetup.emergencyPhraseConfigured
+              ? 'настроены'
+              : 'нужна настройка'}
+          </summary>
+          <WakeDismissalSetupPanel
+            setup={dismissalSetup}
+            busy={busy}
+            onRegenerateQr={onRegenerateDismissalQr}
+            onSaveEmergencyPhrase={onSaveEmergencyPhrase}
+            {...(onExportDismissalQr ? { onExportQr: onExportDismissalQr } : {})}
+          />
+        </details>
       ) : null}
     </section>
   );
@@ -639,13 +778,16 @@ function WakeDismissalSetupPanel({
   busy,
   onRegenerateQr,
   onSaveEmergencyPhrase,
+  onExportQr,
 }: {
   readonly setup: WakeDismissalSetup;
   readonly busy: boolean;
   readonly onRegenerateQr: () => void;
   readonly onSaveEmergencyPhrase: (phrase: string) => void;
+  readonly onExportQr?: () => void;
 }) {
   const phraseForm = useQuickAccessUncontrolledForm(busy);
+  const [replace, setReplace] = useState(false);
   return (
     <section className="sleep-dismissal-setup" aria-label="Защита выключения будильника">
       <div className="sleep-dismissal-setup__row">
@@ -653,10 +795,41 @@ function WakeDismissalSetupPanel({
           QR для подъёма
           <small>{setup.qrConfigured ? 'Настроен' : 'Не настроен'}</small>
         </span>
-        <button type="button" disabled={busy} onClick={onRegenerateQr}>
-          {setup.qrConfigured ? 'Заменить и сохранить' : 'Создать и сохранить'}
-        </button>
+        {setup.qrConfigured ? (
+          <div className="wake-management__actions">
+            <button type="button" disabled={busy || !onExportQr} onClick={onExportQr}>
+              Открыть QR для печати
+            </button>
+            <button type="button" disabled={busy} onClick={() => setReplace(true)}>
+              Заменить QR
+            </button>
+          </div>
+        ) : (
+          <button type="button" disabled={busy} onClick={onRegenerateQr}>
+            Создать и сохранить
+          </button>
+        )}
       </div>
+      {replace ? (
+        <div role="group" aria-label="Замена QR">
+          <p>Прежний распечатанный QR станет недействительным. Создать новый?</p>
+          <div className="wake-management__actions">
+            <button type="button" disabled={busy} onClick={() => setReplace(false)}>
+              Отмена
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                onRegenerateQr();
+                setReplace(false);
+              }}
+            >
+              Создать новый QR
+            </button>
+          </div>
+        </div>
+      ) : null}
       {setup.qrSavedTo ? <small>Файл: {setup.qrSavedTo}</small> : null}
       <form
         className="sleep-dismissal-setup__phrase"
@@ -751,8 +924,54 @@ function SleepHistoryPanel({
 }) {
   const summary = summarizeSleepHistory(state);
   const entries = selectSleepHistoryEntries(state).slice(0, 3);
+  const cycle = latestCycle(state.nightCycles);
+  const evening = cycle ? summarizeEveningHistory(state, cycle.cycleDate) : null;
   return (
     <section className="sleep-summary-card sleep-summary-card--history">
+      <h2>Последние 14 вечеров</h2>
+      {!evening || evening.recorded === 0 ? (
+        <p>Пока нет истории предыдущих вечеров.</p>
+      ) : (
+        <>
+          <p>
+            <strong>
+              {evening.completed} / {evening.recorded}
+            </strong>{' '}
+            подготовок завершено
+          </p>
+          <p>
+            <strong>
+              {evening.onTime} / {evening.completed}
+            </strong>{' '}
+            завершено до времени сна
+          </p>
+          <p>
+            Есть записи за {evening.recorded} вечеров. Пропущено: {evening.skipped}. Без завершения:{' '}
+            {evening.incomplete}.
+          </p>
+          {evening.suggestions.length > 0 ? (
+            <>
+              <h3>Что стоит пересмотреть</h3>
+              <ul>
+                {evening.suggestions.map((item) => (
+                  <li key={item.id}>
+                    «{item.title}» осталось невыполненным в {item.missed} из {item.total}{' '}
+                    завершённых подготовок.
+                  </li>
+                ))}
+              </ul>
+              <p>Возможно, удобнее сделать это раньше или упростить пункт в настройках списка.</p>
+            </>
+          ) : (
+            <p>
+              {evening.completed < 5
+                ? 'Пока мало данных для устойчивого вывода.'
+                : 'Пункты с повторяющимися пропусками не выявлены.'}
+            </p>
+          )}
+        </>
+      )}
+      <p>Время завершения подготовки не означает фактическое засыпание.</p>
       <header>
         <span className="sleep-card-icon" aria-hidden="true">
           <SleepGlyph kind="history" />
@@ -1175,14 +1394,6 @@ function formatCycleDate(cycleDate: string | undefined, timeZone: string): strin
     day: 'numeric',
     month: 'long',
   }).format(date);
-}
-
-function countdownLabel(cycle: NightCycle | null): string {
-  if (cycle === null) return '—:—';
-  const remaining = Math.max(0, cycle.plannedSleepAt.getTime() - Date.now());
-  const hours = Math.floor(remaining / 3_600_000);
-  const minutes = Math.floor((remaining % 3_600_000) / 60_000);
-  return [hours, minutes].map((value) => String(value).padStart(2, '0')).join(':');
 }
 
 type SleepGlyphKind =

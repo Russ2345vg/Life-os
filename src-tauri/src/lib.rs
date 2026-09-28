@@ -54,6 +54,7 @@ pub fn run() {
             android_alarm::android_alarm_stop,
             android_alarm::android_alarm_dismissal_status,
             android_alarm::android_alarm_regenerate_dismissal_qr,
+            android_alarm::android_alarm_export_dismissal_qr,
             android_alarm::android_alarm_save_emergency_phrase,
             sync_commands::sync_auth_session_write,
             sync_commands::sync_auth_session_read,

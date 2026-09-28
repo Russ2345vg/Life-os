@@ -29,6 +29,9 @@ import {
 export class LifeActionRecordMapper {
   public static toRecord(entity: LifeAction): LifeActionRecord {
     return {
+      estimateMinutes: entity.estimateMinutes,
+      scheduledStartMinute: entity.scheduledStartMinute,
+      scheduledDurationMinutes: entity.scheduledDurationMinutes,
       expectedContributions: entity.expectedContributions,
       completedOn: entity.completedOn,
       priority: entity.priority,
@@ -67,6 +70,9 @@ export class LifeActionRecordMapper {
   public static fromRecord(record: LifeActionRecord): LifeAction {
     assertRecordAndSchemaVersion(record);
     return LifeAction.rehydrate({
+      estimateMinutes: record.estimateMinutes ?? null,
+      scheduledStartMinute: record.scheduledStartMinute ?? null,
+      scheduledDurationMinutes: record.scheduledDurationMinutes ?? null,
       expectedContributions: record.expectedContributions ?? null,
       ...(record.completedOn === undefined ? {} : { completedOn: record.completedOn }),
       priority: record.priority ?? null,

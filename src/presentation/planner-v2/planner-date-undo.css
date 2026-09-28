@@ -1,0 +1,18 @@
+.planner-v2 .planner-date-undo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 20px;
+  padding: 12px 16px;
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  background: var(--surface-glass-shell);
+}
+.planner-date-undo span {
+  flex: 1 1 220px;
+  overflow-wrap: anywhere;
+}
+.planner-v2 .planner-date-undo button {
+  min-height: 44px;
+}

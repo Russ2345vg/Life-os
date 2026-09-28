@@ -41,6 +41,12 @@ export function structuredSyncFixtures(): Readonly<
   const id = (type: string) => EntityId.create(`sync04-${type}`);
   const common = { now, occurredAt: now, createdAt: now };
   return {
+    time_capacity: {
+      schemaVersion: 1,
+      id: 'time-capacity',
+      weekdays: [360, 360, 360, 360, 300, null, null],
+      version: 1,
+    },
     task_scenario: {
       id: 'sync04-task-scenario',
       title: 'За компьютером',

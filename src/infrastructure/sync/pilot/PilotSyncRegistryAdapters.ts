@@ -47,6 +47,10 @@ import { WalkCaptureRecordMapper } from '../../persistence/mappers/WalkCaptureRe
 import { SleepScheduleRecordMapper } from '../../persistence/mappers/SleepScheduleRecordMapper';
 import { LIFE_OS_SYNC_REGISTRY } from '../LifeOsSyncRegistry';
 import { attachmentReference } from '../../../application/sync/attachments/AttachmentContracts';
+import {
+  parseTimeCapacityRecord,
+  type TimeCapacityRecord,
+} from '../../../application/time/TimeCapacityService';
 
 type PilotRegistration = Omit<SyncEntityRegistration, 'entityType'> & {
   readonly entityType: PilotEntityType;
@@ -102,6 +106,10 @@ function mapped<TDomain, TRecord extends object>(
               'expectedContributions',
               'parentActionId',
               'directionId',
+              'estimateMinutes',
+              'scheduledStartMinute',
+              'scheduledDurationMinutes',
+              'goalIdAtStart',
             ].filter((field) => !Object.hasOwn(isRecord(value) ? value : {}, field))
           : []),
       ]),
@@ -112,6 +120,39 @@ function mapped<TDomain, TRecord extends object>(
         version: receiverVersion(existing),
       }),
     references,
+  };
+}
+
+function lifeActionMapped(): PilotAdapterBinding {
+  const binding = mapped(
+    LifeActionRecordMapper,
+    (record) => [
+      ...optional(record, 'decisionId', 'decision'),
+      ...optional(record, 'directionId', 'direction'),
+      ...optional(record, 'sphereId', 'sphere'),
+      ...optional(record, 'goalId', 'goal'),
+      ...optional(record, 'parentActionId', 'life_action'),
+      ...(isRecord(record.occurrence)
+        ? optional(record.occurrence, 'ruleId', 'recurrence_rule')
+        : []),
+    ],
+    true,
+  );
+  return {
+    ...binding,
+    normalize: (value) =>
+      binding.normalize(
+        isRecord(value) && value.plannedDate === null
+          ? { ...value, scheduledStartMinute: null, scheduledDurationMinutes: null }
+          : value,
+      ),
+    prepare: (value, existing) =>
+      binding.prepare(
+        value.plannedDate === null
+          ? { ...value, scheduledStartMinute: null, scheduledDurationMinutes: null }
+          : value,
+        existing,
+      ),
   };
 }
 
@@ -240,22 +281,21 @@ const PILOT_BINDINGS: Readonly<Record<PilotEntityType, PilotAdapterBinding>> = O
     ...optional(record, 'projectId', 'project'),
     ...optional(record, 'sphereId', 'sphere'),
   ]),
-  life_action: mapped(
-    LifeActionRecordMapper,
+  life_action: lifeActionMapped(),
+  time_capacity: mapped({
+    fromRecord: parseTimeCapacityRecord,
+    toRecord: (record: TimeCapacityRecord) => record,
+  }),
+  action_session: mapped(
+    ActionSessionRecordMapper,
     (record) => [
-      ...optional(record, 'decisionId', 'decision'),
-      ...optional(record, 'directionId', 'direction'),
-      ...optional(record, 'sphereId', 'sphere'),
-      ...optional(record, 'goalId', 'goal'),
-      ...optional(record, 'parentActionId', 'life_action'),
-      ...(isRecord(record.occurrence)
-        ? optional(record.occurrence, 'ruleId', 'recurrence_rule')
-        : []),
+      ...orphanSafe(record, 'lifeActionId', 'life_action'),
+      ...optional(record, 'goalIdAtStart', 'goal').map((reference) => ({
+        ...reference,
+        required: false,
+      })),
     ],
     true,
-  ),
-  action_session: mapped(ActionSessionRecordMapper, (record) =>
-    required(record, 'lifeActionId', 'life_action'),
   ),
   journal_entry: {
     normalize: (value) =>

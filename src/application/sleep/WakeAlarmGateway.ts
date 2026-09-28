@@ -28,6 +28,12 @@ export interface WakeAlarmStatus {
   readonly sleepEvents: readonly SleepEvent[];
   readonly wakeResults: readonly WakeResult[];
   readonly message: string | null;
+  readonly testEvidence?: {
+    readonly scheduledAt: Date;
+    readonly deliveredAt: Date | null;
+    readonly confirmedAt: Date | null;
+    readonly valid: boolean;
+  } | null;
 }
 
 export interface WakeDismissalSetup {
@@ -69,6 +75,7 @@ export interface WakeAlarmGateway {
   stop(): Promise<void>;
   dismissalSetup(): Promise<WakeDismissalSetup>;
   regenerateDismissalQr(): Promise<WakeDismissalSetup>;
+  exportDismissalQr(): Promise<void>;
   saveEmergencyPhrase(phrase: string): Promise<WakeDismissalSetup>;
 }
 
@@ -103,6 +110,10 @@ export class UnsupportedWakeAlarmGateway implements WakeAlarmGateway {
 
   public async saveEmergencyPhrase(): Promise<WakeDismissalSetup> {
     return unavailableWakeDismissalSetup();
+  }
+
+  public async exportDismissalQr(): Promise<void> {
+    throw new Error('Открыть QR можно в приложении LifeOS на Android.');
   }
 }
 

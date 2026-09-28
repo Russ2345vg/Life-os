@@ -46,6 +46,10 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     expect(noticeBox!.x + noticeBox!.width).toBeLessThanOrEqual(page.viewportSize()!.width);
 
     await page.getByRole('checkbox', { name: 'Выполнить: Проверка отклика', exact: true }).click();
+    await page
+      .getByRole('dialog', { name: 'Итог задачи', exact: true })
+      .getByRole('button', { name: 'Пропустить', exact: true })
+      .click();
     await expect(page.getByRole('progressbar', { name: 'Прогресс дня' })).toHaveAttribute(
       'value',
       '100',

@@ -12,6 +12,66 @@ import type {
 } from './WakeAlarmGateway';
 
 describe('SleepScheduleService', () => {
+  it('re-enabling the alarm restores future occurrences and native scheduling', async () => {
+    const repository = new InMemorySleepScheduleRepository();
+    const clock = new FakeClock(new Date('2026-09-20T12:00:00Z'));
+    const gateway = new FakeWakeAlarmGateway();
+    const service = new SleepScheduleService(
+      repository,
+      clock,
+      new FakeIdGenerator('enabled'),
+      gateway,
+    );
+    await service.saveSettings({
+      bedtime: '22:00',
+      wakeTime: '07:00',
+      timeZone: 'Asia/Chita',
+      enabled: true,
+    });
+    await service.setEnabled(false);
+    await service.setEnabled(true);
+    expect(gateway.reconciliations.at(-1)?.nextOccurrence?.scheduledAt.toISOString()).toBe(
+      '2026-09-20T22:00:00.000Z',
+    );
+  });
+  it('persists a one-time wake across reopening and reconciles the exact shifted timestamp', async () => {
+    const repository = new InMemorySleepScheduleRepository();
+    const clock = new FakeClock(new Date('2026-09-20T12:00:00Z'));
+    const gateway = new FakeWakeAlarmGateway();
+    const service = new SleepScheduleService(
+      repository,
+      clock,
+      new FakeIdGenerator('once'),
+      gateway,
+    );
+    await service.saveSettings({
+      bedtime: '22:00',
+      wakeTime: '07:00',
+      timeZone: 'Asia/Chita',
+      enabled: true,
+    });
+    await service.setNearestWakeTime('09:00');
+    expect(gateway.reconciliations.at(-1)?.nextOccurrence?.scheduledAt.toISOString()).toBe(
+      '2026-09-21T00:00:00.000Z',
+    );
+    expect(gateway.reconciliations.at(-1)?.wakeTime).toBe('07:00');
+    clock.setTime(new Date('2026-09-20T23:00:00Z'));
+    const reopened = new SleepScheduleService(
+      repository,
+      clock,
+      new FakeIdGenerator('reload'),
+      gateway,
+    );
+    await reopened.syncAlarm();
+    expect(gateway.reconciliations.at(-1)?.nextOccurrence?.scheduledAt.toISOString()).toBe(
+      '2026-09-21T00:00:00.000Z',
+    );
+    clock.setTime(new Date('2026-09-21T00:01:00Z'));
+    await reopened.syncAlarm();
+    expect(gateway.reconciliations.at(-1)?.nextOccurrence?.scheduledAt.toISOString()).toBe(
+      '2026-09-21T22:00:00.000Z',
+    );
+  });
   it('persists settings and reopens one stable night cycle', async () => {
     const repository = new InMemorySleepScheduleRepository();
     const clock = new FakeClock(new Date('2026-09-20T12:00:00.000Z'));
@@ -356,6 +416,7 @@ class FakeWakeAlarmGateway implements WakeAlarmGateway {
   public async openSettings(): Promise<void> {}
 
   public async stop(): Promise<void> {}
+  public async exportDismissalQr(): Promise<void> {}
 
   public async dismissalSetup(): Promise<WakeDismissalSetup> {
     return unavailableDismissalSetup();

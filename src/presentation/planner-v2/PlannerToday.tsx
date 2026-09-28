@@ -3,6 +3,7 @@ import { useQuickAccessGuard } from './QuickAccessContext';
 import { AppIcon } from '../components/AppIcon';
 import { PlannerScenariosPanel, type ScenarioService } from './PlannerScenariosPanel';
 import { PlannerOverdueActions } from './PlannerOverdueActions';
+import { selectRepeatedPlanActions } from './plannerPlanReviewModel';
 import type { ReactNode } from 'react';
 import {
   selectActionOptions,
@@ -17,6 +18,8 @@ import { VoiceTextInput } from '../voice-input/VoiceTextInput';
 import type { PlannerOption } from './PlannerActionForm';
 import { EntityContextMenu, type EntityMenuAction } from './EntityContextMenu';
 import type { SleepTodayEntry } from '../../application/sleep/SleepTodayEntry';
+import { buildTimeScheduleDay } from '../../application/queries/GetTimeSchedule';
+import { clockTime, durationLabel } from './timePresentation';
 
 export function PlannerToday({
   date,
@@ -40,6 +43,7 @@ export function PlannerToday({
   sleepEntry,
   scenarios,
   menuForAction,
+  capacityMinutes = null,
 }: {
   readonly date: DayDate;
   readonly day: 'today' | 'tomorrow';
@@ -62,8 +66,16 @@ export function PlannerToday({
   readonly sleepEntry?: SleepTodayEntry;
   readonly scenarios?: ScenarioService | undefined;
   readonly menuForAction?: (action: LifeAction) => readonly EntityMenuAction[];
+  readonly capacityMinutes?: number | null;
 }) {
   const [title, setTitle] = useState('');
+  const [reviewed, setReviewed] = useState<readonly string[]>([]);
+  const reviewKey = (action: LifeAction) =>
+    `${date.toString()}:${action.id.toString()}:${action.plannedDate?.toString()}:${action.rescheduleCount}`;
+  const repeatedActions = selectRepeatedPlanActions(overview).filter(
+    (action) => !reviewed.includes(reviewKey(action)),
+  );
+  const reviewCount = overview.overdue.length + repeatedActions.length;
   const heading = useRef<HTMLHeadingElement>(null);
   const adding = useRef(false);
   useQuickAccessGuard(() => ({ dirty: title !== '', busy: busy || adding.current }));
@@ -94,6 +106,7 @@ export function PlannerToday({
   );
 
   const total = overview.actions.length + overview.completed.length + (overview.main ? 1 : 0);
+  const schedule = buildTimeScheduleDay(date.toString(), availableActions, capacityMinutes);
   const percent = total ? Math.round((overview.completed.length / total) * 100) : 0;
   const dateLabel = new Intl.DateTimeFormat('ru-RU', {
     weekday: 'long',
@@ -134,6 +147,16 @@ export function PlannerToday({
                   {action.title.toString()} <RecurrenceBadge action={action} />
                 </span>
                 {goal ? <span className="planner-muted">{goal.title}</span> : null}
+                {action.scheduledStartMinute !== null ? (
+                  <span className="planner-muted">
+                    {clockTime(action.scheduledStartMinute)}–
+                    {clockTime(action.scheduledStartMinute + action.scheduledDurationMinutes!)}
+                  </span>
+                ) : action.estimateMinutes !== null ? (
+                  <span className="planner-muted">
+                    Оценка: {durationLabel(action.estimateMinutes)}
+                  </span>
+                ) : null}
                 {action.description ? (
                   <span className="planner-action-note">{action.description}</span>
                 ) : null}
@@ -181,6 +204,9 @@ export function PlannerToday({
               {day === 'tomorrow' ? 'Завтра' : 'Сегодня'}
             </h1>
             <p className="planner-eyebrow">{dateLabel}</p>
+            <a className="planner-text-link" href="#/v2/actions?view=time">
+              Рабочее время
+            </a>
           </div>
           <div className="planner-day-switch" role="group" aria-label="План на день">
             <button
@@ -228,6 +254,18 @@ export function PlannerToday({
             <h2 id="planner-quick-create-title">
               {day === 'tomorrow' ? 'План на завтра' : 'План на сегодня'}
             </h2>
+            {(schedule.timed.length + schedule.untimed.length > 0 || capacityMinutes !== null) && (
+              <p className={schedule.overCapacity ? 'planner-error' : 'planner-muted'}>
+                План: {durationLabel(schedule.plannedMinutes)} ·{' '}
+                {capacityMinutes === null
+                  ? 'Доступное время не задано'
+                  : `Доступно: ${durationLabel(capacityMinutes)}`}
+                {schedule.unknownEstimateCount > 0 && (
+                  <> · Без оценки: {schedule.unknownEstimateCount}</>
+                )}
+                {schedule.overCapacity && <> · План превышает доступное время</>}
+              </p>
+            )}
             <form
               className="planner-quick-add"
               onSubmit={(event) => {
@@ -373,14 +411,50 @@ export function PlannerToday({
             ) : null}
           </PlannerScenariosPanel>
           {day === 'today' && (
-            <PlannerOverdueActions
-              actions={overview.overdue}
-              today={date.toString()}
-              busy={busy}
-              onReschedule={onReschedule}
-              onListResolved={() => heading.current?.focus()}
-              renderAction={(action, controls) => row(action, 'overdue', controls)}
-            />
+            <details
+              className="planner-details planner-plan-review"
+              open
+              hidden={reviewCount === 0}
+            >
+              <summary>Разобрать план · {reviewCount} требуют решения</summary>
+              <p className="planner-muted">
+                На сегодня: {overview.actions.length + (overview.main ? 1 : 0)}.{' '}
+                {overview.main
+                  ? `Главное: ${overview.main.title.toString()}.`
+                  : 'Главное ещё не выбрано: отметьте звёздочкой одно действие в плане.'}
+              </p>
+              <PlannerOverdueActions
+                actions={overview.overdue}
+                today={date.toString()}
+                busy={busy}
+                onReschedule={onReschedule}
+                onListResolved={() => heading.current?.focus()}
+                renderAction={(action, controls) => row(action, 'overdue', controls)}
+              />
+              <PlannerOverdueActions
+                title="Повторно перенесено на сегодня"
+                headingId="planner-repeated-title"
+                actions={repeatedActions}
+                todayLabel="Оставить на сегодня"
+                description="Оставьте на сегодня или выберите новую дату. Подтверждение действует до выхода со страницы."
+                today={date.toString()}
+                busy={busy}
+                onReschedule={async (id, nextDate) => {
+                  if (nextDate === date.toString()) {
+                    const action = repeatedActions.find((item) => item.id.toString() === id);
+                    if (action) setReviewed((keys) => [...keys, reviewKey(action)]);
+                  } else await onReschedule(id, nextDate);
+                }}
+                onListResolved={() => heading.current?.focus()}
+                renderAction={(action, controls) => row(action, 'overdue', controls)}
+              />
+              {repeatedActions.length > 0 ? (
+                <p className="planner-muted">
+                  Счётчик учитывает переносы подготовленных действий. Изменения дат черновиков в
+                  него не входят.
+                </p>
+              ) : null}
+            </details>
           )}
         </section>
       </div>

@@ -303,7 +303,7 @@ describe('IndexedDbPilotSyncStore', () => {
     expect(await store.hasApplied('remote-event-1')).toBe(false);
   });
 
-  it('defers a newly enabled child type when its required parent has not arrived', async () => {
+  it('preserves a work session arriving before its missing action', async () => {
     const indexedDb = new LifeOsIndexedDb(new IDBFactory());
     const database = await indexedDb.open();
     const seed = database.transaction(LIFE_OS_SYNC_STORE.settings, 'readwrite');
@@ -316,9 +316,13 @@ describe('IndexedDbPilotSyncStore', () => {
         kind: 'fast_forward',
         winner: 'incoming',
       }),
-    ).rejects.toThrow('parent has not arrived');
-    expect(await store.cursor('space')).toBe(0);
-    expect(await read(database, LIFE_OS_STORE.actionSessions, 'session-1')).toBeUndefined();
+    ).resolves.toBeUndefined();
+    expect(await store.cursor('space')).toBe(8);
+    expect(await read(database, LIFE_OS_STORE.actionSessions, 'session-1')).toMatchObject({
+      lifeActionId: 'missing-action',
+      status: 'running',
+    });
+    indexedDb.close();
   });
 
   it('persists a complete deferred child across restart and keeps cursor monotonic during replay', async () => {

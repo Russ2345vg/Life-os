@@ -89,6 +89,8 @@ export function PlannerGoalList({
   const periodOption = periodOptions.find(([value]) => value === periodFilter)!;
   const label = (key: string, value: string | boolean) => {
     switch (key) {
+      case 'showCompleted':
+        return 'Показать выполненные';
       case 'unassigned':
         return 'Без направления';
       case 'undated':
@@ -174,13 +176,21 @@ export function PlannerGoalList({
                 value={filters.status}
                 onChange={(e) => change('status', e.target.value as GoalFilters['status'])}
               >
-                <option value="">Все</option>
+                <option value="">{filters.showCompleted ? 'Все' : 'Все незавершённые'}</option>
                 {Object.entries(statusLabels).map(([v, l]) => (
                   <option key={v} value={v}>
                     {l}
                   </option>
                 ))}
               </select>
+            </label>
+            <label className="planner-check-label">
+              <input
+                type="checkbox"
+                checked={filters.showCompleted}
+                onChange={(e) => change('showCompleted', e.target.checked)}
+              />
+              Показать выполненные
             </label>
             <label>
               <span>Сфера</span>
@@ -335,7 +345,9 @@ export function PlannerGoalList({
               ? `По запросу «${search}» ничего не найдено.`
               : filterCount
                 ? 'Нет целей с выбранными условиями.'
-                : 'Здесь пока нет целей.'}
+                : goals.some((goal) => goal.status === 'achieved')
+                  ? 'Нет незавершённых целей. Включите «Показать выполненные» в фильтрах.'
+                  : 'Здесь пока нет целей.'}
           </p>
           {(search || filterCount > 0) && (
             <button

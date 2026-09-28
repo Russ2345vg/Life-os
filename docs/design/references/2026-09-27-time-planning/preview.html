@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LifeOS · Планирование времени · Предложение</title>
+    <link rel="stylesheet" href="/src/presentation/styles/global.css" />
+    <link rel="stylesheet" href="/src/presentation/planner-v2/planner-v2.css" />
+    <link rel="stylesheet" href="/src/presentation/planner-v2/planner-library.css" />
+    <link rel="stylesheet" href="/src/presentation/planner-v2/planner-views.css" />
+    <link rel="stylesheet" href="/src/presentation/planner-v2/planner-master.css" />
+    <link rel="stylesheet" href="/src/presentation/planner-v2/planner-premium.css" />
+    <link rel="stylesheet" href="./preview.css" />
+  </head>
+  <body>
+    <div class="planner-v2">
+      <aside class="planner-sidebar" id="shell"></aside>
+      <main class="planner-content">
+        <header class="planner-page-heading">
+          <h1>Действия</h1>
+          <button class="planner-primary" id="add">+ Запланировать</button>
+        </header>
+        <p class="proposal-note">Предложение обновления · демонстрационная неделя</p>
+        <div class="time-toolbar">
+          <label
+            >Представление
+            <select aria-label="Представление">
+              <option>Календарь</option>
+            </select></label
+          >
+          <div class="time-modes" aria-label="Масштаб календаря">
+            <button id="day-mode" aria-pressed="false">День</button
+            ><button id="week-mode" aria-pressed="true">Неделя</button>
+          </div>
+          <strong>28 сентября — 4 октября</strong>
+        </div>
+        <div class="time-layout">
+          <section class="time-calendar" aria-label="Расписание недели">
+            <div class="day-select" id="day-select"></div>
+            <div class="time-grid" id="time-grid"></div>
+          </section>
+          <aside class="time-context">
+            <section class="day-capacity">
+              <p class="eyebrow">ПОНЕДЕЛЬНИК, 28 СЕНТЯБРЯ</p>
+              <h2>Есть место для важного</h2>
+              <p><strong id="planned-hours">3 ч 30 мин</strong> из 6 доступных часов</p>
+              <progress
+                id="capacity"
+                max="360"
+                value="210"
+                aria-label="Загрузка выбранного дня"
+              ></progress>
+              <p class="muted" id="capacity-note">Свободно 2 ч 30 мин · перерывы учтены</p>
+            </section>
+            <section>
+              <h2>Пока без времени <span class="muted">3</span></h2>
+              <p class="muted">Дела на выбранный день. Время можно оставить свободным.</p>
+              <div class="unscheduled">
+                <strong>Разобрать входящие</strong><span>20 мин · без цели</span
+                ><button class="schedule" data-title="Разобрать входящие" data-duration="20">
+                  Выбрать время
+                </button>
+              </div>
+              <div class="unscheduled">
+                <strong>Прочитать главу книги</strong><span>40 мин · Обучение</span
+                ><button class="schedule" data-title="Прочитать главу книги" data-duration="40">
+                  Выбрать время
+                </button>
+              </div>
+              <div class="unscheduled">
+                <strong>Прогулка</strong><span>Длительность не задана</span
+                ><button class="schedule" data-title="Прогулка" data-duration="30">
+                  Выбрать время
+                </button>
+              </div>
+            </section>
+            <section class="block-details" id="block-details" hidden>
+              <h2 id="block-title"></h2>
+              <p id="block-description" class="muted"></p>
+              <button id="move">Перенести на 30 минут позже</button>
+            </section>
+          </aside>
+        </div>
+        <p id="feedback" role="status" hidden></p>
+        <dialog id="schedule-dialog" aria-labelledby="schedule-title">
+          <form id="schedule-form">
+            <h2 id="schedule-title">Запланировать действие</h2>
+            <label
+              >Действие
+              <select id="action-choice">
+                <option>Подготовить проект</option>
+                <option>Разобрать входящие</option>
+                <option>Прочитать главу книги</option>
+                <option>Прогулка</option>
+              </select></label
+            ><label>Начало <input id="start-time" type="time" value="16:00" required /></label
+            ><label
+              >Длительность, минуты
+              <input id="duration" type="number" value="60" min="15" max="240" required
+            /></label>
+            <p id="form-error" role="alert" hidden></p>
+            <div class="form-actions">
+              <button type="button" id="cancel">Отмена</button
+              ><button class="planner-primary" type="submit">Запланировать</button>
+            </div>
+          </form>
+        </dialog>
+      </main>
+    </div>
+    <script type="module" src="./preview.js"></script>
+  </body>
+</html>

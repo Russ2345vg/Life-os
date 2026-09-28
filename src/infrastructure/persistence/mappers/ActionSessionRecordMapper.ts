@@ -12,6 +12,7 @@ import {
   createNullableValueObject,
   invalidRecord,
   readEntityId,
+  readOptionalNullableEntityId,
   readIsoDate,
   readNullableIsoDate,
   readNullableString,
@@ -27,6 +28,7 @@ export class ActionSessionRecordMapper {
       schemaVersion: 1,
       id: entity.id.toString(),
       lifeActionId: entity.lifeActionId.toString(),
+      goalIdAtStart: entity.goalIdAtStart?.toString() ?? null,
       status: entity.status,
       startedAt: entity.startedAt.toISOString(),
       pausedAt: toNullableIsoDate(entity.pausedAt),
@@ -61,6 +63,7 @@ export class ActionSessionRecordMapper {
     return ActionSession.rehydrate({
       id: readEntityId(record, 'id'),
       lifeActionId: readEntityId(record, 'lifeActionId'),
+      goalIdAtStart: readOptionalNullableEntityId(record, 'goalIdAtStart'),
       status: readString(record, 'status') as ActionSessionStatus,
       startedAt: readIsoDate(record, 'startedAt'),
       pausedAt: readNullableIsoDate(record, 'pausedAt'),

@@ -127,78 +127,83 @@ export class RecurringActions {
     });
   }
   async materialize(from: string, to = addDays(from, 13), onlyRuleId?: string) {
-    return this.repository.change((s) => {
-      let created = 0;
-      const now = this.clock.now();
-      for (const rule of s.rules.filter(
-        (r) => r.removedAt == null && r.purgedAt == null && (!onlyRuleId || r.id === onlyRuleId),
-      )) {
-        const windowFrom = rule.schedule.kind === 'count' ? localDate(now) : from;
-        const windowTo = rule.schedule.kind === 'count' ? addDays(windowFrom, 62) : to;
-        this.reconcileFuture(s, rule, windowFrom);
-        const completions = this.completions(s, rule.id);
-        if (
-          rule.schedule.kind === 'count' &&
-          s.actions.some(
-            (a) =>
-              this.isCurrentOccurrence(a, rule) &&
-              !a.isArchived() &&
-              a.status !== 'completed' &&
-              a.status !== 'cancelled',
+    return this.repository.change(
+      (s) => {
+        let created = 0;
+        const now = this.clock.now();
+        for (const rule of s.rules.filter(
+          (r) => r.removedAt == null && r.purgedAt == null && (!onlyRuleId || r.id === onlyRuleId),
+        )) {
+          const windowFrom = rule.schedule.kind === 'count' ? localDate(now) : from;
+          const windowTo = rule.schedule.kind === 'count' ? addDays(windowFrom, 62) : to;
+          this.reconcileFuture(s, rule, windowFrom);
+          const completions = this.completions(s, rule.id);
+          if (
+            rule.schedule.kind === 'count' &&
+            s.actions.some(
+              (a) =>
+                this.isCurrentOccurrence(a, rule) &&
+                !a.isArchived() &&
+                a.status !== 'completed' &&
+                a.status !== 'cancelled',
+            )
           )
-        )
-          continue;
-        let capacity =
-          rule.maxCompletions === null
-            ? Infinity
-            : rule.maxCompletions -
-              completions.length -
-              s.actions.filter(
-                (a) =>
-                  this.isCurrentOccurrence(a, rule) &&
-                  !a.isArchived() &&
-                  a.status !== 'completed' &&
-                  a.status !== 'cancelled',
-              ).length;
-        const existing = new Set(
-          s.actions.filter((a) => this.isCurrentOccurrence(a, rule)).map((a) => a.occurrence!.slot),
-        );
-        for (const slot of occurrenceSlots(rule, windowFrom, windowTo, completions)) {
-          if (existing.has(slot.slot) || capacity <= 0) continue;
-          if (s.actions.some((a) => a.id.toString() === slot.id))
-            throw new DomainError(
-              'recurrence.identity_collision',
-              'Идентификатор повторения уже занят.',
-            );
-          const action = LifeAction.createDraft({
-            id: EntityId.create(slot.id),
-            title: LifeActionTitle.create(rule.title),
-            need: rule.need ?? null,
-            directionId: rule.directionId ? EntityId.create(rule.directionId) : null,
-            sphereId: rule.sphereId ? EntityId.create(rule.sphereId) : null,
-            goalId: rule.goalId ? EntityId.create(rule.goalId) : null,
-            plannedDate: rule.schedule.kind === 'count' ? null : DayDate.create(slot.date),
-            createdAt: now,
-            eventId: EntityId.create(`create:${slot.id}`),
-          });
-          action.setPlanningMetadata({
-            priority: rule.priority,
-            occurrence: {
-              ruleId: rule.id,
-              slot: slot.slot,
-              ruleRevision: rule.revision,
-              restorationGeneration: rule.restorationGeneration ?? 0,
-              originalDate: slot.date,
-            },
-          });
-          s.actions.push(action);
-          existing.add(slot.slot);
-          created++;
-          capacity--;
+            continue;
+          let capacity =
+            rule.maxCompletions === null
+              ? Infinity
+              : rule.maxCompletions -
+                completions.length -
+                s.actions.filter(
+                  (a) =>
+                    this.isCurrentOccurrence(a, rule) &&
+                    !a.isArchived() &&
+                    a.status !== 'completed' &&
+                    a.status !== 'cancelled',
+                ).length;
+          const existing = new Set(
+            s.actions
+              .filter((a) => this.isCurrentOccurrence(a, rule))
+              .map((a) => a.occurrence!.slot),
+          );
+          for (const slot of occurrenceSlots(rule, windowFrom, windowTo, completions)) {
+            if (existing.has(slot.slot) || capacity <= 0) continue;
+            if (s.actions.some((a) => a.id.toString() === slot.id))
+              throw new DomainError(
+                'recurrence.identity_collision',
+                'Идентификатор повторения уже занят.',
+              );
+            const action = LifeAction.createDraft({
+              id: EntityId.create(slot.id),
+              title: LifeActionTitle.create(rule.title),
+              need: rule.need ?? null,
+              directionId: rule.directionId ? EntityId.create(rule.directionId) : null,
+              sphereId: rule.sphereId ? EntityId.create(rule.sphereId) : null,
+              goalId: rule.goalId ? EntityId.create(rule.goalId) : null,
+              plannedDate: rule.schedule.kind === 'count' ? null : DayDate.create(slot.date),
+              createdAt: now,
+              eventId: EntityId.create(`create:${slot.id}`),
+            });
+            action.setPlanningMetadata({
+              priority: rule.priority,
+              occurrence: {
+                ruleId: rule.id,
+                slot: slot.slot,
+                ruleRevision: rule.revision,
+                restorationGeneration: rule.restorationGeneration ?? 0,
+                originalDate: slot.date,
+              },
+            });
+            s.actions.push(action);
+            existing.add(slot.slot);
+            created++;
+            capacity--;
+          }
         }
-      }
-      return created;
-    });
+        return created;
+      },
+      { preserveExistingRecurrenceWindows: true },
+    );
   }
   async resolveForDate(ruleId: string, date: string): Promise<LifeAction | null> {
     DayDate.create(date);

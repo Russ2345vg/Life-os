@@ -1,0 +1,267 @@
+body {
+  margin: 0;
+}
+.wake-preview {
+  max-width: 1000px;
+  margin: auto;
+}
+.preview-note {
+  font-size: var(--planner-font-meta);
+  color: var(--text-muted);
+  margin: 0 0 var(--space-4);
+}
+.planner-v2 .wake-hero {
+  display: block;
+  padding: var(--space-6);
+  border-color: var(--border-soft);
+  border-radius: var(--radius-medium);
+}
+.wake-hero .wake-card-heading {
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+}
+.planner-v2 .wake-preview .wake-card-heading h2 {
+  color: var(--text-secondary);
+  font-size: var(--planner-font-body);
+  font-weight: 500;
+}
+.wake-card-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-6);
+  padding-block: var(--space-4) var(--space-6);
+}
+.wake-time {
+  display: block;
+  font-size: 72px;
+  font-weight: 650;
+  line-height: 1.1;
+  letter-spacing: -0.05em;
+  font-variant-numeric: tabular-nums;
+  margin: 0 0 var(--space-3);
+}
+.planner-v2 .wake-time-block p {
+  color: var(--text-primary);
+  font-size: var(--planner-font-body);
+  margin-bottom: var(--space-2);
+}
+.wake-time-block small {
+  color: var(--text-muted);
+  font-size: var(--planner-font-meta);
+}
+.wake-status {
+  color: var(--success);
+  font-weight: 600;
+  font-size: var(--planner-font-body);
+}
+.wake-status[data-state='error'],
+.wake-status[data-state='permission'] {
+  color: var(--danger);
+}
+.wake-status[data-state='stale'],
+.wake-status[data-state='disabled'],
+.wake-status[data-state='browser'] {
+  color: var(--text-secondary);
+}
+.wake-status[data-state='ringing'] {
+  color: var(--accent-primary);
+}
+.wake-hero[data-state='disabled'] .wake-time {
+  color: var(--text-muted);
+}
+.planner-v2 .wake-readiness p {
+  font-size: var(--planner-font-body);
+  color: var(--text-secondary);
+  max-width: 42ch;
+}
+.wake-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+.wake-preview :is(button, summary, input:not([type='checkbox']), select) {
+  min-height: var(--control-md);
+  min-width: var(--control-md);
+}
+.wake-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-soft);
+  color: var(--text-muted);
+  font-size: var(--planner-font-meta);
+}
+.planner-v2 .wake-skip {
+  background: transparent;
+  color: var(--text-secondary);
+  border-color: transparent;
+  padding: var(--space-2) 0;
+}
+.planner-v2 .wake-skip:hover {
+  color: var(--text-primary);
+  text-decoration: underline;
+}
+.wake-skip-confirm {
+  padding-block: var(--space-4);
+  border-top: 1px solid var(--border-soft);
+}
+.planner-v2 .wake-skip-confirm p {
+  margin-top: var(--space-2);
+  font-size: var(--planner-font-body);
+}
+.wake-detail {
+  border-bottom: 1px solid var(--border-soft);
+  padding: var(--space-4) 0;
+}
+.wake-detail:first-of-type {
+  margin-top: var(--space-3);
+}
+.wake-detail summary {
+  cursor: pointer;
+  color: var(--text-primary);
+  font-size: var(--planner-font-body);
+  line-height: 1.5;
+}
+.wake-detail summary span {
+  font-weight: 500;
+}
+.wake-detail summary small {
+  display: block;
+  margin-top: var(--space-1);
+  margin-left: var(--space-4);
+  color: var(--text-muted);
+  font-size: var(--planner-font-meta);
+}
+.wake-detail-content {
+  padding: var(--space-3) 0 0 var(--space-4);
+}
+.wake-setting-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding-block: var(--space-3);
+}
+.wake-setting-row small {
+  display: block;
+  color: var(--text-muted);
+}
+.wake-edit {
+  padding: var(--space-6);
+  margin-top: var(--space-3);
+  background: var(--surface-1);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-medium);
+}
+.wake-edit h2 {
+  margin-top: 0;
+}
+.wake-edit-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-4);
+}
+.wake-edit-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.wake-edit-fields :is(input, select) {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.wake-check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--control-md);
+}
+.wake-check input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent-primary);
+}
+.wake-detail-content > button {
+  margin-top: var(--space-3);
+}
+.preview-feedback {
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-2);
+  border-radius: var(--radius-small);
+  color: var(--text-secondary);
+}
+.preview-tools {
+  margin-top: var(--space-6);
+  font-size: var(--planner-font-meta);
+  color: var(--text-muted);
+}
+.preview-tools summary {
+  cursor: pointer;
+}
+.preview-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+.preview-state select {
+  max-width: 100%;
+}
+[hidden] {
+  display: none !important;
+}
+@media (max-width: 700px) {
+  .planner-v2 .wake-hero,
+  .wake-edit {
+    padding: var(--space-4);
+  }
+  .wake-card-body,
+  .wake-edit-fields {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-4);
+  }
+  .wake-time {
+    font-size: 64px;
+  }
+  .wake-card-heading .wake-status {
+    flex-basis: 100%;
+  }
+  .wake-readiness .wake-actions > button {
+    flex: 1 1 120px;
+  }
+  .wake-hero:not([data-state='ready']) .wake-readiness .wake-actions {
+    flex-direction: column;
+  }
+  .wake-hero:not([data-state='ready']) .wake-readiness .wake-actions > button {
+    flex: none;
+    width: 100%;
+  }
+  .wake-card-footer {
+    align-items: flex-start;
+  }
+  .wake-card-footer .wake-skip {
+    padding-block: 0;
+    text-align: left;
+  }
+  .wake-setting-row button,
+  .wake-skip-confirm button {
+    width: 100%;
+  }
+}
+@media (max-width: 360px) {
+  .wake-readiness .wake-actions > button {
+    flex: none;
+    width: 100%;
+  }
+}

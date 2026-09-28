@@ -1,0 +1,51 @@
+.goal-dynamics {
+  margin-block: var(--space-6);
+  padding-block: var(--space-6);
+  border-block: 1px solid var(--border-soft);
+  min-width: 0;
+}
+.goal-dynamics h2 {
+  font-size: 1.125rem;
+}
+.goal-dynamics h3 {
+  font-size: 1rem;
+}
+.goal-dynamics-chart {
+  margin: var(--space-4) 0;
+}
+.goal-dynamics-chart svg {
+  display: block;
+  width: 100%;
+  height: 160px;
+  fill: var(--text-secondary);
+}
+.goal-dynamics-zero {
+  stroke: var(--border-strong);
+}
+.goal-dynamics-scale,
+.goal-dynamics-chart figcaption {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+.goal-dynamics-day {
+  margin-top: var(--space-4);
+  padding-block: var(--space-3);
+  border-top: 1px solid var(--border-soft);
+}
+.goal-dynamics-record {
+  margin-block: var(--space-3);
+}
+.goal-dynamics :is(summary, a) {
+  min-height: var(--control-md);
+}
+.goal-dynamics a {
+  display: inline-flex;
+  align-items: center;
+}
+.goal-dynamics :is(p, summary, a) {
+  overflow-wrap: anywhere;
+}

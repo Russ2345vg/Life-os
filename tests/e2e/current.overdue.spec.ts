@@ -59,6 +59,42 @@ async function seed(page: Page) {
   return { today, yesterday, actions, overdue };
 }
 
+test('plan review surfaces repeated ready actions and preserves the chosen main when rescheduling', async ({
+  page,
+}, testInfo) => {
+  const { today } = await seed(page);
+  const repeated = createReadyLifeAction('review-repeat', DayDate.create(addDays(today, -2)));
+  repeated.reschedule(DayDate.create(addDays(today, -1)), new Date(), EntityId.create('repeat-1'));
+  repeated.reschedule(DayDate.create(today), new Date(), EntityId.create('repeat-2'));
+  await putActions(page, [repeated]);
+  await page.reload();
+  const review = page.locator('.planner-plan-review');
+  await expect(review.locator('summary')).toContainText('4 требуют решения');
+  const repeats = page.getByRole('region', { name: 'Повторно перенесено на сегодня' });
+  await expect(repeats).toContainText('Зафиксировано переносов: 2');
+  await expect(repeats.getByRole('button', { name: 'Убрать из плана' })).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath('plan-review-initial.png'), fullPage: true });
+  await repeats.getByRole('button', { name: 'Оставить на сегодня' }).click();
+  await expect(repeats).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Сегодня', exact: true })).toBeFocused();
+  await expect(page.locator('.planner-today-list')).toContainText('Действие review-repeat');
+  await expect(review.locator('summary')).toContainText('3 требуют решения');
+  await page.reload();
+  await expect(repeats).toContainText('Зафиксировано переносов: 2');
+  await repeats.getByRole('button', { name: 'Выбрать дату' }).click();
+  await repeats
+    .getByLabel('Новая дата: Действие review-repeat', { exact: true })
+    .fill(addDays(today, 1));
+  await repeats.getByRole('button', { name: 'Сохранить дату' }).click();
+  await expect(repeats).toHaveCount(0);
+  await expect(page.locator('.planner-main')).toContainText('Главное дело сегодня');
+  await expect(review.locator('summary')).toContainText('3 требуют решения');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('plan-review.png'), fullPage: true });
+  await page.reload();
+  await expect(page.getByRole('region', { name: 'Повторно перенесено на сегодня' })).toHaveCount(0);
+});
+
 test('unfinished previous days: three decisions persist without replacing the main action', async ({
   page,
 }, testInfo) => {

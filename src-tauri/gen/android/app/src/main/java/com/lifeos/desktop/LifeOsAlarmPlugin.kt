@@ -180,8 +180,15 @@ class LifeOsAlarmPlugin(private val activity: Activity) : Plugin(activity) {
 
   @Command
   fun stop(invoke: Invoke) {
+    val testId = LifeOsAlarmScheduler.currentTestOccurrenceId(activity)
+    if (testId == null) {
+      invoke.reject("Обычный будильник выключается через QR или аварийную фразу.", "GUARDED_WAKE_DISMISSAL")
+      return
+    }
     activity.startService(Intent(activity, LifeOsAlarmRingingService::class.java).apply {
       action = LifeOsAlarmScheduler.ACTION_STOP
+      putExtra(LifeOsAlarmScheduler.EXTRA_OCCURRENCE_ID, testId)
+      putExtra(LifeOsAlarmScheduler.EXTRA_IS_TEST, true)
     })
     invoke.resolve()
   }
@@ -197,6 +204,25 @@ class LifeOsAlarmPlugin(private val activity: Activity) : Plugin(activity) {
       invoke.resolve(WakeChallengeStore(activity).regenerateQr().toJsObject())
     } catch (error: Exception) {
       invoke.reject(error.message ?: "Не удалось сохранить QR.", "WAKE_QR_FAILED", error)
+    }
+  }
+
+  @Command
+  fun exportDismissalQr(invoke: Invoke) {
+    activity.runOnUiThread {
+      try {
+        val uri = WakeChallengeStore(activity).exportUri(activity)
+        val intent = Intent(Intent.ACTION_SEND).apply {
+          type = "image/png"
+          putExtra(Intent.EXTRA_STREAM, uri)
+          clipData = android.content.ClipData.newUri(activity.contentResolver, "QR LifeOS", uri)
+          addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        activity.startActivity(Intent.createChooser(intent, "QR LifeOS — сохранить или распечатать"))
+        invoke.resolve()
+      } catch (error: Exception) {
+        invoke.reject(error.message ?: "Не удалось открыть QR.", "WAKE_QR_EXPORT_FAILED", error)
+      }
     }
   }
 
@@ -277,6 +303,12 @@ private fun LifeOsAlarmStatus.toJsObject() = JSObject().apply {
     }
   })
   put("message", message)
+  put("testEvidence", testEvidence?.let { evidence -> JSObject().apply {
+    put("scheduledAtEpochMillis", evidence.scheduledAtEpochMillis)
+    put("deliveredAtEpochMillis", evidence.deliveredAtEpochMillis)
+    put("confirmedAtEpochMillis", evidence.confirmedAtEpochMillis)
+    put("valid", testEvidenceValid)
+  } })
 }
 
 private fun WakeDismissalSetupStatus.toJsObject() = JSObject().apply {

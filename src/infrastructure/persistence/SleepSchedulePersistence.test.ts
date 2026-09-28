@@ -14,6 +14,25 @@ import {
 } from './indexed-db/LifeOsIndexedDb';
 
 describe('Sleep schedule persistence migration', () => {
+  it('retains a one-time wake when the repository is reopened', async () => {
+    const database = new LifeOsIndexedDb(new IDBFactory());
+    const original = fullState();
+    const state = {
+      ...original,
+      settings: {
+        ...original.settings!,
+        wakeOverride: { cycleDate: '2026-09-20', wakeTime: '09:00' },
+      },
+    };
+    await new IndexedDbSleepScheduleRepository(database).save(state);
+    const restored = await new IndexedDbSleepScheduleRepository(database).load();
+    expect(restored?.settings?.wakeTime).toBe('07:00');
+    expect(restored?.settings?.wakeOverride).toEqual({
+      cycleDate: '2026-09-20',
+      wakeTime: '09:00',
+    });
+    database.close();
+  });
   it('adds sleep and scenario stores when upgrading v25 and preserves planner data byte-for-byte', async () => {
     const factory = new IDBFactory();
     const legacyRecord = {
@@ -33,6 +52,7 @@ describe('Sleep schedule persistence migration', () => {
       'inboxIdeas',
       'sleepSchedules',
       'taskScenarios',
+      'timeCapacity',
     ]);
     await expect(
       observeRequest(

@@ -24,6 +24,17 @@ export interface SetLifeActionPlanInput {
   readonly allowedStatuses?: readonly LifeActionStatus[];
 }
 
+export interface LifeActionDateUndoReceipt {
+  readonly lifeActionId: EntityId;
+  readonly previousDate: DayDate | null;
+  readonly previousIsNext: boolean;
+  readonly previousOccurrence: LifeAction['occurrence'];
+  readonly previousEstimateMinutes: number | null;
+  readonly previousScheduledStartMinute: number | null;
+  readonly previousScheduledDurationMinutes: number | null;
+  readonly expectedVersion: number;
+}
+
 export class SetLifeActionPlan {
   public constructor(
     readonly repository: LifeActionRepository,
@@ -35,6 +46,94 @@ export class SetLifeActionPlan {
   public async execute(input: SetLifeActionPlanInput): Promise<Result<LifeAction, DomainError>> {
     const action = await this.repository.findById(input.lifeActionId);
     if (action === null) return lifeActionNotFound();
+    return this.applyPlan(action, input);
+  }
+
+  public async changeDate(
+    input: Pick<SetLifeActionPlanInput, 'lifeActionId' | 'plannedDate'>,
+  ): Promise<
+    Result<
+      { readonly action: LifeAction; readonly receipt: LifeActionDateUndoReceipt | null },
+      DomainError
+    >
+  > {
+    const action = await this.repository.findById(input.lifeActionId);
+    if (action === null) return lifeActionNotFound();
+    const previous = {
+      lifeActionId: action.id,
+      previousDate: action.plannedDate,
+      previousIsNext: action.isNext,
+      previousOccurrence: action.occurrence,
+      previousEstimateMinutes: action.estimateMinutes,
+      previousScheduledStartMinute: action.scheduledStartMinute,
+      previousScheduledDurationMinutes: action.scheduledDurationMinutes,
+    };
+    const changed =
+      (action.plannedDate?.toString() ?? null) !== (input.plannedDate?.toString() ?? null);
+    const result = await this.applyPlan(action, {
+      ...input,
+      isNext: changed ? false : action.isNext,
+      allowedStatuses: [LIFE_ACTION_STATUS.draft, LIFE_ACTION_STATUS.ready],
+    });
+    if (!result.ok) return result;
+    return success({
+      action: result.value,
+      receipt: changed ? { ...previous, expectedVersion: result.value.version } : null,
+    });
+  }
+
+  public async undoDate(
+    receipt: LifeActionDateUndoReceipt,
+  ): Promise<Result<LifeAction, DomainError>> {
+    const action = await this.repository.findById(receipt.lifeActionId);
+    if (action === null) return lifeActionNotFound();
+    try {
+      if (
+        action.version !== receipt.expectedVersion ||
+        ![LIFE_ACTION_STATUS.draft, LIFE_ACTION_STATUS.ready].some(
+          (status) => status === action.status,
+        )
+      )
+        throw new DomainError(
+          'life_action.undo_conflict',
+          'Действие уже изменилось. Отмена не выполнена.',
+        );
+      if (action.status === LIFE_ACTION_STATUS.ready && receipt.previousDate !== null)
+        action.reschedule(receipt.previousDate, this.clock.now(), this.ids.generate());
+      action.setPlan(receipt.previousDate, receipt.previousIsNext);
+      action.setTimePlanning({
+        estimateMinutes: receipt.previousEstimateMinutes,
+        scheduledStartMinute: receipt.previousScheduledStartMinute,
+        scheduledDurationMinutes: receipt.previousScheduledDurationMinutes,
+      });
+      action.setPlanningMetadata({ occurrence: receipt.previousOccurrence });
+      await this.unitOfWork.commit({
+        ...(receipt.previousIsNext && receipt.previousDate !== null
+          ? { mainActionDate: receipt.previousDate }
+          : {}),
+        lifeActions: [{ lifeAction: action, expectedVersion: receipt.expectedVersion }],
+        journalEntries: [
+          ...createLifeActionJournalEntries(action),
+          planningJournal(
+            this.ids.generate().toString(),
+            'LifeAction',
+            action.id.toString(),
+            'Перенос даты отменён',
+            this.clock.now(),
+            { plannedDate: receipt.previousDate?.toString() ?? null },
+          ),
+        ],
+      });
+      return success(action);
+    } catch (error: unknown) {
+      return lifeActionDomainFailure(error);
+    }
+  }
+
+  private async applyPlan(
+    action: LifeAction,
+    input: SetLifeActionPlanInput,
+  ): Promise<Result<LifeAction, DomainError>> {
     try {
       if (input.allowedStatuses && !input.allowedStatuses.includes(action.status))
         throw new DomainError(

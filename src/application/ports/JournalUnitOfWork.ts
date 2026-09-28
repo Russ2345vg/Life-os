@@ -8,6 +8,7 @@ import type {
   Direction,
   JournalEntry,
   LifeAction,
+  EntityId,
   Project,
 } from '../../domain';
 
@@ -42,6 +43,8 @@ export interface JournalProjectChange {
 }
 
 export interface CommitJournalStateInput {
+  /** Recheck the source action while atomically creating a work session. */
+  readonly workSessionActionGuard?: { readonly id: EntityId; readonly expectedVersion: number };
   readonly planningSetup?: {
     readonly rules: readonly RecurrenceRule[];
     readonly links: readonly ContributionLink[];

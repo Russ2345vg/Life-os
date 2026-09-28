@@ -17,6 +17,31 @@ import {
 } from './LifeOsIndexedDb';
 
 describe('LifeOsIndexedDb', () => {
+  it('adds capacity storage to v27 without rewriting an existing action', async () => {
+    const factory = new IDBFactory();
+    const legacy = await new Promise<IDBDatabase>((resolve, reject) => {
+      const opened = factory.open(LIFE_OS_DATABASE_NAME, 27);
+      opened.onupgradeneeded = () =>
+        opened.result.createObjectStore('lifeActions', { keyPath: 'id' });
+      opened.onsuccess = () => resolve(opened.result);
+      opened.onerror = () => reject(opened.error);
+    });
+    const saved = { id: 'existing-action', marker: 'unchanged' };
+    const write = legacy.transaction('lifeActions', 'readwrite');
+    write.objectStore('lifeActions').put(saved);
+    await transactionDone(write);
+    legacy.close();
+    const adapter = new LifeOsIndexedDb(factory);
+    const upgraded = await adapter.open();
+    expect([...upgraded.objectStoreNames]).toContain(LIFE_OS_STORE.timeCapacity);
+    expect(
+      await executeIndexedDbRequest(upgraded, 'lifeActions', 'readonly', (store) =>
+        store.get('existing-action'),
+      ),
+    ).toEqual(saved);
+    adapter.close();
+  });
+
   it('returns the same mutation-capturing connection to concurrent open callers', async () => {
     const indexedDb = new LifeOsIndexedDb(new IDBFactory());
     const [first, second] = await Promise.all([indexedDb.open(), indexedDb.open()]);
@@ -200,6 +225,7 @@ describe('LifeOsIndexedDb', () => {
       LIFE_OS_SYNC_STORE.settings,
       LIFE_OS_SYNC_STORE.snapshotMeta,
       LIFE_OS_STORE.taskScenarios,
+      LIFE_OS_STORE.timeCapacity,
       LIFE_OS_STORE.tomorrowPlans,
       LIFE_OS_STORE.walkCaptures,
       LIFE_OS_STORE.walks,
@@ -397,7 +423,7 @@ describe('LifeOsIndexedDb', () => {
     const secondConnection = await indexedDb.open();
 
     expect(secondConnection).not.toBe(firstConnection);
-    expect([...secondConnection.objectStoreNames]).toHaveLength(45);
+    expect([...secondConnection.objectStoreNames]).toHaveLength(46);
     indexedDb.close();
   });
 

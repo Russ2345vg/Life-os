@@ -51,6 +51,8 @@ struct EmergencyPhrasePayload {
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AndroidAlarmStatus {
+    #[serde(default)]
+    test_evidence: Option<AndroidTestEvidence>,
     supported: bool,
     state: String,
     exact_alarm_granted: bool,
@@ -67,6 +69,15 @@ pub struct AndroidAlarmStatus {
     sleep_events: Vec<AndroidSleepEvent>,
     wake_results: Vec<AndroidWakeResult>,
     message: Option<String>,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AndroidTestEvidence {
+    scheduled_at_epoch_millis: i64,
+    delivered_at_epoch_millis: Option<i64>,
+    confirmed_at_epoch_millis: Option<i64>,
+    valid: bool,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -207,6 +218,17 @@ pub async fn android_alarm_regenerate_dismissal_qr<R: Runtime>(
     app.state::<AndroidAlarm<R>>()
         .0
         .run_mobile_plugin_async("regenerateDismissalQr", ())
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn android_alarm_export_dismissal_qr<R: Runtime>(
+    app: AppHandle<R>,
+) -> Result<(), String> {
+    app.state::<AndroidAlarm<R>>()
+        .0
+        .run_mobile_plugin_async("exportDismissalQr", ())
         .await
         .map_err(|error| error.to_string())
 }

@@ -8,6 +8,7 @@ import type {
 } from '../../application/ports/JournalUnitOfWork';
 import { DomainError } from '../../shared/errors/DomainError';
 import { assertActionHierarchy } from '../../domain/life-action/ActionHierarchy';
+import { assertChangedActionTimeWindows } from '../../domain/life-action/ActionTimeWindows';
 import { LIFE_OS_STORE, LifeOsIndexedDb } from './indexed-db/LifeOsIndexedDb';
 import { ActionSessionRecordMapper } from './mappers/ActionSessionRecordMapper';
 import { DayRecordMapper } from './mappers/DayRecordMapper';
@@ -19,6 +20,7 @@ import { ProjectGoalCompatibility as ProjectRecordMapper } from './mappers/Proje
 import type { GoalRecord } from './records/GoalRecord';
 import type { DecisionRecord } from './records/DecisionRecord';
 import type { LifeActionRecord } from './records/LifeActionRecord';
+import type { ActionSessionRecord } from './records/ActionSessionRecord';
 import {
   IndexedDbPilotMutationRecorder,
   PILOT_MUTATION_STORES,
@@ -90,11 +92,13 @@ export class IndexedDbJournalUnitOfWork implements JournalUnitOfWork {
         );
       }
       for (const change of input.workSessions ?? []) {
+        const store = transaction.objectStore(LIFE_OS_STORE.actionSessions);
+        const previous = await observeRequest<ActionSessionRecord | undefined>(
+          store.get(change.workSession.id.toString()),
+        );
         writes.push(
           observeRequest(
-            transaction
-              .objectStore(LIFE_OS_STORE.actionSessions)
-              .put(ActionSessionRecordMapper.toRecord(change.workSession)),
+            store.put({ ...previous, ...ActionSessionRecordMapper.toRecord(change.workSession) }),
           ),
         );
       }
@@ -147,6 +151,13 @@ async function validateExpectedState(
   input: CommitJournalStateInput,
 ): Promise<void> {
   const checks: Promise<void>[] = [];
+  if (input.workSessionActionGuard)
+    checks.push(
+      validateSessionAction(
+        transaction.objectStore(LIFE_OS_STORE.lifeActions),
+        input.workSessionActionGuard,
+      ),
+    );
   if (input.mainActionDate !== undefined)
     checks.push(
       validateMainActionSelection(transaction.objectStore(LIFE_OS_STORE.lifeActions), input),
@@ -181,7 +192,6 @@ async function validateExpectedState(
   for (const change of input.workSessions ?? []) {
     const store = transaction.objectStore(LIFE_OS_STORE.actionSessions);
     checks.push(validateVersion(store, change.workSession.id.toString(), change.expectedVersion));
-    if (change.expectedVersion === null) checks.push(validateNoUnfinishedSession(store));
   }
   for (const change of input.directions ?? []) {
     checks.push(
@@ -202,6 +212,8 @@ async function validateExpectedState(
     );
   }
   await Promise.all(checks);
+  if (input.workSessions?.some((change) => change.expectedVersion === null))
+    await validateNoUnfinishedSession(transaction.objectStore(LIFE_OS_STORE.actionSessions), input);
   if (input.lifeActions?.length) {
     const stored = await observeRequest<LifeActionRecord[]>(
       transaction.objectStore(LIFE_OS_STORE.lifeActions).getAll(),
@@ -213,6 +225,7 @@ async function validateExpectedState(
         LifeActionRecordMapper.toRecord(change.lifeAction),
       );
     assertActionHierarchy([...final.values()]);
+    assertChangedActionTimeWindows(stored, [...final.values()]);
   }
 }
 
@@ -279,14 +292,40 @@ async function validateUniqueDecisionCreation(
   }
 }
 
-async function validateNoUnfinishedSession(store: IDBObjectStore): Promise<void> {
-  const [running, paused] = await Promise.all([
-    observeRequest<unknown[]>(store.index('byStatus').getAll('running')),
-    observeRequest<unknown[]>(store.index('byStatus').getAll('paused')),
-  ]);
-  if (running.length > 0 || paused.length > 0) {
+async function validateNoUnfinishedSession(
+  store: IDBObjectStore,
+  input: CommitJournalStateInput,
+): Promise<void> {
+  const records = await observeRequest<ActionSessionRecord[]>(store.getAll());
+  const final = new Map(records.map((record) => [record.id, record]));
+  for (const change of input.workSessions ?? [])
+    final.set(
+      change.workSession.id.toString(),
+      ActionSessionRecordMapper.toRecord(change.workSession),
+    );
+  if (
+    [...final.values()].filter((record) => ['running', 'paused'].includes(record.status)).length > 1
+  ) {
     throw new DomainError('session.unfinished_exists', 'Другая рабочая сессия уже выполняется.');
   }
+}
+
+async function validateSessionAction(
+  store: IDBObjectStore,
+  guard: NonNullable<CommitJournalStateInput['workSessionActionGuard']>,
+): Promise<void> {
+  const action = await observeRequest<LifeActionRecord | undefined>(store.get(guard.id.toString()));
+  if (
+    !action ||
+    action.version !== guard.expectedVersion ||
+    action.archivedAt !== null ||
+    action.deletedAt != null ||
+    !['draft', 'ready'].includes(action.status)
+  )
+    throw new DomainError(
+      'session.action_unavailable',
+      'Действие изменилось. Обновите экран перед началом работы.',
+    );
 }
 
 function collectStores(input: CommitJournalStateInput): string[] {
@@ -302,6 +341,7 @@ function collectStores(input: CommitJournalStateInput): string[] {
   if ((input.lifeActions?.length ?? 0) > 0) stores.add(LIFE_OS_STORE.lifeActions);
   if (input.mainActionDate !== undefined) stores.add(LIFE_OS_STORE.lifeActions);
   if ((input.workSessions?.length ?? 0) > 0) stores.add(LIFE_OS_STORE.actionSessions);
+  if (input.workSessionActionGuard) stores.add(LIFE_OS_STORE.lifeActions);
   if ((input.directions?.length ?? 0) > 0) stores.add(LIFE_OS_STORE.directions);
   if ((input.projects?.length ?? 0) > 0) stores.add(LIFE_OS_STORE.goals);
   if ((input.directions?.length ?? 0) > 0 || (input.projects?.length ?? 0) > 0) {
@@ -342,6 +382,15 @@ async function settleTransaction(completion: Promise<void>): Promise<void> {
 }
 
 function transactionFailed(error: unknown): DomainError {
+  if (
+    error instanceof DomainError &&
+    [
+      'life_action.time_conflict',
+      'session.unfinished_exists',
+      'session.action_unavailable',
+    ].includes(error.code)
+  )
+    return error;
   return new DomainError(
     'persistence.transaction_failed',
     'Состояние и событие журнала не были сохранены.',

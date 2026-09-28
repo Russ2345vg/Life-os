@@ -133,6 +133,10 @@ test('scenarios collect three tasks, share completion, preserve saved sets and s
     .getByRole('combobox', { name: 'Сейчас я…' })
     .selectOption({ label: 'Дома за компьютером' });
   await panel.getByRole('checkbox', { name: 'Выполнить: Прочитать главу', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: 'Итог задачи', exact: true })
+    .getByRole('button', { name: 'Пропустить', exact: true })
+    .click();
   await expect(
     panel.getByRole('checkbox', { name: 'Выполнить: Прочитать главу', exact: true }),
   ).toBeChecked();

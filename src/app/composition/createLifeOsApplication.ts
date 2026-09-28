@@ -19,6 +19,9 @@ import { SelectGoalNextAction } from '../../application/commands/SelectGoalNextA
 import { SetLifeActionGoal } from '../../application/commands/SetLifeActionGoal';
 import { SetLifeActionParent } from '../../application/commands/SetLifeActionParent';
 import { SetLifeActionPlan } from '../../application/commands/SetLifeActionPlan';
+import { SetLifeActionTime } from '../../application/commands/SetLifeActionTime';
+import { TimeCapacityService } from '../../application/time/TimeCapacityService';
+import { WorkSessions } from '../../application/time/WorkSessions';
 import { UpdateDirection } from '../../application/commands/UpdateDirection';
 import { UpdateGoal } from '../../application/commands/UpdateGoal';
 import { UpdateLifeActionDetails } from '../../application/commands/UpdateLifeActionDetails';
@@ -55,6 +58,8 @@ import { IndexedDbDirectionRepository } from '../../infrastructure/persistence/I
 import { IndexedDbGoalRepository } from '../../infrastructure/persistence/IndexedDbGoalRepository';
 import { IndexedDbJournalUnitOfWork } from '../../infrastructure/persistence/IndexedDbJournalUnitOfWork';
 import { IndexedDbLifeActionRepository } from '../../infrastructure/persistence/IndexedDbLifeActionRepository';
+import { IndexedDbTimeCapacityRepository } from '../../infrastructure/persistence/IndexedDbTimeCapacityRepository';
+import { IndexedDbActionSessionRepository } from '../../infrastructure/persistence/IndexedDbActionSessionRepository';
 import { IndexedDbPlannerRepository } from '../../infrastructure/persistence/IndexedDbPlannerRepository';
 import { IndexedDbPlanningRepository } from '../../infrastructure/persistence/IndexedDbPlanningRepository';
 import { IndexedDbProjectRepository } from '../../infrastructure/persistence/IndexedDbProjectRepository';
@@ -177,6 +182,8 @@ export async function createLifeOsApplication(
       clock,
       idGenerator,
     );
+    const setLifeActionTime = new SetLifeActionTime(lifeActionRepository, journalUnitOfWork);
+    const timeCapacity = new TimeCapacityService(new IndexedDbTimeCapacityRepository(database));
     const setLifeActionGoal = new SetLifeActionGoal(
       lifeActionRepository,
       goalRepository,
@@ -236,6 +243,15 @@ export async function createLifeOsApplication(
       createLifeActionDraft,
       completeLifeAction,
       setLifeActionPlan,
+      setLifeActionTime,
+      timeCapacity,
+      workSessions: new WorkSessions(
+        new IndexedDbActionSessionRepository(database),
+        lifeActionRepository,
+        journalUnitOfWork,
+        clock,
+        idGenerator,
+      ),
       setLifeActionGoal,
       getPlannerToday: new GetPlannerToday(lifeActionRepository),
       getGoals: new GetGoals(goalRepository),

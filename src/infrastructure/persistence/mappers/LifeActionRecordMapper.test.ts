@@ -11,6 +11,34 @@ import type { LifeActionRecord } from '../records/LifeActionRecord';
 import { LifeActionRecordMapper } from './LifeActionRecordMapper';
 
 describe('LifeActionRecordMapper', () => {
+  it('round-trips estimate and scheduled block while legacy records read as unscheduled', () => {
+    const action = LifeAction.createDraft({
+      id: id('timed-action'),
+      title: LifeActionTitle.create('Работа'),
+      plannedDate: DayDate.create('2026-09-28'),
+      createdAt: time('2026-09-28T08:00:00.000Z'),
+      eventId: id('created'),
+    });
+    action.setTimePlanning({
+      estimateMinutes: 75,
+      scheduledStartMinute: 540,
+      scheduledDurationMinutes: 60,
+    });
+    const record = LifeActionRecordMapper.toRecord(action);
+    const restored = LifeActionRecordMapper.fromRecord(record);
+    expect(restored.estimateMinutes).toBe(75);
+    expect(restored.scheduledStartMinute).toBe(540);
+    expect(restored.scheduledDurationMinutes).toBe(60);
+    const legacy = { ...record } as Record<string, unknown>;
+    delete legacy.estimateMinutes;
+    delete legacy.scheduledStartMinute;
+    delete legacy.scheduledDurationMinutes;
+    const old = LifeActionRecordMapper.fromRecord(legacy as unknown as LifeActionRecord);
+    expect(old.estimateMinutes).toBeNull();
+    expect(old.scheduledStartMinute).toBeNull();
+    expect(old.scheduledDurationMinutes).toBeNull();
+  });
+
   it('round-trips deleted and restored actions with trash timestamps', () => {
     const deletedAt = time('2026-09-25T10:00:00.000Z');
     const restoredAt = time('2026-09-26T10:00:00.000Z');

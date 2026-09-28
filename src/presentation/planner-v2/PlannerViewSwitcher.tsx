@@ -8,12 +8,20 @@ export function PlannerViewSwitcher({
   readonly onNavigate: (route: PlannerRoute) => void;
 }) {
   const section =
-    'section' in route ? route.section : route.view === 'actions' ? 'actions' : 'goals';
+    'section' in route
+      ? route.section
+      : ['actions', 'time'].includes(route.view)
+        ? 'actions'
+        : 'goals';
   const baseRoutes: readonly { label: string; route: PlannerRoute }[] = [
     { label: 'Список', route: { view: section } },
+    ...(section === 'goals' ? [{ label: 'Обзор недели', route: { view: 'review' } as const }] : []),
     ...(section === 'goals' ? [{ label: 'Фокус', route: { view: 'focus' } as const }] : []),
     { label: 'Канбан', route: { view: 'kanban', section } },
     { label: 'Календарь', route: { view: 'calendar', section } },
+    ...(section === 'actions'
+      ? [{ label: 'Рабочее время', route: { view: 'time' } as const }]
+      : []),
     ...(section === 'goals' ? [{ label: 'Древо', route: { view: 'tree', section } as const }] : []),
   ];
   const routes = baseRoutes.map((item) => ({
@@ -30,12 +38,16 @@ export function PlannerViewSwitcher({
       <span>Представление</span>
       <select
         value={buildPlannerRoute(
-          route.view === 'goals'
-            ? {
-                view: 'goals',
-                ...('sphereId' in route && route.sphereId ? { sphereId: route.sphereId } : {}),
-              }
-            : route,
+          route.view === 'time'
+            ? { view: 'time' }
+            : route.view === 'review'
+              ? { view: 'review' }
+              : route.view === 'goals'
+                ? {
+                    view: 'goals',
+                    ...('sphereId' in route && route.sphereId ? { sphereId: route.sphereId } : {}),
+                  }
+                : route,
         )}
         onChange={(event) => {
           const selected = routes.find((r) => buildPlannerRoute(r.route) === event.target.value);

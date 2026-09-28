@@ -1,4 +1,5 @@
 import type { Direction, Goal, GoalStatus, LifeAction, Sphere } from '../../domain';
+import { isPlannerCatalogVisibleAction } from '../../application/planner/PlannerCatalog';
 import { comparePlannerGoalActions, isOpenAction } from './plannerCatalogModel';
 
 export interface PlannerViewData {
@@ -52,7 +53,7 @@ export function buildPlannerViews(data: PlannerViewData) {
     }
   }
   for (const action of data.actions) {
-    if (action.isArchived()) continue;
+    if (!isPlannerCatalogVisibleAction(action)) continue;
     const date = action.plannedDate?.toString();
     const column: ActionColumn =
       action.status === 'completed'

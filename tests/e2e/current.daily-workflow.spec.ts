@@ -163,6 +163,10 @@ test('Today opens the action body; completion stays completed until explicit reo
   await expect(page).toHaveURL(/#\/v2\/actions\/daily-action-0$/);
   await page.goto('/#/v2/today');
   await page.getByRole('checkbox', { name: 'Выполнить: Прогулка', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: 'Итог задачи', exact: true })
+    .getByRole('button', { name: 'Пропустить', exact: true })
+    .click();
   await expect(page).toHaveURL(/#\/v2\/today$/);
   await page.locator('.planner-completed > summary').click();
   const completed = page.getByRole('checkbox', { name: 'Выполнить: Прогулка', exact: true });
@@ -216,6 +220,7 @@ test('Actions shows one recurring series and can remove one occurrence or the wh
           return rows.some(
             (row) =>
               row.status === 'cancelled' &&
+              typeof row.archivedAt === 'string' &&
               (row.occurrence as { ruleId?: string; originalDate?: string } | undefined)?.ruleId ===
                 id &&
               (row.occurrence as { originalDate?: string } | undefined)?.originalDate === date,
@@ -225,6 +230,13 @@ test('Actions shows one recurring series and can remove one occurrence or the wh
       ),
     )
     .toBe(true);
+
+  await page.goto('/#/v2/actions?view=calendar');
+  await expect(page.locator('button[aria-current="date"]')).toHaveAttribute(
+    'aria-label',
+    /: 2 действий/,
+  );
+  await page.goto('/#/v2/actions');
 
   await page.getByRole('button', { name: `Действия: ${title}`, exact: true }).click();
   await page.getByRole('menuitem', { name: 'Удалить всю серию', exact: true }).click();
@@ -236,6 +248,8 @@ test('Actions shows one recurring series and can remove one occurrence or the wh
   await expect(titleLink).toHaveCount(0);
   await page.reload();
   await expect(titleLink).toHaveCount(0);
+  await page.goto('/#/v2/actions?view=calendar');
+  await expect(page.getByLabel('Календарь').getByText(title, { exact: true })).toHaveCount(0);
   expect(
     await page.evaluate(async (id) => {
       const db = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -260,7 +274,8 @@ test('Actions shows one recurring series and can remove one occurrence or the wh
         open: actions.filter(
           (row) =>
             (row.occurrence as { ruleId?: string } | undefined)?.ruleId === id &&
-            !['completed', 'cancelled'].includes(String(row.status)),
+            row.status !== 'completed' &&
+            row.archivedAt == null,
         ).length,
       };
     }, ruleId),

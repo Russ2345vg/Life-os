@@ -1,4 +1,7 @@
 import { PlannerGoalForm } from './PlannerGoalForm';
+import { PlannerActionForm } from './PlannerActionForm';
+import { submitPlannerAction } from './plannerFormSubmission';
+import type { CreateLifeActionDraft } from '../../application';
 import { useQuickAccess, useQuickAccessGuard } from './QuickAccessContext';
 import { PlannerSheet } from './PlannerSheet';
 import { PlanningGoalDetail } from './PlanningGoalDetail';
@@ -22,6 +25,8 @@ import type { InboxIdea } from '../../domain/planner/InboxIdea';
 import type { FocusPeriod } from '../../domain/planner/FocusPeriod';
 import { PlannerInbox } from './PlannerInbox';
 import { PlannerGoalList } from './PlannerGoalList';
+import { PlannerWeeklyReview } from './PlannerWeeklyReview';
+import { buildWeeklyGoalReview } from '../../application/queries/GetWeeklyGoalReview';
 import { PlannerFocus } from './PlannerFocus';
 import { PlannerActionList } from './PlannerActionList';
 import { activeFocusIds } from './plannerCatalogModel';
@@ -42,13 +47,22 @@ import type { DeletePilotLifeAction } from '../../application/sync/pilot/DeleteP
 import type { ArchiveLifeAction } from '../../application/commands/ArchiveLifeAction';
 import type { EditPlannerActionDraft } from '../../application/commands/EditPlannerActionDraft';
 import type { SetLifeActionParent } from '../../application/commands/SetLifeActionParent';
+import type { SetLifeActionTime } from '../../application/commands/SetLifeActionTime';
+import type { TimeCapacityService } from '../../application/time/TimeCapacityService';
+import type { WorkSessions } from '../../application/time/WorkSessions';
 import type { SelectGoalNextAction } from '../../application/commands/SelectGoalNextAction';
 import type { UpdateLifeActionDetails } from '../../application/commands/UpdateLifeActionDetails';
 import type { PlanningServices } from '../../application/planner/PlanningServices';
 import { DomainError } from '../../shared/errors/DomainError';
 import type { EntityMenuAction } from './EntityContextMenu';
+import { PlannerWorkTime } from './PlannerWorkTime';
+import type { PlannerWorkTimeController } from './usePlannerWorkTime';
 
 export interface PlannerLibraryServices {
+  readonly setLifeActionTime?: Pick<SetLifeActionTime, 'execute'>;
+  readonly timeCapacity?: Pick<TimeCapacityService, 'get' | 'setWeekday'>;
+  readonly workSessions?: Pick<WorkSessions, 'list' | 'start' | 'pause' | 'resume' | 'finish'>;
+  readonly createLifeActionDraft: Pick<CreateLifeActionDraft, 'execute'>;
   readonly plannerInbox: Pick<InboxService, 'list' | 'capture' | 'convert' | 'archive'>;
   readonly plannerFocus: Pick<FocusService, 'get' | 'setRole'>;
   readonly plannerCatalog: Pick<PlannerCatalog, 'actions'>;
@@ -82,14 +96,31 @@ export function PlannerLibraryWorkspace({
   route,
   today,
   onNavigate,
+  onActionCompleted,
+  onChangeDate,
+  dateRevision = 0,
+  workTime,
 }: {
   readonly services: PlannerLibraryServices;
   readonly route: PlannerRoute;
   readonly today: string;
   readonly onNavigate: (route: PlannerRoute) => void;
+  readonly onActionCompleted?: (action: LifeAction) => void;
+  readonly onChangeDate: (id: string, date: string) => Promise<LifeAction>;
+  readonly dateRevision?: number;
+  readonly workTime?: PlannerWorkTimeController;
 }) {
   const planningContext = usePlanning();
   const [data, setData] = useState<LibraryData | null>(null);
+  const [timeCapacity, setTimeCapacity] = useState<readonly (number | null)[]>([
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+  ]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   useEffect(() => {
@@ -98,6 +129,7 @@ export function PlannerLibraryWorkspace({
     return () => window.clearTimeout(timeout);
   }, [notice]);
   const [busy, setBusy] = useState(false);
+  const [creatingStepFor, setCreatingStepFor] = useState<string | null>(null);
   const revision = useQuickAccess()?.revision ?? 0;
   useQuickAccessGuard(() => ({ dirty: false, busy }));
   const sequence = useRef(0);
@@ -120,8 +152,9 @@ export function PlannerLibraryWorkspace({
       services.plannerCatalog.actions(),
       services.plannerInbox.list(),
       services.plannerFocus.get(today),
+      services.timeCapacity?.get() ?? Promise.resolve([null, null, null, null, null, null, null]),
     ])
-      .then(([goals, directions, spheres, actions, ideas, focus]) => {
+      .then(([goals, directions, spheres, actions, ideas, focus, capacity]) => {
         if (request === sequence.current) {
           setData({
             goals,
@@ -131,6 +164,7 @@ export function PlannerLibraryWorkspace({
             ideas,
             focus,
           });
+          setTimeCapacity(capacity);
           setError(null);
         }
       })
@@ -144,15 +178,31 @@ export function PlannerLibraryWorkspace({
   useEffect(() => {
     void load().catch(report);
     return invalidateLoad;
-  }, [load, report, invalidateLoad, revision]);
+  }, [load, report, invalidateLoad, revision, dateRevision, workTime?.revision]);
   const refresh = useCallback(() => {
     void load().catch(report);
   }, [load, report]);
+  useEffect(() => {
+    if (route.view !== 'time') return;
+    const refreshVisible = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+    window.addEventListener('focus', refreshVisible);
+    window.addEventListener('pageshow', refreshVisible);
+    document.addEventListener('visibilitychange', refreshVisible);
+    const timer = window.setInterval(refreshVisible, 5000);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refreshVisible);
+      window.removeEventListener('pageshow', refreshVisible);
+      document.removeEventListener('visibilitychange', refreshVisible);
+    };
+  }, [route.view, refresh]);
   useSyncContentChanged(
-    'goals|lifeActions|directions|spheres|inboxIdeas|focusPeriods|planningPeriods|periodMemberships|progressContributions',
+    'goals|lifeActions|timeCapacity|directions|spheres|inboxIdeas|focusPeriods|planningPeriods|periodMemberships|progressContributions',
     refresh,
   );
-  const run = async (work: () => Promise<unknown>, message: string) => {
+  const run = async (work: () => Promise<unknown>, message: string | null) => {
     if (working.current) return;
     working.current = true;
     setBusy(true);
@@ -173,8 +223,30 @@ export function PlannerLibraryWorkspace({
   const perform = (work: () => Promise<unknown>, message: string) => {
     void run(work, message).catch(report);
   };
+  const setActionTime = async (
+    id: string,
+    estimateMinutes: number | null,
+    scheduledStartMinute: number | null,
+    scheduledDurationMinutes: number | null,
+    expectedVersion: number,
+  ) => {
+    if (!services.setLifeActionTime) throw new Error('Планирование времени недоступно.');
+    await run(async () => {
+      const result = await services.setLifeActionTime!.execute({
+        lifeActionId: EntityId.create(id),
+        estimateMinutes,
+        scheduledStartMinute,
+        scheduledDurationMinutes,
+        expectedVersion,
+      });
+      if (!result.ok) throw result.error;
+    }, 'Время действия сохранено');
+  };
   const complete = (id: string) =>
-    perform(() => completePlannerAction(services.completeLifeAction, id), 'Действие выполнено');
+    perform(async () => {
+      const action = await completePlannerAction(services.completeLifeAction, id);
+      onActionCompleted?.(action);
+    }, 'Действие выполнено');
   const menuForGoal = (goal: Goal): EntityMenuAction[] => [
     {
       label: 'Редактировать',
@@ -291,13 +363,20 @@ export function PlannerLibraryWorkspace({
         ]),
   ];
   const views = useMemo(() => (data ? buildPlannerViews(data) : null), [data]);
+  const changeLibraryDate = (id: string, date: string) =>
+    data?.actions.find((action) => action.id.toString() === id)?.status === 'completed'
+      ? planPlannerAction(services.setLifeActionPlan, id, date, undefined, ['completed'])
+      : onChangeDate(id, date);
   const operations: PlannerViewOperations = {
     busy,
     onComplete: complete,
     onPlan: async (id, date, main) => {
       await run(
-        () => planPlannerAction(services.setLifeActionPlan, id, date, main),
-        main ? 'Следующее действие выбрано' : 'Дата сохранена',
+        () =>
+          main === undefined
+            ? changeLibraryDate(id, date)
+            : planPlannerAction(services.setLifeActionPlan, id, date, main),
+        main === undefined ? null : 'Следующее действие выбрано',
       );
     },
     onLink: async (id, goalId) => {
@@ -368,6 +447,35 @@ export function PlannerLibraryWorkspace({
   };
   return (
     <>
+      {route.view === 'review' && creatingStepFor && (
+        <PlannerSheet
+          title="Новое действие цели"
+          onClose={() => {
+            if (!busy) setCreatingStepFor(null);
+          }}
+        >
+          <PlannerActionForm
+            goals={(planningContext?.state?.goals ?? [])
+              .filter((goal) => goal.status === 'active' && !goal.isDeleted())
+              .map((goal) => ({ id: goal.id.toString(), title: goal.title }))}
+            initialGoalId={creatingStepFor}
+            lockGoal
+            currentDate={today}
+            contextLabel={
+              planningContext?.state?.goals.find((goal) => goal.id.toString() === creatingStepFor)
+                ?.title ?? null
+            }
+            onCancel={() => setCreatingStepFor(null)}
+            onSubmit={async (draft) => {
+              await run(
+                () => submitPlannerAction(services.createLifeActionDraft, draft),
+                'Действие создано. Выберите его следующим шагом цели.',
+              );
+              setCreatingStepFor(null);
+            }}
+          />
+        </PlannerSheet>
+      )}
       {notice && (
         <p className="planner-notice" role="status">
           {notice}
@@ -390,6 +498,44 @@ export function PlannerLibraryWorkspace({
             Загружаем…
           </div>
         )
+      ) : route.view === 'time' ? (
+        <>
+          {workTime?.notice && (
+            <p className="planner-notice" role="status">
+              {workTime.notice}
+            </p>
+          )}
+          <PlannerWorkTime
+            actions={data.actions}
+            goals={data.goals}
+            weekdays={timeCapacity}
+            today={today}
+            initialActionId={route.actionId}
+            sessions={workTime?.sessions ?? null}
+            sessionError={
+              workTime?.error ?? (workTime ? null : 'Рабочие сессии недоступны в этой сборке.')
+            }
+            busy={busy || Boolean(workTime?.busy)}
+            viewSwitcher={<PlannerViewSwitcher route={route} onNavigate={onNavigate} />}
+            onStart={async (id) => {
+              await workTime?.start(id);
+            }}
+            onPause={async (id, version) => {
+              await workTime?.pause(id, version);
+            }}
+            onResume={async (id, version) => {
+              await workTime?.resume(id, version);
+            }}
+            onFinish={async (id, version) => {
+              await workTime?.finish(id, version);
+            }}
+            onRefresh={() => {
+              refresh();
+              void workTime?.refresh().catch(() => {});
+            }}
+            onNavigate={onNavigate}
+          />
+        </>
       ) : route.view === 'goal' ? (
         <>
           {route.edit && data.goals.find((goal) => goal.id.toString() === route.id) && (
@@ -466,7 +612,22 @@ export function PlannerLibraryWorkspace({
               {...operations}
             />
           ) : route.view === 'calendar' ? (
-            <PlannerCalendar data={views} today={today} {...operations} />
+            <PlannerCalendar
+              data={views}
+              today={today}
+              capacity={timeCapacity}
+              onSetTime={setActionTime}
+              onSetCapacity={async (weekday, minutes) => {
+                if (!services.timeCapacity)
+                  throw new Error('Настройка доступного времени недоступна.');
+                await run(
+                  () => services.timeCapacity!.setWeekday(weekday, minutes),
+                  'Доступное время сохранено',
+                );
+                setTimeCapacity(await services.timeCapacity.get());
+              }}
+              {...operations}
+            />
           ) : (
             <PlannerTree data={views} {...operations} />
           )}
@@ -507,10 +668,7 @@ export function PlannerLibraryWorkspace({
           }
           onComplete={complete}
           onPlan={async (id, date) => {
-            await run(
-              () => planPlannerAction(services.setLifeActionPlan, id, date),
-              'Дата сохранена',
-            );
+            await run(() => changeLibraryDate(id, date), null);
           }}
           onLink={async (id, goalId) => {
             await run(async () => {
@@ -523,6 +681,7 @@ export function PlannerLibraryWorkspace({
           }}
           menuForAction={menuForAction}
           onEdit={operations.onEdit}
+          onSetTime={services.setLifeActionTime ? setActionTime : undefined}
           onUnlink={operations.onUnlink}
           onReopen={operations.onReopen}
         />
@@ -540,7 +699,42 @@ export function PlannerLibraryWorkspace({
             </button>
           </header>
           <PlannerViewSwitcher route={route} onNavigate={onNavigate} />
-          {route.view === 'focus' ? (
+          {route.view === 'review' && planningContext?.error && (
+            <div role="alert" className="planner-error">
+              <p>Не удалось обновить обзор. Показаны последние загруженные данные.</p>
+              <p>{planningContext.error}</p>
+              <button type="button" disabled={busy} onClick={() => void planningContext.refresh()}>
+                Повторить загрузку обзора
+              </button>
+            </div>
+          )}
+          {route.view === 'review' ? (
+            planningContext?.state ? (
+              <PlannerWeeklyReview
+                review={buildWeeklyGoalReview(planningContext.state, today, route.week)}
+                today={today}
+                busy={busy}
+                onWeek={(week) => onNavigate({ view: 'review', week })}
+                onOpenGoal={(id) => onNavigate({ view: 'goal', id })}
+                onOpenAction={(id) => onNavigate({ view: 'action', id })}
+                onSelectStep={operations.onGoalNextAction}
+                onCreateStep={setCreatingStepFor}
+                onPlan={async (id, date) => {
+                  if (
+                    planningContext.state?.actions
+                      .find((action) => action.id.toString() === id)
+                      ?.plannedDate?.toString() === date
+                  ) {
+                    await planningContext.refresh();
+                    return;
+                  }
+                  await run(() => onChangeDate(id, date), null);
+                }}
+              />
+            ) : (
+              !planningContext?.error && <p role="status">Загружаем результаты…</p>
+            )
+          ) : route.view === 'focus' ? (
             <PlannerFocus
               goals={data.goals}
               actions={data.actions}

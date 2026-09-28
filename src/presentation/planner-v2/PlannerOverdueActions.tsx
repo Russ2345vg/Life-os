@@ -9,6 +9,10 @@ export function PlannerOverdueActions({
   onReschedule,
   onListResolved,
   renderAction,
+  title = 'Осталось с прошлых дней',
+  headingId = 'planner-overdue-title',
+  description = 'Выберите новую дату. Черновик можно оставить без даты.',
+  todayLabel = 'На сегодня',
 }: {
   readonly actions: readonly LifeAction[];
   readonly today: string;
@@ -16,6 +20,10 @@ export function PlannerOverdueActions({
   readonly onReschedule: (id: string, date: string) => Promise<void>;
   readonly onListResolved: () => void;
   readonly renderAction: (action: LifeAction, controls: ReactNode) => ReactNode;
+  readonly title?: string;
+  readonly headingId?: string;
+  readonly description?: string;
+  readonly todayLabel?: string;
 }) {
   const section = useRef<HTMLElement>(null);
   const focusAfterSave = useRef<{ id: string; index: number } | null>(null);
@@ -42,11 +50,11 @@ export function PlannerOverdueActions({
   };
   if (!actions.length) return null;
   return (
-    <section ref={section} className="planner-overdue" aria-labelledby="planner-overdue-title">
-      <h2 id="planner-overdue-title">
-        Осталось с прошлых дней <span>{actions.length}</span>
+    <section ref={section} className="planner-overdue" aria-labelledby={headingId}>
+      <h2 id={headingId}>
+        {title} <span>{actions.length}</span>
       </h2>
-      <p className="planner-muted">Выберите новую дату или оставьте действие без даты.</p>
+      <p className="planner-muted">{description}</p>
       <ul>
         {actions.map((action) =>
           renderAction(
@@ -56,6 +64,7 @@ export function PlannerOverdueActions({
               action={action}
               today={today}
               busy={busy}
+              todayLabel={todayLabel}
               onReschedule={reschedule}
             />,
           ),
@@ -70,11 +79,13 @@ function OverduePlanControls({
   today,
   busy,
   onReschedule,
+  todayLabel,
 }: {
   readonly action: LifeAction;
   readonly today: string;
   readonly busy: boolean;
   readonly onReschedule: (id: string, date: string) => Promise<void>;
+  readonly todayLabel: string;
 }) {
   const inputId = useId();
   const input = useRef<HTMLInputElement>(null);
@@ -112,6 +123,9 @@ function OverduePlanControls({
   return (
     <div className="planner-overdue-controls">
       <p className="planner-muted">
+        {action.rescheduleCount >= 2 ? (
+          <span>Зафиксировано переносов: {action.rescheduleCount}. </span>
+        ) : null}
         Было запланировано:{' '}
         <time dateTime={previousDate}>
           {previousDate &&
@@ -130,7 +144,7 @@ function OverduePlanControls({
         <>
           <div className="planner-inline-actions">
             <button type="button" disabled={disabled} onClick={() => void save(today)}>
-              На сегодня
+              {todayLabel}
             </button>
             <button
               ref={trigger}

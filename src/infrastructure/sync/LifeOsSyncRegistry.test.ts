@@ -11,6 +11,7 @@ const EXPECTED_ENTITY_TYPES = [
   'progress_contribution',
   'recurrence_rule',
   'action_session',
+  'time_capacity',
   'day',
   'decision',
   'direction',
@@ -48,6 +49,7 @@ const EXPECTED_ENTITY_STORES = {
   progress_contribution: 'progressContributions',
   recurrence_rule: 'recurrenceRules',
   action_session: 'actionSessions',
+  time_capacity: 'timeCapacity',
   day: 'days',
   decision: 'decisions',
   direction: 'directions',
@@ -102,7 +104,7 @@ describe('LIFE_OS_SYNC_REGISTRY', () => {
       LIFE_OS_SYNC_REGISTRY.filter(({ storageKind }) => storageKind === 'indexed_db').map(
         ({ storeName }) => storeName,
       ),
-    ).toHaveLength(33);
+    ).toHaveLength(34);
     expect(LIFE_OS_SYNC_REGISTRY.every(({ readiness }) => readiness === 'sync_ready')).toBe(true);
   });
 

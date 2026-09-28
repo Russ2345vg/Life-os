@@ -1,7 +1,12 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it } from 'vitest';
 import { createLifeOsApplication } from '../../app/composition/createLifeOsApplication';
-import { LifeOsIndexedDb, LIFE_OS_STORE, LIFE_OS_SYNC_STORE } from './indexed-db/LifeOsIndexedDb';
+import {
+  LifeOsIndexedDb,
+  LIFE_OS_DATABASE_VERSION,
+  LIFE_OS_STORE,
+  LIFE_OS_SYNC_STORE,
+} from './indexed-db/LifeOsIndexedDb';
 import { done, request } from '../sync/attachments/AttachmentRegistration';
 import {
   IndexedDbPilotMutationRecorder,
@@ -16,7 +21,9 @@ describe('Task scenario persistence', () => {
     const factory = new IDBFactory();
     const opening = factory.open('lifeos', 26);
     opening.onupgradeneeded = () => {
-      for (const name of Object.values(LIFE_OS_STORE).filter((name) => name !== 'taskScenarios'))
+      for (const name of Object.values(LIFE_OS_STORE).filter(
+        (name) => !['taskScenarios', 'timeCapacity'].includes(name),
+      ))
         opening.result.createObjectStore(name, { keyPath: 'id' });
     };
     const old = await request(opening);
@@ -28,7 +35,7 @@ describe('Task scenario persistence', () => {
     const database = new LifeOsIndexedDb(factory);
     try {
       const db = await database.open();
-      expect(db.version).toBe(27);
+      expect(db.version).toBe(LIFE_OS_DATABASE_VERSION);
       expect(
         await request(db.transaction('taskScenarios').objectStore('taskScenarios').getAll()),
       ).toEqual([]);

@@ -21,8 +21,8 @@ interface SnapshotPayloadView {
 }
 
 describe('IndexedDbSnapshotService', () => {
-  it.each([23, 24, 25, 26])(
-    'verifies a schema %s backup after adding scenarios',
+  it.each([23, 24, 25, 26, 27])(
+    'verifies a schema %s backup after adding weekday capacity',
     async (version) => {
       const { database, service } = await createService('schema23');
       const created = await service.createPreSyncSnapshot(),
@@ -30,7 +30,8 @@ describe('IndexedDbSnapshotService', () => {
         stored = (await readSnapshotRecord(opened, created.snapshotId))!;
       const payload = stored.payload as SnapshotPayloadView;
       const added = new Set([
-        'taskScenarios',
+        'timeCapacity',
+        ...(version < 27 ? ['taskScenarios'] : []),
         ...(version < 25 ? ['directionIndicators', 'balanceMonthlySnapshots'] : []),
         ...(version < 24
           ? [

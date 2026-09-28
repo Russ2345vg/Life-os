@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ActionCancelReason,
   DayDate,
   Direction,
   EntityId,
@@ -121,6 +122,31 @@ describe('V2 views projections', () => {
     expect(view.actionsByDate.get('2026-09-18')).toEqual([a]);
     expect(view.actionsByColumn.get('completed')).toEqual([a]);
     expect(a.completedAt).toEqual(now);
+  });
+  it('hides legacy cancelled recurrence occurrences while keeping standalone cancellations', () => {
+    const recurring = action('legacy-recurring', false, '2026-09-15');
+    recurring.setPlanningMetadata({
+      occurrence: {
+        ruleId: 'removed-rule',
+        slot: '2026-09-15',
+        originalDate: '2026-09-15',
+        ruleRevision: 1,
+      },
+    });
+    recurring.cancel(now, id('cancel-recurring'), ActionCancelReason.create('Серия удалена'));
+    const standalone = action('standalone', false, '2026-09-15');
+    standalone.cancel(now, id('cancel-standalone'), ActionCancelReason.create('Не актуально'));
+
+    const view = buildPlannerViews({
+      goals: [],
+      actions: [recurring, standalone],
+      spheres: [],
+      directions: [],
+    });
+
+    expect(view.actionsByDate.get('2026-09-15')).toEqual([standalone]);
+    expect(view.actionsByColumn.get('cancelled')).toEqual([standalone]);
+    expect(view.actionsWithoutGoal).toEqual([standalone]);
   });
   it('indexes a large collection and produces Monday-first calendar days across leap years', () => {
     const actions = Array.from({ length: 2500 }, (_, i) => action(`a${i}`, true, '2026-09-13'));

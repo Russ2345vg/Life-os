@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.media.RingtoneManager
 import androidx.core.content.ContextCompat
 
 data class LifeOsAlarmOccurrence(
@@ -47,6 +48,8 @@ data class LifeOsAlarmStatus(
   val sleepEvents: List<NativeSleepEvent>,
   val wakeResults: List<NativeWakeResult>,
   val message: String?,
+  val testEvidence: WakeProbeEvidence?,
+  val testEvidenceValid: Boolean,
 )
 
 object LifeOsAlarmScheduler {
@@ -166,6 +169,10 @@ object LifeOsAlarmScheduler {
     val nextAt = preferences.getLong(KEY_NEXT_AT, 0L).takeIf { it > 0L }
     val error = preferences.getString(KEY_LAST_ERROR, null)
     val ringing = preferences.getBoolean(KEY_RINGING, false)
+    val probeStore = WakeProbeStore(context)
+    val fingerprint = testFingerprint(context)
+    val probe = probeStore.evidence()
+    if (probe != null && probe.fingerprint != fingerprint) probeStore.invalidate()
     val state = LifeOsAlarmStatusPolicy.state(
       ringing = ringing,
       hasAlarmCapabilityIssues = alarmIssues.isNotEmpty(),
@@ -193,14 +200,20 @@ object LifeOsAlarmScheduler {
       sleepEvents = LifeOsSleepEventStore(context).events(),
       wakeResults = LifeOsSleepEventStore(context).wakeResults(),
       message = error,
+      testEvidence = probe,
+      testEvidenceValid = probe != null && probe.fingerprint == fingerprint,
     )
   }
 
   fun scheduleTest(context: Context, delaySeconds: Int, soundUri: String?, soundTitle: String): LifeOsAlarmStatus {
     require(delaySeconds in 5..300) { "Пробный сигнал можно поставить через 5–300 секунд." }
     val issues = capabilityIssues(context)
-    if (issues.isNotEmpty()) return status(context)
+    require(issues.isEmpty()) { "Разрешите точные будильники, уведомления и полный экран перед проверкой." }
+    check(!preferences(context).getBoolean(KEY_RINGING, false)) { "Сначала завершите текущий сигнал." }
     val trigger = System.currentTimeMillis() + delaySeconds * 1_000L
+    val probeStore = WakeProbeStore(context)
+    probeStore.scheduled("test-$trigger", trigger, testFingerprint(context))
+    try {
     scheduleExact(
       context = context,
       occurrence = LifeOsAlarmOccurrence("test-$trigger", "test", trigger),
@@ -208,6 +221,10 @@ object LifeOsAlarmScheduler {
       soundTitle = soundTitle,
       isTest = true,
     )
+    } catch (error: Exception) {
+      probeStore.invalidate()
+      throw error
+    }
     return status(context).copy(message = "Пробный сигнал прозвучит через $delaySeconds секунд.")
   }
 
@@ -218,18 +235,23 @@ object LifeOsAlarmScheduler {
     val wakeTime = preferences.getString(KEY_WAKE_TIME, null) ?: return
     val timeZone = preferences.getString(KEY_TIME_ZONE, null) ?: return
     val storedCycle = preferences.getString(KEY_NEXT_CYCLE, null) ?: return
-    val cycleDate = AlarmScheduleMath.firstFutureCycle(
+    val now = System.currentTimeMillis()
+    val storedAt = preferences.getLong(KEY_NEXT_AT, 0L)
+    val cycleDate = AlarmScheduleMath.restoredCycle(
       storedCycle,
+      storedAt,
       wakeTime,
       timeZone,
-      System.currentTimeMillis(),
+      now,
     )
     val occurrenceId = if (cycleDate == storedCycle) {
       preferences.getString(KEY_NEXT_ID, null) ?: "native-$cycleDate"
     } else {
       "native-$cycleDate"
     }
-    val trigger = AlarmScheduleMath.triggerForCycleDate(cycleDate, wakeTime, timeZone)
+    val trigger = AlarmScheduleMath.restoredTrigger(storedAt, now) {
+      AlarmScheduleMath.triggerForCycleDate(cycleDate, wakeTime, timeZone)
+    }
     preferences.edit()
       .putString(KEY_NEXT_ID, occurrenceId)
       .putString(KEY_NEXT_CYCLE, cycleDate)
@@ -247,6 +269,12 @@ object LifeOsAlarmScheduler {
 
   fun acceptDelivery(context: Context, occurrenceId: String, cycleDate: String, isTest: Boolean): Boolean {
     val preferences = preferences(context)
+    if (isTest) {
+      val evidence = WakeProbeStore(context).evidence()
+      if (evidence?.occurrenceId != occurrenceId || evidence.fingerprint != testFingerprint(context)) return false
+      if (preferences.getBoolean(KEY_RINGING, false)) return false
+      WakeProbeStore(context).delivered(occurrenceId, System.currentTimeMillis())
+    }
     val previousDeliveryKey = preferences.getString(KEY_LAST_DELIVERED_ID, null)
     if (!AlarmDeliveryPolicy.shouldAccept(previousDeliveryKey, occurrenceId, isTest)) return false
     val deliveryKey = AlarmDeliveryPolicy.deliveryKey(occurrenceId, isTest)
@@ -284,6 +312,30 @@ object LifeOsAlarmScheduler {
 
   fun markRinging(context: Context, ringing: Boolean) {
     preferences(context).edit().putBoolean(KEY_RINGING, ringing).apply()
+  }
+
+  fun confirmTestHeard(context: Context, occurrenceId: String): Boolean {
+    if (!isCurrentTest(context, occurrenceId)) return false
+    return WakeProbeStore(context).confirm(occurrenceId, testFingerprint(context))
+  }
+
+  fun isCurrentTest(context: Context, occurrenceId: String): Boolean =
+    matchesCurrentDelivery(context, occurrenceId, true)
+
+  fun matchesCurrentDelivery(context: Context, occurrenceId: String, isTest: Boolean): Boolean =
+    preferences(context).getBoolean(KEY_RINGING, false) &&
+      preferences(context).getString(KEY_LAST_DELIVERED_ID, null) == AlarmDeliveryPolicy.deliveryKey(occurrenceId, isTest)
+
+  fun currentTestOccurrenceId(context: Context): String? =
+    WakeProbeStore(context).evidence()?.occurrenceId?.takeIf { isCurrentTest(context, it) }
+
+  private fun testFingerprint(context: Context): String {
+    val prefs = preferences(context)
+    val soundUri = prefs.getString(KEY_SOUND_URI, null)
+      ?: RingtoneManager.getActualDefaultRingtoneUri(context, RingtoneManager.TYPE_ALARM)?.toString()
+      ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)?.toString()
+    return listOf(prefs.getInt(KEY_SETTINGS_VERSION, 0), soundUri,
+      exactAlarmGranted(context), notificationsGranted(context), fullScreenGranted(context)).joinToString("|")
   }
 
   fun cancelTest(context: Context) {

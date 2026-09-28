@@ -16,6 +16,12 @@ import type { SleepEventKind, WakeResultKind } from '../../domain/sleep/SleepSch
 type InvokeFunction = (command: string, args?: Record<string, unknown>) => Promise<unknown>;
 
 interface NativeAlarmStatus {
+  readonly testEvidence?: {
+    readonly scheduledAtEpochMillis: number;
+    readonly deliveredAtEpochMillis: number | null;
+    readonly confirmedAtEpochMillis: number | null;
+    readonly valid: boolean;
+  } | null;
   readonly supported: boolean;
   readonly state: WakeAlarmState;
   readonly exactAlarmGranted: boolean;
@@ -157,6 +163,11 @@ export class TauriAndroidWakeAlarmGateway implements WakeAlarmGateway {
     );
   }
 
+  public async exportDismissalQr(): Promise<void> {
+    if (!this.#isSupported()) throw new Error('Открыть QR можно в приложении LifeOS на Android.');
+    await this.#invoke('android_alarm_export_dismissal_qr');
+  }
+
   public async saveEmergencyPhrase(phrase: string): Promise<WakeDismissalSetup> {
     if (!this.#isSupported()) return unavailableWakeDismissalSetup();
     return normalizeDismissalSetup(
@@ -207,6 +218,15 @@ function normalizeDismissalSetup(setup: NativeWakeDismissalSetup): WakeDismissal
 
 function normalizeStatus(status: NativeAlarmStatus): WakeAlarmStatus {
   return {
+    testEvidence:
+      status.testEvidence == null
+        ? null
+        : {
+            scheduledAt: new Date(status.testEvidence.scheduledAtEpochMillis),
+            deliveredAt: toDate(status.testEvidence.deliveredAtEpochMillis),
+            confirmedAt: toDate(status.testEvidence.confirmedAtEpochMillis),
+            valid: status.testEvidence.valid,
+          },
     supported: status.supported,
     state: status.state,
     exactAlarmGranted: status.exactAlarmGranted,

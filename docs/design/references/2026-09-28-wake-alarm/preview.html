@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LifeOS · Подъём и будильник · Макет</title>
+    <link rel="stylesheet" href="/src/presentation/styles/global.css" />
+    <link rel="stylesheet" href="/src/presentation/planner-v2/quick-access.css" />
+    <link rel="stylesheet" href="/src/presentation/planner-v2/planner-v2.css" />
+    <link rel="stylesheet" href="/src/presentation/planner-v2/evening-support.css" />
+    <link rel="stylesheet" href="/src/presentation/planner-v2/planner-master.css" />
+    <link rel="stylesheet" href="/src/presentation/planner-v2/planner-premium.css" />
+    <link rel="stylesheet" href="./preview.css" />
+  </head>
+  <body>
+    <div class="planner-v2 planner-v2--sleep">
+      <aside class="planner-sidebar" id="shell"></aside>
+      <main class="planner-content" id="planner-main-content">
+        <section class="sleep-page wake-preview">
+          <header class="planner-page-heading">
+            <h1>Сон и подъём</h1>
+            <a href="/#/v2/sleep">К приложению</a>
+          </header>
+          <p class="preview-note">Макет · реальный сигнал не запускается</p>
+          <section
+            class="wake-hero sleep-summary-card"
+            id="wake-card"
+            aria-label="Ближайший подъём"
+          >
+            <header class="wake-card-heading">
+              <h2>Ближайший подъём</h2>
+              <span class="wake-status" id="wake-status" role="status">Установлен на Android</span>
+            </header>
+            <div class="wake-card-body">
+              <div class="wake-time-block">
+                <strong class="wake-time" id="wake-time">07:15</strong>
+                <p id="wake-date">Завтра, вторник, 29 сентября</p>
+                <small>Ежедневно · Asia/Chita</small>
+              </div>
+              <div class="wake-readiness">
+                <p id="wake-explanation">Приложение на телефоне подтвердило сигнал.</p>
+                <div class="wake-actions">
+                  <button type="button" id="permission" hidden>Разрешить будильник</button>
+                  <button type="button" id="retry" hidden>Проверить снова</button>
+                  <button type="button" class="planner-primary" id="edit">Изменить время</button>
+                  <button type="button" id="test">Пробный сигнал</button>
+                </div>
+              </div>
+            </div>
+            <section
+              class="wake-skip-confirm"
+              id="skip-confirm"
+              aria-labelledby="skip-title"
+              hidden
+            >
+              <h2 id="skip-title">Пропустить ближайший подъём?</h2>
+              <p id="skip-description"></p>
+              <div class="wake-actions">
+                <button type="button" class="planner-primary" id="confirm-skip">
+                  Пропустить один раз
+                </button>
+                <button type="button" id="cancel-skip">Оставить будильник</button>
+              </div>
+            </section>
+            <footer class="wake-card-footer">
+              <span id="sound-label">Системный сигнал</span>
+              <button type="button" class="wake-skip" id="skip">Пропустить один подъём</button>
+            </footer>
+          </section>
+          <form id="edit-form" class="wake-edit" hidden>
+            <h2>Время подъёма</h2>
+            <div class="wake-edit-fields">
+              <label>Подъём<input type="time" id="time-input" value="07:15" required /></label>
+              <label
+                >Звук<select id="sound-input">
+                  <option>Системный сигнал</option>
+                  <option>Утренний сигнал</option>
+                </select></label
+              >
+            </div>
+            <div class="wake-actions">
+              <button class="planner-primary" type="submit">Сохранить подъём</button
+              ><button id="cancel" type="button">Отмена</button>
+            </div>
+          </form>
+          <p role="status" class="preview-feedback" id="feedback" hidden></p>
+          <details class="wake-detail">
+            <summary>
+              <span>Как выключить сигнал</span><small>QR и аварийная фраза настроены</small>
+            </summary>
+            <div class="wake-detail-content">
+              <p class="planner-muted">
+                Для выключения сигнала отсканируйте свой QR. Если он недоступен, используйте
+                аварийную фразу на экране будильника.
+              </p>
+              <div class="wake-setting-row">
+                <span>QR для подъёма<small>Настроен</small></span
+                ><button type="button" id="qr">Заменить QR</button>
+              </div>
+              <div class="wake-setting-row">
+                <span>Аварийная фраза<small>Настроена</small></span
+                ><button type="button" id="phrase">Изменить</button>
+              </div>
+            </div>
+          </details>
+          <details class="wake-detail">
+            <summary>
+              <span>Вечерняя подготовка</span
+              ><small id="evening-summary">Сон в 22:30 · 2 из 4 пунктов</small>
+            </summary>
+            <div class="wake-detail-content">
+              <label class="wake-check"><input type="checkbox" checked /> Подготовить одежду</label>
+              <label class="wake-check"
+                ><input type="checkbox" checked /> Собрать вещи на завтра</label
+              >
+              <label class="wake-check"><input type="checkbox" /> Проветрить комнату</label>
+              <label class="wake-check"><input type="checkbox" /> Поставить стакан воды</label>
+              <button type="button" class="planner-primary" id="evening">
+                Завершить подготовку
+              </button>
+            </div>
+          </details>
+          <details class="wake-detail">
+            <summary>
+              <span>Расписание и история</span
+              ><small id="schedule-summary">22:30–07:15 · ежедневно</small>
+            </summary>
+            <div class="wake-detail-content">
+              <p id="schedule-detail">Расписание включено · 22:30–07:15</p>
+              <p>Режим «Не беспокоить» включается за час до сна.</p>
+              <p>Последний подъём: 28 сентября, 07:18 · QR принят · вода отмечена.</p>
+            </div>
+          </details>
+          <details class="preview-tools">
+            <summary>Состояния макета</summary>
+            <label class="preview-state"
+              >Состояние<select id="state">
+                <option value="ready">Android подтвердил</option>
+                <option value="permission">Нужны разрешения</option>
+                <option value="disabled">Расписание выключено</option>
+                <option value="stale">Ожидает применения</option>
+                <option value="error">Ошибка постановки</option>
+                <option value="ringing">Сигнал звучит</option>
+                <option value="browser">В браузере</option>
+              </select></label
+            >
+          </details>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="./preview.js"></script>
+  </body>
+</html>

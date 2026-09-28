@@ -7,6 +7,30 @@ import { PlannerWorkspace, type PlannerServices } from './PlannerWorkspace';
 import { PlannerViewSwitcher } from './PlannerViewSwitcher';
 
 describe('V2 preview routes', () => {
+  it('opens work time and preserves an optional selected action', () => {
+    expect(parsePlannerRoute('#/v2/actions?view=time&actionId=work')).toEqual({
+      view: 'time',
+      actionId: 'work',
+    });
+    expect(parsePlannerRoute('#/v2/actions?view=time')).toEqual({ view: 'time' });
+    const html = renderToStaticMarkup(
+      createElement(PlannerViewSwitcher, {
+        route: { view: 'actions' },
+        onNavigate: vi.fn(),
+      }),
+    );
+    expect(html).toContain('Рабочее время');
+  });
+  it('opens weekly review with its selected week', () => {
+    expect(parsePlannerRoute('#/v2/goals?view=review&week=2026-09-14')).toEqual({
+      view: 'review',
+      week: '2026-09-14',
+    });
+    const html = renderToStaticMarkup(
+      createElement(PlannerViewSwitcher, { route: { view: 'goals' }, onNavigate: vi.fn() }),
+    );
+    expect(html).toContain('Обзор недели');
+  });
   it('retains the selected direction when creating a goal', () => {
     expect(parsePlannerRoute('#/v2/goals/new?directionId=home')).toEqual({
       view: 'new-goal',

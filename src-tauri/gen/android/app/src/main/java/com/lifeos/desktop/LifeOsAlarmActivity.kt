@@ -37,7 +37,7 @@ import java.util.Locale
 
 class LifeOsAlarmActivity : Activity() {
   private val challengeStore by lazy { WakeChallengeStore(this) }
-  private val session = WakeDismissalSession()
+  private var session = WakeDismissalSession()
   private val holdTracker = EmergencyHoldTracker()
   private val handler = Handler(Looper.getMainLooper())
   private var cameraController: QrCameraController? = null
@@ -76,6 +76,16 @@ class LifeOsAlarmActivity : Activity() {
     ) {
       cameraView?.let(::startCamera)
     }
+  }
+
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+    handler.removeCallbacksAndMessages(null)
+    holdTracker.release()
+    holdCompleted = false
+    session = WakeDismissalSession()
+    showRinging()
   }
 
   override fun onPause() {
@@ -127,13 +137,32 @@ class LifeOsAlarmActivity : Activity() {
     val setup = challengeStore.status()
     val body = verticalLayout(Gravity.CENTER_HORIZONTAL).apply {
       setPadding(dp(24), dp(32), dp(24), dp(28))
-      addView(spacer(52))
-      addView(AlarmPulseView(context), centered(dp(166), dp(166)))
-      addView(label("Будильник звонит", 14f, ACCENT, true).withTop(24))
-      addView(label(currentTime(), 58f, TEXT, false).withTop(12))
-      addView(label("Пора вставать", 28f, TEXT, true).withTop(2))
+      addView(spacer(20))
+      addView(AlarmPulseView(context), centered(dp(112), dp(112)))
+      addView(label(if (isTestAlarm()) "Проверка на этом телефоне" else "Будильник звонит", 14f, ACCENT, true).withTop(24))
+      addView(label(currentTime(), 64f, TEXT, false).withTop(12).apply { gravity = Gravity.CENTER })
+      addView(label(if (isTestAlarm()) "Слышите сигнал?" else "Пора вставать", 28f, TEXT, true).withTop(2).apply { gravity = Gravity.CENTER })
       addView(label(currentDate(), 14f, MUTED, false).withTop(12))
-      addView(spacer(54))
+      addView(spacer(32))
+      if (isTestAlarm()) {
+        val message = label("Подтвердите, если звук действительно прозвучал. Обычное расписание сохранится.", 14f, MUTED, false).apply { gravity = Gravity.CENTER }
+        addView(message.withTop(12))
+        addView(primaryButton("Я услышал сигнал") {
+          if (LifeOsAlarmScheduler.confirmTestHeard(this@LifeOsAlarmActivity, occurrenceId)) {
+            stopSignal()
+            showProbeCompleted()
+          } else {
+            message.text = "Настройки изменились. Повторите проверку из LifeOS."
+          }
+        }.withTop(24))
+        addView(secondaryButton("Закрыть без подтверждения") {
+          if (LifeOsAlarmScheduler.isCurrentTest(this@LifeOsAlarmActivity, occurrenceId)) {
+            stopSignal()
+            finishAndRemoveTask()
+          }
+        }.withTop(12))
+        return@apply
+      }
       addView(primaryButton("Сканировать QR") {
         if (setup.qrConfigured) requestCamera() else showSetupMessage()
       })
@@ -160,6 +189,16 @@ class LifeOsAlarmActivity : Activity() {
 
   private fun showSetupMessage() {
     findViewById<TextView>(SETUP_MESSAGE_ID)?.visibility = View.VISIBLE
+  }
+
+  private fun showProbeCompleted() {
+    val body = verticalLayout(Gravity.CENTER_HORIZONTAL).apply {
+      setPadding(dp(24), dp(48), dp(24), dp(28))
+      addView(label("Сигнал проверен", 28f, TEXT, true).apply { gravity = Gravity.CENTER })
+      addView(label("Доставка и ваше подтверждение сохранены на этом телефоне.", 16f, MUTED, false).withTop(16))
+      addView(primaryButton("Готово") { finishAndRemoveTask() }.withTop(32))
+    }
+    setScreen("Проверка завершена", "LifeOS", body)
   }
 
   private fun requestCamera() {
@@ -425,6 +464,8 @@ class LifeOsAlarmActivity : Activity() {
   private fun stopSignal() {
     startService(Intent(this, LifeOsAlarmRingingService::class.java).apply {
       action = LifeOsAlarmScheduler.ACTION_STOP
+      putExtra(LifeOsAlarmScheduler.EXTRA_OCCURRENCE_ID, occurrenceId)
+      putExtra(LifeOsAlarmScheduler.EXTRA_IS_TEST, isTestAlarm())
     })
   }
 

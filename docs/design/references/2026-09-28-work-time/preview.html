@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LifeOS · Рабочее время · Макет</title>
+    <link rel="stylesheet" href="/src/presentation/styles/global.css" />
+    <link rel="stylesheet" href="/src/presentation/planner-v2/planner-v2.css" />
+    <link rel="stylesheet" href="/src/presentation/planner-v2/planner-library.css" />
+    <link rel="stylesheet" href="/src/presentation/planner-v2/planner-master.css" />
+    <link rel="stylesheet" href="/src/presentation/planner-v2/planner-premium.css" />
+    <link rel="stylesheet" href="./preview.css" />
+  </head>
+  <body>
+    <div class="planner-v2">
+      <aside class="planner-sidebar" id="shell"></aside>
+      <main class="planner-content">
+        <header class="planner-page-heading">
+          <h1>Рабочее время</h1>
+          <a href="/#/v2/actions?view=calendar">В календарь</a>
+        </header>
+        <p class="planner-muted">Макет продолжения обновления · демонстрационные данные</p>
+        <section class="work-active" aria-label="Текущая работа">
+          <div>
+            <p class="work-eyebrow" id="session-status">РАБОТА ИДЁТ</p>
+            <h2>Подготовить проект</h2>
+            <p class="planner-muted">Плановый блок 10:00–11:00 · цель «Запустить проект»</p>
+          </div>
+          <div class="work-clock"><strong id="elapsed">00:42:18</strong><span>без пауз</span></div>
+          <div class="work-controls">
+            <button id="pause">Пауза</button
+            ><button class="planner-primary" id="finish">Закончить работу</button>
+          </div>
+        </section>
+        <p class="planner-muted">
+          Окончание работы сохраняет часы. Само действие остаётся открытым до отметки выполнения.
+        </p>
+        <div class="work-report-heading">
+          <h2>План и факт</h2>
+          <div class="work-modes">
+            <button id="day" aria-pressed="true">День</button
+            ><button id="week" aria-pressed="false">Неделя</button>
+          </div>
+          <strong id="period">Понедельник, 28 сентября</strong>
+        </div>
+        <section class="work-summary" aria-label="Итоги периода">
+          <div>
+            <span>Запланировано</span><strong id="planned">3 ч 30 мин</strong>
+            <p>Блоки и оценки дел без времени</p>
+          </div>
+          <div>
+            <span>Отработано</span><strong id="actual">2 ч 12 мин</strong>
+            <p>Рабочие сессии, паузы исключены</p>
+          </div>
+          <div>
+            <span>Выполнено</span><strong id="done">2 действия</strong>
+            <p>Ещё 1 действие без оценки</p>
+          </div>
+        </section>
+        <section class="work-details" aria-label="Время по действиям">
+          <div class="work-row work-row--header">
+            <span>Действие</span><span>План</span><span>Факт</span>
+          </div>
+          <div class="work-row">
+            <div>
+              <a href="#">Подготовить проект</a
+              ><span class="planner-muted">Запустить проект · работа идёт</span>
+            </div>
+            <span>1 ч</span><span>42 мин</span>
+          </div>
+          <div class="work-row">
+            <div>
+              <a href="#">Разобрать материалы</a
+              ><span class="planner-muted">Запустить проект · выполнено</span>
+            </div>
+            <span>1 ч 30 мин</span><span>1 ч 5 мин</span>
+          </div>
+          <div class="work-row">
+            <div>
+              <a href="#">Занятие английским</a
+              ><span class="planner-muted">Обучение · выполнено</span>
+            </div>
+            <span>1 ч</span><span>25 мин</span>
+          </div>
+        </section>
+        <p class="planner-muted">
+          Время прошлых сессий остаётся у цели, выбранной в начале работы. Сессии без известной цели
+          входят в общую сумму.
+        </p>
+        <p id="feedback" role="status" hidden>Работа сохранена. Действие можно продолжить позже.</p>
+      </main>
+    </div>
+    <script type="module" src="./preview.js"></script>
+  </body>
+</html>
