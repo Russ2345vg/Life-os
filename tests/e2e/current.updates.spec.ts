@@ -1,6 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 
-async function updateRuntime(page: Page, scenario: 'available' | 'failure' | 'offline') {
+async function updateRuntime(
+  page: Page,
+  scenario: 'available' | 'failure' | 'offline' | 'external-installer',
+) {
   await page.route('**/src/app/composition/createApplicationUpdateService.ts', (route) =>
     route.fulfill({
       contentType: 'application/javascript',
@@ -13,6 +16,7 @@ async function updateRuntime(page: Page, scenario: 'available' | 'failure' | 'of
             progress(50);
             if (${JSON.stringify(scenario)} === 'failure' && attempts++ === 0) throw new Error('download failed');
             await new Promise(resolve => setTimeout(resolve, 300));
+            if (${JSON.stringify(scenario)} === 'external-installer') return 'installer-opened';
           }};
         }});
       }`,
@@ -60,5 +64,21 @@ test('an offline startup check stays quiet without losing access to the planner'
   await updateRuntime(page, 'offline');
   await page.goto('/#/v2/today');
   await expect(page.getByRole('region', { name: 'Обновление LifeOS' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Сегодня', exact: true })).toBeVisible();
+});
+
+test('an external installer leaves the update retryable and dismissible after cancellation', async ({
+  page,
+}) => {
+  await updateRuntime(page, 'external-installer');
+  await page.goto('/#/v2/today');
+  const notice = page.getByRole('region', { name: 'Обновление LifeOS' });
+  const install = notice.getByRole('button', { name: 'Обновить', exact: true });
+  await install.click();
+  await expect(install).toBeEnabled();
+  await install.click();
+  await expect(install).toBeEnabled();
+  await notice.getByRole('button', { name: 'Позже', exact: true }).click();
+  await expect(notice).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Сегодня', exact: true })).toBeVisible();
 });

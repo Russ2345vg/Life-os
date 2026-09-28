@@ -59,9 +59,13 @@ export class ApplicationUpdateService {
     if (!update || !['available', 'error'].includes(this.#state.status)) return;
     this.#set({ status: 'installing', version: update.version, progress: null });
     try {
-      await update.install((progress) =>
+      const result = await update.install((progress) =>
         this.#set({ status: 'installing', version: update.version, progress }),
       );
+      if (result === 'installer-opened') {
+        this.#set({ status: 'available', version: update.version });
+        return;
+      }
       this.#set({ status: 'installed', version: update.version });
       this.#releaseUpdate();
     } catch {

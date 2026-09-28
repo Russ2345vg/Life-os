@@ -1,6 +1,6 @@
 export interface ApplicationUpdate {
   readonly version: string;
-  install(onProgress: (percent: number | null) => void): Promise<void>;
+  install(onProgress: (percent: number | null) => void): Promise<'installer-opened' | void>;
   close(): Promise<void>;
 }
 

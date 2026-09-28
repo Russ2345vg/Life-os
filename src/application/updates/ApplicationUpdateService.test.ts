@@ -87,6 +87,20 @@ describe('ApplicationUpdateService', () => {
     expect(service.getSnapshot().status).toBe('installed');
   });
 
+  it('keeps an external installer handoff available for retry or dismissal', async () => {
+    const { service, update } = setup();
+    vi.mocked(update.install).mockResolvedValue('installer-opened');
+    await service.start();
+    await service.install();
+    expect(service.getSnapshot()).toEqual({ status: 'available', version: '1.0.14' });
+    expect(update.close).not.toHaveBeenCalled();
+    await service.install();
+    expect(update.install).toHaveBeenCalledTimes(2);
+    service.dismiss();
+    expect(service.getSnapshot()).toEqual({ status: 'idle' });
+    expect(update.close).toHaveBeenCalledOnce();
+  });
+
   it('dismisses for this session and releases the native update resource', async () => {
     const { service, update } = setup();
     await service.start();
