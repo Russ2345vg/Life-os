@@ -39,11 +39,15 @@ export function PlannerDiary({
     | { readonly kind: 'day'; readonly date: string; readonly entry: DiaryDayEntry | null }
     | { readonly kind: 'week'; readonly date: string; readonly overview: DiaryWeekOverview }
     | { readonly kind: 'month'; readonly date: string; readonly overview: DiaryMonthOverview }
-    | { readonly kind: 'error'; readonly message: string }
+    | {
+        readonly kind: 'error';
+        readonly date: string;
+        readonly period: ResolvedDiaryRoute['period'];
+        readonly message: string;
+      }
   >({ kind: 'loading' });
   useEffect(() => {
     let active = true;
-    setState({ kind: 'loading' });
     const date = DayDate.create(resolved.date);
     const load =
       resolved.period === 'day'
@@ -67,6 +71,8 @@ export function PlannerDiary({
         if (active)
           setState({
             kind: 'error',
+            date: resolved.date,
+            period: resolved.period,
             message: error instanceof Error ? error.message : 'Не удалось загрузить дневник.',
           });
       });
@@ -85,7 +91,9 @@ export function PlannerDiary({
           <span />
           Загружаем дневник…
         </div>
-      ) : state.kind === 'error' ? (
+      ) : state.kind === 'error' &&
+        state.date === resolved.date &&
+        state.period === resolved.period ? (
         <div className="planner-error" role="alert">
           {state.message}
         </div>

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { DayDate } from '../domain';
 import {
   parseApplicationRoute,
@@ -59,7 +59,7 @@ export function ApplicationShell() {
         setRoute(resolved);
       },
     });
-  }, [leaveGuard]);
+  }, [application.currentDateProvider, leaveGuard]);
 
   useEffect(() => {
     const beforeUnload = (event: BeforeUnloadEvent) => {
@@ -87,14 +87,20 @@ export function ApplicationShell() {
     [application],
   );
 
-  const navigate = createGuardedNavigator(
-    leaveGuard,
-    (hash) => window.history.pushState(null, '', hash),
-    (nextRoute) => {
-      acceptedHash.current = buildPlannerRoute(nextRoute);
-      setRoute(nextRoute);
+  const navigate = useCallback(
+    async (nextRoute: PlannerRoute): Promise<boolean> => {
+      if (!(await leaveGuard.flushBeforeLeave())) return false;
+      const resolved = resolveShellRoute(
+        nextRoute,
+        application.currentDateProvider.getCurrentDate(),
+      );
+      const hash = buildPlannerRoute(resolved);
+      window.history.pushState(null, '', hash);
+      acceptedHash.current = hash;
+      setRoute(resolved);
+      return true;
     },
-    (nextRoute) => resolveShellRoute(nextRoute, application.currentDateProvider.getCurrentDate()),
+    [application.currentDateProvider, leaveGuard],
   );
 
   return (

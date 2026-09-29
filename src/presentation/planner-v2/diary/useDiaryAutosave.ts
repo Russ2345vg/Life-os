@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { RouteLeaveGuard } from '../../navigation/RouteLeaveGuard';
 
 export interface DiaryAutosaveQueue<T> {
@@ -84,16 +84,10 @@ export function useDiaryAutosave<T>(input: {
   readonly saveDraft: (value: T, expectedVersion: number | null) => Promise<{ version: number }>;
   readonly guard: RouteLeaveGuard;
 }) {
-  const saveDraft = useRef(input.saveDraft);
-  saveDraft.current = input.saveDraft;
-  const version = useRef(input.initialVersion);
-  const queue = useRef<DiaryAutosaveQueue<T> | null>(null);
-  if (queue.current === null)
-    queue.current = createDiaryAutosaveQueue(async (value) => {
-      const saved = await saveDraft.current(value, version.current);
-      version.current = saved.version;
-    });
-  const autosave = queue.current;
+  const [controller] = useState(() =>
+    createDiaryAutosaveController(input.initialVersion, input.saveDraft),
+  );
+  const autosave = controller.queue;
   const [, render] = useState(0);
   useEffect(() => autosave.subscribe(() => render((value) => value + 1)), [autosave]);
   useEffect(
@@ -110,9 +104,25 @@ export function useDiaryAutosave<T>(input: {
     retry: autosave.retry,
     inspect: autosave.inspect(),
     error: autosave.failure(),
-    getVersion: () => version.current,
+    getVersion: controller.getVersion,
+    replaceVersion: controller.replaceVersion,
+  };
+}
+
+function createDiaryAutosaveController<T>(
+  initialVersion: number | null,
+  saveDraft: (value: T, expectedVersion: number | null) => Promise<{ version: number }>,
+) {
+  let version = initialVersion;
+  const queue = createDiaryAutosaveQueue(async (value: T) => {
+    const saved = await saveDraft(value, version);
+    version = saved.version;
+  });
+  return {
+    queue,
+    getVersion: () => version,
     replaceVersion: (next: number | null) => {
-      version.current = next;
+      version = next;
     },
   };
 }
