@@ -53,6 +53,132 @@
   box-shadow: var(--shadow-soft);
 }
 
+.planner-v2 .planner-diary-period-layout {
+  display: grid;
+  grid-template-areas: 'reflection context';
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
+  align-items: start;
+  gap: var(--space-5);
+}
+
+.planner-v2 .planner-diary-period-layout > .planner-diary-summary,
+.planner-v2 .planner-diary-month-context {
+  grid-area: context;
+}
+
+.planner-v2 .planner-diary-summary {
+  padding: clamp(20px, 3vw, 28px);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-large);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-soft);
+}
+
+.planner-v2 .planner-diary-summary h2,
+.planner-v2 .planner-diary-facts h3 {
+  margin: 0;
+}
+
+.planner-v2 .planner-diary-coverage {
+  margin: var(--space-3) 0 var(--space-5);
+  color: var(--text-secondary);
+}
+
+.planner-v2 .planner-diary-coverage strong {
+  color: var(--text-primary);
+  font-size: 24px;
+}
+
+.planner-v2 .planner-diary-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.planner-v2 .planner-diary-metrics > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-medium);
+  background: var(--surface-2);
+}
+
+.planner-v2 .planner-diary-metrics span,
+.planner-v2 .planner-diary-facts p {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.planner-v2 .planner-diary-metrics strong {
+  font-size: 22px;
+}
+
+.planner-v2 .planner-diary-facts {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--border-soft);
+}
+
+.planner-v2 .planner-diary-facts h3 {
+  font-size: 14px;
+}
+
+.planner-v2 .planner-diary-facts p {
+  margin: 0;
+}
+
+.planner-v2 .planner-diary-reflection {
+  grid-area: reflection;
+  display: grid;
+  gap: var(--space-5);
+}
+
+.planner-v2 .planner-diary-month-context {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.planner-v2 .planner-diary-month-context .planner-diary-card {
+  padding: var(--space-5);
+}
+
+.planner-v2 .planner-diary-weeks ul {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.planner-v2 .planner-diary-weeks li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-block: var(--space-2);
+  border-bottom: 1px solid var(--border-soft);
+  color: var(--text-secondary);
+}
+
+.planner-v2 .planner-diary-weeks li:last-child {
+  border-bottom: 0;
+}
+
+.planner-v2 .planner-diary-weeks strong {
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.planner-v2 .planner-diary-excerpts blockquote {
+  margin: 0;
+  padding: var(--space-3) 0 var(--space-3) var(--space-4);
+  border-left: 2px solid var(--planner-accent);
+  color: var(--text-secondary);
+}
+
 .planner-v2 .planner-diary-card h2 {
   margin: 0 0 var(--space-5);
   font-size: 20px;
@@ -189,6 +315,13 @@
   }
 
   .planner-v2 .planner-diary-entry {
+    grid-template-columns: 1fr;
+  }
+
+  .planner-v2 .planner-diary-period-layout {
+    grid-template-areas:
+      'context'
+      'reflection';
     grid-template-columns: 1fr;
   }
 
