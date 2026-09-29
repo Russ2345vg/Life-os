@@ -1,6 +1,7 @@
 export { ActionSessionRecordMapper } from './ActionSessionRecordMapper';
 export { DayRecordMapper } from './DayRecordMapper';
 export { DecisionRecordMapper } from './DecisionRecordMapper';
+export { DiaryEntryRecordMapper } from './DiaryEntryRecordMapper';
 export { DirectionRecordMapper } from './DirectionRecordMapper';
 export { EveningCycleRecordMapper } from './EveningCycleRecordMapper';
 export { ExerciseDefinitionRecordMapper } from './ExerciseDefinitionRecordMapper';

@@ -1,6 +1,7 @@
 export type { ActionSessionRecord, PauseIntervalRecord } from './ActionSessionRecord';
 export type { DayRecord } from './DayRecord';
 export type { DecisionRecord } from './DecisionRecord';
+export type { DiaryEntryRecord } from './DiaryEntryRecord';
 export type { DirectionRecord } from './DirectionRecord';
 export type { EveningCycleRecord } from './EveningCycleRecord';
 export type { ExerciseDefinitionRecord } from './ExerciseDefinitionRecord';

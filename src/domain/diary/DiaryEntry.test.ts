@@ -245,6 +245,9 @@ describe('Diary entry validation', () => {
     );
 
     expect(() => validateDiaryEntry({ ...draft, periodKey: 'month:2026-08-01' })).toThrow();
+    expect(() =>
+      validateDiaryEntry({ ...draft, periodStart: DayDate.create('2026-09-15') }),
+    ).toThrow();
     expect(() => validateDiaryEntry({ ...draft, promptVersion: 2 as 1 })).toThrow();
     expect(() =>
       validateDiaryEntry({

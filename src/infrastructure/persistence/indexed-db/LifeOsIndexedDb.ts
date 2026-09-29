@@ -46,7 +46,7 @@ interface MutationCaptureConfiguration {
 }
 
 export const LIFE_OS_DATABASE_NAME = 'lifeos';
-export const LIFE_OS_DATABASE_VERSION = 28;
+export const LIFE_OS_DATABASE_VERSION = 29;
 
 export const LIFE_OS_DOMAIN_STORE = {
   directionIndicators: 'directionIndicators',
@@ -59,6 +59,7 @@ export const LIFE_OS_DOMAIN_STORE = {
   recurrenceRules: 'recurrenceRules',
   days: 'days',
   decisions: 'decisions',
+  diaryEntries: 'diaryEntries',
   lifeActions: 'lifeActions',
   actionSessions: 'actionSessions',
   routineBlocks: 'routineBlocks',
@@ -301,6 +302,7 @@ export class LifeOsIndexedDb {
             !request.result.objectStoreNames.contains(LIFE_OS_STORE.timeCapacity)
           )
             request.result.createObjectStore(LIFE_OS_STORE.timeCapacity, { keyPath: 'id' });
+          if (oldVersion < 29) createVersionTwentyNineSchema(request.result);
           if (oldVersion < 22 && request.transaction)
             upgradeLegacyProjects(request.result, request.transaction);
         } catch (error: unknown) {
@@ -585,6 +587,13 @@ function createVersionTwentySixSchema(database: IDBDatabase): void {
   if (!database.objectStoreNames.contains(LIFE_OS_STORE.sleepSchedules)) {
     database.createObjectStore(LIFE_OS_STORE.sleepSchedules, { keyPath: 'id' });
   }
+}
+
+function createVersionTwentyNineSchema(database: IDBDatabase): void {
+  if (database.objectStoreNames.contains(LIFE_OS_STORE.diaryEntries)) return;
+  const entries = database.createObjectStore(LIFE_OS_STORE.diaryEntries, { keyPath: 'id' });
+  entries.createIndex('byPeriodKey', 'periodKey', { unique: true });
+  entries.createIndex('byKindAndPeriodStart', ['kind', 'periodStart'], { unique: false });
 }
 
 function createVersionTwentyOneSchema(transaction: IDBTransaction | null): void {

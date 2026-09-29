@@ -35,6 +35,7 @@ export type { DayRepository } from './ports/DayRepository';
 export type { DecisionRepository } from './ports/DecisionRepository';
 export type { DecisionsByProjectIdsReader } from './ports/DecisionsByProjectIdsReader';
 export type { DecisionsByProjectReader } from './ports/DecisionsByProjectReader';
+export type { DiaryRepository } from './ports/DiaryRepository';
 export type { DirectionRepository, DirectionVersionedUpdate } from './ports/DirectionRepository';
 export type { GoalRepository } from './ports/GoalRepository';
 export type { IdGenerator } from './ports/IdGenerator';

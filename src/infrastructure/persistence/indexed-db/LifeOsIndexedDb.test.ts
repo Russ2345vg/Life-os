@@ -17,6 +17,41 @@ import {
 } from './LifeOsIndexedDb';
 
 describe('LifeOsIndexedDb', () => {
+  it('adds diary storage to v28 without rewriting an existing action', async () => {
+    const factory = new IDBFactory();
+    const legacy = await new Promise<IDBDatabase>((resolve, reject) => {
+      const opened = factory.open(LIFE_OS_DATABASE_NAME, 28);
+      opened.onupgradeneeded = () =>
+        opened.result.createObjectStore('lifeActions', { keyPath: 'id' });
+      opened.onsuccess = () => resolve(opened.result);
+      opened.onerror = () => reject(opened.error);
+    });
+    const saved = { id: 'existing-action', marker: 'unchanged' };
+    const write = legacy.transaction('lifeActions', 'readwrite');
+    write.objectStore('lifeActions').put(saved);
+    await transactionDone(write);
+    legacy.close();
+
+    const adapter = new LifeOsIndexedDb(factory);
+    const upgraded = await adapter.open();
+
+    expect([...upgraded.objectStoreNames]).toContain(LIFE_OS_STORE.diaryEntries);
+    expect(
+      await executeIndexedDbRequest(upgraded, 'lifeActions', 'readonly', (store) =>
+        store.get('existing-action'),
+      ),
+    ).toEqual(saved);
+    expect(
+      indexesOf(
+        upgraded.transaction(LIFE_OS_STORE.diaryEntries).objectStore(LIFE_OS_STORE.diaryEntries),
+      ),
+    ).toEqual({
+      byKindAndPeriodStart: false,
+      byPeriodKey: true,
+    });
+    adapter.close();
+  });
+
   it('adds capacity storage to v27 without rewriting an existing action', async () => {
     const factory = new IDBFactory();
     const legacy = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -188,6 +223,7 @@ describe('LifeOsIndexedDb', () => {
       LIFE_OS_STORE.contributionLinks,
       LIFE_OS_STORE.days,
       LIFE_OS_STORE.decisions,
+      LIFE_OS_STORE.diaryEntries,
       LIFE_OS_STORE.directionIndicators,
       LIFE_OS_STORE.directions,
       LIFE_OS_STORE.eveningCycles,
@@ -308,6 +344,10 @@ describe('LifeOsIndexedDb', () => {
       byPlannedDate: false,
       byProjectId: false,
     });
+    expect(indexesOf(transaction.objectStore(LIFE_OS_STORE.diaryEntries))).toEqual({
+      byKindAndPeriodStart: false,
+      byPeriodKey: true,
+    });
     expect(indexesOf(transaction.objectStore(LIFE_OS_STORE.lifeActions))).toEqual({
       byDecisionId: false,
       byPlannedDate: false,
@@ -423,7 +463,7 @@ describe('LifeOsIndexedDb', () => {
     const secondConnection = await indexedDb.open();
 
     expect(secondConnection).not.toBe(firstConnection);
-    expect([...secondConnection.objectStoreNames]).toHaveLength(46);
+    expect([...secondConnection.objectStoreNames]).toHaveLength(47);
     indexedDb.close();
   });
 

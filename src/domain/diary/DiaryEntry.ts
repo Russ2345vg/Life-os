@@ -175,6 +175,7 @@ export function validateDiaryEntry(
   if (
     value.id.toString() !== expected.id.toString() ||
     value.periodKey !== expected.periodKey ||
+    !value.periodStart.equals(expected.periodStart) ||
     !value.periodEnd.equals(expected.periodEnd)
   )
     throw invalidEntry();
