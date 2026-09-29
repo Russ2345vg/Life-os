@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import * as releaseModule from './release-publish.mjs';
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -119,4 +120,28 @@ test('embeds the signature content and immutable release asset URLs', () => {
   assert.equal(android.versionCode, 1_000_002);
   assert.equal(android.packageId, 'com.lifeos.desktop');
   assert.match(android.apkUrl, /LifeOS_1\.0\.2_android_release\.apk$/);
+});
+
+test('keeps the Tauri plugin manager JNI bridge in tracked release rules', () => {
+  const rules = readFileSync(
+    join(import.meta.dirname, '..', 'src-tauri', 'gen', 'android', 'app', 'proguard-rules.pro'),
+    'utf8',
+  );
+
+  assert.match(rules, /-keep class com\.lifeos\.desktop\.TauriActivity/);
+  assert.match(rules, /public app\.tauri\.plugin\.PluginManager getPluginManager\(\);/);
+});
+test('rejects a release APK whose Tauri JNI bridge was stripped', () => {
+  assert.throws(
+    () =>
+      releaseModule.assertAndroidJniBridge(
+        '.class public abstract Lcom/lifeos/desktop/TauriActivity;',
+      ),
+    /getPluginManager/,
+  );
+  assert.doesNotThrow(() =>
+    releaseModule.assertAndroidJniBridge(
+      '    app.tauri.plugin.PluginManager getPluginManager() -> getPluginManager',
+    ),
+  );
 });

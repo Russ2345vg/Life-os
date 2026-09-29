@@ -176,6 +176,12 @@ export function selectAndroidApk(root) {
   return apk;
 }
 
+export function assertAndroidJniBridge(mapping) {
+  if (!/\bgetPluginManager\(\).*->\s*getPluginManager\b/.test(mapping)) {
+    throw new Error('Android release removed the Tauri getPluginManager JNI bridge.');
+  }
+}
+
 function sha256(path) {
   return createHash('sha256').update(readFileSync(path)).digest('hex');
 }
@@ -253,6 +259,18 @@ function prepareArtifacts({ owner, version, notes }) {
 
   const androidOutputs = join(TAURI_DIR, 'gen', 'android', 'app', 'build', 'outputs', 'apk');
   const sourceApk = selectAndroidApk(androidOutputs);
+  const androidMapping = join(
+    TAURI_DIR,
+    'gen',
+    'android',
+    'app',
+    'build',
+    'outputs',
+    'mapping',
+    'universalRelease',
+    'mapping.txt',
+  );
+  assertAndroidJniBridge(readFileSync(androidMapping, 'utf8'));
 
   const generatedProperties = join(TAURI_DIR, 'gen', 'android', 'app', 'tauri.properties');
   const properties = readFileSync(generatedProperties, 'utf8');

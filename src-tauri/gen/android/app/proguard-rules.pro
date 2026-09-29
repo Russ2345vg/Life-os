@@ -19,3 +19,9 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+# Rust resolves this inherited method through JNI during Tauri plugin initialization.
+# Keep it in the tracked rules because clean release worktrees do not contain
+# the generated, Git-ignored proguard-tauri.pro file.
+-keep class com.lifeos.desktop.TauriActivity {
+  public app.tauri.plugin.PluginManager getPluginManager();
+}
