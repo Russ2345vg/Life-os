@@ -21,6 +21,16 @@ const SIGNING_DIR = 'D:\\Android\\LifeOS\\signing';
 const RELEASE_REPOSITORY = 'LifeOS-Releases';
 const PACKAGE_ID = 'com.lifeos.desktop';
 
+export function buildReleasePath(environment) {
+  const inheritedPath =
+    Object.entries(environment).find(([key]) => key.toLowerCase() === 'path')?.[1] ?? '';
+  const releaseTools = [
+    'D:\\Android\\CargoHome\\bin',
+    'D:\\Android\\RustupHome\\toolchains\\stable-x86_64-pc-windows-msvc\\bin',
+  ];
+  return [...releaseTools, ...(inheritedPath === '' ? [] : [inheritedPath])].join(';');
+}
+
 export function validateReleaseVersion(version) {
   if (!/^\d+\.\d+\.\d+$/.test(version)) {
     throw new Error('Release version must use the X.Y.Z format.');
@@ -63,6 +73,22 @@ export function buildAndroidManifest({ owner, version, notes, sha256 }) {
     apkUrl: releaseAssetUrl(owner, version, `LifeOS_${version}_android_release.apk`),
     sha256,
     packageId: PACKAGE_ID,
+  };
+}
+
+export function buildReleaseConfig({ owner, publicKey }) {
+  const endpoint = `https://github.com/${owner}/${RELEASE_REPOSITORY}/releases/latest/download/latest.json`;
+  return {
+    build: {
+      beforeBuildCommand: '',
+    },
+    plugins: {
+      updater: {
+        pubkey: publicKey.trim(),
+        endpoints: [endpoint],
+        windows: { installMode: 'passive' },
+      },
+    },
   };
 }
 
@@ -143,6 +169,13 @@ function findFiles(root, predicate) {
   return found;
 }
 
+export function selectAndroidApk(root) {
+  const candidates = findFiles(root, (path) => /-release\.apk$/i.test(basename(path)));
+  const apk = candidates.find((path) => /universal/i.test(basename(path))) ?? candidates[0];
+  if (!apk) throw new Error('Android release APK was not produced.');
+  return apk;
+}
+
 function sha256(path) {
   return createHash('sha256').update(readFileSync(path)).digest('hex');
 }
@@ -161,10 +194,11 @@ function verifySourceVersions(version) {
 function writeReleaseConfig(owner, publicKey) {
   const endpoint = `https://github.com/${owner}/${RELEASE_REPOSITORY}/releases/latest/download/latest.json`;
   const configPath = join(TAURI_DIR, 'tauri.release.conf.json');
-  writeFileSync(
-    configPath,
-    `${JSON.stringify({ plugins: { updater: { pubkey: publicKey.trim(), endpoints: [endpoint], windows: { installMode: 'passive' } } } }, null, 2)}\n`,
-  );
+  const config = buildReleaseConfig({
+    owner,
+    publicKey,
+  });
+  writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
   return { configPath, endpoint };
 }
 
@@ -194,14 +228,23 @@ function prepareArtifacts({ owner, version, notes }) {
     VITE_LIFEOS_ANDROID_UPDATE_ENDPOINT: androidEndpoint,
     TAURI_SIGNING_PRIVATE_KEY: readFileSync(privateKeyPath, 'utf8'),
   };
-  buildEnvironment.PATH = `D:\\Android\\CargoHome\\bin;D:\\Android\\RustupHome\\toolchains\\stable-x86_64-pc-windows-msvc\\bin;${buildEnvironment.PATH}`;
+  for (const key of Object.keys(buildEnvironment)) {
+    if (key.toLowerCase() === 'path') delete buildEnvironment[key];
+  }
+  buildEnvironment.PATH = buildReleasePath(process.env);
+
+  run(process.execPath, [join(ROOT, 'scripts', 'run-check.mjs'), 'build'], {
+    env: buildEnvironment,
+  });
 
   run('npm.cmd', ['run', 'tauri', '--', 'build', '--config', configPath], {
     env: buildEnvironment,
   });
-  run('npm.cmd', ['run', 'tauri', '--', 'android', 'build', '--apk', '--ci'], {
-    env: buildEnvironment,
-  });
+  run(
+    'npm.cmd',
+    ['run', 'tauri', '--', 'android', 'build', '--apk', '--ci', '--config', configPath],
+    { env: buildEnvironment },
+  );
 
   const nsisDirectory = join(TAURI_DIR, 'target', 'release', 'bundle', 'nsis');
   const installer = selectWindowsInstaller(nsisDirectory, version);
@@ -209,9 +252,7 @@ function prepareArtifacts({ owner, version, notes }) {
   if (!existsSync(signature)) throw new Error('Tauri updater signature was not produced.');
 
   const androidOutputs = join(TAURI_DIR, 'gen', 'android', 'app', 'build', 'outputs', 'apk');
-  const apkCandidates = findFiles(androidOutputs, (path) => /release.*\.apk$/i.test(path));
-  const sourceApk = apkCandidates.find((path) => /universal/i.test(path)) ?? apkCandidates[0];
-  if (!sourceApk) throw new Error('Android release APK was not produced.');
+  const sourceApk = selectAndroidApk(androidOutputs);
 
   const generatedProperties = join(TAURI_DIR, 'gen', 'android', 'app', 'tauri.properties');
   const properties = readFileSync(generatedProperties, 'utf8');

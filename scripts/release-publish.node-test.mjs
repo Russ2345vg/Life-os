@@ -1,15 +1,61 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   buildAndroidManifest,
+  buildReleasePath,
+  buildReleaseConfig,
   buildWindowsManifest,
   expectedAndroidVersionCode,
+  selectAndroidApk,
   validateReleaseVersion,
   selectWindowsInstaller,
 } from './release-publish.mjs';
+
+test('preserves the mixed-case Windows Path value', () => {
+  assert.equal(
+    buildReleasePath({ Path: 'C:\\Program Files\\nodejs;C:\\Windows\\System32' }),
+    'D:\\Android\\CargoHome\\bin;D:\\Android\\RustupHome\\toolchains\\stable-x86_64-pc-windows-msvc\\bin;C:\\Program Files\\nodejs;C:\\Windows\\System32',
+  );
+});
+
+test('ships the Tauri activity source required by a clean Android checkout', () => {
+  const activity = readFileSync(
+    join(
+      import.meta.dirname,
+      '..',
+      'src-tauri',
+      'gen',
+      'android',
+      'app',
+      'src',
+      'main',
+      'java',
+      'com',
+      'lifeos',
+      'desktop',
+      'generated',
+      'TauriActivity.kt',
+    ),
+    'utf8',
+  );
+  assert.match(activity, /package com\.lifeos\.desktop/);
+  assert.match(activity, /abstract class TauriActivity : WryActivity\(\)/);
+});
+
+test('disables the nested Tauri frontend build command', () => {
+  const config = buildReleaseConfig({
+    owner: 'lifeos-owner',
+    publicKey: 'public-key',
+  });
+
+  assert.equal(config.build.beforeBuildCommand, '');
+  assert.deepEqual(config.plugins.updater.endpoints, [
+    'https://github.com/lifeos-owner/LifeOS-Releases/releases/latest/download/latest.json',
+  ]);
+});
 
 test('never relabels an old installer as a new version', () => {
   const directory = mkdtempSync(join(tmpdir(), 'lifeos-release-test-'));
@@ -19,6 +65,23 @@ test('never relabels an old installer as a new version', () => {
     const current = join(directory, 'LifeOS_1.0.14_x64-setup.exe');
     writeFileSync(current, 'new');
     assert.equal(selectWindowsInstaller(directory, '1.0.14'), current);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('selects the release APK when its parent path also contains release', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'lifeos-release-1-0-23-'));
+  try {
+    const debugDirectory = join(directory, 'outputs', 'apk', 'universal', 'debug');
+    const releaseDirectory = join(directory, 'outputs', 'apk', 'universal', 'release');
+    mkdirSync(debugDirectory, { recursive: true });
+    mkdirSync(releaseDirectory, { recursive: true });
+    writeFileSync(join(debugDirectory, 'app-universal-debug.apk'), 'debug');
+    const releaseApk = join(releaseDirectory, 'app-universal-release.apk');
+    writeFileSync(releaseApk, 'release');
+
+    assert.equal(selectAndroidApk(directory), releaseApk);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
