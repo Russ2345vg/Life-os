@@ -9,6 +9,7 @@ export type SyncEntityType =
   | 'recurrence_rule'
   | 'day'
   | 'decision'
+  | 'diary_entry'
   | 'life_action'
   | 'time_capacity'
   | 'action_session'
@@ -46,6 +47,7 @@ export const SYNC_ENTITY_TYPES: readonly SyncEntityType[] = Object.freeze([
   'recurrence_rule',
   'day',
   'decision',
+  'diary_entry',
   'life_action',
   'time_capacity',
   'action_session',
@@ -78,7 +80,11 @@ export type SyncDeletionMode = 'none' | 'archive' | 'soft_delete' | 'guarded_del
 export type SyncRegistrationReadiness =
   'registered' | 'pilot_ready' | 'requires_later_adapter' | 'sync_ready';
 export type SyncIdSource =
-  'crypto_uuid' | 'fixed_or_crypto_uuid' | 'domain_event_id' | 'deterministic_recommendation_id';
+  | 'crypto_uuid'
+  | 'fixed_or_crypto_uuid'
+  | 'domain_event_id'
+  | 'deterministic_recommendation_id'
+  | 'deterministic_period_id';
 
 export interface SyncEntityRegistration {
   readonly entityType: SyncEntityType;

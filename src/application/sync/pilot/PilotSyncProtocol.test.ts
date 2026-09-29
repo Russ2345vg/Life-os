@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DomainError } from '../../../shared/errors/DomainError';
 import {
   parsePilotSyncPayload,
   serializePilotSyncPayload,
@@ -68,8 +69,12 @@ describe('PilotSyncProtocol', () => {
     ).toThrow(/вложение/u);
     expect(() => serializePilotSyncPayload({ ...base, revision: 4 })).toThrow(/ревизий/u);
     expect(() => serializePilotSyncPayload({ ...base, schemaVersion: 2 as 1 })).toThrow(/верс/iu);
-    expect(() =>
-      parsePilotSyncPayload(JSON.stringify({ ...base, entityType: 'unknown_record' })),
-    ).toThrow(/тип/iu);
+    try {
+      parsePilotSyncPayload(JSON.stringify({ ...base, entityType: 'unknown_record' }));
+      throw new Error('Expected an unsupported entity type to be rejected.');
+    } catch (error: unknown) {
+      expect(error).toBeInstanceOf(DomainError);
+      expect((error as DomainError).code).toBe('sync.client_update_required');
+    }
   });
 });

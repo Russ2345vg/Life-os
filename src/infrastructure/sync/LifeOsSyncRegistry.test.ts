@@ -14,6 +14,7 @@ const EXPECTED_ENTITY_TYPES = [
   'time_capacity',
   'day',
   'decision',
+  'diary_entry',
   'direction',
   'evening_cycle',
   'exercise_definition',
@@ -52,6 +53,7 @@ const EXPECTED_ENTITY_STORES = {
   time_capacity: 'timeCapacity',
   day: 'days',
   decision: 'decisions',
+  diary_entry: 'diaryEntries',
   direction: 'directions',
   evening_cycle: 'eveningCycles',
   exercise_definition: 'exerciseDefinitions',
@@ -104,7 +106,7 @@ describe('LIFE_OS_SYNC_REGISTRY', () => {
       LIFE_OS_SYNC_REGISTRY.filter(({ storageKind }) => storageKind === 'indexed_db').map(
         ({ storeName }) => storeName,
       ),
-    ).toHaveLength(34);
+    ).toHaveLength(35);
     expect(LIFE_OS_SYNC_REGISTRY.every(({ readiness }) => readiness === 'sync_ready')).toBe(true);
   });
 
@@ -117,6 +119,12 @@ describe('LIFE_OS_SYNC_REGISTRY', () => {
     });
     expect(registration('recommendation_application')).toMatchObject({
       idSource: 'deterministic_recommendation_id',
+      readiness: 'sync_ready',
+    });
+    expect(registration('diary_entry')).toMatchObject({
+      idSource: 'deterministic_period_id',
+      dependencies: [],
+      deletionMode: 'none',
       readiness: 'sync_ready',
     });
     expect(registration('decision')).toMatchObject({ deletionMode: 'soft_delete' });

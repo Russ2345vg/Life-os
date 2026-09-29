@@ -17,6 +17,12 @@ export function presentSyncStatus(
     label,
     shortLabel,
   });
+  if (data?.setupIssue === 'client-update-required')
+    return value(
+      'attention',
+      'Обновите LifeOS для синхронизации новых данных',
+      'Требуется обновление',
+    );
   if (data?.setupIssue === 'rotation-pending')
     return value('attention', 'Завершите обновление защиты устройств', 'Обновление защиты');
   if (data?.setupIssue === 'revoked')

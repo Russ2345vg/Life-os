@@ -21,7 +21,7 @@ interface SnapshotPayloadView {
 }
 
 describe('IndexedDbSnapshotService', () => {
-  it.each([23, 24, 25, 26, 27])(
+  it.each([23, 24, 25, 26, 27, 28])(
     'verifies a schema %s backup after adding weekday capacity',
     async (version) => {
       const { database, service } = await createService('schema23');
@@ -30,7 +30,8 @@ describe('IndexedDbSnapshotService', () => {
         stored = (await readSnapshotRecord(opened, created.snapshotId))!;
       const payload = stored.payload as SnapshotPayloadView;
       const added = new Set([
-        'timeCapacity',
+        ...(version < 29 ? ['diaryEntries'] : []),
+        ...(version < 28 ? ['timeCapacity'] : []),
         ...(version < 27 ? ['taskScenarios'] : []),
         ...(version < 25 ? ['directionIndicators', 'balanceMonthlySnapshots'] : []),
         ...(version < 24
@@ -128,13 +129,41 @@ describe('IndexedDbSnapshotService', () => {
       photo: { dataUrl: 'data:image/jpeg;base64,AQID', mimeType: 'image/jpeg', sizeBytes: 3 },
     };
     const decision = { id: 'decision-snapshot', title: 'Существующая запись без перепаковки' };
+    const diaryEntry = {
+      id: 'diary:day:2026-09-03',
+      periodKey: 'day:2026-09-03',
+      kind: 'day',
+      periodStart: '2026-09-03',
+      periodEnd: '2026-09-03',
+      status: 'completed',
+      promptVersion: 1,
+      payload: {
+        productivity: 4,
+        energy: 3,
+        mood: 5,
+        overall: 4,
+        worldBetter: 'Помог коллеге',
+        energyReflection: null,
+        tomorrowReflection: null,
+        note: null,
+      },
+      createdAt: '2026-09-03T10:00:00.000Z',
+      updatedAt: '2026-09-03T10:00:00.000Z',
+      version: 1,
+    };
     const seed = opened.transaction(
-      [LIFE_OS_STORE.goals, LIFE_OS_STORE.walks, LIFE_OS_STORE.decisions],
+      [
+        LIFE_OS_STORE.goals,
+        LIFE_OS_STORE.walks,
+        LIFE_OS_STORE.decisions,
+        LIFE_OS_STORE.diaryEntries,
+      ],
       'readwrite',
     );
     seed.objectStore(LIFE_OS_STORE.goals).put(goal);
     seed.objectStore(LIFE_OS_STORE.walks).put(walk);
     seed.objectStore(LIFE_OS_STORE.decisions).put(decision);
+    seed.objectStore(LIFE_OS_STORE.diaryEntries).put(diaryEntry);
     await transactionDone(seed);
     const before = await readDomainFixtures(opened);
     const transactionSpy = vi.spyOn(opened, 'transaction');
@@ -183,6 +212,7 @@ describe('IndexedDbSnapshotService', () => {
     expect(snapshottedGoal.legacyBlob).toBeInstanceOf(Blob);
     await expect(snapshottedGoal.legacyBlob.text()).resolves.toBe('legacy-photo');
     expect(recordsFor(payload, LIFE_OS_STORE.walks)).toContainEqual(walk);
+    expect(recordsFor(payload, LIFE_OS_STORE.diaryEntries)).toContainEqual(diaryEntry);
     expect(payload.localSettings).toEqual({ eveningRitual: DEFAULT_EVENING_RITUAL_SETTINGS });
     expect(transactionSpy).toHaveBeenCalledWith(Object.values(LIFE_OS_STORE).sort(), 'readonly');
     await expect(service.verifySnapshot(created.snapshotId)).resolves.toEqual({
@@ -219,7 +249,10 @@ describe('IndexedDbSnapshotService', () => {
     const payload = stored.payload as SnapshotPayloadView;
     await writeSnapshotRecord(opened, {
       ...stored,
-      payload: { ...payload, stores: payload.stores.slice(1) },
+      payload: {
+        ...payload,
+        stores: payload.stores.filter(({ name }) => name !== LIFE_OS_STORE.diaryEntries),
+      },
     });
 
     await expect(service.verifySnapshot(created.snapshotId)).resolves.toMatchObject({

@@ -54,8 +54,13 @@ export function assertPilotSyncPayload(value: unknown): asserts value is PilotSy
   if (value.protocolVersion !== PILOT_SYNC_PROTOCOL_VERSION || value.schemaVersion !== 1) {
     throw invalidPayload('Версия пилот-протокола не поддерживается.');
   }
-  if (typeof value.entityType !== 'string' || !isSyncEntityType(value.entityType)) {
+  if (typeof value.entityType !== 'string')
     throw invalidPayload('Тип сущности не поддерживается Sync Registry.');
+  if (!isSyncEntityType(value.entityType)) {
+    throw new DomainError(
+      'sync.client_update_required',
+      'Обновите LifeOS для синхронизации нового типа данных.',
+    );
   }
   if (value.operation !== 'upsert' && value.operation !== 'tombstone') {
     throw invalidPayload('Операция пилот-события не поддерживается.');

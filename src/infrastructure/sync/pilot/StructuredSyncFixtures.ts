@@ -4,6 +4,9 @@ import {
   DayDate,
   Decision,
   DecisionTitle,
+  completeDiaryEntry,
+  createDiaryDraft,
+  diaryPeriod,
   Direction,
   EveningCycle,
   ExerciseDefinition,
@@ -15,6 +18,7 @@ import {
   PreparationPlan,
   PreparationRule,
   Project,
+  reviseDiaryEntry,
   RoutineBlock,
   RoutineBlockRecurrence,
   RoutineOccurrenceExecution,
@@ -40,6 +44,22 @@ export function structuredSyncFixtures(): Readonly<
   const date = DayDate.create('2026-09-07');
   const id = (type: string) => EntityId.create(`sync04-${type}`);
   const common = { now, occurredAt: now, createdAt: now };
+  const diaryDraft = createDiaryDraft(diaryPeriod('day', date), now);
+  const diaryEntry = completeDiaryEntry(
+    reviseDiaryEntry(
+      diaryDraft,
+      {
+        ...diaryDraft.payload,
+        productivity: 4,
+        energy: 3,
+        mood: 5,
+        overall: 4,
+        worldBetter: 'Помог коллеге\nи позвонил родителям.',
+      },
+      now,
+    ),
+    now,
+  );
   return {
     time_capacity: {
       schemaVersion: 1,
@@ -189,6 +209,9 @@ export function structuredSyncFixtures(): Readonly<
           eventId: id('decision-event'),
         }),
       ),
+    },
+    diary_entry: {
+      ...mappers.DiaryEntryRecordMapper.toRecord({ ...diaryEntry, version: 1 }),
     },
     life_action: {
       ...mappers.LifeActionRecordMapper.toRecord(

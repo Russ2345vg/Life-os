@@ -141,4 +141,37 @@ describe('Sync status projection', () => {
     expect(JSON.stringify(result)).not.toMatch(/PRIVATE|SECRET|encryptedBlob|localImage/);
     database.close();
   });
+
+  it('surfaces an unknown synchronized entity as a client update requirement', async () => {
+    const database = new LifeOsIndexedDb(new IDBFactory());
+    const source = new IndexedDbSyncStatusSource(database);
+    const db = await database.open();
+    const tx = db.transaction(['sync_settings', 'sync_quarantine'], 'readwrite');
+    tx.objectStore('sync_settings').put({
+      id: 'sync',
+      spaceId: 'own',
+      membershipStatus: 'active',
+      setupState: 'configured',
+      accountSetupState: 'ready',
+      accountUserId: '30000000-0000-4000-8000-000000000001',
+      accountSessionId: '40000000-0000-4000-8000-000000000001',
+      accountEmail: 'person@example.com',
+      accountMigrationSnapshotId: null,
+    });
+    tx.objectStore('sync_quarantine').put({
+      quarantineId: 'future-entry',
+      entityType: 'future_entry',
+      objectId: 'future-object',
+      reason: 'sync.client_update_required',
+      encryptedPayload: 'SECRET',
+      sequence: 5,
+      state: 'attention',
+      createdAt: '2026-09-29T00:00:00.000Z',
+      spaceId: 'own',
+    });
+    await new Promise<void>((resolve) => tx.addEventListener('complete', () => resolve()));
+
+    expect((await source.read()).setupIssue).toBe('client-update-required');
+    database.close();
+  });
 });

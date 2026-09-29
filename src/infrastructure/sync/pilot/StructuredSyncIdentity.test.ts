@@ -89,6 +89,21 @@ async function apply(store: IndexedDbPilotSyncStore, payload: PilotSyncPayload, 
 }
 
 describe('SYNC-04 singleton logical identity', () => {
+  it('keeps the deterministic diary period identity without an alias or conflict', async () => {
+    const a = await device('a');
+    const b = await device('b');
+    const left = a.payload('diary_entry');
+    const right = b.payload('diary_entry');
+
+    expect(left.objectId).toBe('diary:day:2026-09-07');
+    expect(right.objectId).toBe(left.objectId);
+    await apply(a.store, right);
+    expect((await a.store.localState('diary_entry', left.objectId)).record?.id).toBe(left.objectId);
+    expect((await a.store.counts()).conflicts).toBe(0);
+    a.db.close();
+    b.db.close();
+  });
+
   it.each([
     ['preparation_plan', { targetDayId: 'lifeos:singleton:day:2026-09-07' }],
     ['tomorrow_plan', { sourceDayId: 'lifeos:singleton:day:2026-09-08' }],

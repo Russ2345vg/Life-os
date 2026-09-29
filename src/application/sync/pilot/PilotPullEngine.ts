@@ -46,7 +46,7 @@ export class PilotPullEngine {
             cursor = event.sequence;
             continue;
           }
-          await this.store.quarantine(event.sequence, 'pilot_event_invalid', event.ciphertext);
+          await this.store.quarantine(event.sequence, quarantineReason(error), event.ciphertext);
           return { applied, quarantined: quarantined + 1 };
         }
       }
@@ -112,7 +112,7 @@ export class PilotPullEngine {
         await this.store.removeDeferredRemoteEvent(spaceId, event.sequence);
       } catch (error: unknown) {
         if (isDependencyMissing(error)) continue;
-        await this.store.quarantine(event.sequence, 'pilot_event_invalid', event.ciphertext);
+        await this.store.quarantine(event.sequence, quarantineReason(error), event.ciphertext);
         await this.store.removeDeferredRemoteEvent(spaceId, event.sequence);
         quarantined += 1;
       }
@@ -123,6 +123,12 @@ export class PilotPullEngine {
 
 function isDependencyMissing(error: unknown): boolean {
   return error instanceof DomainError && error.code === 'sync.pilot_dependency_missing';
+}
+
+function quarantineReason(error: unknown): string {
+  return error instanceof DomainError && error.code === 'sync.client_update_required'
+    ? error.code
+    : 'pilot_event_invalid';
 }
 
 function assertBindings(

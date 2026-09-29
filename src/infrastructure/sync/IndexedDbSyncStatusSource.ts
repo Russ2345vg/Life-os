@@ -38,7 +38,7 @@ export class IndexedDbSyncStatusSource implements SyncStatusSource {
   #installation: Installation | null = null;
   #outbox: Pick<SyncOutboxRecord, 'state'>[] = [];
   #conflicts: Pick<SyncConflictRecord, 'spaceId' | 'resolutionStatus'>[] = [];
-  #quarantine: Pick<SyncQuarantineRecord, 'spaceId' | 'state'>[] = [];
+  #quarantine: Pick<SyncQuarantineRecord, 'spaceId' | 'state' | 'reason'>[] = [];
   #attachments: (SyncStatusSnapshot['attachments'][number] & {
     spaceId: string;
     deletedAt: string | null;
@@ -95,8 +95,8 @@ export class IndexedDbSyncStatusSource implements SyncStatusSource {
             if (name === S.quarantine)
               this.#quarantine = await project<
                 SyncQuarantineRecord,
-                Pick<SyncQuarantineRecord, 'spaceId' | 'state'>
-              >(store, (q) => ({ spaceId: q.spaceId ?? null, state: q.state }));
+                Pick<SyncQuarantineRecord, 'spaceId' | 'state' | 'reason'>
+              >(store, (q) => ({ spaceId: q.spaceId ?? null, state: q.state, reason: q.reason }));
             if (name === S.attachmentQueue)
               this.#attachments = await project<DurableAttachment, Attachment>(store, (a) => ({
                 attachmentId: a.attachmentId,
@@ -132,8 +132,9 @@ export class IndexedDbSyncStatusSource implements SyncStatusSource {
       accountState: this.#installation?.accountSetupState ?? 'local_anonymous',
       accountEmail: this.#installation?.accountEmail ?? null,
       cursor: this.#cursors.find((c) => c.spaceId === spaceId)?.lastSequence ?? null,
-      setupIssue:
-        this.#installation?.setupState === 'rotation_pending'
+      setupIssue: ownQuarantine.some((q) => q.reason === 'sync.client_update_required')
+        ? 'client-update-required'
+        : this.#installation?.setupState === 'rotation_pending'
           ? 'rotation-pending'
           : this.#installation?.membershipStatus === 'revoked'
             ? 'revoked'

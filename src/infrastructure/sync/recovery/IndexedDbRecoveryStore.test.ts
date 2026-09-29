@@ -396,7 +396,7 @@ describe('IndexedDB recovery transactions', () => {
         );
       await completion;
       const state = await f.store.readState();
-      expect(new Set(state.items.map((item) => item.entityType)).size).toBe(33);
+      expect(new Set(state.items.map((item) => item.entityType)).size).toBe(34);
       expect(state.items.find((item) => item.entityType === 'life_action')?.record).toMatchObject(
         expectedFields,
       );
@@ -416,6 +416,9 @@ describe('IndexedDB recovery transactions', () => {
       expect(restoredAction.isNext).toBe(expectedFields.isNext);
       expect(restored.items.find((item) => item.entityType === 'life_action')?.record).toEqual(
         state.items.find((item) => item.entityType === 'life_action')?.record,
+      );
+      expect(restored.items.find((item) => item.entityType === 'diary_entry')?.record).toEqual(
+        state.items.find((item) => item.entityType === 'diary_entry')?.record,
       );
       expect(restored.items.map((i) => [i.entityType, i.record.id])).toEqual(
         state.items.map((i) => [i.entityType, i.record.id]),

@@ -44,6 +44,18 @@ describe('final Sync status', () => {
     ).toBe('synced');
     expect(presentSyncStatus(pilot, { ...data, quarantined: 1 }, true).state).toBe('error');
   });
+  it('asks for an update when synchronized data uses a newer client contract', () => {
+    expect(
+      presentSyncStatus(
+        pilot,
+        { ...data, setupIssue: 'client-update-required', quarantined: 1 },
+        true,
+      ),
+    ).toMatchObject({
+      state: 'attention',
+      label: 'Обновите LifeOS для синхронизации новых данных',
+    });
+  });
   it('does not present a pending remote attachment as missing content', () => {
     expect(
       presentAttachment(

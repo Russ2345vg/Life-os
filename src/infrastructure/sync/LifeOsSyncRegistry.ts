@@ -59,6 +59,9 @@ export const LIFE_OS_SYNC_REGISTRY = Object.freeze([
     deletionMode: 'soft_delete',
     dependencies: ['goal', 'sphere'],
   }),
+  registration('diary_entry', LIFE_OS_STORE.diaryEntries, 'IndexedDbDiaryRepository', {
+    idSource: 'deterministic_period_id',
+  }),
   registration('life_action', LIFE_OS_STORE.lifeActions, 'IndexedDbLifeActionRepository', {
     deletionMode: 'archive',
     dependencies: ['decision', 'sphere', 'direction', 'goal', 'recurrence_rule', 'life_action'],

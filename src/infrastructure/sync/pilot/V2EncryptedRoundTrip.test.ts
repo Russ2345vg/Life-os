@@ -70,6 +70,10 @@ describe('V2 serialized records and native encrypted round-trip', () => {
       ).toEqual(record);
       return serialized;
     });
+    const diaryPayload = parsePilotSyncPayload(payloads[SYNC_ENTITY_TYPES.indexOf('diary_entry')]!);
+    expect(diaryPayload.record?.payload).toMatchObject({
+      worldBetter: 'Помог коллеге\nи позвонил родителям.',
+    });
     const directory = env.LIFEOS_NATIVE_ROUNDTRIP_DIR;
     if (directory) {
       if (env.LIFEOS_NATIVE_ROUNDTRIP_PHASE === 'prepare') {

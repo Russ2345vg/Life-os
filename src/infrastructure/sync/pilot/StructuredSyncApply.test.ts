@@ -177,7 +177,7 @@ describe('SYNC-04 structured database apply', () => {
     const records = await request<SyncOutboxRecord[]>(
       read.objectStore(LIFE_OS_SYNC_STORE.outbox).getAll(),
     );
-    expect(records).toHaveLength(34);
+    expect(records).toHaveLength(35);
     for (const record of records) {
       const payload = parsePilotSyncPayload(record.serializedPayload);
       const identityRead = connection.transaction(IDENTITY_READ_STORES);
@@ -258,7 +258,7 @@ describe('SYNC-04 structured database apply', () => {
       ).toBe(true);
     }
     expect(await store.counts()).toEqual({ pending: 1, conflicts: 0, quarantined: 0 });
-    expect(await store.cursor('space')).toBe(35);
+    expect(await store.cursor('space')).toBe(36);
     indexedDb.close();
   });
 

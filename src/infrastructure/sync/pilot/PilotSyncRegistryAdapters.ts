@@ -25,6 +25,7 @@ import {
   ActionSessionRecordMapper,
   DayRecordMapper,
   DecisionRecordMapper,
+  DiaryEntryRecordMapper,
   DirectionRecordMapper,
   EveningCycleRecordMapper,
   ExerciseDefinitionRecordMapper,
@@ -281,6 +282,7 @@ const PILOT_BINDINGS: Readonly<Record<PilotEntityType, PilotAdapterBinding>> = O
     ...optional(record, 'projectId', 'project'),
     ...optional(record, 'sphereId', 'sphere'),
   ]),
+  diary_entry: mapped(DiaryEntryRecordMapper),
   life_action: lifeActionMapped(),
   time_capacity: mapped({
     fromRecord: parseTimeCapacityRecord,

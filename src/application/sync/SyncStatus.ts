@@ -14,7 +14,8 @@ export interface SyncStatusSnapshot {
   readonly accountState: AccountSetupState;
   readonly accountEmail: string | null;
   readonly cursor?: number | null;
-  readonly setupIssue?: 'pending' | 'revoked' | 'rotation-pending' | null;
+  readonly setupIssue?:
+    'pending' | 'revoked' | 'rotation-pending' | 'client-update-required' | null;
   readonly configured: boolean;
   readonly pending: number;
   readonly conflicts: number;

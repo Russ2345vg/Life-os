@@ -245,4 +245,65 @@ describe('PilotPullEngine', () => {
     expect(store.quarantine).not.toHaveBeenCalled();
     expect(transport.acknowledge).toHaveBeenCalledWith(11);
   });
+
+  it('quarantines an unknown future entity as requiring a client update before local apply', async () => {
+    const metadata = {
+      protocolVersion: 1 as const,
+      purpose: 'pilot_event' as const,
+      spaceId: 'space',
+      eventId: 'future-event',
+      objectId: 'future-object',
+      originDeviceId: 'new-client',
+      keyEpoch: 3,
+      operation: 'upsert' as const,
+      baseRevision: 0,
+      revision: 1,
+      hlcWallTime: 10,
+      hlcLogical: 0,
+    };
+    const event = { sequence: 5, metadata, ciphertext: 'cipher', nonce: 'nonce' };
+    const store = {
+      installation: vi.fn(async () => ({
+        setupState: 'configured',
+        membershipStatus: 'active',
+        spaceId: 'space',
+      })),
+      cursor: vi.fn(async () => 0),
+      hasApplied: vi.fn(async () => false),
+      localState: vi.fn(),
+      hasSameSemanticContent: vi.fn(),
+      applyPulled: vi.fn(),
+      advanceAppliedDuplicate: vi.fn(),
+      deferRemoteEvent: vi.fn(),
+      deferredRemoteEvents: vi.fn(async () => []),
+      removeDeferredRemoteEvent: vi.fn(),
+      quarantine: vi.fn(),
+    };
+    const transport = {
+      pull: vi.fn(async () => [event]),
+      acknowledge: vi.fn(async () => undefined),
+    };
+    const plaintext = JSON.stringify({
+      protocolVersion: 1,
+      schemaVersion: 1,
+      entityType: 'future_entry',
+      operation: 'upsert',
+      objectId: metadata.objectId,
+      eventId: metadata.eventId,
+      originDeviceId: metadata.originDeviceId,
+      keyEpoch: metadata.keyEpoch,
+      baseRevision: metadata.baseRevision,
+      revision: metadata.revision,
+      hlc: { wallTime: metadata.hlcWallTime, logical: metadata.hlcLogical },
+      record: { id: metadata.objectId },
+    });
+    const crypto = { decryptPilotPayload: vi.fn(async () => plaintext) };
+
+    await expect(
+      new PilotPullEngine(store as never, crypto as never, transport as never).run(),
+    ).resolves.toEqual({ applied: 0, quarantined: 1 });
+    expect(store.quarantine).toHaveBeenCalledWith(5, 'sync.client_update_required', 'cipher');
+    expect(store.localState).not.toHaveBeenCalled();
+    expect(store.applyPulled).not.toHaveBeenCalled();
+  });
 });

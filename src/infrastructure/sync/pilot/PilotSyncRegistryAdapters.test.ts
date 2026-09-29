@@ -67,6 +67,26 @@ describe('PilotSyncRegistryAdapters', () => {
     ).toThrow();
   });
 
+  it('round-trips a diary entry without transport versions and preserves reflection text', () => {
+    const fixture = structuredSyncFixtures().diary_entry;
+    const wire = normalizePilotRecord('diary_entry', fixture);
+
+    expect(wire).not.toHaveProperty('version');
+    expect(wire).toMatchObject({
+      id: 'diary:day:2026-09-07',
+      periodKey: 'day:2026-09-07',
+      status: 'completed',
+      payload: { worldBetter: 'Помог коллеге\nи позвонил родителям.' },
+    });
+    expect(pilotRelationshipReferences('diary_entry', wire)).toEqual([]);
+    expect(prepareRemotePilotRecord('diary_entry', wire)).toMatchObject({ version: 1 });
+    expect(prepareRemotePilotRecord('diary_entry', wire, { ...fixture, version: 7 })).toMatchObject(
+      {
+        version: 8,
+      },
+    );
+  });
+
   it('preserves scheduled time when an old peer omits new fields and clears it on an explicit null date', () => {
     const existing = {
       ...structuredSyncFixtures().life_action,
@@ -339,7 +359,7 @@ describe('PilotSyncRegistryAdapters', () => {
   );
 
   it('uses the complete real dependency order and excludes Goal covers', () => {
-    expect(PILOT_DEPENDENCY_ORDER).toHaveLength(35);
+    expect(PILOT_DEPENDENCY_ORDER).toHaveLength(36);
     expect(PILOT_DEPENDENCY_ORDER.indexOf('sphere')).toBeLessThan(
       PILOT_DEPENDENCY_ORDER.indexOf('direction'),
     );
@@ -369,7 +389,7 @@ describe('PilotSyncRegistryAdapters', () => {
     expect(runtime.map(({ registration }) => registration.entityType)).toEqual(
       PILOT_DEPENDENCY_ORDER,
     );
-    expect(runtime).toHaveLength(35);
+    expect(runtime).toHaveLength(36);
   });
 
   it('preserves a local Goal cover while applying structured remote data without Outbox echo', async () => {
