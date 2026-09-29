@@ -19,6 +19,28 @@ export { DayDate } from './day/DayDate';
 export { DAY_STATUS, type DayStatus } from './day/DayStatus';
 export { DayCompleted, DayCreated, DayFirstActivityRecorded, DayOpened } from './day/events';
 export {
+  completeDiaryEntry,
+  createDiaryDraft,
+  diaryPeriod,
+  reviseDiaryEntry,
+  validateDiaryEntry,
+  type DiaryDayEntry,
+  type DiaryDayPayload,
+  type DiaryEntry,
+  type DiaryEntryByKind,
+  type DiaryEntryStatus,
+  type DiaryMonthEntry,
+  type DiaryMonthPayload,
+  type DiaryPayload,
+  type DiaryPayloadByKind,
+  type DiaryPeriod,
+  type DiaryPeriodKind,
+  type DiaryRating,
+  type DiaryRatings,
+  type DiaryWeekEntry,
+  type DiaryWeekPayload,
+} from './diary';
+export {
   EVENING_CYCLE_MODE,
   EVENING_CYCLE_COMPLETION,
   EVENING_MODE_REASON,
