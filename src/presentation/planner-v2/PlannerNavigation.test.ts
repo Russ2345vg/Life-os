@@ -119,9 +119,10 @@ describe('V2 preview routes', () => {
     );
     const mainNav = markup.match(/<nav aria-label="Рабочий интерфейс">([\s\S]*?)<\/nav>/)?.[1];
     expect(mainNav).toBeDefined();
-    expect(mainNav?.match(/<a /g)).toHaveLength(6);
+    expect(mainNav?.match(/<a /g)).toHaveLength(7);
     expect(mainNav).toContain('Сферы');
     expect(mainNav).toContain('Направления');
+    expect(mainNav).toContain('Дневник');
     expect(mainNav).not.toContain('Планирование');
     expect(mainNav).toMatch(/href="#\/v2\/goals" aria-current="page"/);
     expect(markup).not.toContain('Планы');
@@ -135,7 +136,7 @@ describe('V2 preview routes', () => {
     expect(parsePlannerRoute(buildPlannerRoute(fromList))).toEqual(fromList);
   });
   it('keeps the same navigation and marks More for secondary destinations', () => {
-    for (const view of ['sleep', 'inbox', 'spheres', 'account'] as const) {
+    for (const view of ['sleep', 'inbox', 'spheres', 'directions', 'account'] as const) {
       const markup = renderToStaticMarkup(
         createElement(PlannerWorkspace, {
           services: {} as PlannerServices,
@@ -145,7 +146,7 @@ describe('V2 preview routes', () => {
         }),
       );
       const nav = markup.match(/<nav aria-label="Рабочий интерфейс">([\s\S]*?)<\/nav>/)?.[1];
-      expect(nav?.match(/<a /g)).toHaveLength(6);
+      expect(nav?.match(/<a /g)).toHaveLength(7);
       expect(nav).toContain('class="planner-nav-more" type="button" aria-current="page"');
       expect(markup).toContain('href="#/v2/sleep"');
     }
@@ -163,7 +164,10 @@ describe('V2 preview routes', () => {
     expect(markup).toContain('href="#/v2/today"');
     expect(markup).toContain('href="#/v2/goals"');
     expect(markup).toContain('href="#/v2/actions"');
+    expect(markup).toContain('href="#/v2/diary?period=day&amp;date=2026-09-13"');
     expect(markup).toContain('href="#/v2/inbox"');
+    const nav = markup.match(/<nav aria-label="Рабочий интерфейс">([\s\S]*?)<\/nav>/)?.[1] ?? '';
+    expect(nav.match(/class="planner-nav-secondary"/g)).toHaveLength(3);
     expect(markup).not.toContain('Старая версия');
     expect(markup).not.toContain('<span>V2</span>');
   });

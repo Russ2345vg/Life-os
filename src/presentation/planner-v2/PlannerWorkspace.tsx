@@ -60,8 +60,10 @@ import {
 } from '../../application/sleep/SleepTodayEntry';
 
 import './planner-premium.css';
+import './diary/diary.css';
 import type { LifeActionDateUndoReceipt } from '../../application/commands/SetLifeActionPlan';
 import './planner-date-undo.css';
+import { PlannerDiary } from './diary/PlannerDiary';
 
 export interface PlannerServices extends PlannerLibraryServices {
   readonly diary: DiaryService;
@@ -169,7 +171,7 @@ function PlannerWorkspaceContent({
     setError(null);
   }
   const load = useCallback(async () => {
-    if (route.view === 'sleep' || route.view === 'account') return;
+    if (route.view === 'sleep' || route.view === 'account' || route.view === 'diary') return;
     const sequence = ++request.current;
     const date = DayDate.create(selectedDateKey);
     if (services.planning) await services.planning.recurrence.materialize(selectedDateKey);
@@ -423,17 +425,36 @@ function PlannerWorkspaceContent({
             <span className="planner-nav-secondary">
               {navLink({ view: 'spheres' }, 'Сферы', 'goals')}
             </span>
-            {navLink({ view: 'directions' }, 'Направления', 'goals')}
+            <span className="planner-nav-secondary">
+              {navLink({ view: 'directions' }, 'Направления', 'goals')}
+            </span>
             {navLink({ view: 'goals' }, 'Цели', 'goals')}
             {navLink({ view: 'actions' }, 'Действия', 'actions')}
             <span className="planner-nav-secondary">
               {navLink({ view: 'inbox' }, 'Входящие', 'history')}
             </span>
+            {navLink(
+              {
+                view: 'diary',
+                period: 'day',
+                date: currentDate.toString(),
+              },
+              'Дневник',
+              'history',
+            )}
             <button
               className="planner-nav-more"
               type="button"
               aria-current={
-                ['account', 'inbox', 'spheres', 'sphere', 'sleep'].includes(route.view)
+                [
+                  'account',
+                  'inbox',
+                  'spheres',
+                  'sphere',
+                  'directions',
+                  'direction',
+                  'sleep',
+                ].includes(route.view)
                   ? 'page'
                   : undefined
               }
@@ -447,6 +468,7 @@ function PlannerWorkspaceContent({
           </nav>
           <div id="planner-more-menu" className="planner-more-menu" hidden={!moreOpen}>
             {navLink({ view: 'spheres' }, 'Сферы', 'goals')}
+            {navLink({ view: 'directions' }, 'Направления', 'goals')}
             {navLink({ view: 'inbox' }, 'Входящие', 'history')}
             {navLink({ view: 'sleep' }, 'Подготовка ко сну', 'today')}
             {navLink({ view: 'account' }, 'Аккаунт и синхронизация', 'account')}
@@ -511,7 +533,14 @@ function PlannerWorkspaceContent({
               </button>
             </div>
           ) : null}
-          {route.view === 'account' ? (
+          {route.view === 'diary' ? (
+            <PlannerDiary
+              service={services.diary}
+              route={route}
+              currentDate={currentDate}
+              onNavigate={navigate}
+            />
+          ) : route.view === 'account' ? (
             <AccountSyncPage
               service={services.accountSync}
               onBack={() => navigate({ view: 'today' })}
