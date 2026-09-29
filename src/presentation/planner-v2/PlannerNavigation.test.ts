@@ -2,7 +2,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { DayDate } from '../../domain';
-import { buildPlannerRoute, parsePlannerRoute } from './PlannerNavigation';
+import { buildPlannerRoute, parsePlannerRoute, resolveDiaryRoute } from './PlannerNavigation';
 import { PlannerWorkspace, type PlannerServices } from './PlannerWorkspace';
 import { PlannerViewSwitcher } from './PlannerViewSwitcher';
 
@@ -30,6 +30,30 @@ describe('V2 preview routes', () => {
       createElement(PlannerViewSwitcher, { route: { view: 'goals' }, onNavigate: vi.fn() }),
     );
     expect(html).toContain('Обзор недели');
+  });
+  it('roundtrips diary routes and resolves safe calendar defaults without future periods', () => {
+    for (const route of [
+      { view: 'diary' },
+      { view: 'diary', period: 'day', date: '2026-09-29' },
+      { view: 'diary', period: 'week', date: '2026-09-16' },
+      { view: 'diary', period: 'month', date: '2026-09-18' },
+    ] as const)
+      expect(parsePlannerRoute(buildPlannerRoute(route))).toEqual(route);
+    const today = DayDate.create('2026-09-29');
+    expect(resolveDiaryRoute({ view: 'diary' }, today)).toEqual({
+      view: 'diary',
+      period: 'week',
+      date: '2026-09-21',
+    });
+    expect(
+      resolveDiaryRoute({ view: 'diary', period: 'week', date: '2026-09-16' }, today).date,
+    ).toBe('2026-09-14');
+    expect(resolveDiaryRoute({ view: 'diary', period: 'month', date: 'bad' }, today).date).toBe(
+      '2026-09-01',
+    );
+    expect(
+      resolveDiaryRoute({ view: 'diary', period: 'day', date: '2026-10-02' }, today).date,
+    ).toBe('2026-09-29');
   });
   it('retains the selected direction when creating a goal', () => {
     expect(parsePlannerRoute('#/v2/goals/new?directionId=home')).toEqual({

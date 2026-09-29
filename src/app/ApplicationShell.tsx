@@ -1,16 +1,25 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { DayDate } from '../domain';
 import {
   parseApplicationRoute,
   resolveInitialApplicationRoute,
 } from '../presentation/navigation/ApplicationRoute';
-import { buildPlannerRoute, type PlannerRoute } from '../presentation/planner-v2/PlannerNavigation';
+import {
+  buildPlannerRoute,
+  resolveDiaryRoute,
+  type PlannerRoute,
+} from '../presentation/planner-v2/PlannerNavigation';
 import { SyncStatusProvider } from '../presentation/sync/SyncStatusContext';
 import { startBrowserApplicationRouteSync } from './lifecycle/BrowserApplicationRouteSync';
 import { startBrowserCurrentDateRefresh } from './lifecycle/BrowserCurrentDateRefresh';
 import { useLifeOsApplication } from './providers';
 import { createApplicationUpdateService } from './composition/createApplicationUpdateService';
 import { ApplicationUpdateNotice } from '../presentation/updates/ApplicationUpdateNotice';
+import {
+  createRouteLeaveGuard,
+  RouteLeaveGuardProvider,
+  type RouteLeaveGuard,
+} from '../presentation/navigation/RouteLeaveGuard';
 
 const PlannerWorkspace = lazy(() =>
   import('../presentation/planner-v2/PlannerWorkspace').then((module) => ({
@@ -24,21 +33,43 @@ export function ApplicationShell() {
   useEffect(() => {
     void updates.start();
   }, [updates]);
-  const [route, setRoute] = useState<PlannerRoute>(() =>
-    resolveInitialApplicationRoute(parseApplicationRoute(window.location.hash)),
-  );
+  const [route, setRoute] = useState<PlannerRoute>(() => {
+    const initial = resolveInitialApplicationRoute(parseApplicationRoute(window.location.hash));
+    return initial.view === 'diary' ? resolveDiaryRoute(initial, application.currentDate) : initial;
+  });
+  const [leaveGuard] = useState(createRouteLeaveGuard);
+  const acceptedHash = useRef(buildPlannerRoute(route));
   const [currentDate, setCurrentDate] = useState<DayDate>(application.currentDate);
 
   useEffect(() => {
-    if (parseApplicationRoute(window.location.hash) === null) {
-      window.history.replaceState(null, '', buildPlannerRoute({ view: 'today' }));
-    }
+    if (window.location.hash !== acceptedHash.current)
+      window.history.replaceState(null, '', acceptedHash.current);
     return startBrowserApplicationRouteSync({
       windowTarget: window,
       readHash: () => window.location.hash,
-      restore: setRoute,
+      readAcceptedHash: () => acceptedHash.current,
+      replaceHash: (hash) => window.history.replaceState(null, '', hash),
+      beforeRestore: () => leaveGuard.flushBeforeLeave(),
+      restore: (nextRoute) => {
+        const resolved = resolveShellRoute(
+          nextRoute,
+          application.currentDateProvider.getCurrentDate(),
+        );
+        acceptedHash.current = buildPlannerRoute(resolved);
+        setRoute(resolved);
+      },
     });
-  }, []);
+  }, [leaveGuard]);
+
+  useEffect(() => {
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      if (!leaveGuard.shouldBlockUnload()) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', beforeUnload);
+    return () => window.removeEventListener('beforeunload', beforeUnload);
+  }, [leaveGuard]);
 
   useEffect(
     () =>
@@ -56,22 +87,48 @@ export function ApplicationShell() {
     [application],
   );
 
-  const navigate = (nextRoute: PlannerRoute): void => {
-    window.history.pushState(null, '', buildPlannerRoute(nextRoute));
-    setRoute(nextRoute);
-  };
+  const navigate = createGuardedNavigator(
+    leaveGuard,
+    (hash) => window.history.pushState(null, '', hash),
+    (nextRoute) => {
+      acceptedHash.current = buildPlannerRoute(nextRoute);
+      setRoute(nextRoute);
+    },
+    (nextRoute) => resolveShellRoute(nextRoute, application.currentDateProvider.getCurrentDate()),
+  );
 
   return (
     <SyncStatusProvider sync={application.sync}>
-      <Suspense fallback={<p role="status">Загружаем…</p>}>
-        <PlannerWorkspace
-          systemNotice={<ApplicationUpdateNotice service={updates} />}
-          services={application}
-          route={route}
-          currentDate={currentDate}
-          onNavigate={navigate}
-        />
-      </Suspense>
+      <RouteLeaveGuardProvider guard={leaveGuard}>
+        <Suspense fallback={<p role="status">Загружаем…</p>}>
+          <PlannerWorkspace
+            systemNotice={<ApplicationUpdateNotice service={updates} />}
+            services={application}
+            route={route}
+            currentDate={currentDate}
+            onNavigate={(nextRoute) => void navigate(nextRoute)}
+          />
+        </Suspense>
+      </RouteLeaveGuardProvider>
     </SyncStatusProvider>
   );
+}
+
+export function createGuardedNavigator(
+  guard: RouteLeaveGuard,
+  pushHash: (hash: string) => void,
+  commit: (route: PlannerRoute) => void,
+  normalize: (route: PlannerRoute) => PlannerRoute = (route) => route,
+) {
+  return async (nextRoute: PlannerRoute): Promise<boolean> => {
+    if (!(await guard.flushBeforeLeave())) return false;
+    const resolved = normalize(nextRoute);
+    pushHash(buildPlannerRoute(resolved));
+    commit(resolved);
+    return true;
+  };
+}
+
+function resolveShellRoute(route: PlannerRoute, currentDate: DayDate): PlannerRoute {
+  return route.view === 'diary' ? resolveDiaryRoute(route, currentDate) : route;
 }

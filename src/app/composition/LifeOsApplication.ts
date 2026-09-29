@@ -1,4 +1,10 @@
-import type { AccountSync, Clock, CurrentDateProvider, SyncApplication } from '../../application';
+import type {
+  AccountSync,
+  Clock,
+  CurrentDateProvider,
+  DiaryService,
+  SyncApplication,
+} from '../../application';
 import type { BalanceServices } from '../../application/balance/BalanceServices';
 import type { PlanningServices } from '../../application/planner/PlanningServices';
 import type { DayDate } from '../../domain';
@@ -16,6 +22,7 @@ export interface LifeOsApplication extends PlannerServices {
   readonly plannerScenarios: PlannerScenarios;
   readonly balance: BalanceServices;
   readonly planning: PlanningServices;
+  readonly diary: DiaryService;
   readonly sync: SyncApplication;
   readonly accountSync: AccountSync;
   readonly clock: Clock;

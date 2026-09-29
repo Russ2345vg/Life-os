@@ -1,3 +1,6 @@
+import { DayDate } from '../../domain';
+import { addDays, automaticPeriod } from '../../domain/planner/PlanningPeriod';
+
 export type PlannerRoute =
   | { readonly view: 'spheres' }
   | { readonly view: 'directions' }
@@ -8,6 +11,11 @@ export type PlannerRoute =
   | { readonly view: 'today'; readonly day?: 'tomorrow' }
   | { readonly view: 'sleep' }
   | { readonly view: 'account' }
+  | {
+      readonly view: 'diary';
+      readonly period?: 'day' | 'week' | 'month';
+      readonly date?: string;
+    }
   | {
       readonly view: 'goals';
       readonly sphereId?: string;
@@ -66,6 +74,16 @@ export function parsePlannerRoute(hash: string): PlannerRoute | null {
     };
   if (path === '#/v2/sleep') return { view: 'sleep' };
   if (path === '#/v2/account') return { view: 'account' };
+  if (path === '#/v2/diary') {
+    const params = new URLSearchParams(query);
+    const period = params.get('period');
+    const date = params.get('date')?.trim();
+    return {
+      view: 'diary',
+      ...(period === 'day' || period === 'week' || period === 'month' ? { period } : {}),
+      ...(date ? { date } : {}),
+    };
+  }
   if (path === '#/v2/goals') {
     if (view === 'review') {
       const week = new URLSearchParams(query).get('week');
@@ -145,6 +163,12 @@ export function buildPlannerRoute(route: PlannerRoute): string {
     return route.day === 'tomorrow' ? '#/v2/today?day=tomorrow' : '#/v2/today';
   if (route.view === 'sleep') return '#/v2/sleep';
   if (route.view === 'account') return '#/v2/account';
+  if (route.view === 'diary') {
+    const params = new URLSearchParams();
+    if (route.period) params.set('period', route.period);
+    if (route.date) params.set('date', route.date);
+    return `#/v2/diary${params.size ? `?${params}` : ''}`;
+  }
   if (route.view === 'new-goal')
     return `#/v2/goals/new${route.directionId ? `?${new URLSearchParams({ directionId: route.directionId })}` : ''}`;
   if (route.view === 'goals') {
@@ -172,4 +196,45 @@ export function buildPlannerRoute(route: PlannerRoute): string {
   if (route.returnToGoal) params.set('returnToGoal', '1');
   if (route.returnToGoals) params.set('returnToGoals', '1');
   return `#/v2/actions/new${params.size > 0 ? `?${params}` : ''}`;
+}
+
+export type ResolvedDiaryRoute = Readonly<{
+  view: 'diary';
+  period: 'day' | 'week' | 'month';
+  date: string;
+}>;
+
+export function resolveDiaryRoute(
+  route: Extract<PlannerRoute, { view: 'diary' }>,
+  currentDate: DayDate,
+): ResolvedDiaryRoute {
+  const today = currentDate.toString();
+  const period = route.period ?? 'week';
+  const fallback =
+    period === 'day'
+      ? today
+      : period === 'month'
+        ? `${today.slice(0, 7)}-01`
+        : addDays(automaticPeriod('week', today).startDate, -7);
+  let requested = fallback;
+  if (route.date) {
+    try {
+      requested = DayDate.create(route.date).toString();
+    } catch {
+      requested = fallback;
+    }
+  }
+  const normalized =
+    period === 'day'
+      ? requested
+      : period === 'month'
+        ? `${requested.slice(0, 7)}-01`
+        : automaticPeriod('week', requested).startDate;
+  const maximum =
+    period === 'day'
+      ? today
+      : period === 'month'
+        ? `${today.slice(0, 7)}-01`
+        : automaticPeriod('week', today).startDate;
+  return { view: 'diary', period, date: normalized > maximum ? maximum : normalized };
 }

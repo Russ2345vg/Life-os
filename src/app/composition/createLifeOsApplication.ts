@@ -26,6 +26,7 @@ import { UpdateDirection } from '../../application/commands/UpdateDirection';
 import { UpdateGoal } from '../../application/commands/UpdateGoal';
 import { UpdateLifeActionDetails } from '../../application/commands/UpdateLifeActionDetails';
 import { UpdateSphere } from '../../application/commands/UpdateSphere';
+import { DiaryApplicationService } from '../../application/diary/DiaryService';
 import type { Clock } from '../../application/ports/Clock';
 import type { CurrentDateProvider } from '../../application/ports/CurrentDateProvider';
 import type { IdGenerator } from '../../application/ports/IdGenerator';
@@ -54,6 +55,7 @@ import { CryptoIdGenerator } from '../../infrastructure/ids/CryptoIdGenerator';
 import { IndexedDbBalanceRepository } from '../../infrastructure/persistence/IndexedDbBalanceRepository';
 import { IndexedDbDayRepository } from '../../infrastructure/persistence/IndexedDbDayRepository';
 import { IndexedDbDecisionRepository } from '../../infrastructure/persistence/IndexedDbDecisionRepository';
+import { IndexedDbDiaryRepository } from '../../infrastructure/persistence/IndexedDbDiaryRepository';
 import { IndexedDbDirectionRepository } from '../../infrastructure/persistence/IndexedDbDirectionRepository';
 import { IndexedDbGoalRepository } from '../../infrastructure/persistence/IndexedDbGoalRepository';
 import { IndexedDbJournalUnitOfWork } from '../../infrastructure/persistence/IndexedDbJournalUnitOfWork';
@@ -153,6 +155,12 @@ export async function createLifeOsApplication(
       progress: new GoalContributions(planningRepository, clock, idGenerator),
       recurrence: new RecurringActions(planningRepository, clock, idGenerator),
     };
+    const diary = new DiaryApplicationService(
+      new IndexedDbDiaryRepository(database),
+      clock,
+      currentDateProvider,
+      planningRepository,
+    );
     const plannerRepository = new IndexedDbPlannerRepository(database, mutationRecorder);
     const plannerInbox = new PlannerInbox(plannerRepository, clock, idGenerator);
     const plannerFocus = new PlannerFocus(
@@ -231,6 +239,7 @@ export async function createLifeOsApplication(
       currentDate: currentDay.date,
       balance,
       planning,
+      diary,
       plannerInbox,
       plannerScenarios: new PlannerScenarios(
         new IndexedDbTaskScenarioRepository(database),

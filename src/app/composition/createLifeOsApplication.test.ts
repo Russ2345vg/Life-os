@@ -25,6 +25,7 @@ describe('createLifeOsApplication', () => {
     });
     expect(application.balance).toBeDefined();
     expect(application.planning).toBeDefined();
+    expect(application.diary).toBeDefined();
     expect(application.plannerInbox).toBeDefined();
     expect(application.plannerFocus).toBeDefined();
     expect(application.plannerCatalog).toBeDefined();
@@ -64,6 +65,7 @@ describe('createLifeOsApplication', () => {
         'directions',
         'goals',
         'lifeActions',
+        'diaryEntries',
       ]),
     );
 

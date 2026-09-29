@@ -19,6 +19,7 @@ import type {
   CreateGoal,
   CreateLifeActionDraft,
   CompleteLifeAction,
+  DiaryService,
   AccountSync,
   GetDirections,
   GetGoals,
@@ -63,6 +64,7 @@ import type { LifeActionDateUndoReceipt } from '../../application/commands/SetLi
 import './planner-date-undo.css';
 
 export interface PlannerServices extends PlannerLibraryServices {
+  readonly diary: DiaryService;
   readonly plannerScenarios?: ScenarioService;
   readonly balance?: BalanceServices;
   readonly planning?: PlanningServices;
