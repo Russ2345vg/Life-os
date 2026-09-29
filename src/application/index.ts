@@ -28,6 +28,8 @@ export {
 } from './commands/UpdateLifeActionDetails';
 export { UpdateSphere, type UpdateSphereInput } from './commands/UpdateSphere';
 
+export * from './diary';
+
 export type { BalanceRepository } from './ports/BalanceRepository';
 export type { Clock } from './ports/Clock';
 export type { CurrentDateProvider } from './ports/CurrentDateProvider';
