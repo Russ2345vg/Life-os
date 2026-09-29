@@ -59,6 +59,26 @@ describe('diary period views', () => {
     expect(html).toMatch(/<button[^>]*class="planner-primary"[^>]*>Завершить неделю<\/button>/);
   });
 
+  it('blocks weekly reflection fields while completion is in progress', () => {
+    const draft = createDiaryDraft(diaryPeriod('week', DayDate.create('2026-09-21')), new Date());
+    const html = renderToStaticMarkup(
+      createElement(DiaryWeekView, {
+        payload: { ...draft.payload, learned: 'Слушать внимательнее' },
+        summary,
+        completedActions: 0,
+        goalsWithRecords: 0,
+        status: 'saving',
+        disabled: true,
+        onChange: vi.fn(),
+        onComplete: vi.fn(),
+      }),
+    );
+    expect(html.match(/<textarea[^>]*disabled=""/g)).toHaveLength(5);
+    expect(html).toMatch(
+      /<button[^>]*class="planner-primary"[^>]*disabled=""[^>]*>Завершить неделю<\/button>/,
+    );
+  });
+
   it('shows calendar-month coverage, week buckets and saved weekly excerpts only', () => {
     const draft = createDiaryDraft(diaryPeriod('month', DayDate.create('2026-09-01')), new Date());
     const reflectionDraft = createDiaryDraft(
@@ -97,5 +117,27 @@ describe('diary period views', () => {
     expect(html).toContain('Разговор у реки');
     expect(html).not.toContain('Причина');
     expect(html.indexOf('Сводка месяца')).toBeLessThan(html.indexOf('Итоги месяца'));
+  });
+
+  it('blocks monthly reflection fields while completion is in progress', () => {
+    const draft = createDiaryDraft(diaryPeriod('month', DayDate.create('2026-09-01')), new Date());
+    const html = renderToStaticMarkup(
+      createElement(DiaryMonthView, {
+        payload: { ...draft.payload, biggestAchievement: 'Важный результат' },
+        summary,
+        weekBuckets: [],
+        weeklyReflections: [],
+        completedActions: 0,
+        goalsWithRecords: 0,
+        status: 'saving',
+        disabled: true,
+        onChange: vi.fn(),
+        onComplete: vi.fn(),
+      }),
+    );
+    expect(html.match(/<textarea[^>]*disabled=""/g)).toHaveLength(5);
+    expect(html).toMatch(
+      /<button[^>]*class="planner-primary"[^>]*disabled=""[^>]*>Завершить месяц<\/button>/,
+    );
   });
 });

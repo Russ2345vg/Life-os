@@ -7,11 +7,13 @@ export type DiarySaveStatus = 'saved' | 'saving' | 'failed' | 'completed';
 export function DiaryDayView({
   payload,
   status,
+  disabled = false,
   onChange,
   onComplete,
 }: {
   readonly payload: DiaryDayPayload;
   readonly status: DiarySaveStatus;
+  readonly disabled?: boolean;
   readonly onChange: (payload: DiaryDayPayload) => void;
   readonly onComplete: () => void;
 }) {
@@ -19,6 +21,7 @@ export function DiaryDayView({
     <DiaryRatingScale
       label={label}
       value={payload[field]}
+      disabled={disabled}
       onChange={(value) => onChange({ ...payload, [field]: value })}
     />
   );
@@ -31,6 +34,7 @@ export function DiaryDayView({
       <span>{label}</span>
       <VoiceTextArea
         value={payload[field] ?? ''}
+        disabled={disabled}
         onValueChange={(value) => onChange({ ...payload, [field]: value })}
         maxLength={field === 'note' ? 12_000 : 4_000}
         rows={rows}
@@ -71,7 +75,7 @@ export function DiaryDayView({
         <button
           className="planner-primary"
           type="button"
-          disabled={!canComplete || status === 'saving'}
+          disabled={disabled || !canComplete || status === 'saving'}
           onClick={onComplete}
         >
           Завершить день

@@ -53,4 +53,22 @@ describe('PlannerDiary daily view', () => {
     );
     expect(html).toMatch(/<button[^>]*class="planner-primary"[^>]*>Завершить день<\/button>/);
   });
+
+  it('blocks ratings, reflections and completion while the entry is being completed', () => {
+    const draft = createDiaryDraft(diaryPeriod('day', DayDate.create('2026-09-29')), new Date());
+    const html = renderToStaticMarkup(
+      createElement(DiaryDayView, {
+        payload: { ...draft.payload, productivity: 5, energy: 4, mood: 3, overall: 4 },
+        status: 'saving',
+        disabled: true,
+        onChange: vi.fn(),
+        onComplete: vi.fn(),
+      }),
+    );
+    expect(html.match(/<fieldset[^>]*disabled=""/g)).toHaveLength(4);
+    expect(html.match(/<textarea[^>]*disabled=""/g)).toHaveLength(4);
+    expect(html).toMatch(
+      /<button[^>]*class="planner-primary"[^>]*disabled=""[^>]*>Завершить день<\/button>/,
+    );
+  });
 });

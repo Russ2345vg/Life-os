@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { DiaryMonthOverview, DiaryService, DiaryWeekOverview } from '../../../application';
 import {
   createDiaryDraft,
@@ -189,6 +189,8 @@ function DiaryDayEditor({
   );
   const [payload, setPayload] = useState<DiaryDayPayload>(initial.payload);
   const [completed, setCompleted] = useState(entry?.status === 'completed');
+  const [completing, setCompleting] = useState(false);
+  const completionInProgress = useRef(false);
   const [conflictVersion, setConflictVersion] = useState<number | null>(null);
   const [completionError, setCompletionError] = useState<unknown>(null);
   const autosave = useDiaryAutosave<DiaryDayPayload>({
@@ -197,16 +199,19 @@ function DiaryDayEditor({
     saveDraft: (next, expectedVersion) =>
       service.saveDraft({ kind: 'day', anchor: date, payload: next, expectedVersion }),
   });
-  const status: DiarySaveStatus = autosave.inspect.pending
-    ? 'saving'
-    : autosave.inspect.failed
-      ? 'failed'
-      : completed
-        ? 'completed'
-        : 'saved';
+  const status: DiarySaveStatus =
+    completing || autosave.inspect.pending
+      ? 'saving'
+      : autosave.inspect.failed
+        ? 'failed'
+        : completed
+          ? 'completed'
+          : 'saved';
   const change = (next: DiaryDayPayload) => {
+    if (completionInProgress.current) return;
     setPayload(next);
     setCompleted(false);
+    setConflictVersion(null);
     setCompletionError(null);
     autosave.enqueue(next);
   };
@@ -219,35 +224,60 @@ function DiaryDayEditor({
     await autosave.retry();
   };
   const complete = async () => {
+    if (completionInProgress.current) return;
+    completionInProgress.current = true;
+    setCompleting(true);
     setCompletionError(null);
     try {
       await autosave.flush();
-      const saved = await service.complete({
-        kind: 'day',
-        anchor: date,
-        payload,
-        expectedVersion: autosave.getVersion(),
+      await autosave.runOperation(async () => {
+        const saved = await service.complete({
+          kind: 'day',
+          anchor: date,
+          payload,
+          expectedVersion: autosave.getVersion(),
+        });
+        autosave.replaceVersion(saved.version);
       });
-      autosave.replaceVersion(saved.version);
       setCompleted(true);
+    } catch (error: unknown) {
+      setCompletionError(error);
+    } finally {
+      completionInProgress.current = false;
+      setCompleting(false);
+    }
+  };
+  const retryCompletion = async () => {
+    try {
+      if (isConflict(completionError)) {
+        const remote = await service.get('day', date);
+        autosave.replaceVersion(remote?.version ?? null);
+        setConflictVersion(remote?.version ?? null);
+      }
+      await complete();
     } catch (error: unknown) {
       setCompletionError(error);
     }
   };
   return (
     <>
-      {autosave.inspect.failed ? (
+      {autosave.draftFailed ? (
         <DiarySaveError
           error={autosave.error}
           conflictVersion={conflictVersion}
           onRetry={() => void retry()}
         />
       ) : completionError !== null ? (
-        <DiarySaveError error={completionError} onRetry={() => void complete()} />
+        <DiarySaveError
+          error={completionError}
+          conflictVersion={conflictVersion}
+          onRetry={() => void retryCompletion()}
+        />
       ) : null}
       <DiaryDayView
         payload={payload}
         status={status}
+        disabled={completing}
         onChange={change}
         onComplete={() => void complete()}
       />
@@ -269,6 +299,8 @@ function DiaryWeekEditor({
   );
   const [payload, setPayload] = useState<DiaryWeekPayload>(initial.payload);
   const [completed, setCompleted] = useState(overview.entry?.status === 'completed');
+  const [completing, setCompleting] = useState(false);
+  const completionInProgress = useRef(false);
   const [conflictVersion, setConflictVersion] = useState<number | null>(null);
   const [completionError, setCompletionError] = useState<unknown>(null);
   const anchor = overview.period.periodStart;
@@ -278,10 +310,12 @@ function DiaryWeekEditor({
     saveDraft: (next, expectedVersion) =>
       service.saveDraft({ kind: 'week', anchor, payload: next, expectedVersion }),
   });
-  const status = diarySaveStatus(autosave.inspect, completed);
+  const status = diarySaveStatus(autosave.inspect, completed, completing);
   const change = (next: DiaryWeekPayload) => {
+    if (completionInProgress.current) return;
     setPayload(next);
     setCompleted(false);
+    setConflictVersion(null);
     setCompletionError(null);
     autosave.enqueue(next);
   };
@@ -294,31 +328,55 @@ function DiaryWeekEditor({
     await autosave.retry();
   };
   const complete = async () => {
+    if (completionInProgress.current) return;
+    completionInProgress.current = true;
+    setCompleting(true);
     setCompletionError(null);
     try {
       await autosave.flush();
-      const saved = await service.complete({
-        kind: 'week',
-        anchor,
-        payload,
-        expectedVersion: autosave.getVersion(),
+      await autosave.runOperation(async () => {
+        const saved = await service.complete({
+          kind: 'week',
+          anchor,
+          payload,
+          expectedVersion: autosave.getVersion(),
+        });
+        autosave.replaceVersion(saved.version);
       });
-      autosave.replaceVersion(saved.version);
       setCompleted(true);
+    } catch (error: unknown) {
+      setCompletionError(error);
+    } finally {
+      completionInProgress.current = false;
+      setCompleting(false);
+    }
+  };
+  const retryCompletion = async () => {
+    try {
+      if (isConflict(completionError)) {
+        const remote = await service.get('week', anchor);
+        autosave.replaceVersion(remote?.version ?? null);
+        setConflictVersion(remote?.version ?? null);
+      }
+      await complete();
     } catch (error: unknown) {
       setCompletionError(error);
     }
   };
   return (
     <>
-      {autosave.inspect.failed ? (
+      {autosave.draftFailed ? (
         <DiarySaveError
           error={autosave.error}
           conflictVersion={conflictVersion}
           onRetry={() => void retry()}
         />
       ) : completionError !== null ? (
-        <DiarySaveError error={completionError} onRetry={() => void complete()} />
+        <DiarySaveError
+          error={completionError}
+          conflictVersion={conflictVersion}
+          onRetry={() => void retryCompletion()}
+        />
       ) : null}
       <DiaryWeekView
         payload={payload}
@@ -326,6 +384,7 @@ function DiaryWeekEditor({
         completedActions={overview.planning.completed.length}
         goalsWithRecords={overview.planning.withRecords}
         status={status}
+        disabled={completing}
         onChange={change}
         onComplete={() => void complete()}
       />
@@ -347,6 +406,8 @@ function DiaryMonthEditor({
   );
   const [payload, setPayload] = useState<DiaryMonthPayload>(initial.payload);
   const [completed, setCompleted] = useState(overview.entry?.status === 'completed');
+  const [completing, setCompleting] = useState(false);
+  const completionInProgress = useRef(false);
   const [conflictVersion, setConflictVersion] = useState<number | null>(null);
   const [completionError, setCompletionError] = useState<unknown>(null);
   const anchor = overview.period.periodStart;
@@ -356,10 +417,12 @@ function DiaryMonthEditor({
     saveDraft: (next, expectedVersion) =>
       service.saveDraft({ kind: 'month', anchor, payload: next, expectedVersion }),
   });
-  const status = diarySaveStatus(autosave.inspect, completed);
+  const status = diarySaveStatus(autosave.inspect, completed, completing);
   const change = (next: DiaryMonthPayload) => {
+    if (completionInProgress.current) return;
     setPayload(next);
     setCompleted(false);
+    setConflictVersion(null);
     setCompletionError(null);
     autosave.enqueue(next);
   };
@@ -372,31 +435,55 @@ function DiaryMonthEditor({
     await autosave.retry();
   };
   const complete = async () => {
+    if (completionInProgress.current) return;
+    completionInProgress.current = true;
+    setCompleting(true);
     setCompletionError(null);
     try {
       await autosave.flush();
-      const saved = await service.complete({
-        kind: 'month',
-        anchor,
-        payload,
-        expectedVersion: autosave.getVersion(),
+      await autosave.runOperation(async () => {
+        const saved = await service.complete({
+          kind: 'month',
+          anchor,
+          payload,
+          expectedVersion: autosave.getVersion(),
+        });
+        autosave.replaceVersion(saved.version);
       });
-      autosave.replaceVersion(saved.version);
       setCompleted(true);
+    } catch (error: unknown) {
+      setCompletionError(error);
+    } finally {
+      completionInProgress.current = false;
+      setCompleting(false);
+    }
+  };
+  const retryCompletion = async () => {
+    try {
+      if (isConflict(completionError)) {
+        const remote = await service.get('month', anchor);
+        autosave.replaceVersion(remote?.version ?? null);
+        setConflictVersion(remote?.version ?? null);
+      }
+      await complete();
     } catch (error: unknown) {
       setCompletionError(error);
     }
   };
   return (
     <>
-      {autosave.inspect.failed ? (
+      {autosave.draftFailed ? (
         <DiarySaveError
           error={autosave.error}
           conflictVersion={conflictVersion}
           onRetry={() => void retry()}
         />
       ) : completionError !== null ? (
-        <DiarySaveError error={completionError} onRetry={() => void complete()} />
+        <DiarySaveError
+          error={completionError}
+          conflictVersion={conflictVersion}
+          onRetry={() => void retryCompletion()}
+        />
       ) : null}
       <DiaryMonthView
         payload={payload}
@@ -406,6 +493,7 @@ function DiaryMonthEditor({
         completedActions={overview.planning.completed.length}
         goalsWithRecords={overview.planning.withRecords}
         status={status}
+        disabled={completing}
         onChange={change}
         onComplete={() => void complete()}
       />
@@ -440,8 +528,15 @@ function DiarySaveError({
 function diarySaveStatus(
   inspect: { readonly pending: boolean; readonly failed: boolean },
   completed: boolean,
+  completing = false,
 ): DiarySaveStatus {
-  return inspect.pending ? 'saving' : inspect.failed ? 'failed' : completed ? 'completed' : 'saved';
+  return completing || inspect.pending
+    ? 'saving'
+    : inspect.failed
+      ? 'failed'
+      : completed
+        ? 'completed'
+        : 'saved';
 }
 
 function shiftRoute(

@@ -3,14 +3,21 @@ import type { DiaryRating } from '../../../domain';
 export function DiaryRatingScale({
   label,
   value,
+  disabled = false,
   onChange,
 }: {
   readonly label: string;
   readonly value: DiaryRating | null;
+  readonly disabled?: boolean;
   readonly onChange: (value: DiaryRating) => void;
 }) {
   return (
-    <fieldset className="planner-diary-rating" role="radiogroup" aria-label={label}>
+    <fieldset
+      className="planner-diary-rating"
+      role="radiogroup"
+      aria-label={label}
+      disabled={disabled}
+    >
       <legend>{label}</legend>
       <div>
         {([1, 2, 3, 4, 5] as const).map((rating) => (

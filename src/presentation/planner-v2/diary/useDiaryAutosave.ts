@@ -87,39 +87,83 @@ export function useDiaryAutosave<T>(input: {
   const [controller] = useState(() =>
     createDiaryAutosaveController(input.initialVersion, input.saveDraft),
   );
-  const autosave = controller.queue;
   const [, render] = useState(0);
-  useEffect(() => autosave.subscribe(() => render((value) => value + 1)), [autosave]);
-  useEffect(
-    () =>
-      input.guard.register({
-        inspect: () => autosave.inspect(),
-        flush: () => autosave.flush(),
-      }),
-    [autosave, input.guard],
-  );
+  useEffect(() => controller.subscribe(() => render((value) => value + 1)), [controller]);
+  useEffect(() => input.guard.register(controller), [controller, input.guard]);
   return {
-    enqueue: autosave.enqueue,
-    flush: autosave.flush,
-    retry: autosave.retry,
-    inspect: autosave.inspect(),
-    error: autosave.failure(),
+    enqueue: controller.enqueue,
+    flush: controller.flushDrafts,
+    retry: controller.retryDraft,
+    runOperation: controller.runOperation,
+    inspect: controller.inspect(),
+    draftFailed: controller.inspectDraft().failed,
+    error: controller.draftFailure(),
     getVersion: controller.getVersion,
     replaceVersion: controller.replaceVersion,
   };
 }
 
-function createDiaryAutosaveController<T>(
+export function createDiaryAutosaveController<T>(
   initialVersion: number | null,
   saveDraft: (value: T, expectedVersion: number | null) => Promise<{ version: number }>,
 ) {
   let version = initialVersion;
+  let activeOperation: Promise<void> | null = null;
+  let operationFailure: unknown = null;
+  const operationListeners = new Set<() => void>();
+  const notifyOperation = () => operationListeners.forEach((listener) => listener());
   const queue = createDiaryAutosaveQueue(async (value: T) => {
     const saved = await saveDraft(value, version);
     version = saved.version;
   });
   return {
-    queue,
+    enqueue(value: T) {
+      operationFailure = null;
+      queue.enqueue(value);
+      notifyOperation();
+    },
+    flushDrafts: queue.flush,
+    retryDraft: queue.retry,
+    inspectDraft: queue.inspect,
+    draftFailure: queue.failure,
+    inspect() {
+      const draft = queue.inspect();
+      return {
+        pending: draft.pending || activeOperation !== null,
+        failed: draft.failed || operationFailure !== null,
+      };
+    },
+    async flush() {
+      await queue.flush();
+      if (activeOperation !== null) await activeOperation;
+      if (operationFailure !== null) throw operationFailure;
+    },
+    async runOperation<R>(operation: () => Promise<R>): Promise<R> {
+      if (activeOperation !== null)
+        throw new Error('Операция сохранения дневника уже выполняется.');
+      operationFailure = null;
+      const result = Promise.resolve().then(operation);
+      activeOperation = result.then(() => undefined);
+      void activeOperation.catch(() => undefined);
+      notifyOperation();
+      try {
+        return await result;
+      } catch (error: unknown) {
+        operationFailure = error;
+        throw error;
+      } finally {
+        activeOperation = null;
+        notifyOperation();
+      }
+    },
+    subscribe(listener: () => void) {
+      operationListeners.add(listener);
+      const unsubscribeQueue = queue.subscribe(listener);
+      return () => {
+        operationListeners.delete(listener);
+        unsubscribeQueue();
+      };
+    },
     getVersion: () => version,
     replaceVersion: (next: number | null) => {
       version = next;

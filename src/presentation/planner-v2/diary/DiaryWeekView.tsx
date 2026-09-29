@@ -10,6 +10,7 @@ export function DiaryWeekView({
   completedActions,
   goalsWithRecords,
   status,
+  disabled = false,
   onChange,
   onComplete,
 }: {
@@ -18,6 +19,7 @@ export function DiaryWeekView({
   readonly completedActions: number;
   readonly goalsWithRecords: number;
   readonly status: DiarySaveStatus;
+  readonly disabled?: boolean;
   readonly onChange: (payload: DiaryWeekPayload) => void;
   readonly onComplete: () => void;
 }) {
@@ -47,6 +49,7 @@ export function DiaryWeekView({
             <span>{label}</span>
             <VoiceTextArea
               value={payload[field] ?? ''}
+              disabled={disabled}
               onValueChange={(value) => onChange({ ...payload, [field]: value })}
               maxLength={4_000}
               rows={3}
@@ -55,7 +58,7 @@ export function DiaryWeekView({
         ))}
         <ReflectionActions
           status={status}
-          disabled={!canComplete || status === 'saving'}
+          disabled={disabled || !canComplete || status === 'saving'}
           label="Завершить неделю"
           onComplete={onComplete}
         />

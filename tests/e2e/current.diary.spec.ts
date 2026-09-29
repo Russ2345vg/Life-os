@@ -26,6 +26,15 @@ test('daily diary saves, survives navigation and recovers a failed draft', async
   await page.reload();
   await expect(worldBetter).toHaveValue('Помог коллеге разобраться в сложной задаче.');
   await expect(page.getByText('День завершён', { exact: true })).toBeVisible();
+  await bumpDiaryVersion(page, `diary:day:${today}`);
+  await page.getByRole('button', { name: 'Завершить день', exact: true }).click();
+  const conflictAlert = page.getByRole('alert');
+  await expect(conflictAlert).toContainText('Запись изменилась в другом окне');
+  await conflictAlert
+    .getByRole('button', { name: 'Применить мои изменения повторно', exact: true })
+    .click();
+  await expect(conflictAlert).toHaveCount(0);
+  await expect(page.getByText('День завершён', { exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: 'Предыдущий период', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`date=${addDays(today, -1)}`));
@@ -158,6 +167,36 @@ async function restoreDiaryWrites(page: Page): Promise<void> {
       IDBDatabase.prototype.transaction = fixture.diaryOriginalTransaction;
     delete fixture.diaryOriginalTransaction;
   });
+}
+
+async function bumpDiaryVersion(page: Page, id: string): Promise<void> {
+  await page.evaluate(async (entryId) => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('lifeos');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const transaction = database.transaction('diaryEntries', 'readwrite');
+        const store = transaction.objectStore('diaryEntries');
+        const request = store.get(entryId);
+        request.onsuccess = () => {
+          const record = request.result as { version: number } | undefined;
+          if (record === undefined) {
+            transaction.abort();
+            return;
+          }
+          store.put({ ...record, version: record.version + 1 });
+        };
+        transaction.oncomplete = () => resolve();
+        transaction.onabort = () => reject(transaction.error ?? new Error('Diary record missing'));
+        transaction.onerror = () => reject(transaction.error);
+      });
+    } finally {
+      database.close();
+    }
+  }, id);
 }
 
 function collectBrowserErrors(page: Page): string[] {

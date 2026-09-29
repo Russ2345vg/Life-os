@@ -13,6 +13,7 @@ export function DiaryMonthView({
   completedActions,
   goalsWithRecords,
   status,
+  disabled = false,
   onChange,
   onComplete,
 }: {
@@ -23,6 +24,7 @@ export function DiaryMonthView({
   readonly completedActions: number;
   readonly goalsWithRecords: number;
   readonly status: DiarySaveStatus;
+  readonly disabled?: boolean;
   readonly onChange: (payload: DiaryMonthPayload) => void;
   readonly onComplete: () => void;
 }) {
@@ -85,6 +87,7 @@ export function DiaryMonthView({
             <span>{label}</span>
             <VoiceTextArea
               value={payload[field] ?? ''}
+              disabled={disabled}
               onValueChange={(value) => onChange({ ...payload, [field]: value })}
               maxLength={4_000}
               rows={3}
@@ -93,7 +96,7 @@ export function DiaryMonthView({
         ))}
         <ReflectionActions
           status={status}
-          disabled={!canComplete || status === 'saving'}
+          disabled={disabled || !canComplete || status === 'saving'}
           label="Завершить месяц"
           onComplete={onComplete}
         />
