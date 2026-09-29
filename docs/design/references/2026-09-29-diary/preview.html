@@ -1,0 +1,1131 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LifeOS — Дневник</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --canvas: #091013;
+        --shell: #0b1417;
+        --surface: #0f191c;
+        --surface-2: #132024;
+        --field: #0c1518;
+        --border: #263337;
+        --border-strong: #35464b;
+        --text: #eef2f0;
+        --text-2: #b2bdb9;
+        --muted: #7e8c88;
+        --jade: #80cfaa;
+        --jade-soft: rgba(128, 207, 170, 0.13);
+        --gold: #d5ad74;
+        --danger: #e58484;
+        --shadow: 0 18px 42px rgba(0, 0, 0, 0.2);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        background: var(--canvas);
+      }
+      body {
+        margin: 0;
+        min-width: 320px;
+        background:
+          radial-gradient(circle at 88% 6%, rgba(68, 118, 98, 0.08), transparent 31rem),
+          var(--canvas);
+        color: var(--text);
+        font-family: Inter, 'Segoe UI', system-ui, sans-serif;
+        font-size: 15px;
+        line-height: 1.5;
+      }
+      button,
+      textarea {
+        font: inherit;
+      }
+      button {
+        color: inherit;
+      }
+      button:focus-visible,
+      textarea:focus-visible {
+        outline: 2px solid var(--jade);
+        outline-offset: 2px;
+      }
+      .app {
+        min-height: 100vh;
+        display: grid;
+        grid-template-columns: 230px minmax(0, 1fr);
+      }
+      .sidebar {
+        position: sticky;
+        top: 0;
+        height: 100vh;
+        padding: 36px 16px 28px;
+        border-right: 1px solid rgba(128, 207, 170, 0.08);
+        background: rgba(10, 20, 23, 0.86);
+      }
+      .brand {
+        margin: 0 14px 30px;
+        font-size: 26px;
+        font-weight: 760;
+        letter-spacing: -0.05em;
+      }
+      .search {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 58px;
+        width: 100%;
+        padding: 10px 14px;
+        margin-bottom: 36px;
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        background: transparent;
+        color: var(--text-2);
+        text-align: left;
+      }
+      .search kbd {
+        color: var(--muted);
+        font: 12px inherit;
+      }
+      nav {
+        display: grid;
+        gap: 6px;
+      }
+      nav button {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-height: 48px;
+        padding: 0 13px;
+        border: 0;
+        border-radius: 9px;
+        background: transparent;
+        color: var(--text-2);
+        text-align: left;
+      }
+      nav button.active {
+        background: rgba(41, 86, 68, 0.48);
+        color: var(--jade);
+      }
+      .nav-icon {
+        width: 21px;
+        text-align: center;
+        font-size: 17px;
+      }
+      .content {
+        width: 100%;
+        max-width: 1500px;
+        padding: 42px clamp(26px, 4vw, 58px) 80px;
+      }
+      .page-head {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 28px;
+      }
+      h1 {
+        margin: 0;
+        font-size: clamp(30px, 3vw, 40px);
+        line-height: 1.1;
+        letter-spacing: -0.045em;
+      }
+      .subtitle {
+        margin: 10px 0 0;
+        color: var(--muted);
+      }
+      .mode-switch {
+        display: inline-grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 4px;
+        padding: 4px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: var(--field);
+      }
+      .mode-switch button {
+        min-width: 92px;
+        min-height: 42px;
+        padding: 0 16px;
+        border: 0;
+        border-radius: 7px;
+        background: transparent;
+        color: var(--text-2);
+        cursor: pointer;
+      }
+      .mode-switch button[aria-pressed='true'] {
+        background: var(--surface-2);
+        color: var(--jade);
+        box-shadow: inset 0 0 0 1px rgba(128, 207, 170, 0.15);
+      }
+      .period {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 24px;
+      }
+      .period button {
+        width: 44px;
+        height: 44px;
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        background: var(--surface);
+        cursor: pointer;
+      }
+      .period strong {
+        min-width: 218px;
+        font-size: 14px;
+      }
+      .period span {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .view {
+        display: none;
+      }
+      .view.active {
+        display: block;
+        animation: reveal 160ms ease-out;
+      }
+      @keyframes reveal {
+        from {
+          opacity: 0.55;
+          transform: translateY(3px);
+        }
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 300px;
+        gap: 24px;
+        align-items: start;
+      }
+      .stack {
+        display: grid;
+        gap: 20px;
+      }
+      .panel {
+        border: 1px solid var(--border);
+        border-radius: 15px;
+        background: rgba(15, 25, 28, 0.9);
+        box-shadow: 0 7px 28px rgba(0, 0, 0, 0.08);
+        padding: 24px;
+      }
+      .panel.primary {
+        border-color: rgba(128, 207, 170, 0.22);
+        box-shadow: var(--shadow);
+      }
+      .panel h2 {
+        margin: 0;
+        font-size: 20px;
+        letter-spacing: -0.025em;
+      }
+      .panel h3 {
+        margin: 0;
+        font-size: 15px;
+      }
+      .panel-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 22px;
+      }
+      .panel-head p {
+        margin: 6px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .progress-note {
+        color: var(--jade);
+        font-size: 13px;
+        white-space: nowrap;
+      }
+      .ratings {
+        display: grid;
+        gap: 6px;
+      }
+      .rating-row {
+        display: grid;
+        grid-template-columns: minmax(160px, 1fr) auto;
+        align-items: center;
+        gap: 20px;
+        padding: 15px 0;
+        border-top: 1px solid rgba(53, 70, 75, 0.55);
+      }
+      .rating-row:first-child {
+        border-top: 0;
+        padding-top: 0;
+      }
+      .rating-copy strong {
+        display: block;
+      }
+      .rating-copy span {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+        margin-top: 2px;
+      }
+      .scale {
+        display: grid;
+        grid-template-columns: repeat(5, 42px);
+        gap: 7px;
+      }
+      .scale button {
+        width: 42px;
+        height: 42px;
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        background: var(--field);
+        color: var(--text-2);
+        cursor: pointer;
+      }
+      .scale button.selected {
+        border-color: rgba(128, 207, 170, 0.45);
+        background: var(--jade-soft);
+        color: var(--jade);
+        font-weight: 700;
+      }
+      .questions {
+        display: grid;
+        gap: 20px;
+      }
+      label {
+        display: grid;
+        gap: 8px;
+        color: var(--text);
+        font-weight: 600;
+      }
+      label small {
+        color: var(--muted);
+        font-weight: 400;
+      }
+      textarea {
+        width: 100%;
+        min-height: 84px;
+        resize: vertical;
+        padding: 13px 14px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: var(--field);
+        color: var(--text);
+      }
+      textarea::placeholder {
+        color: #64726f;
+      }
+      .form-actions {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-top: 22px;
+      }
+      .autosave {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .primary-button {
+        min-height: 46px;
+        padding: 0 20px;
+        border: 0;
+        border-radius: 9px;
+        background: var(--jade);
+        color: #082117;
+        font-weight: 750;
+        cursor: pointer;
+      }
+      .eyebrow {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+      }
+      .history {
+        display: grid;
+        gap: 8px;
+        margin-top: 18px;
+      }
+      .history button {
+        display: grid;
+        grid-template-columns: 46px 1fr auto;
+        align-items: center;
+        gap: 10px;
+        min-height: 56px;
+        width: 100%;
+        padding: 7px 9px;
+        border: 1px solid transparent;
+        border-radius: 9px;
+        background: transparent;
+        text-align: left;
+        cursor: pointer;
+      }
+      .history button.current {
+        border-color: rgba(128, 207, 170, 0.24);
+        background: var(--jade-soft);
+      }
+      .day-num {
+        color: var(--text-2);
+        font-weight: 700;
+      }
+      .history-copy {
+        min-width: 0;
+      }
+      .history-copy strong,
+      .history-copy span {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .history-copy strong {
+        font-size: 13px;
+      }
+      .history-copy span {
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .score {
+        color: var(--jade);
+        font-size: 13px;
+      }
+      .quiet-note {
+        margin: 20px 0 0;
+        padding-top: 16px;
+        border-top: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+        margin: 18px 0 4px;
+      }
+      .summary-item {
+        min-height: 104px;
+        padding: 14px;
+        border-radius: 11px;
+        background: var(--field);
+      }
+      .summary-item span {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .summary-item strong {
+        display: block;
+        margin: 6px 0 10px;
+        color: var(--jade);
+        font-size: 25px;
+        font-weight: 650;
+      }
+      .micro-bars {
+        height: 18px;
+        display: flex;
+        align-items: flex-end;
+        gap: 3px;
+      }
+      .micro-bars i {
+        flex: 1;
+        min-width: 3px;
+        border-radius: 2px 2px 0 0;
+        background: rgba(128, 207, 170, 0.38);
+      }
+      .summary-context {
+        display: flex;
+        gap: 16px;
+        color: var(--muted);
+        font-size: 12px;
+        margin-top: 15px;
+      }
+      .suggestions {
+        display: grid;
+        gap: 9px;
+        margin-top: 15px;
+      }
+      .suggestion {
+        padding: 12px 13px;
+        border-left: 2px solid var(--gold);
+        background: rgba(213, 173, 116, 0.055);
+        border-radius: 0 8px 8px 0;
+      }
+      .suggestion strong,
+      .suggestion span {
+        display: block;
+      }
+      .suggestion strong {
+        font-size: 13px;
+      }
+      .suggestion span {
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .memory-list {
+        display: grid;
+        gap: 14px;
+        margin: 18px 0 0;
+      }
+      .memory {
+        padding-bottom: 14px;
+        border-bottom: 1px solid var(--border);
+      }
+      .memory:last-child {
+        border-bottom: 0;
+        padding-bottom: 0;
+      }
+      .memory time {
+        color: var(--jade);
+        font-size: 11px;
+      }
+      .memory p {
+        margin: 4px 0 0;
+        color: var(--text-2);
+        font-size: 13px;
+      }
+      .month-chart {
+        display: grid;
+        grid-template-columns: 112px repeat(4, 1fr);
+        gap: 10px 14px;
+        align-items: center;
+        margin-top: 20px;
+      }
+      .month-chart .week {
+        color: var(--muted);
+        text-align: center;
+        font-size: 11px;
+      }
+      .metric-name {
+        color: var(--text-2);
+        font-size: 12px;
+      }
+      .meter {
+        height: 8px;
+        border-radius: 99px;
+        background: #1a272a;
+        overflow: hidden;
+      }
+      .meter span {
+        display: block;
+        height: 100%;
+        border-radius: inherit;
+        background: var(--jade);
+        opacity: 0.75;
+      }
+      .insight {
+        margin-top: 18px;
+        padding: 14px 16px;
+        border: 1px solid rgba(128, 207, 170, 0.14);
+        border-radius: 10px;
+        background: rgba(128, 207, 170, 0.055);
+        color: var(--text-2);
+        font-size: 13px;
+      }
+      .insight strong {
+        color: var(--text);
+      }
+      .bottom-nav {
+        display: none;
+      }
+      .mobile-title {
+        display: none;
+      }
+
+      @media (max-width: 900px) {
+        .app {
+          grid-template-columns: 1fr;
+        }
+        .sidebar {
+          display: none;
+        }
+        .content {
+          padding: 22px 16px 92px;
+        }
+        .mobile-title {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          min-height: 48px;
+          margin-bottom: 22px;
+        }
+        .mobile-title strong {
+          font-size: 22px;
+          letter-spacing: -0.04em;
+        }
+        .mobile-title button {
+          min-height: 44px;
+          padding: 0 13px;
+          border: 1px solid var(--border);
+          border-radius: 9px;
+          background: transparent;
+        }
+        .page-head {
+          display: block;
+          margin-bottom: 20px;
+        }
+        h1 {
+          font-size: 31px;
+        }
+        .mode-switch {
+          width: 100%;
+          margin-top: 20px;
+        }
+        .mode-switch button {
+          min-width: 0;
+          padding: 0 8px;
+        }
+        .period {
+          display: grid;
+          grid-template-columns: 44px minmax(0, 1fr) 44px;
+        }
+        .period strong {
+          min-width: 0;
+          text-align: center;
+          font-size: 13px;
+        }
+        .period span {
+          grid-column: 1 / -1;
+          text-align: center;
+        }
+        .layout {
+          grid-template-columns: 1fr;
+        }
+        .panel {
+          padding: 20px;
+          border-radius: 14px;
+        }
+        .rating-row {
+          grid-template-columns: 1fr;
+          gap: 12px;
+          padding: 18px 0;
+        }
+        .scale {
+          grid-template-columns: repeat(5, minmax(44px, 1fr));
+          width: 100%;
+        }
+        .scale button {
+          width: 100%;
+          min-width: 44px;
+          height: 44px;
+        }
+        .summary-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+        .month-chart {
+          grid-template-columns: 90px repeat(4, 1fr);
+          gap: 10px 8px;
+        }
+        .side-panel {
+          order: 2;
+        }
+        .form-actions {
+          align-items: stretch;
+          flex-direction: column-reverse;
+        }
+        .primary-button {
+          width: 100%;
+        }
+        .bottom-nav {
+          position: fixed;
+          z-index: 20;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          display: grid;
+          grid-template-columns: repeat(5, 1fr);
+          min-height: 72px;
+          padding: 7px 6px max(7px, env(safe-area-inset-bottom));
+          border-top: 1px solid var(--border);
+          background: rgba(10, 17, 20, 0.97);
+          backdrop-filter: blur(16px);
+        }
+        .bottom-nav button {
+          border: 0;
+          border-radius: 8px;
+          background: transparent;
+          color: var(--muted);
+          font-size: 10px;
+        }
+        .bottom-nav button span {
+          display: block;
+          margin-bottom: 3px;
+          font-size: 17px;
+        }
+        .bottom-nav button.active {
+          background: var(--jade-soft);
+          color: var(--jade);
+        }
+      }
+
+      @media (max-width: 450px) {
+        .panel-head {
+          display: block;
+        }
+        .progress-note {
+          display: inline-block;
+          margin-top: 8px;
+        }
+        .summary-context {
+          flex-direction: column;
+          gap: 4px;
+        }
+        .month-chart {
+          grid-template-columns: 76px repeat(4, 1fr);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .view.active {
+          animation: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="brand">LifeOS</div>
+        <button class="search">
+          <span>⌕&nbsp;&nbsp; Поиск и добавление</span><kbd>Ctrl K</kbd>
+        </button>
+        <nav aria-label="Рабочий интерфейс">
+          <button><span class="nav-icon">▣</span>Сегодня</button>
+          <button><span class="nav-icon">◉</span>Сферы</button>
+          <button><span class="nav-icon">⌖</span>Направления</button>
+          <button><span class="nav-icon">◇</span>Цели</button>
+          <button><span class="nav-icon">ϟ</span>Действия</button>
+          <button><span class="nav-icon">↶</span>Входящие</button>
+          <button class="active"><span class="nav-icon">☷</span>Дневник</button>
+          <button><span class="nav-icon">•••</span>Ещё</button>
+        </nav>
+      </aside>
+
+      <main class="content">
+        <div class="mobile-title"><strong>LifeOS</strong><button>⌕&nbsp; Поиск</button></div>
+        <header class="page-head">
+          <div>
+            <h1>Дневник</h1>
+            <p class="subtitle">Замечать, как проживается жизнь — день за днём.</p>
+          </div>
+          <div class="mode-switch" role="group" aria-label="Период дневника">
+            <button type="button" data-mode="day" aria-pressed="true">День</button>
+            <button type="button" data-mode="week" aria-pressed="false">Неделя</button>
+            <button type="button" data-mode="month" aria-pressed="false">Месяц</button>
+          </div>
+        </header>
+
+        <section class="view active" data-view="day">
+          <div class="period">
+            <button aria-label="Предыдущий день">←</button><strong>Вторник, 29 сентября</strong
+            ><button aria-label="Следующий день">→</button><span>Сегодня</span>
+          </div>
+          <div class="layout">
+            <div class="stack">
+              <section class="panel primary">
+                <div class="panel-head">
+                  <div>
+                    <h2>Как прошёл день?</h2>
+                    <p>Четыре независимые оценки — без правильных ответов.</p>
+                  </div>
+                  <span class="progress-note">4 из 4</span>
+                </div>
+                <div class="ratings">
+                  <div class="rating-row">
+                    <div class="rating-copy">
+                      <strong>Продуктивность</strong><span>Насколько продвинулся в важном</span>
+                    </div>
+                    <div class="scale" aria-label="Продуктивность">
+                      <button>1</button><button>2</button><button>3</button
+                      ><button class="selected">4</button><button>5</button>
+                    </div>
+                  </div>
+                  <div class="rating-row">
+                    <div class="rating-copy">
+                      <strong>Энергия</strong><span>Сколько было сил в течение дня</span>
+                    </div>
+                    <div class="scale" aria-label="Энергия">
+                      <button>1</button><button>2</button><button class="selected">3</button
+                      ><button>4</button><button>5</button>
+                    </div>
+                  </div>
+                  <div class="rating-row">
+                    <div class="rating-copy">
+                      <strong>Настроение</strong><span>Как чувствовал себя эмоционально</span>
+                    </div>
+                    <div class="scale" aria-label="Настроение">
+                      <button>1</button><button>2</button><button>3</button
+                      ><button class="selected">4</button><button>5</button>
+                    </div>
+                  </div>
+                  <div class="rating-row">
+                    <div class="rating-copy">
+                      <strong>Общая оценка дня</strong><span>Насколько доволен прожитым днём</span>
+                    </div>
+                    <div class="scale" aria-label="Общая оценка">
+                      <button>1</button><button>2</button><button>3</button
+                      ><button class="selected">4</button><button>5</button>
+                    </div>
+                  </div>
+                </div>
+              </section>
+              <section class="panel">
+                <div class="panel-head">
+                  <div>
+                    <h2>О чём хочется помнить?</h2>
+                    <p>Можно ответить на всё или оставить только одну важную мысль.</p>
+                  </div>
+                </div>
+                <div class="questions">
+                  <label
+                    >Что я сделал сегодня, чтобы мир стал лучше?<textarea
+                      placeholder="Даже небольшой поступок имеет значение…"
+                    >
+Помог коллеге спокойно разобраться с задачей и позвонил родителям.</textarea>
+                  </label>
+                  <label
+                    >Что сегодня давало мне силы, а что забирало?<textarea
+                      placeholder="Люди, занятия, мысли, события…"
+                    ></textarea>
+                  </label>
+                  <label
+                    >Что я хочу повторить или сделать иначе завтра?<textarea
+                      placeholder="Один небольшой вывод на завтра…"
+                    ></textarea>
+                  </label>
+                  <label
+                    >Что ещё хочется записать? <small>Необязательно</small
+                    ><textarea placeholder="Свободная заметка…"></textarea>
+                  </label>
+                </div>
+                <div class="form-actions">
+                  <span class="autosave">Черновик сохраняется на этом устройстве</span
+                  ><button class="primary-button">Сохранить день</button>
+                </div>
+              </section>
+            </div>
+            <aside class="panel side-panel">
+              <span class="eyebrow">Последние дни</span>
+              <div class="history">
+                <button class="current">
+                  <span class="day-num">29</span
+                  ><span class="history-copy"
+                    ><strong>Сегодня</strong><span>Запись не завершена</span></span
+                  ><span class="score">4,0</span>
+                </button>
+                <button>
+                  <span class="day-num">28</span
+                  ><span class="history-copy"
+                    ><strong>Понедельник</strong><span>Спокойный старт недели</span></span
+                  ><span class="score">3,8</span>
+                </button>
+                <button>
+                  <span class="day-num">27</span
+                  ><span class="history-copy"
+                    ><strong>Воскресенье</strong><span>Отдых и близкие</span></span
+                  ><span class="score">4,5</span>
+                </button>
+                <button>
+                  <span class="day-num">26</span
+                  ><span class="history-copy"
+                    ><strong>Суббота</strong><span>Прогулка за городом</span></span
+                  ><span class="score">4,3</span>
+                </button>
+              </div>
+              <p class="quiet-note">
+                Оценки помогают увидеть закономерности. Они не превращаются в рейтинг хороших и
+                плохих дней.
+              </p>
+            </aside>
+          </div>
+        </section>
+
+        <section class="view" data-view="week">
+          <div class="period">
+            <button aria-label="Предыдущая неделя">←</button><strong>21–27 сентября</strong
+            ><button aria-label="Следующая неделя">→</button><span>Завершённая неделя</span>
+          </div>
+          <div class="layout">
+            <div class="stack">
+              <section class="panel primary">
+                <div class="panel-head">
+                  <div>
+                    <h2>Неделя в ощущениях</h2>
+                    <p>Сводка по пяти заполненным дням.</p>
+                  </div>
+                  <span class="progress-note">5 из 7 дней</span>
+                </div>
+                <div class="summary-grid">
+                  <div class="summary-item">
+                    <span>Продуктивность</span><strong>3,8</strong>
+                    <div class="micro-bars">
+                      <i style="height: 48%"></i><i style="height: 70%"></i
+                      ><i style="height: 82%"></i><i style="height: 62%"></i
+                      ><i style="height: 78%"></i>
+                    </div>
+                  </div>
+                  <div class="summary-item">
+                    <span>Энергия</span><strong>3,2</strong>
+                    <div class="micro-bars">
+                      <i style="height: 60%"></i><i style="height: 48%"></i
+                      ><i style="height: 72%"></i><i style="height: 44%"></i
+                      ><i style="height: 65%"></i>
+                    </div>
+                  </div>
+                  <div class="summary-item">
+                    <span>Настроение</span><strong>4,0</strong>
+                    <div class="micro-bars">
+                      <i style="height: 70%"></i><i style="height: 76%"></i
+                      ><i style="height: 67%"></i><i style="height: 82%"></i
+                      ><i style="height: 77%"></i>
+                    </div>
+                  </div>
+                  <div class="summary-item">
+                    <span>Общая оценка</span><strong>4,1</strong>
+                    <div class="micro-bars">
+                      <i style="height: 73%"></i><i style="height: 78%"></i
+                      ><i style="height: 70%"></i><i style="height: 86%"></i
+                      ><i style="height: 82%"></i>
+                    </div>
+                  </div>
+                </div>
+                <div class="summary-context">
+                  <span>↗ Настроение выше прошлой недели</span><span>·</span
+                  ><span>Энергия была ниже в середине недели</span>
+                </div>
+              </section>
+              <section class="panel">
+                <div class="panel-head">
+                  <div>
+                    <h2>Итоги недели</h2>
+                    <p>LifeOS подсказывает факты, а смысл формулируешь ты.</p>
+                  </div>
+                </div>
+                <div class="questions">
+                  <label
+                    >Чему я научился на этой неделе?<textarea>
+Делать короткую паузу перед сложным разговором — этого часто достаточно, чтобы услышать другого человека.</textarea>
+                  </label>
+                  <label
+                    >Какое моё самое большое достижение за неделю?<textarea
+                      placeholder="Что особенно важно именно для тебя…"
+                    ></textarea>
+                  </label>
+                  <label
+                    >Какие моменты запомнились больше всего и почему?<textarea
+                      placeholder="Люди, события, ощущения…"
+                    ></textarea>
+                  </label>
+                  <label
+                    >Что давало силы, а что забирало?<textarea
+                      placeholder="Повторяющиеся источники энергии и напряжения…"
+                    ></textarea>
+                  </label>
+                  <label
+                    >Что я хочу перенести в следующую неделю?<textarea
+                      placeholder="Одно намерение или небольшое изменение…"
+                    ></textarea>
+                  </label>
+                </div>
+                <div class="form-actions">
+                  <span class="autosave">Ответы можно дополнить позже</span
+                  ><button class="primary-button">Сохранить итоги недели</button>
+                </div>
+              </section>
+            </div>
+            <aside class="stack side-panel">
+              <section class="panel">
+                <span class="eyebrow">Подсказки из целей</span>
+                <div class="suggestions">
+                  <div class="suggestion">
+                    <strong>Завершил 6 важных действий</strong
+                    ><span>В том числе первый черновик проекта</span>
+                  </div>
+                  <div class="suggestion">
+                    <strong>Продвинул 2 активные цели</strong
+                    ><span>Это факты из обзора целей, их можно использовать в ответе</span>
+                  </div>
+                </div>
+              </section>
+              <section class="panel">
+                <span class="eyebrow">Запомнилось в дневнике</span>
+                <div class="memory-list">
+                  <div class="memory">
+                    <time>24 сентября</time>
+                    <p>«Вечерняя прогулка неожиданно вернула ясность»</p>
+                  </div>
+                  <div class="memory">
+                    <time>26 сентября</time>
+                    <p>«Первый спокойный разговор о том, что давно откладывал»</p>
+                  </div>
+                </div>
+              </section>
+            </aside>
+          </div>
+        </section>
+
+        <section class="view" data-view="month">
+          <div class="period">
+            <button aria-label="Предыдущий месяц">←</button><strong>Сентябрь 2026</strong
+            ><button aria-label="Следующий месяц">→</button><span>Текущий месяц</span>
+          </div>
+          <div class="layout">
+            <div class="stack">
+              <section class="panel primary">
+                <div class="panel-head">
+                  <div>
+                    <h2>Месяц в динамике</h2>
+                    <p>23 дневные записи и 3 завершённых недельных итога.</p>
+                  </div>
+                  <span class="progress-note">Данных достаточно</span>
+                </div>
+                <div class="month-chart">
+                  <div></div>
+                  <div class="week">1 нед.</div>
+                  <div class="week">2 нед.</div>
+                  <div class="week">3 нед.</div>
+                  <div class="week">4 нед.</div>
+                  <div class="metric-name">Продуктивность</div>
+                  <div class="meter"><span style="width: 64%"></span></div>
+                  <div class="meter"><span style="width: 76%"></span></div>
+                  <div class="meter"><span style="width: 70%"></span></div>
+                  <div class="meter"><span style="width: 82%"></span></div>
+                  <div class="metric-name">Энергия</div>
+                  <div class="meter"><span style="width: 72%"></span></div>
+                  <div class="meter"><span style="width: 58%"></span></div>
+                  <div class="meter"><span style="width: 62%"></span></div>
+                  <div class="meter"><span style="width: 68%"></span></div>
+                  <div class="metric-name">Настроение</div>
+                  <div class="meter"><span style="width: 66%"></span></div>
+                  <div class="meter"><span style="width: 73%"></span></div>
+                  <div class="meter"><span style="width: 75%"></span></div>
+                  <div class="meter"><span style="width: 82%"></span></div>
+                  <div class="metric-name">Оценка дня</div>
+                  <div class="meter"><span style="width: 70%"></span></div>
+                  <div class="meter"><span style="width: 72%"></span></div>
+                  <div class="meter"><span style="width: 78%"></span></div>
+                  <div class="meter"><span style="width: 84%"></span></div>
+                </div>
+                <div class="insight">
+                  <strong>Наблюдение:</strong> самые высокие оценки дня чаще встречались после
+                  прогулок и спокойных вечеров. Это подсказка из твоих записей, а не автоматический
+                  вывод о причине.
+                </div>
+              </section>
+              <section class="panel">
+                <div class="panel-head">
+                  <div>
+                    <h2>Итоги месяца</h2>
+                    <p>Сводка уже собрана. Осталось назвать главное своими словами.</p>
+                  </div>
+                </div>
+                <div class="questions">
+                  <label
+                    >Какое достижение этого месяца для меня самое важное?<textarea
+                      placeholder="Не обязательно самое большое внешне…"
+                    ></textarea>
+                  </label>
+                  <label
+                    >Чему я научился и что понял о себе?<textarea
+                      placeholder="Навыки, решения, новые наблюдения…"
+                    ></textarea>
+                  </label>
+                  <label
+                    >Какие моменты хочется сохранить в памяти и почему?<textarea
+                      placeholder="Люди, события, места, чувства…"
+                    ></textarea>
+                  </label>
+                  <label
+                    >Что в этом месяце больше всего влияло на энергию и настроение?<textarea
+                      placeholder="Что повторялось в хорошие и трудные периоды…"
+                    ></textarea>
+                  </label>
+                  <label
+                    >С каким намерением я вхожу в следующий месяц?<textarea
+                      placeholder="Один ясный ориентир…"
+                    ></textarea>
+                  </label>
+                </div>
+                <div class="form-actions">
+                  <span class="autosave">Можно вернуться и отредактировать итог</span
+                  ><button class="primary-button">Сохранить итоги месяца</button>
+                </div>
+              </section>
+            </div>
+            <aside class="stack side-panel">
+              <section class="panel">
+                <span class="eyebrow">Из недельных итогов</span>
+                <div class="memory-list">
+                  <div class="memory">
+                    <time>Неделя 1</time>
+                    <p>Научился заранее оставлять время без задач</p>
+                  </div>
+                  <div class="memory">
+                    <time>Неделя 2</time>
+                    <p>Главное достижение — закончил первый этап проекта</p>
+                  </div>
+                  <div class="memory">
+                    <time>Неделя 3</time>
+                    <p>Самый яркий момент — поездка с близкими</p>
+                  </div>
+                </div>
+              </section>
+              <section class="panel">
+                <span class="eyebrow">Факты месяца</span>
+                <div class="suggestions">
+                  <div class="suggestion">
+                    <strong>21 важное действие завершено</strong><span>По данным планировщика</span>
+                  </div>
+                  <div class="suggestion">
+                    <strong>4 цели получили прогресс</strong
+                    ><span>Можно использовать как опору для рефлексии</span>
+                  </div>
+                </div>
+              </section>
+            </aside>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="bottom-nav" aria-label="Мобильная навигация">
+      <button><span>▣</span>Сегодня</button><button><span>◇</span>Цели</button
+      ><button><span>ϟ</span>Действия</button><button class="active"><span>☷</span>Дневник</button
+      ><button><span>•••</span>Ещё</button>
+    </div>
+
+    <script>
+      const modeButtons = [...document.querySelectorAll('[data-mode]')];
+      const views = [...document.querySelectorAll('[data-view]')];
+      modeButtons.forEach((button) =>
+        button.addEventListener('click', () => {
+          modeButtons.forEach((item) => item.setAttribute('aria-pressed', String(item === button)));
+          views.forEach((view) =>
+            view.classList.toggle('active', view.dataset.view === button.dataset.mode),
+          );
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }),
+      );
+      document.querySelectorAll('.scale').forEach((scale) => {
+        scale.querySelectorAll('button').forEach((button) =>
+          button.addEventListener('click', () => {
+            scale
+              .querySelectorAll('button')
+              .forEach((item) => item.classList.toggle('selected', item === button));
+          }),
+        );
+      });
+      document.querySelectorAll('.primary-button').forEach((button) =>
+        button.addEventListener('click', () => {
+          const previous = button.textContent;
+          button.textContent = 'Сохранено ✓';
+          setTimeout(() => {
+            button.textContent = previous;
+          }, 1400);
+        }),
+      );
+    </script>
+  </body>
+</html>
