@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { SnapshotService } from './SnapshotService';
 import { SyncApplicationService, type SyncApplicationDependencies } from './SyncApplicationService';
 import type { AccountAuth } from './account/AccountAuth';
+import { SyncTransferGate } from './account/SyncTransferGate';
 import type {
   CachedSyncDevice,
   SyncDeviceCacheRepository,
@@ -22,6 +23,104 @@ const ACCOUNT_SESSION_ID = '50000000-0000-4000-8000-000000000001';
 const TIMESTAMP = '2026-09-04T00:00:00.000Z';
 
 describe('SyncApplicationService', () => {
+  it('does not enroll an account recovery device when the email is unverified', async () => {
+    const initial: SyncInstallation = {
+      ...configuredInstallation(),
+      accountSetupState: 'device_recovery_required',
+      accountUserId: ACCOUNT_USER_ID,
+      accountSessionId: ACCOUNT_SESSION_ID,
+      accountEmail: 'person@example.com',
+    };
+    const fixture = createFixture(initial);
+    vi.mocked(fixture.auth.current).mockResolvedValue({
+      ...accountSession(),
+      emailVerified: false,
+    });
+    const service = new SyncApplicationService(fixture.dependencies);
+    await expect(service.recover('LIFEOS-RECOVERY-V1:synthetic')).rejects.toThrow(
+      'Account Sync session is unavailable.',
+    );
+    expect(fixture.transport.beginRecovery).not.toHaveBeenCalled();
+    expect(fixture.snapshot.createPreSyncSnapshot).not.toHaveBeenCalled();
+    expect(fixture.installation.value).toEqual(initial);
+  });
+  it('returns cached overview when expired authorization cannot open the transfer gate', async () => {
+    const fixture = createFixture(configuredInstallation());
+    const service = new SyncApplicationService({
+      ...fixture.dependencies,
+      transferGate: new SyncTransferGate(async () => {
+        throw new Error('expired session');
+      }),
+    });
+    await expect(service.loadOverview()).resolves.toMatchObject({ connection: 'local' });
+    expect(fixture.fetchMyRotationEnvelope).not.toHaveBeenCalled();
+  });
+  it('drains overview network work before credentials can change', async () => {
+    const fixture = createFixture(configuredInstallation());
+    let finish: (() => void) | undefined;
+    fixture.fetchMyRotationEnvelope.mockImplementation(async () => {
+      await new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      return null;
+    });
+    const gate = new SyncTransferGate(async () => true);
+    const service = new SyncApplicationService({ ...fixture.dependencies, transferGate: gate });
+    const overview = service.loadOverview();
+    await vi.waitFor(() => expect(finish).toBeDefined());
+    let drained = false;
+    const paused = gate.pauseAndDrain().then(() => {
+      drained = true;
+    });
+    await Promise.resolve();
+    expect(drained).toBe(false);
+    finish?.();
+    await overview;
+    await paused;
+    expect(drained).toBe(true);
+    fixture.fetchMyRotationEnvelope.mockClear();
+    await expect(service.loadOverview()).resolves.toMatchObject({ connection: 'local' });
+    expect(fixture.fetchMyRotationEnvelope).not.toHaveBeenCalled();
+  });
+  it('preserves the configured recording context and candidate through interrupted account recovery', async () => {
+    const initial: SyncInstallation = {
+      ...configuredInstallation(),
+      accountSetupState: 'device_recovery_required',
+      accountUserId: ACCOUNT_USER_ID,
+      accountSessionId: ACCOUNT_SESSION_ID,
+      accountEmail: 'person@example.com',
+    };
+    const fixture = createFixture(initial);
+    vi.mocked(fixture.auth.current).mockResolvedValue(accountSession());
+    vi.mocked(fixture.transport.completeRecovery).mockImplementationOnce(async () => {
+      expect(fixture.installation.value).toMatchObject({
+        deviceId: DEVICE_ID,
+        spaceId: SPACE_ID,
+        membershipStatus: 'active',
+        setupState: 'configured',
+        accountRecoveryDeviceId: SECOND_DEVICE_ID,
+      });
+      throw new Error('interrupted');
+    });
+    const service = new SyncApplicationService(fixture.dependencies);
+    await expect(service.recover('LIFEOS-RECOVERY-V1:synthetic')).rejects.toThrow('interrupted');
+    expect(fixture.crypto.deleteDeviceSecrets).not.toHaveBeenCalled();
+    await service.recover('LIFEOS-RECOVERY-V1:synthetic');
+    expect(fixture.transport.beginRecovery).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ deviceId: SECOND_DEVICE_ID }),
+    );
+    expect(fixture.transport.beginRecovery).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ deviceId: SECOND_DEVICE_ID }),
+    );
+    expect(fixture.snapshot.createPreSyncSnapshot).toHaveBeenCalledOnce();
+    expect(fixture.installation.value).toMatchObject({
+      deviceId: SECOND_DEVICE_ID,
+      accountRecoveryDeviceId: null,
+      accountSetupState: 'recovery_confirmation_pending',
+    });
+  });
   it('creates one stable local device identity without network and reuses it', async () => {
     const fixture = createFixture();
     const service = new SyncApplicationService(fixture.dependencies);
@@ -348,6 +447,7 @@ function createFixture(initial: SyncInstallation | null = null) {
     setPassword: vi.fn(),
     signIn: vi.fn(),
     requestPasswordReset: vi.fn(),
+    completePasswordReset: vi.fn(),
     updatePassword: vi.fn(),
     signOutCurrent: vi.fn(),
     close: vi.fn(async () => undefined),

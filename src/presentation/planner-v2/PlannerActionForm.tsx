@@ -12,6 +12,7 @@ export interface PlannerOption {
   readonly id: string;
   readonly title: string;
   readonly directionId?: string | null;
+  readonly sphereId?: string | null;
 }
 export function PlannerActionForm({
   goals,

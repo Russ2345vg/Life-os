@@ -1,21 +1,39 @@
-/** Bound Storage requests without changing structured sync or auth transport. */
-export function withStorageTimeout(fetcher: typeof globalThis.fetch): typeof globalThis.fetch {
+/** Keep a deadline through headers and body consumption; never return a late auth response. */
+export function withSupabaseRequestTimeout(
+  fetcher: typeof globalThis.fetch,
+): typeof globalThis.fetch {
   return async (input, init) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-    if (!new URL(url).pathname.startsWith('/storage/v1/')) return fetcher(input, init);
+    const path = new URL(url).pathname;
+    const policy = path.startsWith('/auth/v1/')
+      ? { timeout: 20_000, maxBytes: 2 * 1024 * 1024 }
+      : path.startsWith('/rest/v1/')
+        ? { timeout: 30_000, maxBytes: 16 * 1024 * 1024 }
+        : path.startsWith('/storage/v1/')
+          ? { timeout: 60_000, maxBytes: 96 * 1024 * 1024 }
+          : null;
+    if (policy === null) return fetcher(input, init);
     const controller = new AbortController();
     const original = init?.signal ?? (input instanceof Request ? input.signal : undefined);
     const abort = () => controller.abort(original?.reason);
     if (original?.aborted) abort();
     original?.addEventListener('abort', abort, { once: true });
     const timer = setTimeout(
-      () => controller.abort(new Error('Storage request timed out.')),
-      60_000,
+      () => controller.abort(new Error('LifeOS request timed out.')),
+      policy.timeout,
     );
     try {
-      const response = await fetcher(input, { ...init, signal: controller.signal });
+      controller.signal.throwIfAborted();
+      const fetching = fetcher(input, { ...init, signal: controller.signal }).then((response) => {
+        if (controller.signal.aborted) {
+          void response.body?.cancel().catch(() => undefined);
+          controller.signal.throwIfAborted();
+        }
+        return response;
+      });
+      const response = await untilAbort(fetching, controller.signal);
       if (!response.body) return response;
-      // Storage uses finite JSON/blob responses. Keep the deadline through body consumption.
+      // Keep the same deadline through finite JSON/blob response consumption.
       const reader = response.body.getReader();
       const cancel = () => {
         void reader.cancel().catch(() => undefined);
@@ -25,12 +43,11 @@ export function withStorageTimeout(fetcher: typeof globalThis.fetch): typeof glo
       let size = 0;
       try {
         for (;;) {
-          if (controller.signal.aborted) throw new Error('Storage request aborted.');
-          const next = await reader.read();
-          if (controller.signal.aborted) throw new Error('Storage request aborted.');
+          const next = await untilAbort(reader.read(), controller.signal);
+          controller.signal.throwIfAborted();
           if (next.done) break;
           size += next.value.byteLength;
-          if (size > 96 * 1024 * 1024) throw new Error('Storage response too large.');
+          if (size > policy.maxBytes) throw new Error('LifeOS response too large.');
           chunks.push(new Uint8Array(next.value));
         }
         return new Response(new Blob(chunks), {
@@ -42,9 +59,28 @@ export function withStorageTimeout(fetcher: typeof globalThis.fetch): typeof glo
         controller.signal.removeEventListener('abort', cancel);
         await reader.cancel().catch(() => undefined);
       }
+    } catch (error) {
+      if (controller.signal.aborted) throw controller.signal.reason;
+      throw error;
     } finally {
       clearTimeout(timer);
       original?.removeEventListener('abort', abort);
     }
   };
+}
+
+export const withStorageTimeout = withSupabaseRequestTimeout;
+
+async function untilAbort<T>(pending: Promise<T>, signal: AbortSignal): Promise<T> {
+  signal.throwIfAborted();
+  let abort: () => void = () => undefined;
+  const cancelled = new Promise<never>((_resolve, reject) => {
+    abort = () => reject(signal.reason);
+    signal.addEventListener('abort', abort, { once: true });
+  });
+  try {
+    return await Promise.race([pending, cancelled]);
+  } finally {
+    signal.removeEventListener('abort', abort);
+  }
 }

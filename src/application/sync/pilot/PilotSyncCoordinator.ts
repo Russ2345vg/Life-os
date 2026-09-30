@@ -1,3 +1,5 @@
+import type { SyncTransferGate } from '../account/SyncTransferGate';
+
 export type PilotSyncState = 'idle' | 'syncing' | 'offline' | 'attention' | 'error';
 
 export interface PilotSyncStatus {
@@ -15,6 +17,7 @@ export interface PilotSyncRunResult {
 }
 
 export interface PilotSyncCoordinatorDependencies {
+  readonly transferGate?: SyncTransferGate;
   readonly isOnline?: () => boolean;
   readonly afterStructured?: () => void;
   readonly bootstrap: { run(): Promise<unknown> };
@@ -112,6 +115,24 @@ export class PilotSyncCoordinator {
   }
 
   private async execute(): Promise<PilotSyncRunResult> {
+    if (this.dependencies.transferGate === undefined) return this.executeAllowed();
+    try {
+      const result = await this.dependencies.transferGate.run(() => this.executeAllowed());
+      if (result !== null) return result;
+    } catch {
+      /* Authorization unavailable: preserve queue and report no completed exchange. */
+    }
+    const counts = await this.dependencies.metrics.counts();
+    this.update({
+      ...this.#status,
+      state: 'attention',
+      pendingCount: counts.pending,
+      conflictCount: counts.conflicts,
+    });
+    return { ...counts, lastSequence: null };
+  }
+
+  private async executeAllowed(): Promise<PilotSyncRunResult> {
     this.update({ ...this.#status, state: 'syncing' });
     try {
       await this.dependencies.bootstrap.run();

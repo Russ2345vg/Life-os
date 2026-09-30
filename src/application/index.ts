@@ -46,6 +46,7 @@ export type { JournalUnitOfWork } from './ports/JournalUnitOfWork';
 export type { LifeActionRepository } from './ports/LifeActionRepository';
 export type { LifeActionsByDecisionIdsReader } from './ports/LifeActionsByDecisionIdsReader';
 export type { PlannerRepository } from './ports/PlannerRepository';
+export type { MonthlyDirectionFocusRepository } from './ports/MonthlyDirectionFocusRepository';
 export type { PlanningRepository, PlanningState } from './ports/PlanningRepository';
 export type { ProjectRepository } from './ports/ProjectRepository';
 export type {
@@ -58,6 +59,11 @@ export { GetDirections } from './queries/GetDirections';
 export { GetGoals, type GetGoalsInput } from './queries/GetGoals';
 export { GetPlannerToday, type PlannerTodayOverview } from './queries/GetPlannerToday';
 export { GetSpheres, type SpheresSnapshot } from './queries/GetSpheres';
+export {
+  MonthlyDirectionFocusService,
+  type MonthlyDirectionFocusState,
+  type MonthlyDirectionFocusSuggestion,
+} from './planner/MonthlyDirectionFocusService';
 export { SleepScheduleService } from './sleep/SleepScheduleService';
 export type { SleepScheduleRepository } from './sleep/SleepScheduleRepository';
 export {
@@ -74,3 +80,12 @@ export {
   type AccountSync,
   type AccountSyncDependencies,
 } from './sync/account/AccountSyncService';
+export * from './memory';
+export type {
+  MemoryRepository,
+  MemoryQuery,
+  MemoryPage,
+  MemoryCursor,
+  MemorySaveOptions,
+} from './ports/MemoryRepository';
+export type { MemoryPhotoReader } from './ports/MemoryPhotoReader';

@@ -34,6 +34,9 @@ export function directionDependency(
     case 'tomorrow_plan':
       historical = typeof record.targetDateKey === 'string' && record.targetDateKey < today;
       break;
+    case 'monthly_direction_focus':
+      historical = typeof record.month === 'string' && record.month < today.slice(0, 7);
+      break;
   }
   return { entityType, objectId, label, relation: historical ? 'historical' : 'live' };
 }

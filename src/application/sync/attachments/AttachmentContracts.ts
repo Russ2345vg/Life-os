@@ -51,7 +51,7 @@ export interface DurableAttachment extends AttachmentReference {
   readonly cloudVerifiedAt?: string | null;
   readonly spaceId: string;
   readonly parentObjectId: string;
-  readonly entityType: 'goal' | 'walk';
+  readonly entityType: 'goal' | 'walk' | 'memory_event';
   readonly localImage: LocalSyncImage | null;
   readonly localUri: string;
   readonly state: AttachmentState;

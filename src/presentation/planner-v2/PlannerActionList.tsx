@@ -20,6 +20,7 @@ import {
 import { selectRecurringActionRepresentatives } from '../../application/planner/actionSelection';
 import { PlannerActionTimeSheet, type SetActionTime } from './PlannerActionTimeSheet';
 import { clockTime, durationLabel } from './timePresentation';
+import { PlannerDisclosureCard } from './PlannerDisclosureCard';
 
 export interface PlannerActionOperations {
   readonly busy: boolean;
@@ -158,7 +159,7 @@ export function PlannerActionList({
     : [];
   if (selectedId)
     return (
-      <section>
+      <section className="planner-action-detail-page">
         <a className="planner-text-link" href="#/v2/actions">
           ← Все действия
         </a>
@@ -579,8 +580,12 @@ function PlannerActionEdit({
   }));
   const [error, setError] = useState<string | null>(null);
   return (
-    <details className="planner-action-edit">
-      <summary>Редактировать действие</summary>
+    <PlannerDisclosureCard
+      className="planner-action-edit"
+      icon="settings"
+      title="Редактировать действие"
+      description="Название, потребность и описание"
+    >
       <form
         onSubmit={(event) => {
           event.preventDefault();
@@ -659,7 +664,7 @@ function PlannerActionEdit({
           </p>
         )}
       </form>
-    </details>
+    </PlannerDisclosureCard>
   );
 }
 export function PlannerActionRow({

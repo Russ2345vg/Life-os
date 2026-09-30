@@ -11,6 +11,7 @@ const AUTH_SESSION_ID: &str = "auth:session:v1";
 #[derive(Clone)]
 pub enum SecretId {
     AuthSession,
+    AuthUser,
     AuthPkce { slot: String },
     DevicePrivateKey { device_id: String },
     SpaceKeyRing { space_id: String },
@@ -22,6 +23,9 @@ impl SecretId {
     pub fn auth_session(slot: &str) -> Result<Self, String> {
         if slot == "supabase-auth-session" {
             return Ok(Self::AuthSession);
+        }
+        if slot == "supabase-auth-user" {
+            return Ok(Self::AuthUser);
         }
         if slot == "supabase-auth-pkce-flow-index"
             || slot == "supabase-auth-pkce-legacy"
@@ -65,6 +69,7 @@ impl SecretId {
     fn label(&self) -> String {
         match self {
             Self::AuthSession => AUTH_SESSION_ID.to_owned(),
+            Self::AuthUser => "auth:user:v1".to_owned(),
             Self::AuthPkce { slot } => format!("auth:pkce:v1:{slot}"),
             Self::DevicePrivateKey { device_id } => format!("device:{device_id}:x25519:v1"),
             Self::SpaceKeyRing { space_id } => format!("space:{space_id}:keyring:v1"),

@@ -3,6 +3,58 @@ import { expect, test, type Page } from '@playwright/test';
 const PASSWORD = 'correct horse battery';
 const RECOVERY = 'LIFEOS-RECOVERY-V1:fixture-private-material';
 
+test('completes password reset, rejects mismatched passwords and returns to sign-in', async ({
+  page,
+}, info) => {
+  const issues = observeRuntimeIssues(page);
+  await page.goto('/tests/fixtures/account-sync.html');
+  await page.getByRole('button', { name: /Уже есть аккаунт/ }).click();
+  await page.getByRole('button', { name: 'Забыли пароль?' }).click();
+  await page.getByLabel('Электронная почта').fill('person@example.com');
+  await page.getByRole('button', { name: 'Отправить письмо' }).click();
+  await page.getByLabel('Код или ссылка из письма').fill('123456');
+  await page.getByLabel('Новый пароль', { exact: true }).fill(PASSWORD);
+  await page.getByLabel('Повторите новый пароль').fill('different password');
+  await page.getByRole('button', { name: 'Сохранить новый пароль' }).click();
+  await expect(page.getByRole('alert')).toHaveText('Пароли не совпадают.');
+  await page.getByLabel('Повторите новый пароль').fill(PASSWORD);
+  await assertResponsivePage(page, info.project.name);
+  await page.screenshot({
+    path: info.outputPath(`account-reset-${info.project.name}.png`),
+    fullPage: true,
+  });
+  await page.getByRole('button', { name: 'Сохранить новый пароль' }).click();
+  await expect(page.getByRole('button', { name: 'Сохранить новый пароль' })).toBeDisabled();
+  await expect(page.getByRole('heading', { name: 'Войти в LifeOS' })).toBeVisible();
+  await expect(page.locator('[aria-live="polite"]')).toContainText(
+    'Пароль изменён. Войдите с новым паролем.',
+  );
+  await expect(page.getByLabel('Пароль', { exact: true })).toHaveValue('');
+  expect(issues).toEqual([]);
+});
+
+test('shows reauthentication and device recovery without claiming completed sync', async ({
+  page,
+}, info) => {
+  const issues = observeRuntimeIssues(page);
+  await page.goto('/tests/fixtures/account-sync.html?state=sign-in-required');
+  await expect(page.getByText('Нужно войти', { exact: true })).toBeVisible();
+  await page.getByLabel('Пароль', { exact: true }).fill('old8');
+  await page.getByRole('button', { name: 'Войти', exact: true }).click();
+  await expect(page.getByText('Восстановите доступ', { exact: true })).toBeVisible();
+  await expect(page.getByText('Ожидают отправки: 2')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Синхронизировать сейчас' })).toHaveCount(0);
+  await assertResponsivePage(page, info.project.name);
+  await page.screenshot({
+    path: info.outputPath(`account-reconnect-${info.project.name}.png`),
+    fullPage: true,
+  });
+  await page.goto('/tests/fixtures/account-sync.html?state=unavailable');
+  await expect(page.getByText('Синхронизация доступна только в приложении LifeOS.')).toBeVisible();
+  await expect(page.getByLabel('Электронная почта')).toHaveCount(0);
+  expect(issues).toEqual([]);
+});
+
 function observeRuntimeIssues(page: Page): string[] {
   const issues: string[] = [];
   page.on('pageerror', (error) => issues.push(error.message));

@@ -101,6 +101,7 @@ test('dictation preserves selection, updates the controlled goal draft, stops an
   await mic.focus();
   await page.keyboard.press('Enter');
   await expect(mic).toHaveAttribute('aria-pressed', 'true');
+  await expect(title).toBeFocused();
   await speech(page, 'result', 0, 'Это проверка голосового ввода');
   await expect(title).toHaveValue('');
   await mic.click();

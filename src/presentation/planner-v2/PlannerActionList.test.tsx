@@ -101,4 +101,24 @@ describe('PlannerActionList', () => {
     expect(html).not.toContain('Готово');
     expect(html).not.toContain('planner-action-group--completed');
   });
+
+  it('renders the selected action editor as an accessible disclosure card', () => {
+    const html = renderToStaticMarkup(
+      createElement(PlannerActionList, {
+        actions: [action('detail', 'Разобрать заметки', '2026-09-13')],
+        goals: [goal],
+        today: '2026-09-13',
+        onNew: () => {},
+        selectedId: 'detail',
+        ...operations,
+        onEdit: async () => {},
+      }),
+    );
+
+    expect(html).toContain('class="planner-action-edit planner-disclosure-card"');
+    expect(html).toContain('class="planner-disclosure-card__summary"');
+    expect(html).toContain('name="planner-action-panels"');
+    expect(html).toContain('Название, потребность и описание');
+    expect(html).not.toContain('<summary>Редактировать действие</summary>');
+  });
 });

@@ -21,7 +21,7 @@ interface SnapshotPayloadView {
 }
 
 describe('IndexedDbSnapshotService', () => {
-  it.each([23, 24, 25, 26, 27, 28])(
+  it.each([23, 24, 25, 26, 27, 28, 29, 30])(
     'verifies a schema %s backup after adding weekday capacity',
     async (version) => {
       const { database, service } = await createService('schema23');
@@ -30,6 +30,8 @@ describe('IndexedDbSnapshotService', () => {
         stored = (await readSnapshotRecord(opened, created.snapshotId))!;
       const payload = stored.payload as SnapshotPayloadView;
       const added = new Set([
+        ...(version < 31 ? ['memoryEvents'] : []),
+        ...(version < 30 ? ['monthlyDirectionFocuses'] : []),
         ...(version < 29 ? ['diaryEntries'] : []),
         ...(version < 28 ? ['timeCapacity'] : []),
         ...(version < 27 ? ['taskScenarios'] : []),
@@ -241,27 +243,30 @@ describe('IndexedDbSnapshotService', () => {
     database.close();
   });
 
-  it('rejects a snapshot whose required store manifest is incomplete', async () => {
-    const { database, service } = await createService('incomplete');
-    const created = await service.createPreSyncSnapshot();
-    const opened = await database.open();
-    const stored = (await readSnapshotRecord(opened, created.snapshotId))!;
-    const payload = stored.payload as SnapshotPayloadView;
-    await writeSnapshotRecord(opened, {
-      ...stored,
-      payload: {
-        ...payload,
-        stores: payload.stores.filter(({ name }) => name !== LIFE_OS_STORE.diaryEntries),
-      },
-    });
+  it.each([LIFE_OS_STORE.diaryEntries, LIFE_OS_STORE.memoryEvents])(
+    'rejects a snapshot missing required store %s',
+    async (missingStore) => {
+      const { database, service } = await createService('incomplete');
+      const created = await service.createPreSyncSnapshot();
+      const opened = await database.open();
+      const stored = (await readSnapshotRecord(opened, created.snapshotId))!;
+      const payload = stored.payload as SnapshotPayloadView;
+      await writeSnapshotRecord(opened, {
+        ...stored,
+        payload: {
+          ...payload,
+          stores: payload.stores.filter(({ name }) => name !== missingStore),
+        },
+      });
 
-    await expect(service.verifySnapshot(created.snapshotId)).resolves.toMatchObject({
-      valid: false,
-      reason: 'incomplete',
-      snapshot: null,
-    });
-    database.close();
-  });
+      await expect(service.verifySnapshot(created.snapshotId)).resolves.toMatchObject({
+        valid: false,
+        reason: 'incomplete',
+        snapshot: null,
+      });
+      database.close();
+    },
+  );
 
   it('rejects malformed serialization and inconsistent integrity metadata', async () => {
     const { database, service } = await createService('metadata');

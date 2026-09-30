@@ -82,6 +82,7 @@ function signOutFixture(failure?: 'sync' | 'backup' | 'revoke' | 'auth') {
     setPassword: vi.fn(),
     signIn: vi.fn(),
     requestPasswordReset: vi.fn(),
+    completePasswordReset: vi.fn(),
     updatePassword: vi.fn(),
     signOutCurrent: vi.fn(async () => {
       order.push('auth:sign-out');

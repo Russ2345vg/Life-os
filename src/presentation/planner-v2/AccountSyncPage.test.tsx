@@ -10,6 +10,45 @@ const RECOVERY = 'LIFEOS-RECOVERY-V1:private-material';
 const PASSWORD = 'correct horse battery';
 
 describe('AccountSyncPage', () => {
+  it('shows sign-in and recovery separately from a connected account', () => {
+    const login = render({
+      ...localOverview(),
+      state: 'sign_in_required',
+      email: 'person@example.com',
+    });
+    expect(login).toContain('Нужно войти');
+    expect(login).toContain('Войти в LifeOS');
+    const recovery = render({
+      ...localOverview(),
+      state: 'device_recovery_required',
+      email: 'person@example.com',
+    });
+    expect(recovery).toContain('Восстановите доступ');
+    expect(recovery).toContain('Ключ восстановления');
+    expect(recovery).not.toContain('Синхронизировать сейчас');
+  });
+  it('shows why account access is unavailable without offering a broken form', () => {
+    const html = render({
+      ...localOverview(),
+      availability: { available: false, reason: 'Доступно только в установленном приложении.' },
+    });
+    expect(html).toContain('Доступно только в установленном приложении.');
+    expect(html).not.toContain('type="email"');
+  });
+  it('provides proof and repeated password fields for password recovery', () => {
+    const html = render(localOverview(), 'reset-confirm');
+    expect(html).toContain('Код или ссылка из письма');
+    expect(html).toContain('Повторите новый пароль');
+  });
+  it('does not apply the new-password minimum to an existing password at login', () => {
+    expect(render(localOverview(), 'sign-in')).not.toContain('minLength="12"');
+    expect(
+      render(
+        { ...localOverview(), state: 'email_verification_pending', emailVerified: true },
+        'set-password',
+      ),
+    ).toContain('minLength="12"');
+  });
   it.each(['error', 'attention', 'syncing', 'offline'] as const)(
     'never claims success for an online %s transfer',
     (syncState) => {
@@ -245,6 +284,7 @@ function service(): AccountSync {
     signIn: async () => overview,
     recoverDevice: async () => overview,
     requestPasswordReset: async () => undefined,
+    completePasswordReset: async () => undefined,
     updatePassword: async () => overview,
     syncNow: async () => overview,
     revokeDevice: async () => overview,

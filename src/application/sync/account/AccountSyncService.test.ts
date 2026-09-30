@@ -10,6 +10,7 @@ import type {
 import type { SyncTrustTransport } from '../ports/SyncTrustTransport';
 import type { AccountAuth, AccountSession } from './AccountAuth';
 import { AccountSyncService } from './AccountSyncService';
+import { SyncTransferGate } from './SyncTransferGate';
 
 const DEVICE_ID = '10000000-0000-4000-8000-000000000001';
 const SPACE_ID = '20000000-0000-4000-8000-000000000001';
@@ -22,6 +23,149 @@ const RECOVERY = 'LIFEOS-RECOVERY-V1:private-material';
 const TIMESTAMP = '2026-09-22T10:00:00.000Z';
 
 describe('AccountSyncService', () => {
+  it('blocks background transfers until account adoption has completed', async () => {
+    const gate = new SyncTransferGate(async () => true);
+    const fixture = createFixture(
+      registrationInstallation({ spaceId: SPACE_ID, currentKeyEpoch: 4 }),
+      gate,
+    );
+    let adopt: (() => void) | undefined;
+    fixture.transport.adoptCurrentSpace.mockImplementation(async () => {
+      await new Promise<void>((resolve) => {
+        adopt = resolve;
+      });
+      return { spaceId: SPACE_ID, currentKeyEpoch: 4 };
+    });
+    const operation = fixture.service.setPasswordAndAdopt(PASSWORD);
+    await vi.waitFor(() => expect(adopt).toBeDefined());
+    const push = vi.fn(async () => 1);
+    expect(await gate.run(push)).toBeNull();
+    expect(push).not.toHaveBeenCalled();
+    adopt?.();
+    await operation;
+    expect(await gate.run(push)).toBe(1);
+  });
+  it('waits for active transfers before sign-in and restores valid old session after a wrong password', async () => {
+    const gate = new SyncTransferGate(async () => true);
+    const fixture = createFixture(readyInstallation(), gate);
+    let finish: (() => void) | undefined;
+    const active = gate.run(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    await vi.waitFor(() => expect(finish).toBeDefined());
+    fixture.auth.signIn.mockRejectedValue(
+      new DomainError('account.invalid_credentials', 'Неверный пароль.'),
+    );
+    const operation = fixture.service.signIn(EMAIL, 'wrong');
+    const rejected = expect(operation).rejects.toMatchObject({
+      code: 'account.invalid_credentials',
+    });
+    await Promise.resolve();
+    expect(fixture.auth.signIn).not.toHaveBeenCalled();
+    finish?.();
+    await active;
+    await rejected;
+    expect(fixture.installations.value?.accountSetupState).toBe('ready');
+    expect(await gate.run(async () => 1)).toBe(1);
+  });
+  it('reopens an unsaved recovery key after a restart without requiring another device enrollment', async () => {
+    const fixture = createFixture({
+      ...readyInstallation(),
+      setupState: 'recovery_unconfirmed',
+      accountSetupState: 'recovery_confirmation_pending',
+    });
+    await expect(fixture.service.load()).resolves.toMatchObject({
+      state: 'recovery_confirmation_pending',
+      recoveryMaterial: RECOVERY,
+    });
+    expect(fixture.sync.syncPilotNow).not.toHaveBeenCalled();
+  });
+  it('preserves interrupted sign-out cleanup even after auth session was removed', async () => {
+    const fixture = createFixture({
+      ...readyInstallation(),
+      accountSetupState: 'sign_out_pending',
+      accountMigrationSnapshotId: SNAPSHOT_ID,
+    });
+    fixture.auth.current.mockResolvedValue(null);
+    await expect(fixture.service.load()).resolves.toMatchObject({ state: 'sign_out_pending' });
+    expect(fixture.installations.value?.accountMigrationSnapshotId).toBe(SNAPSHOT_ID);
+  });
+  it('resets passwords without changing installation metadata or starting sync', async () => {
+    const initial = readyInstallation();
+    const fixture = createFixture(initial);
+    await fixture.service.completePasswordReset(EMAIL, '123456', PASSWORD);
+    expect(fixture.auth.completePasswordReset).toHaveBeenCalledWith({
+      email: EMAIL,
+      codeOrLink: '123456',
+      newPassword: PASSWORD,
+      expectedUserId: USER_ID,
+    });
+    expect(fixture.installations.savedStates).toEqual([]);
+    expect(fixture.sync.syncPilotNow).not.toHaveBeenCalled();
+  });
+  it('requires device recovery after signing into a configured installation and never auto-converges it', async () => {
+    const initial = readyInstallation();
+    const fixture = createFixture(initial);
+    const newSession = { ...session(), sessionId: '40000000-0000-4000-8000-000000000002' };
+    fixture.auth.signIn.mockResolvedValue(newSession);
+    fixture.auth.current.mockResolvedValue(newSession);
+    await expect(fixture.service.signIn(EMAIL, PASSWORD)).resolves.toMatchObject({
+      state: 'device_recovery_required',
+    });
+    await expect(fixture.service.load()).resolves.toMatchObject({
+      state: 'device_recovery_required',
+    });
+    expect(fixture.sync.syncPilotNow).not.toHaveBeenCalled();
+    expect(fixture.installations.value).toMatchObject({
+      deviceId: initial.deviceId,
+      spaceId: initial.spaceId,
+      currentKeyEpoch: initial.currentKeyEpoch,
+    });
+  });
+
+  it('requires sign-in when the persisted account has no session and preserves the owner', async () => {
+    const fixture = createFixture(readyInstallation());
+    fixture.auth.current.mockResolvedValue(null);
+    await expect(fixture.service.load()).resolves.toMatchObject({
+      state: 'sign_in_required',
+      email: EMAIL,
+    });
+    expect(fixture.sync.syncPilotNow).not.toHaveBeenCalled();
+    expect(fixture.installations.value?.accountUserId).toBe(USER_ID);
+  });
+
+  it('requires sign-in when the persisted account email is no longer verified', async () => {
+    const fixture = createFixture(readyInstallation());
+    fixture.auth.current.mockResolvedValue(session({ verified: false }));
+    await expect(fixture.service.load()).resolves.toMatchObject({ state: 'sign_in_required' });
+    expect(fixture.sync.syncPilotNow).not.toHaveBeenCalled();
+    expect(fixture.installations.value?.accountUserId).toBe(USER_ID);
+  });
+
+  it.each([{ verified: false }, { anonymous: true }])(
+    'does not update a password using a non-permanent verified session: %j',
+    async (override) => {
+      const fixture = createFixture(readyInstallation());
+      fixture.auth.current.mockResolvedValue(session(override));
+      await expect(fixture.service.updatePassword(PASSWORD)).rejects.toMatchObject({
+        code: 'account.state_invalid',
+      });
+      expect(fixture.auth.updatePassword).not.toHaveBeenCalled();
+      expect(fixture.installations.savedStates).toEqual([]);
+    },
+  );
+
+  it('rejects a different account before replacing a configured session', async () => {
+    const fixture = createFixture(readyInstallation());
+    await expect(fixture.service.signIn('other@example.com', PASSWORD)).rejects.toMatchObject({
+      code: 'account.owner_mismatch',
+    });
+    expect(fixture.auth.signIn).not.toHaveBeenCalled();
+    expect(fixture.installations.value?.accountEmail).toBe(EMAIL);
+  });
   it('does not confirm an incomplete run using an old successful exchange', async () => {
     const fixture = createFixture(readyInstallation());
     fixture.sync.pilotStatus.mockReturnValue({
@@ -147,7 +291,7 @@ describe('AccountSyncService', () => {
     });
   });
 
-  it('snapshots before first-space setup, starts initial push and waits for recovery confirmation', async () => {
+  it('snapshots before first-space setup and starts exchange only after saving the recovery key', async () => {
     const fixture = createFixture(registrationInstallation());
     const setupInstallation = {
       ...registrationInstallation(),
@@ -176,7 +320,7 @@ describe('AccountSyncService', () => {
     expect(fixture.snapshots.createPreSyncSnapshot).toHaveBeenCalledOnce();
     expect(fixture.snapshots.verifySnapshot).toHaveBeenCalledWith(SNAPSHOT_ID);
     expect(fixture.sync.setupFirstSpace).toHaveBeenCalledOnce();
-    expect(fixture.sync.syncPilotNow).toHaveBeenCalledOnce();
+    expect(fixture.sync.syncPilotNow).not.toHaveBeenCalled();
     const pending = fixture.installations.savedStates.find(
       (state) => state.accountSetupState === 'account_migration_pending',
     );
@@ -187,6 +331,8 @@ describe('AccountSyncService', () => {
     });
     expect(JSON.stringify(fixture.installations.savedStates)).not.toContain(PASSWORD);
     expect(JSON.stringify(fixture.installations.savedStates)).not.toContain(RECOVERY);
+    await expect(fixture.service.confirmRecoverySaved()).resolves.toMatchObject({ state: 'ready' });
+    expect(fixture.sync.syncPilotNow).toHaveBeenCalledOnce();
   });
 
   it('adopts the exact existing anonymous space and key epoch without creating another space', async () => {
@@ -334,11 +480,11 @@ describe('AccountSyncService', () => {
   });
 });
 
-function createFixture(initial: SyncInstallation) {
+function createFixture(initial: SyncInstallation, transferGate?: SyncTransferGate) {
   const installations = new MemoryInstallationRepository(initial);
   const permanentSession = session();
   const auth = {
-    current: vi.fn(async () => permanentSession),
+    current: vi.fn<AccountAuth['current']>(async () => permanentSession),
     ensureAnonymous: vi.fn(async () => session({ anonymous: true, email: null, verified: false })),
     beginRegistration: vi.fn(async () =>
       session({ anonymous: true, email: EMAIL, verified: false }),
@@ -348,6 +494,7 @@ function createFixture(initial: SyncInstallation) {
     setPassword: vi.fn(async () => permanentSession),
     signIn: vi.fn(async () => permanentSession),
     requestPasswordReset: vi.fn(async () => undefined),
+    completePasswordReset: vi.fn(async () => undefined),
     updatePassword: vi.fn(async () => permanentSession),
     signOutCurrent: vi.fn(async () => undefined),
     close: vi.fn(async () => undefined),
@@ -418,6 +565,7 @@ function createFixture(initial: SyncInstallation) {
     revokeCurrentDevice: vi.fn(async () => undefined),
   };
   const service = new AccountSyncService({
+    ...(transferGate === undefined ? {} : { transferGate }),
     auth,
     installations,
     snapshots,

@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { DayDate, EntityId, Goal, LifeAction, LifeActionTitle } from '../../domain';
+import { DayDate, Direction, EntityId, Goal, LifeAction, LifeActionTitle } from '../../domain';
 import type { AccountSync } from '../../application';
 import { PlannerInbox } from './PlannerInbox';
 import { PlannerGoalList } from './PlannerGoalList';
@@ -25,6 +25,55 @@ const action = LifeAction.createDraft({
   eventId: EntityId.create('e'),
 });
 describe('current library rendering', () => {
+  it.each([
+    { ownNeed: 'Самостоятельность', expected: 'Самостоятельность', inherited: false },
+    { ownNeed: null, expected: 'Спокойствие', inherited: true },
+  ])(
+    'shows the resolved goal need on its list card ($expected)',
+    ({ ownNeed, expected, inherited }) => {
+      const direction = Direction.create({
+        id: EntityId.create('need-direction'),
+        name: 'Финансы',
+        need: 'Спокойствие',
+        now,
+      });
+      const item = Goal.create({
+        id: EntityId.create('visible-need-goal'),
+        title: 'Финансовый запас',
+        directionId: direction.id,
+        need: ownNeed,
+        status: 'active',
+        now,
+      });
+      const html = renderToStaticMarkup(
+        createElement(PlannerGoalList, {
+          today: '2026-09-28',
+          goals: [item],
+          directions: [direction],
+          spheres: [],
+          actions: [],
+          focusIds: [],
+        }),
+      );
+      expect(html).toContain(expected);
+      expect(html.includes('Из направления')).toBe(inherited);
+    },
+  );
+
+  it('makes an unspecified need visible on a goal card without inventing motivation', () => {
+    const html = renderToStaticMarkup(
+      createElement(PlannerGoalList, {
+        today: '2026-09-28',
+        goals: [goal],
+        directions: [],
+        spheres: [],
+        actions: [],
+        focusIds: [],
+      }),
+    );
+    expect(html).toContain('Потребность пока не указана.');
+  });
+
   it('exposes all linked actions from a goal even without a selected next step', () => {
     const unselectedGoal = Goal.create({
       id: EntityId.create('goal-with-actions'),

@@ -1,12 +1,28 @@
 import type { ResolvedEntityNeed } from '../../domain/planner/resolveEntityNeed';
 
-export function EntityNeedText({ need }: { readonly need: ResolvedEntityNeed | null }) {
-  if (!need) return <p className="planner-muted">Потребность пока не указана.</p>;
+export function EntityNeedText({
+  need,
+  prominent = false,
+}: {
+  readonly need: ResolvedEntityNeed | null;
+  readonly prominent?: boolean;
+}) {
+  const className = prominent
+    ? 'planner-entity-need planner-entity-need--prominent'
+    : 'planner-muted planner-entity-need';
+  if (!need)
+    return <p className={prominent ? className : 'planner-muted'}>Потребность пока не указана.</p>;
   return (
-    <p className="planner-muted planner-entity-need">
-      Потребность: {need.text}
+    <p className={className}>
+      <span className="planner-entity-need-content">
+        Потребность: {prominent ? <strong>{need.text}</strong> : need.text}
+      </span>
       {need.source !== 'own' && (
-        <span> · {need.source === 'goal' ? 'Из цели' : 'Из направления'}</span>
+        <span className="planner-entity-need-source">
+          {' '}
+          {!prominent && '· '}
+          {need.source === 'goal' ? 'Из цели' : 'Из направления'}
+        </span>
       )}
     </p>
   );

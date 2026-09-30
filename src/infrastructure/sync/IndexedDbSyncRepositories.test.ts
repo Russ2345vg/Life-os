@@ -131,6 +131,11 @@ describe('SYNC-02 IndexedDB repositories', () => {
     accountMetadata('email_verification_pending'),
     accountMetadata('account_migration_pending', SNAPSHOT_ID),
     accountMetadata('recovery_confirmation_pending'),
+    accountMetadata('sign_in_required'),
+    {
+      ...accountMetadata('device_recovery_required'),
+      accountRecoveryDeviceId: '10000000-0000-4000-8000-000000000002',
+    },
     accountMetadata('ready'),
     accountMetadata('sign_out_pending', SNAPSHOT_ID),
   ])('survives restart in account state $accountSetupState', async (account) => {

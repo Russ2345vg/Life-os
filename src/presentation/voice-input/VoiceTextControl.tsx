@@ -202,6 +202,17 @@ export function VoiceTextControl<T extends HTMLInputElement | HTMLTextAreaElemen
                   else {
                     setLimited(false);
                     capture();
+                    element.current?.focus({ preventScroll: true });
+                    if (element.current && selection.current.start !== null) {
+                      try {
+                        element.current.setSelectionRange(
+                          selection.current.start,
+                          selection.current.end,
+                        );
+                      } catch {
+                        /* Search fallback. */
+                      }
+                    }
                     voice.start();
                   }
                 }}

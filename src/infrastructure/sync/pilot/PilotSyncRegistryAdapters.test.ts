@@ -87,6 +87,25 @@ describe('PilotSyncRegistryAdapters', () => {
     );
   });
 
+  it('round-trips a monthly direction focus with an optional direction relationship', () => {
+    const fixture = structuredSyncFixtures().monthly_direction_focus;
+    const wire = normalizePilotRecord('monthly_direction_focus', fixture);
+
+    expect(wire).not.toHaveProperty('version');
+    expect(wire).toMatchObject({
+      id: 'monthly-direction-focus:2026-09',
+      month: '2026-09',
+      directionId: 'sync04-direction',
+    });
+    expect(pilotRelationshipReferences('monthly_direction_focus', wire)).toEqual([
+      { entityType: 'direction', objectId: 'sync04-direction', required: true },
+    ]);
+    expect(
+      pilotRelationshipReferences('monthly_direction_focus', { ...wire, directionId: null }),
+    ).toEqual([]);
+    expect(prepareRemotePilotRecord('monthly_direction_focus', wire)).toMatchObject({ version: 1 });
+  });
+
   it('preserves scheduled time when an old peer omits new fields and clears it on an explicit null date', () => {
     const existing = {
       ...structuredSyncFixtures().life_action,
@@ -359,7 +378,7 @@ describe('PilotSyncRegistryAdapters', () => {
   );
 
   it('uses the complete real dependency order and excludes Goal covers', () => {
-    expect(PILOT_DEPENDENCY_ORDER).toHaveLength(36);
+    expect(PILOT_DEPENDENCY_ORDER).toHaveLength(38);
     expect(PILOT_DEPENDENCY_ORDER.indexOf('sphere')).toBeLessThan(
       PILOT_DEPENDENCY_ORDER.indexOf('direction'),
     );
@@ -389,7 +408,7 @@ describe('PilotSyncRegistryAdapters', () => {
     expect(runtime.map(({ registration }) => registration.entityType)).toEqual(
       PILOT_DEPENDENCY_ORDER,
     );
-    expect(runtime).toHaveLength(36);
+    expect(runtime).toHaveLength(38);
   });
 
   it('preserves a local Goal cover while applying structured remote data without Outbox echo', async () => {

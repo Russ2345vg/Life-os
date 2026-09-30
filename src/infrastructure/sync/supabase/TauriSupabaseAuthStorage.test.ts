@@ -1,7 +1,50 @@
 import { describe, expect, it } from 'vitest';
 import { TauriSupabaseAuthStorage, type TauriInvoke } from './TauriSupabaseAuthStorage';
+import { createLifeOsSupabaseClient } from './createLifeOsSupabaseClient';
 
 describe('TauriSupabaseAuthStorage', () => {
+  it('turns native key-store failures into a safe actionable error', async () => {
+    const storage = new TauriSupabaseAuthStorage(async () => {
+      throw new Error('native secret-path private-token');
+    });
+    const error = await storage.getItem('sb-project-auth-token').catch((reason: unknown) => reason);
+    expect(error).toMatchObject({ code: 'account.session_storage_failed' });
+    expect(JSON.stringify(error)).not.toContain('private-token');
+  });
+  it('supports SDK user metadata in a slot separate from the persisted session', async () => {
+    const slots: unknown[] = [];
+    const invoke: TauriInvoke = async <T>(_command: string, args?: Record<string, unknown>) => {
+      slots.push(args?.slot);
+      return null as T;
+    };
+    const storage = new TauriSupabaseAuthStorage(invoke);
+    await storage.setItem('sb-project-auth-token-user', 'synthetic-user');
+    await storage.getItem('sb-project-auth-token-user');
+    await storage.removeItem('sb-project-auth-token-user');
+    expect(slots).toEqual(Array(3).fill('supabase-auth-user'));
+  });
+
+  it('completes the installed SDK local sign-out with native storage', async () => {
+    const invoke: TauriInvoke = async <T>() => null as T;
+    const client = createLifeOsSupabaseClient(
+      {
+        url: 'https://isolated.supabase.co',
+        publishableKey: 'sb_publishable_synthetic-test',
+        accountSyncEnabled: true,
+      },
+      {
+        authStorage: new TauriSupabaseAuthStorage(invoke),
+        fetch: async () => {
+          throw new Error('Unexpected network traffic.');
+        },
+      },
+    );
+    try {
+      await expect(client.auth.signOut({ scope: 'local' })).resolves.toEqual({ error: null });
+    } finally {
+      await client.auth.stopAutoRefresh();
+    }
+  });
   it('uses one native auth-only slot and never exposes a generic LifeOS secret slot', async () => {
     const calls: Array<readonly [string, Record<string, unknown> | undefined]> = [];
     const invoke: TauriInvoke = async <T>(command: string, args?: Record<string, unknown>) => {

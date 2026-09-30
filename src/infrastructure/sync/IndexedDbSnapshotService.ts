@@ -298,6 +298,8 @@ function hasCompleteStoreManifest(
     'recurrenceRules',
   ]);
   const expected = Object.values(LIFE_OS_STORE)
+    .filter((name) => version >= 31 || name !== LIFE_OS_STORE.memoryEvents)
+    .filter((name) => version >= 30 || name !== LIFE_OS_STORE.monthlyDirectionFocuses)
     .filter((name) => version >= 29 || name !== LIFE_OS_STORE.diaryEntries)
     .filter((name) => version >= 28 || name !== 'timeCapacity')
     .filter((name) => version >= 27 || name !== 'taskScenarios')

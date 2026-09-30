@@ -18,6 +18,13 @@ import { createDefaultPreparationCatalog } from '../../../domain/sleep/SleepSche
 import { DEFAULT_SLEEP_ALARM_SOUND } from '../../../domain/sleep/SleepSchedule';
 import type { SleepScheduleRecord } from '../records/SleepScheduleRecord';
 import {
+  validateColdShowerEntry,
+  type ColdShowerEntry,
+  type ColdShowerStatus,
+  type ColdShowerFeeling,
+  type ColdShowerSkipReason,
+} from '../../../domain/sleep/ColdShower';
+import {
   assertRecordAndSchemaVersion,
   invalidRecord,
   readBoolean,
@@ -36,6 +43,15 @@ export class SleepScheduleRecordMapper {
       schemaVersion: 1,
       id: SLEEP_SCHEDULE_ID,
       version: state.version,
+      ...(state.coldShowerEntries === undefined
+        ? {}
+        : {
+            coldShowerEntries: state.coldShowerEntries.map((entry) => ({
+              ...entry,
+              recordedAt: entry.recordedAt.toISOString(),
+              updatedAt: entry.updatedAt.toISOString(),
+            })),
+          }),
       settings:
         state.settings === null
           ? null
@@ -104,6 +120,9 @@ export class SleepScheduleRecordMapper {
     return {
       id: SLEEP_SCHEDULE_ID,
       version: readInteger(value, 'version'),
+      ...(value.coldShowerEntries === undefined
+        ? {}
+        : { coldShowerEntries: readColdShowerEntries(value) }),
       settings,
       preparationGroups,
       preparationItems,
@@ -168,6 +187,26 @@ export class SleepScheduleRecordMapper {
         : [],
     };
   }
+}
+
+function readColdShowerEntries(record: UnknownRecord): readonly ColdShowerEntry[] {
+  const entries = readRecordArray(record, 'coldShowerEntries').map((item) => {
+    const entry: ColdShowerEntry = {
+      date: readString(item, 'date'),
+      status: readString(item, 'status') as ColdShowerStatus,
+      energy: item.energy === null ? null : readNumber(item, 'energy'),
+      feeling: item.feeling === null ? null : (readString(item, 'feeling') as ColdShowerFeeling),
+      skipReason:
+        item.skipReason === null ? null : (readString(item, 'skipReason') as ColdShowerSkipReason),
+      recordedAt: readIsoDate(item, 'recordedAt'),
+      updatedAt: readIsoDate(item, 'updatedAt'),
+    };
+    validateColdShowerEntry(entry);
+    return entry;
+  });
+  if (new Set(entries.map((entry) => entry.date)).size !== entries.length)
+    throw invalidRecord('Запись содержит повторные отметки душа за один день.');
+  return entries;
 }
 
 function readPreparationItemKind(record: UnknownRecord): PreparationItemKind {

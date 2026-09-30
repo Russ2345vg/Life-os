@@ -85,6 +85,7 @@ export class UnavailableAccountSync implements AccountSync {
 
   public async load(): Promise<AccountOverview> {
     return {
+      availability: { available: false, reason: this.message },
       state: 'local_anonymous',
       email: null,
       emailVerified: false,
@@ -122,6 +123,9 @@ export class UnavailableAccountSync implements AccountSync {
     return this.reject();
   }
   public requestPasswordReset(): Promise<void> {
+    return this.reject();
+  }
+  public completePasswordReset(): Promise<void> {
     return this.reject();
   }
   public updatePassword(): Promise<AccountOverview> {

@@ -1,10 +1,14 @@
 #[cfg(target_os = "android")]
 mod android_alarm;
 #[cfg(target_os = "android")]
+mod android_speech;
+#[cfg(target_os = "android")]
 mod android_updater;
 mod secure_key_store;
 mod sync_commands;
 mod sync_crypto;
+#[cfg(target_os = "windows")]
+mod windows_voice_typing;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -35,17 +39,20 @@ pub fn run() {
             sync_commands::sync_prepare_rotation,
             sync_commands::sync_hash_pairing_secret,
             sync_commands::sync_render_pairing_qr,
-            sync_commands::sync_platform
+            sync_commands::sync_platform,
+            windows_voice_typing::windows_voice_typing_start
         ]);
 
     #[cfg(target_os = "android")]
     let builder = tauri::Builder::default()
         .plugin(android_updater::init())
         .plugin(android_alarm::init())
+        .plugin(android_speech::init())
         .plugin(secure_key_store::android::init())
         .invoke_handler(tauri::generate_handler![
             android_updater::android_check_update,
             android_updater::android_download_and_install,
+            android_speech::android_speech_recognize,
             android_alarm::android_alarm_reconcile,
             android_alarm::android_alarm_status,
             android_alarm::android_alarm_list_sounds,

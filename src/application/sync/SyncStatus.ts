@@ -4,7 +4,7 @@ import type { AccountSetupState } from './ports/SyncInstallationRepository';
 export interface SyncAttachmentStatus {
   readonly attachmentId: string;
   readonly parentObjectId: string;
-  readonly entityType: 'goal' | 'walk';
+  readonly entityType: 'goal' | 'walk' | 'memory_event';
   readonly state: AttachmentState;
   readonly localAvailable: boolean;
 }

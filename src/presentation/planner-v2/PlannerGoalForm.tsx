@@ -94,6 +94,20 @@ export function PlannerGoalForm({
           />
         </VoiceField>
         <VoiceField>
+          <span>Потребность</span>
+          <VoiceTextInput
+            id="planner-goal-need"
+            value={draft.need}
+            onValueChange={(value) => change('need', value)}
+            maxLength={500}
+            aria-describedby="planner-goal-need-help"
+            placeholder="Ради чего вам нужна эта цель?"
+          />
+          <small id="planner-goal-need-help" className="planner-muted">
+            Необязательно. Пустое поле использует потребность направления.
+          </small>
+        </VoiceField>
+        <VoiceField>
           <span>Желаемый результат</span>
           <VoiceTextArea
             id="planner-goal-outcome"
@@ -191,16 +205,6 @@ export function PlannerGoalForm({
                 ))}
               </select>
             </label>
-            <VoiceField>
-              <span>Потребность</span>
-              <VoiceTextInput
-                id="planner-goal-need"
-                value={draft.need}
-                onValueChange={(value) => change('need', value)}
-                maxLength={500}
-                placeholder="Необязательно · пустое поле использует потребность родителя"
-              />
-            </VoiceField>
             <VoiceField>
               <span>Описание / заметки</span>
               <VoiceTextArea

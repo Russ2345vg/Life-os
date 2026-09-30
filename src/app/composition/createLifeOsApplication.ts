@@ -27,10 +27,12 @@ import { UpdateGoal } from '../../application/commands/UpdateGoal';
 import { UpdateLifeActionDetails } from '../../application/commands/UpdateLifeActionDetails';
 import { UpdateSphere } from '../../application/commands/UpdateSphere';
 import { DiaryApplicationService } from '../../application/diary/DiaryService';
+import { BrowserMemoryPhotoReader } from '../../infrastructure/memory/BrowserMemoryPhotoReader';
 import type { Clock } from '../../application/ports/Clock';
 import type { CurrentDateProvider } from '../../application/ports/CurrentDateProvider';
 import type { IdGenerator } from '../../application/ports/IdGenerator';
 import { DailyDirection } from '../../application/planner/DailyDirection';
+import { MonthlyDirectionFocusService } from '../../application/planner/MonthlyDirectionFocusService';
 import { GoalContributions } from '../../application/planner/GoalContributions';
 import { PeriodPlanning } from '../../application/planner/PeriodPlanning';
 import { PlannerCatalog } from '../../application/planner/PlannerCatalog';
@@ -44,6 +46,7 @@ import { GetGoals } from '../../application/queries/GetGoals';
 import { GetPlannerToday } from '../../application/queries/GetPlannerToday';
 import { GetSpheres } from '../../application/queries/GetSpheres';
 import { SleepScheduleService } from '../../application/sleep/SleepScheduleService';
+import { ColdShowerService } from '../../application/sleep/ColdShowerService';
 import { DeletePilotDirection } from '../../application/sync/pilot/DeletePilotDirection';
 import { DeletePilotGoal } from '../../application/sync/pilot/DeletePilotGoal';
 import { DeletePilotLifeAction } from '../../application/sync/pilot/DeletePilotLifeAction';
@@ -60,6 +63,7 @@ import { IndexedDbDirectionRepository } from '../../infrastructure/persistence/I
 import { IndexedDbGoalRepository } from '../../infrastructure/persistence/IndexedDbGoalRepository';
 import { IndexedDbJournalUnitOfWork } from '../../infrastructure/persistence/IndexedDbJournalUnitOfWork';
 import { IndexedDbLifeActionRepository } from '../../infrastructure/persistence/IndexedDbLifeActionRepository';
+import { IndexedDbMonthlyDirectionFocusRepository } from '../../infrastructure/persistence/IndexedDbMonthlyDirectionFocusRepository';
 import { IndexedDbTimeCapacityRepository } from '../../infrastructure/persistence/IndexedDbTimeCapacityRepository';
 import { IndexedDbActionSessionRepository } from '../../infrastructure/persistence/IndexedDbActionSessionRepository';
 import { IndexedDbPlannerRepository } from '../../infrastructure/persistence/IndexedDbPlannerRepository';
@@ -78,6 +82,9 @@ import { BrowserLocalSettingsStore } from '../settings/BrowserLocalSettingsStore
 import type { LifeOsApplication } from './LifeOsApplication';
 import { LifeOsApplicationInitializationError } from './LifeOsApplicationInitializationError';
 import { createLifeOsSyncApplication } from './createLifeOsSyncApplication';
+import { createMemoryModule } from './modules/createMemoryModule';
+import { PlannerLibraryReadModels } from '../../application/planner/PlannerLibraryReadModels';
+import { IndexedDbPlannerChangeSource } from '../../infrastructure/persistence/IndexedDbPlannerChangeSource';
 
 export interface CreateLifeOsApplicationDependencies {
   readonly database?: LifeOsIndexedDb;
@@ -85,12 +92,14 @@ export interface CreateLifeOsApplicationDependencies {
   readonly currentDateProvider?: CurrentDateProvider;
   readonly idGenerator?: IdGenerator;
   readonly syncEnvironment?: SupabasePublicEnvironment;
+  readonly memoryEnabled?: boolean;
 }
 
 export async function createLifeOsApplication(
   dependencies: CreateLifeOsApplicationDependencies = {},
 ): Promise<LifeOsApplication> {
   const database = dependencies.database ?? new LifeOsIndexedDb();
+  let libraryReads: PlannerLibraryReadModels | undefined;
 
   try {
     await database.open();
@@ -155,12 +164,26 @@ export async function createLifeOsApplication(
       progress: new GoalContributions(planningRepository, clock, idGenerator),
       recurrence: new RecurringActions(planningRepository, clock, idGenerator),
     };
+    const diaryRepository = new IndexedDbDiaryRepository(database);
     const diary = new DiaryApplicationService(
-      new IndexedDbDiaryRepository(database),
+      diaryRepository,
       clock,
       currentDateProvider,
       planningRepository,
     );
+    const memory = createMemoryModule({
+      database,
+      clock,
+      currentDateProvider,
+      idGenerator,
+      writesEnabled:
+        dependencies.memoryEnabled ?? import.meta.env.VITE_LIFEOS_MEMORY_ENABLED === 'true',
+      diary: diaryRepository,
+      spheres: sphereRepository,
+      directions: directionRepository,
+      goals: goalRepository,
+      photoReader: new BrowserMemoryPhotoReader(),
+    });
     const plannerRepository = new IndexedDbPlannerRepository(database, mutationRecorder);
     const plannerInbox = new PlannerInbox(plannerRepository, clock, idGenerator);
     const plannerFocus = new PlannerFocus(
@@ -231,7 +254,24 @@ export async function createLifeOsApplication(
     );
     void sleepSchedule.syncAlarm().catch(() => undefined);
 
+    const getGoals = new GetGoals(goalRepository);
+    const getDirections = new GetDirections(directionRepository);
+    const getSpheres = new GetSpheres(sphereRepository);
+    libraryReads = new PlannerLibraryReadModels(
+      {
+        getGoals: () => getGoals.execute(),
+        getDirections: () => getDirections.execute(),
+        getSpheres: () => getSpheres.execute(),
+        getActions: () => plannerCatalog.actions(),
+        getIdeas: () => plannerInbox.list(),
+        getFocus: (today) => plannerFocus.get(today),
+        getTimeCapacity: () => timeCapacity.get(),
+      },
+      new IndexedDbPlannerChangeSource(database),
+    );
+
     const application: LifeOsApplication = {
+      libraryReads,
       sync,
       accountSync,
       clock,
@@ -240,6 +280,7 @@ export async function createLifeOsApplication(
       balance,
       planning,
       diary,
+      memory,
       plannerInbox,
       plannerScenarios: new PlannerScenarios(
         new IndexedDbTaskScenarioRepository(database),
@@ -263,11 +304,18 @@ export async function createLifeOsApplication(
       ),
       setLifeActionGoal,
       getPlannerToday: new GetPlannerToday(lifeActionRepository),
-      getGoals: new GetGoals(goalRepository),
-      getDirections: new GetDirections(directionRepository),
-      getSpheres: new GetSpheres(sphereRepository),
+      getGoals,
+      getDirections,
+      getSpheres,
       dailyDirection: new DailyDirection(dayRepository, directionRepository, ensureCurrentDay),
+      monthlyDirectionFocus: new MonthlyDirectionFocusService(
+        new IndexedDbMonthlyDirectionFocusRepository(database),
+        directionRepository,
+        dayRepository,
+        clock,
+      ),
       sleepSchedule,
+      coldShower: new ColdShowerService(sleepScheduleRepository, clock, currentDateProvider),
       createGoal: new CreateGoal(goalRepository, directionRepository, clock, idGenerator),
       updateGoal: new UpdateGoal(goalRepository, directionRepository, clock, decisionRepository),
       archiveGoal: new ArchiveGoal(goalRepository, clock),
@@ -293,6 +341,7 @@ export async function createLifeOsApplication(
         idGenerator,
       ),
       close: () => {
+        libraryReads?.close();
         void sync.close();
         database.close();
       },
@@ -300,6 +349,7 @@ export async function createLifeOsApplication(
 
     return application;
   } catch (error: unknown) {
+    libraryReads?.close();
     database.close();
     throw new LifeOsApplicationInitializationError(error);
   }

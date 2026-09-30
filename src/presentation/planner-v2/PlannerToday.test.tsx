@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { DayDate } from '../../domain';
+import { DayDate, EntityId, LifeAction, LifeActionTitle } from '../../domain';
 import { PlannerToday } from './PlannerToday';
 import {
   createLifeActionDraft,
@@ -10,6 +10,53 @@ import {
 } from '../../test/helpers/LifeActionTestFactory';
 
 describe('Planner Today', () => {
+  it('shows the action sphere and direction in the day plan', () => {
+    const date = DayDate.create('2026-09-13');
+    const action = LifeAction.createDraft({
+      id: EntityId.create('invest-action'),
+      title: LifeActionTitle.create('Изучить инвестиции'),
+      sphereId: EntityId.create('finance'),
+      directionId: EntityId.create('investing'),
+      plannedDate: date,
+      createdAt: new Date('2026-09-13T08:00:00Z'),
+      eventId: EntityId.create('invest-action-created'),
+    });
+    const html = renderToStaticMarkup(
+      createElement(PlannerToday, {
+        date,
+        day: 'today',
+        overview: { main: null, actions: [action], unscheduled: [], completed: [], overdue: [] },
+        goals: [],
+        directions: [{ id: 'investing', title: 'Инвестиции', sphereId: 'finance' }],
+        spheres: [{ id: 'finance', title: 'Финансы' }],
+        availableActions: [action],
+        monthlyDirectionFocus: {
+          month: '2026-09',
+          hasCurrent: false,
+          directionId: null,
+          directionLabel: null,
+          suggestion: null,
+          choices: [],
+        },
+        busy: false,
+        onSelectDay: vi.fn(),
+        onOpenAction: vi.fn(),
+        onMonthlyDirectionChange: vi.fn(),
+        onComplete: vi.fn(),
+        onPlan: vi.fn(),
+        onReschedule: async () => {},
+        onQuickAdd: async () => {},
+        onNewAction: vi.fn(),
+        onOpenSleep: vi.fn(),
+      }),
+    );
+
+    expect(html).toContain('planner-action-context');
+    expect(html).toContain('aria-describedby="planner-action-context-invest-action"');
+    expect(html).toContain('Сфера</span> Финансы');
+    expect(html).toContain('Направление</span> Инвестиции');
+  });
+
   it('shows scheduled hours, known workload and remaining unknown estimates', () => {
     const date = DayDate.create('2026-09-13');
     const timed = createLifeActionDraft('today-timed');
@@ -34,13 +81,19 @@ describe('Planner Today', () => {
         },
         goals: [],
         availableActions: [timed, unknown],
-        mainDirectionId: null,
-        directionChoices: [],
+        monthlyDirectionFocus: {
+          month: '2026-09',
+          hasCurrent: false,
+          directionId: null,
+          directionLabel: null,
+          suggestion: null,
+          choices: [],
+        },
         busy: false,
         capacityMinutes: 120,
         onSelectDay: vi.fn(),
         onOpenAction: vi.fn(),
-        onMainDirection: vi.fn(),
+        onMonthlyDirectionChange: vi.fn(),
         onComplete: vi.fn(),
         onPlan: vi.fn(),
         onReschedule: async () => {},
@@ -55,6 +108,58 @@ describe('Planner Today', () => {
     expect(html).toContain('Без оценки: 1');
     expect(html).toContain('#/v2/actions?view=calendar');
   });
+
+  it('presents the day plan as one compact center with visible status', () => {
+    const date = DayDate.create('2026-09-13');
+    const main = createLifeActionDraft('main');
+    main.setPlan(date, true);
+    const planned = createLifeActionDraft('planned');
+    planned.setPlan(date, false);
+    const completed = createLifeActionDraft('completed');
+    const html = renderToStaticMarkup(
+      createElement(PlannerToday, {
+        date,
+        day: 'today',
+        overview: {
+          main,
+          actions: [planned],
+          unscheduled: [],
+          completed: [completed],
+          overdue: [],
+        },
+        goals: [],
+        availableActions: [main, planned, completed],
+        monthlyDirectionFocus: {
+          month: '2026-09',
+          hasCurrent: false,
+          directionId: null,
+          directionLabel: null,
+          suggestion: null,
+          choices: [],
+        },
+        busy: false,
+        onSelectDay: vi.fn(),
+        onOpenAction: vi.fn(),
+        onMonthlyDirectionChange: vi.fn(),
+        onComplete: vi.fn(),
+        onPlan: vi.fn(),
+        onReschedule: async () => {},
+        onQuickAdd: async () => {},
+        onNewAction: vi.fn(),
+        onOpenSleep: vi.fn(),
+      }),
+    );
+
+    expect(html).toContain('planner-day-center__header');
+    expect(html).toContain('Центр дня');
+    expect(html).toContain('План на сегодня');
+    expect(html).toContain('В плане <strong>2</strong>');
+    expect(html).toContain('Готово <strong>1</strong>');
+    expect(html.indexOf('planner-day-center__header')).toBeLessThan(
+      html.indexOf('aria-label="Новое действие на сегодня"'),
+    );
+  });
+
   it('renders an optional main, collapsed completed and an accessible quick add', () => {
     const html = renderToStaticMarkup(
       createElement(PlannerToday, {
@@ -63,12 +168,18 @@ describe('Planner Today', () => {
         overview: { main: null, actions: [], unscheduled: [], completed: [], overdue: [] },
         goals: [],
         availableActions: [],
-        mainDirectionId: null,
-        directionChoices: [],
+        monthlyDirectionFocus: {
+          month: '2026-09',
+          hasCurrent: false,
+          directionId: null,
+          directionLabel: null,
+          suggestion: null,
+          choices: [],
+        },
         busy: false,
         onSelectDay: vi.fn(),
         onOpenAction: vi.fn(),
-        onMainDirection: vi.fn(),
+        onMonthlyDirectionChange: vi.fn(),
         onComplete: vi.fn(),
         onPlan: vi.fn(),
         onReschedule: async () => {},
@@ -88,9 +199,9 @@ describe('Planner Today', () => {
     expect(html).toContain('planner-today-sidebar');
     // Keyboard and screen-reader order follows the visible planning workflow.
     expect(html.indexOf('aria-label="План на день"')).toBeLessThan(
-      html.indexOf('id="planner-main-direction"'),
+      html.indexOf('id="planner-month-direction"'),
     );
-    expect(html.indexOf('id="planner-main-direction"')).toBeLessThan(
+    expect(html.indexOf('id="planner-month-direction"')).toBeLessThan(
       html.indexOf('aria-label="Новое действие на сегодня"'),
     );
     expect(html.indexOf('aria-label="Новое действие на сегодня"')).toBeLessThan(
@@ -106,12 +217,18 @@ describe('Planner Today', () => {
         overview: { main: null, actions: [], unscheduled: [], completed: [], overdue: [] },
         goals: [],
         availableActions: [],
-        mainDirectionId: null,
-        directionChoices: [],
+        monthlyDirectionFocus: {
+          month: '2026-09',
+          hasCurrent: false,
+          directionId: null,
+          directionLabel: null,
+          suggestion: null,
+          choices: [],
+        },
         busy: false,
         onSelectDay: vi.fn(),
         onOpenAction: vi.fn(),
-        onMainDirection: vi.fn(),
+        onMonthlyDirectionChange: vi.fn(),
         onComplete: vi.fn(),
         onPlan: vi.fn(),
         onReschedule: async () => {},
@@ -136,8 +253,14 @@ describe('Planner Today', () => {
         overview: { main: null, actions: [], unscheduled: [], completed: [], overdue: [] },
         goals: [],
         availableActions: [],
-        mainDirectionId: null,
-        directionChoices: [],
+        monthlyDirectionFocus: {
+          month: '2026-09',
+          hasCurrent: false,
+          directionId: null,
+          directionLabel: null,
+          suggestion: null,
+          choices: [],
+        },
         busy: false,
         sleepEntry: {
           active: true,
@@ -147,7 +270,7 @@ describe('Planner Today', () => {
         },
         onSelectDay: vi.fn(),
         onOpenAction: vi.fn(),
-        onMainDirection: vi.fn(),
+        onMonthlyDirectionChange: vi.fn(),
         onComplete: vi.fn(),
         onPlan: vi.fn(),
         onReschedule: async () => {},
@@ -177,12 +300,18 @@ describe('Today unfinished previous days', () => {
         overview: { main: null, actions: [], unscheduled: [], completed: [], overdue: actions },
         goals: [],
         availableActions: actions,
-        mainDirectionId: null,
-        directionChoices: [],
+        monthlyDirectionFocus: {
+          month: '2026-09',
+          hasCurrent: false,
+          directionId: null,
+          directionLabel: null,
+          suggestion: null,
+          choices: [],
+        },
         busy,
         onSelectDay: vi.fn(),
         onOpenAction: vi.fn(),
-        onMainDirection: vi.fn(),
+        onMonthlyDirectionChange: vi.fn(),
         onComplete: vi.fn(),
         onPlan: vi.fn(),
         onReschedule: async () => {},

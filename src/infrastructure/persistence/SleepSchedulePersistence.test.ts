@@ -33,7 +33,7 @@ describe('Sleep schedule persistence migration', () => {
     });
     database.close();
   });
-  it('adds all stores through v29 when upgrading v25 and preserves planner data byte-for-byte', async () => {
+  it('adds all stores through v31 when upgrading v25 and preserves planner data byte-for-byte', async () => {
     const factory = new IDBFactory();
     const legacyRecord = {
       id: 'legacy-idea',
@@ -51,6 +51,8 @@ describe('Sleep schedule persistence migration', () => {
     expect(Array.from(upgraded.objectStoreNames)).toEqual([
       'diaryEntries',
       'inboxIdeas',
+      'memoryEvents',
+      'monthlyDirectionFocuses',
       'sleepSchedules',
       'taskScenarios',
       'timeCapacity',

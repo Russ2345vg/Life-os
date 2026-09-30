@@ -9,6 +9,7 @@ export type SpeechRecognitionFailure =
 
 export type SpeechRecognitionProviderEvent =
   | { readonly type: 'transcript'; readonly transcript: string; readonly isFinal: boolean }
+  | { readonly type: 'external-dictation-started' }
   | { readonly type: 'ended' }
   | { readonly type: 'error'; readonly error: SpeechRecognitionFailure };
 

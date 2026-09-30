@@ -133,12 +133,15 @@ export interface SyncSettingsRecord {
     | 'email_verification_pending'
     | 'account_migration_pending'
     | 'recovery_confirmation_pending'
+    | 'sign_in_required'
+    | 'device_recovery_required'
     | 'ready'
     | 'sign_out_pending';
   readonly accountUserId?: string | null;
   readonly accountSessionId?: string | null;
   readonly accountEmail?: string | null;
   readonly accountMigrationSnapshotId?: string | null;
+  readonly accountRecoveryDeviceId?: string | null;
 }
 
 export interface SyncQuarantineRecord {

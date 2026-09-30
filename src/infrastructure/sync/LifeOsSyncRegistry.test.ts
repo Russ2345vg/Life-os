@@ -15,6 +15,7 @@ const EXPECTED_ENTITY_TYPES = [
   'day',
   'decision',
   'diary_entry',
+  'memory_event',
   'direction',
   'evening_cycle',
   'exercise_definition',
@@ -25,6 +26,7 @@ const EXPECTED_ENTITY_TYPES = [
   'journal_entry',
   'life_action',
   'morning_cycle',
+  'monthly_direction_focus',
   'preparation_plan',
   'preparation_rule',
   'project',
@@ -54,6 +56,7 @@ const EXPECTED_ENTITY_STORES = {
   day: 'days',
   decision: 'decisions',
   diary_entry: 'diaryEntries',
+  memory_event: 'memoryEvents',
   direction: 'directions',
   evening_cycle: 'eveningCycles',
   exercise_definition: 'exerciseDefinitions',
@@ -64,6 +67,7 @@ const EXPECTED_ENTITY_STORES = {
   journal_entry: 'journal',
   life_action: 'lifeActions',
   morning_cycle: 'morningCycles',
+  monthly_direction_focus: 'monthlyDirectionFocuses',
   preparation_plan: 'preparationPlans',
   preparation_rule: 'preparationRules',
   project: 'projects',
@@ -106,7 +110,7 @@ describe('LIFE_OS_SYNC_REGISTRY', () => {
       LIFE_OS_SYNC_REGISTRY.filter(({ storageKind }) => storageKind === 'indexed_db').map(
         ({ storeName }) => storeName,
       ),
-    ).toHaveLength(35);
+    ).toHaveLength(37);
     expect(LIFE_OS_SYNC_REGISTRY.every(({ readiness }) => readiness === 'sync_ready')).toBe(true);
   });
 
@@ -124,6 +128,12 @@ describe('LIFE_OS_SYNC_REGISTRY', () => {
     expect(registration('diary_entry')).toMatchObject({
       idSource: 'deterministic_period_id',
       dependencies: [],
+      deletionMode: 'none',
+      readiness: 'sync_ready',
+    });
+    expect(registration('monthly_direction_focus')).toMatchObject({
+      idSource: 'deterministic_period_id',
+      dependencies: ['direction'],
       deletionMode: 'none',
       readiness: 'sync_ready',
     });

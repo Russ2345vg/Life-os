@@ -6,6 +6,7 @@ import type {
 } from '../../../domain/sleep/SleepSchedule';
 
 export interface SleepScheduleRecord {
+  readonly coldShowerEntries?: readonly ColdShowerEntryRecord[];
   readonly schemaVersion: 1;
   readonly id: 'sleep-schedule';
   readonly version: number;
@@ -17,6 +18,16 @@ export interface SleepScheduleRecord {
   readonly alarmExceptions: readonly AlarmExceptionRecord[];
   readonly sleepEvents?: readonly SleepEventRecord[];
   readonly wakeResults?: readonly WakeResultRecord[];
+}
+
+export interface ColdShowerEntryRecord {
+  readonly date: string;
+  readonly status: 'completed' | 'skipped';
+  readonly energy: number | null;
+  readonly feeling: 'better' | 'unchanged' | 'worse' | null;
+  readonly skipReason: 'forgot' | 'time' | 'unwell' | 'other' | null;
+  readonly recordedAt: string;
+  readonly updatedAt: string;
 }
 
 export interface SleepPreparationGroupRecord {

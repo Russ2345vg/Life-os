@@ -39,8 +39,12 @@ test('opens every primary current route directly and survives reload', async ({ 
       ).toBeVisible();
       if (path === 'account') {
         await expect(
-          routePage.getByText('Данные хранятся только на этом устройстве'),
+          routePage.getByRole('heading', { name: 'Аккаунт недоступен', exact: true }),
         ).toBeVisible();
+        await expect(
+          routePage.getByText('Ваши данные сохранены на этом устройстве.'),
+        ).toBeVisible();
+        await expect(routePage.getByLabel('Электронная почта', { exact: true })).toHaveCount(0);
       }
       await routePage.reload({ waitUntil: 'domcontentloaded' });
       await expect(routePage).toHaveURL(new RegExp(`#\\/v2\\/${path}$`));

@@ -27,6 +27,15 @@ function setup(supported = true) {
 afterEach(() => vi.useRealTimers());
 
 describe('VoiceInputCoordinator', () => {
+  it('returns to idle when native system dictation takes over the focused field', () => {
+    const { coordinator, requests } = setup();
+    coordinator.start('title');
+
+    requests[0]!.onEvent({ type: 'external-dictation-started' });
+
+    expect(coordinator.getSnapshot('title')).toEqual({ status: 'idle' });
+  });
+
   it('buffers final chunks, exposes interim feedback and commits only on end', () => {
     const { coordinator: c, requests, sessions } = setup();
     expect(c.getSnapshot('a').status).toBe('idle');

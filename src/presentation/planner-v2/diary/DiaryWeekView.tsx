@@ -3,6 +3,8 @@ import type { DiaryWeekPayload } from '../../../domain';
 import { VoiceTextArea } from '../../voice-input/VoiceTextArea';
 import type { DiarySaveStatus } from './DiaryDayView';
 import { DiarySummaryCards } from './DiarySummaryCards';
+import type { DiaryMemoryField } from '../../../domain/memory';
+import { DiaryMemoryButton } from './DiaryMemoryButton';
 
 export function DiaryWeekView({
   payload,
@@ -13,6 +15,7 @@ export function DiaryWeekView({
   disabled = false,
   onChange,
   onComplete,
+  onMemory,
 }: {
   readonly payload: DiaryWeekPayload;
   readonly summary: DiaryRatingSummary;
@@ -22,6 +25,7 @@ export function DiaryWeekView({
   readonly disabled?: boolean;
   readonly onChange: (payload: DiaryWeekPayload) => void;
   readonly onComplete: () => void;
+  readonly onMemory?: ((field: DiaryMemoryField) => void) | undefined;
 }) {
   const questions = [
     ['learned', 'Чему я научился за эту неделю?'],
@@ -45,16 +49,25 @@ export function DiaryWeekView({
       >
         <h2 id="diary-week-heading">Итоги недели</h2>
         {questions.map(([field, label]) => (
-          <label className="planner-diary-question" key={field}>
-            <span>{label}</span>
-            <VoiceTextArea
-              value={payload[field] ?? ''}
+          <div className="planner-diary-question" key={field}>
+            <label>
+              <span>{label}</span>
+              <VoiceTextArea
+                value={payload[field] ?? ''}
+                disabled={disabled}
+                onValueChange={(value) => onChange({ ...payload, [field]: value })}
+                maxLength={4_000}
+                rows={3}
+              />
+            </label>
+            <DiaryMemoryButton
+              field={field}
+              label={label}
+              text={payload[field]}
               disabled={disabled}
-              onValueChange={(value) => onChange({ ...payload, [field]: value })}
-              maxLength={4_000}
-              rows={3}
+              onMemory={onMemory}
             />
-          </label>
+          </div>
         ))}
         <ReflectionActions
           status={status}

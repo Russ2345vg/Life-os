@@ -1,28 +1,12 @@
 import { PlannerGoalForm } from './PlannerGoalForm';
 import { PlannerActionForm } from './PlannerActionForm';
 import { submitPlannerAction } from './plannerFormSubmission';
-import type { CreateLifeActionDraft } from '../../application';
-import { useQuickAccess, useQuickAccessGuard } from './QuickAccessContext';
+import { useQuickAccessGuard } from './QuickAccessContext';
 import { PlannerSheet } from './PlannerSheet';
 import { PlanningGoalDetail } from './PlanningGoalDetail';
 import { usePlanning } from './PlanningContext';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { EntityId, type Direction, type Goal, type LifeAction, type Sphere } from '../../domain';
-import type {
-  GetGoals,
-  GetDirections,
-  GetSpheres,
-  CompleteLifeAction,
-  SetLifeActionGoal,
-  SetLifeActionPlan,
-  UpdateGoal,
-  ArchiveGoal,
-} from '../../application';
-import type { PlannerInbox as InboxService } from '../../application/planner/PlannerInbox';
-import type { PlannerFocus as FocusService } from '../../application/planner/PlannerFocus';
-import type { PlannerCatalog } from '../../application/planner/PlannerCatalog';
-import type { InboxIdea } from '../../domain/planner/InboxIdea';
-import type { FocusPeriod } from '../../domain/planner/FocusPeriod';
+import { EntityId, type Goal, type LifeAction } from '../../domain';
 import { PlannerInbox } from './PlannerInbox';
 import { PlannerGoalList } from './PlannerGoalList';
 import { PlannerWeeklyReview } from './PlannerWeeklyReview';
@@ -32,7 +16,7 @@ import { PlannerActionList } from './PlannerActionList';
 import { activeFocusIds } from './plannerCatalogModel';
 import { completePlannerAction, planPlannerAction } from './plannerTodayCommands';
 import type { PlannerRoute } from './PlannerNavigation';
-import { useSyncContentChanged } from '../sync/SyncStatusContext';
+import { usePlannerLibraryReadModel } from './usePlannerLibraryReadModel';
 import './planner-library.css';
 import './planner-views.css';
 import { buildPlannerViews } from './plannerViewsModel';
@@ -42,55 +26,13 @@ import { PlannerTree } from './PlannerTree';
 import { PlannerViewSwitcher } from './PlannerViewSwitcher';
 import { changePlannerGoalStatus, linkPlannerGoalDirection } from './plannerGoalCommands';
 import type { PlannerViewOperations } from './PlannerViewParts';
-import type { DeletePilotGoal } from '../../application/sync/pilot/DeletePilotGoal';
-import type { DeletePilotLifeAction } from '../../application/sync/pilot/DeletePilotLifeAction';
-import type { ArchiveLifeAction } from '../../application/commands/ArchiveLifeAction';
-import type { EditPlannerActionDraft } from '../../application/commands/EditPlannerActionDraft';
-import type { SetLifeActionParent } from '../../application/commands/SetLifeActionParent';
-import type { SetLifeActionTime } from '../../application/commands/SetLifeActionTime';
-import type { TimeCapacityService } from '../../application/time/TimeCapacityService';
-import type { WorkSessions } from '../../application/time/WorkSessions';
-import type { SelectGoalNextAction } from '../../application/commands/SelectGoalNextAction';
-import type { UpdateLifeActionDetails } from '../../application/commands/UpdateLifeActionDetails';
-import type { PlanningServices } from '../../application/planner/PlanningServices';
 import { DomainError } from '../../shared/errors/DomainError';
 import type { EntityMenuAction } from './EntityContextMenu';
 import { PlannerWorkTime } from './PlannerWorkTime';
 import type { PlannerWorkTimeController } from './usePlannerWorkTime';
+import type { PlannerLibraryServices } from '../../application/planner/PlannerLibraryServices';
 
-export interface PlannerLibraryServices {
-  readonly setLifeActionTime?: Pick<SetLifeActionTime, 'execute'>;
-  readonly timeCapacity?: Pick<TimeCapacityService, 'get' | 'setWeekday'>;
-  readonly workSessions?: Pick<WorkSessions, 'list' | 'start' | 'pause' | 'resume' | 'finish'>;
-  readonly createLifeActionDraft: Pick<CreateLifeActionDraft, 'execute'>;
-  readonly plannerInbox: Pick<InboxService, 'list' | 'capture' | 'convert' | 'archive'>;
-  readonly plannerFocus: Pick<FocusService, 'get' | 'setRole'>;
-  readonly plannerCatalog: Pick<PlannerCatalog, 'actions'>;
-  readonly getGoals: Pick<GetGoals, 'execute'>;
-  readonly getDirections: Pick<GetDirections, 'execute'>;
-  readonly getSpheres: Pick<GetSpheres, 'execute'>;
-  readonly completeLifeAction: Pick<CompleteLifeAction, 'execute'>;
-  readonly setLifeActionPlan: Pick<SetLifeActionPlan, 'execute'>;
-  readonly setLifeActionGoal: Pick<SetLifeActionGoal, 'execute'>;
-  readonly updateGoal: Pick<UpdateGoal, 'execute'>;
-  readonly archiveGoal: Pick<ArchiveGoal, 'execute'>;
-  readonly deletePilotGoal: Pick<DeletePilotGoal, 'execute'>;
-  readonly deletePilotLifeAction: Pick<DeletePilotLifeAction, 'execute'>;
-  readonly archiveLifeAction: Pick<ArchiveLifeAction, 'execute'>;
-  readonly editPlannerActionDraft: Pick<EditPlannerActionDraft, 'execute'>;
-  readonly setLifeActionParent: Pick<SetLifeActionParent, 'execute'>;
-  readonly selectGoalNextAction: Pick<SelectGoalNextAction, 'execute'>;
-  readonly updateLifeActionDetails: Pick<UpdateLifeActionDetails, 'execute'>;
-  readonly planning?: PlanningServices;
-}
-interface LibraryData {
-  goals: readonly Goal[];
-  directions: readonly Direction[];
-  spheres: readonly Sphere[];
-  actions: readonly LifeAction[];
-  ideas: readonly InboxIdea[];
-  focus: FocusPeriod | null;
-}
+export type { PlannerLibraryServices } from '../../application/planner/PlannerLibraryServices';
 export function PlannerLibraryWorkspace({
   services,
   route,
@@ -98,7 +40,6 @@ export function PlannerLibraryWorkspace({
   onNavigate,
   onActionCompleted,
   onChangeDate,
-  dateRevision = 0,
   workTime,
 }: {
   readonly services: PlannerLibraryServices;
@@ -107,21 +48,18 @@ export function PlannerLibraryWorkspace({
   readonly onNavigate: (route: PlannerRoute) => void;
   readonly onActionCompleted?: (action: LifeAction) => void;
   readonly onChangeDate: (id: string, date: string) => Promise<LifeAction>;
-  readonly dateRevision?: number;
   readonly workTime?: PlannerWorkTimeController;
 }) {
   const planningContext = usePlanning();
-  const [data, setData] = useState<LibraryData | null>(null);
-  const [timeCapacity, setTimeCapacity] = useState<readonly (number | null)[]>([
-    null,
-    null,
-    null,
-    null,
-    null,
-    null,
-    null,
-  ]);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    snapshot,
+    refresh: refreshReads,
+    whenSettled,
+  } = usePlannerLibraryReadModel(services.libraryReads, today);
+  const data = snapshot.data;
+  const timeCapacity = data?.timeCapacity ?? [];
+  const [commandError, setError] = useState<string | null>(null);
+  const error = commandError ?? snapshot.error?.message ?? null;
   const [notice, setNotice] = useState<string | null>(null);
   useEffect(() => {
     if (!notice) return;
@@ -130,9 +68,7 @@ export function PlannerLibraryWorkspace({
   }, [notice]);
   const [busy, setBusy] = useState(false);
   const [creatingStepFor, setCreatingStepFor] = useState<string | null>(null);
-  const revision = useQuickAccess()?.revision ?? 0;
   useQuickAccessGuard(() => ({ dirty: false, busy }));
-  const sequence = useRef(0);
   const working = useRef(false);
   const report = useCallback(
     (reason: unknown) =>
@@ -143,45 +79,10 @@ export function PlannerLibraryWorkspace({
       ),
     [],
   );
-  const load = useCallback(() => {
-    const request = ++sequence.current;
-    return Promise.all([
-      services.getGoals.execute(),
-      services.getDirections.execute(),
-      services.getSpheres.execute(),
-      services.plannerCatalog.actions(),
-      services.plannerInbox.list(),
-      services.plannerFocus.get(today),
-      services.timeCapacity?.get() ?? Promise.resolve([null, null, null, null, null, null, null]),
-    ])
-      .then(([goals, directions, spheres, actions, ideas, focus, capacity]) => {
-        if (request === sequence.current) {
-          setData({
-            goals,
-            directions,
-            spheres: [...spheres.active, ...spheres.archived],
-            actions,
-            ideas,
-            focus,
-          });
-          setTimeCapacity(capacity);
-          setError(null);
-        }
-      })
-      .catch((reason: unknown) => {
-        if (request === sequence.current) throw reason;
-      });
-  }, [services, today]);
-  const invalidateLoad = useCallback(() => {
-    sequence.current += 1;
-  }, []);
-  useEffect(() => {
-    void load().catch(report);
-    return invalidateLoad;
-  }, [load, report, invalidateLoad, revision, dateRevision, workTime?.revision]);
   const refresh = useCallback(() => {
-    void load().catch(report);
-  }, [load, report]);
+    setError(null);
+    void refreshReads();
+  }, [refreshReads]);
   useEffect(() => {
     if (route.view !== 'time') return;
     const refreshVisible = () => {
@@ -198,10 +99,6 @@ export function PlannerLibraryWorkspace({
       document.removeEventListener('visibilitychange', refreshVisible);
     };
   }, [route.view, refresh]);
-  useSyncContentChanged(
-    'goals|lifeActions|timeCapacity|directions|spheres|inboxIdeas|focusPeriods|planningPeriods|periodMemberships|progressContributions',
-    refresh,
-  );
   const run = async (work: () => Promise<unknown>, message: string | null) => {
     if (working.current) return;
     working.current = true;
@@ -211,7 +108,7 @@ export function PlannerLibraryWorkspace({
       await work();
       setNotice(message);
       await planningContext?.refresh();
-      await load().catch(report);
+      await whenSettled();
     } catch (reason: unknown) {
       report(reason);
       throw reason;
@@ -624,7 +521,6 @@ export function PlannerLibraryWorkspace({
                   () => services.timeCapacity!.setWeekday(weekday, minutes),
                   'Доступное время сохранено',
                 );
-                setTimeCapacity(await services.timeCapacity.get());
               }}
               {...operations}
             />

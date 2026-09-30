@@ -473,9 +473,17 @@ export {
   type ReflectionContextItem,
 } from './reflection';
 export {
+  changeMonthlyDirectionFocus,
+  monthlyDirectionFocusId,
+  monthlyDirectionFocusMonth,
+  validateMonthlyDirectionFocus,
+  type MonthlyDirectionFocus,
+} from './planner/MonthlyDirectionFocus';
+export {
   WalkCapture,
   MAX_WALK_CAPTURE_LENGTH,
   type WalkCaptureCreationData,
   type WalkCaptureData,
   type WalkCaptureStatus,
 } from './walk-capture/WalkCapture';
+export * from './memory';

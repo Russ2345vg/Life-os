@@ -10,6 +10,7 @@ export type SyncEntityType =
   | 'day'
   | 'decision'
   | 'diary_entry'
+  | 'memory_event'
   | 'life_action'
   | 'time_capacity'
   | 'action_session'
@@ -29,6 +30,7 @@ export type SyncEntityType =
   | 'preparation_rule'
   | 'recommendation_application'
   | 'morning_cycle'
+  | 'monthly_direction_focus'
   | 'sleep_schedule'
   | 'goal'
   | 'inbox_idea'
@@ -48,6 +50,7 @@ export const SYNC_ENTITY_TYPES: readonly SyncEntityType[] = Object.freeze([
   'day',
   'decision',
   'diary_entry',
+  'memory_event',
   'life_action',
   'time_capacity',
   'action_session',
@@ -67,6 +70,7 @@ export const SYNC_ENTITY_TYPES: readonly SyncEntityType[] = Object.freeze([
   'preparation_rule',
   'recommendation_application',
   'morning_cycle',
+  'monthly_direction_focus',
   'sleep_schedule',
   'goal',
   'inbox_idea',

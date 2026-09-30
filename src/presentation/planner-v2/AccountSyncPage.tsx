@@ -10,6 +10,7 @@ export type AccountPageStep =
   | 'register'
   | 'sign-in'
   | 'reset-password'
+  | 'reset-confirm'
   | 'verify'
   | 'set-password'
   | 'migration'
@@ -101,6 +102,8 @@ export function AccountSyncPageView({
   const [email, setEmail] = useState(overview.email ?? '');
   const [token, setToken] = useState('');
   const [password, setPassword] = useState('');
+  const [passwordConfirmation, setPasswordConfirmation] = useState('');
+  const [resetProof, setResetProof] = useState('');
   const [recovery, setRecovery] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -153,6 +156,18 @@ export function AccountSyncPageView({
   };
 
   const status = accountStatus(overview);
+  if (overview.availability?.available === false) {
+    return (
+      <section className="account-sync-page" aria-labelledby="account-title">
+        <AccountHeader onBack={onBack} />
+        <div className="account-panel" role="status">
+          <h2>Аккаунт недоступен</h2>
+          <p>{overview.availability.reason}</p>
+          <p className="account-muted">Ваши данные сохранены на этом устройстве.</p>
+        </div>
+      </section>
+    );
+  }
   return (
     <section className="account-sync-page" aria-labelledby="account-title">
       <AccountHeader onBack={onBack} />
@@ -232,7 +247,6 @@ export function AccountSyncPageView({
               void perform(
                 () => service.signIn(submittedEmail, submittedPassword),
                 [submittedPassword],
-                'recover',
               ).finally(() => setPassword(''));
             }}
           >
@@ -279,7 +293,10 @@ export function AccountSyncPageView({
               setError(null);
               void service
                 .requestPasswordReset(submittedEmail)
-                .then(() => setNotice('Письмо для смены пароля отправлено.'))
+                .then(() => {
+                  setNotice('Письмо для смены пароля отправлено.');
+                  setStep('reset-confirm');
+                })
                 .catch((reason: unknown) => setError(redactAccountError(reason, [])))
                 .finally(() => {
                   working.current = false;
@@ -294,7 +311,110 @@ export function AccountSyncPageView({
             <button
               className="account-button account-button--text"
               type="button"
+              onClick={() => setStep('reset-confirm')}
+            >
+              У меня уже есть письмо
+            </button>
+            <button
+              className="account-button account-button--text"
+              type="button"
               onClick={() => setStep('sign-in')}
+            >
+              Вернуться ко входу
+            </button>
+          </AccountForm>
+        ) : null}
+
+        {step === 'reset-confirm' ? (
+          <AccountForm
+            title="Создайте новый пароль"
+            description="Введите код или скопируйте адрес кнопки из письма, не открывая ссылку. После смены пароля войдите заново; ключ восстановления остаётся прежним."
+            busy={busy}
+            onSubmit={(form) => {
+              if (working.current) return;
+              const submittedEmail = readFormValue(form, 'email', email);
+              const proof = readFormValue(form, 'reset-proof', resetProof);
+              const nextPassword = readFormValue(form, 'password', password);
+              const repeated = readFormValue(form, 'password-confirmation', passwordConfirmation);
+              if (nextPassword !== repeated) {
+                setError('Пароли не совпадают.');
+                return;
+              }
+              working.current = true;
+              setBusy(true);
+              setError(null);
+              setNotice(null);
+              void service
+                .completePasswordReset(submittedEmail, proof, nextPassword)
+                .then(() => {
+                  setEmail(submittedEmail);
+                  setStep('sign-in');
+                  setNotice('Пароль изменён. Войдите с новым паролем.');
+                })
+                .catch((reason: unknown) =>
+                  setError(redactAccountError(reason, [proof, nextPassword, repeated])),
+                )
+                .finally(() => {
+                  working.current = false;
+                  setBusy(false);
+                  setPassword('');
+                  setPasswordConfirmation('');
+                  setResetProof('');
+                });
+            }}
+          >
+            <EmailField value={email} onChange={setEmail} />
+            <label>
+              <span>Код или ссылка из письма</span>
+              <textarea
+                name="reset-proof"
+                value={resetProof}
+                onChange={(event) => setResetProof(event.target.value)}
+                autoComplete="off"
+                spellCheck={false}
+                required
+                autoFocus
+              />
+            </label>
+            <PasswordField
+              label="Новый пароль"
+              value={password}
+              onChange={setPassword}
+              autoComplete="new-password"
+              autoFocus={false}
+            />
+            <PasswordField
+              label="Повторите новый пароль"
+              name="password-confirmation"
+              value={passwordConfirmation}
+              onChange={setPasswordConfirmation}
+              autoComplete="new-password"
+              autoFocus={false}
+            />
+            <button className="account-button account-button--primary" type="submit">
+              Сохранить новый пароль
+            </button>
+            <button
+              className="account-button account-button--text"
+              type="button"
+              onClick={() => {
+                setResetProof('');
+                setPassword('');
+                setPasswordConfirmation('');
+                setStep('reset-password');
+              }}
+            >
+              Запросить новое письмо
+            </button>
+            <button
+              className="account-button account-button--text"
+              type="button"
+              onClick={() => {
+                setResetProof('');
+                setPassword('');
+                setPasswordConfirmation('');
+                setStep('sign-in');
+              }}
             >
               Вернуться ко входу
             </button>
@@ -336,10 +456,19 @@ export function AccountSyncPageView({
               type="button"
               disabled={busy}
               onClick={() => {
+                if (working.current) return;
+                working.current = true;
+                setBusy(true);
+                setError(null);
+                setNotice(null);
                 void service
                   .resendVerification()
                   .then(() => setNotice('Новый код отправлен.'))
-                  .catch((reason: unknown) => setError(redactAccountError(reason, [])));
+                  .catch((reason: unknown) => setError(redactAccountError(reason, [])))
+                  .finally(() => {
+                    working.current = false;
+                    setBusy(false);
+                  });
               }}
             >
               Отправить код ещё раз
@@ -417,7 +546,7 @@ export function AccountSyncPageView({
               void perform(
                 () => service.recoverDevice(submitted),
                 [submitted],
-                'ready',
+                undefined,
                 'Данные восстановлены и синхронизированы.',
               ).finally(() => setRecovery(''));
             }}
@@ -448,7 +577,7 @@ export function AccountSyncPageView({
               void perform(
                 () => service.syncNow(),
                 [],
-                'ready',
+                undefined,
                 (updated) =>
                   accountStatus(updated).tone === 'success' ? 'Синхронизация завершена.' : null,
               )
@@ -613,24 +742,29 @@ function PasswordField({
   value,
   onChange,
   autoComplete,
+  name = 'password',
+  autoFocus = true,
 }: {
   readonly label: string;
   readonly value: string;
   readonly onChange: (value: string) => void;
   readonly autoComplete: 'current-password' | 'new-password';
+  readonly name?: string;
+  readonly autoFocus?: boolean;
 }) {
   return (
     <label>
       <span>{label}</span>
       <input
-        name="password"
+        name={name}
         type="password"
         value={value}
         onChange={(event) => onChange(event.target.value)}
         autoComplete={autoComplete}
-        minLength={12}
+        minLength={autoComplete === 'new-password' ? 12 : undefined}
+        maxLength={autoComplete === 'new-password' ? 128 : undefined}
         required
-        autoFocus
+        autoFocus={autoFocus}
       />
     </label>
   );
@@ -895,6 +1029,8 @@ function SignOutDialog({
 }
 
 function stepFor(overview: AccountOverview): AccountPageStep {
+  if (overview.state === 'sign_in_required') return 'sign-in';
+  if (overview.state === 'device_recovery_required') return 'recover';
   if (overview.state === 'local_anonymous') return 'register';
   if (overview.state === 'email_verification_pending')
     return overview.emailVerified ? 'set-password' : 'verify';
@@ -910,6 +1046,19 @@ function accountStatus(overview: AccountOverview): {
   readonly description: string;
   readonly tone: 'local' | 'success' | 'pending' | 'offline';
 } {
+  if (overview.state === 'sign_in_required')
+    return {
+      label: 'Нужно войти',
+      description: 'Вход истёк. Локальные данные сохранены; войдите в подключённый аккаунт.',
+      tone: 'pending',
+    };
+  if (overview.state === 'device_recovery_required')
+    return {
+      label: 'Восстановите доступ',
+      description:
+        'Вы вошли в аккаунт. Введите ключ восстановления, чтобы возобновить синхронизацию устройства.',
+      tone: 'pending',
+    };
   if (overview.state === 'local_anonymous')
     return {
       label: 'Только это устройство',

@@ -6,8 +6,54 @@ import {
   PILOT_MUTATION_STORES,
 } from '../pilot/IndexedDbPilotMutationRecorder';
 import { structuredSyncFixtures } from '../pilot/StructuredSyncFixtures';
+import { bootstrapAttachments } from './AttachmentBootstrap';
 
 describe('SYNC-05 attachment registration', () => {
+  it('bootstraps memory photos once even when the older goal/walk checkpoint is complete', async () => {
+    const db = new LifeOsIndexedDb(new IDBFactory());
+    try {
+      const connection = await db.open();
+      const seed = connection.transaction(
+        [LIFE_OS_SYNC_STORE.settings, 'memoryEvents'],
+        'readwrite',
+      );
+      seed.objectStore(LIFE_OS_SYNC_STORE.settings).put({
+        id: 'sync',
+        setupState: 'configured',
+        membershipStatus: 'active',
+        spaceId: 'space',
+        deviceId: 'device',
+        currentKeyEpoch: 1,
+      });
+      seed
+        .objectStore(LIFE_OS_SYNC_STORE.settings)
+        .put({ id: 'attachment-bootstrap:space', completedAt: 'earlier' });
+      seed.objectStore('memoryEvents').put({
+        ...structuredSyncFixtures().memory_event,
+        photo: { dataUrl: 'data:image/png;base64,aGVsbG8=', mimeType: 'image/png', sizeBytes: 5 },
+      });
+      await done(seed);
+      const recorder = new IndexedDbPilotMutationRecorder();
+      await bootstrapAttachments(db, recorder);
+      await bootstrapAttachments(db, recorder);
+      const read = connection.transaction([
+        LIFE_OS_SYNC_STORE.settings,
+        LIFE_OS_SYNC_STORE.attachmentQueue,
+        LIFE_OS_SYNC_STORE.outbox,
+      ]);
+      expect(
+        await request(read.objectStore(LIFE_OS_SYNC_STORE.attachmentQueue).getAll()),
+      ).toHaveLength(1);
+      expect(await request(read.objectStore(LIFE_OS_SYNC_STORE.outbox).getAll())).toHaveLength(1);
+      expect(
+        await request(
+          read.objectStore(LIFE_OS_SYNC_STORE.settings).get('attachment-bootstrap:memory-v1:space'),
+        ),
+      ).toBeDefined();
+    } finally {
+      db.close();
+    }
+  });
   it('registers a durable opaque reference and keeps binary out of the structured event', async () => {
     const db = new LifeOsIndexedDb(new IDBFactory());
     const connection = await db.open();

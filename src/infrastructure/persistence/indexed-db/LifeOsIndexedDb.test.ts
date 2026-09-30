@@ -17,6 +17,45 @@ import {
 } from './LifeOsIndexedDb';
 
 describe('LifeOsIndexedDb', () => {
+  it('adds memory storage to v30 without changing diary or goal records', async () => {
+    const factory = new IDBFactory();
+    const legacy = await new Promise<IDBDatabase>((resolve, reject) => {
+      const opened = factory.open(LIFE_OS_DATABASE_NAME, 30);
+      opened.onupgradeneeded = () => {
+        opened.result.createObjectStore('diaryEntries', { keyPath: 'id' });
+        opened.result.createObjectStore('goals', { keyPath: 'id' });
+      };
+      opened.onsuccess = () => resolve(opened.result);
+      opened.onerror = () => reject(opened.error);
+    });
+    const oldDiary = { id: 'diary:day:2026-09-29', marker: 'diary-untouched' };
+    const oldGoal = { id: 'goal-before-upgrade', marker: 'goal-untouched' };
+    const write = legacy.transaction(['diaryEntries', 'goals'], 'readwrite');
+    write.objectStore('diaryEntries').put(oldDiary);
+    write.objectStore('goals').put(oldGoal);
+    await transactionDone(write);
+    legacy.close();
+    const adapter = new LifeOsIndexedDb(factory);
+    try {
+      const upgraded = await adapter.open();
+      expect([...upgraded.objectStoreNames]).toContain('memoryEvents');
+      expect(
+        await executeIndexedDbRequest(upgraded, 'diaryEntries', 'readonly', (store) =>
+          store.get(oldDiary.id),
+        ),
+      ).toEqual(oldDiary);
+      expect(
+        await executeIndexedDbRequest(upgraded, 'goals', 'readonly', (store) =>
+          store.get(oldGoal.id),
+        ),
+      ).toEqual(oldGoal);
+      expect(indexesOf(upgraded.transaction('memoryEvents').objectStore('memoryEvents'))).toEqual({
+        byOccurrence: true,
+      });
+    } finally {
+      adapter.close();
+    }
+  });
   it('adds diary storage to v28 without rewriting an existing action', async () => {
     const factory = new IDBFactory();
     const legacy = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -235,6 +274,8 @@ describe('LifeOsIndexedDb', () => {
       LIFE_OS_STORE.inboxIdeas,
       LIFE_OS_STORE.journal,
       LIFE_OS_STORE.lifeActions,
+      LIFE_OS_STORE.memoryEvents,
+      LIFE_OS_STORE.monthlyDirectionFocuses,
       LIFE_OS_STORE.morningCycles,
       LIFE_OS_STORE.periodDecisions,
       LIFE_OS_STORE.periodMemberships,
@@ -463,7 +504,7 @@ describe('LifeOsIndexedDb', () => {
     const secondConnection = await indexedDb.open();
 
     expect(secondConnection).not.toBe(firstConnection);
-    expect([...secondConnection.objectStoreNames]).toHaveLength(47);
+    expect([...secondConnection.objectStoreNames]).toHaveLength(49);
     indexedDb.close();
   });
 

@@ -49,6 +49,8 @@ async function seed(page: Page) {
       id: EntityId.create(`daily-action-${index}`),
       title: LifeActionTitle.create(title),
       description: 'Подробности действия',
+      sphereId: sphere.id,
+      directionId: directions[0]!.id,
       plannedDate: DayDate.create(today),
       createdAt: now,
       eventId: EntityId.create(`created-${index}`),
@@ -159,6 +161,9 @@ test('Today opens the action body; completion stays completed until explicit reo
   const row = page
     .locator('.planner-entity-context')
     .filter({ has: page.getByRole('button', { name: 'Прогулка', exact: true }) });
+  await expect(row.locator('.planner-action-context')).toContainText('Сфера Здоровье QA');
+  await expect(row.locator('.planner-action-context')).toContainText('Направление Тело');
+  await expect(page.getByRole('region', { name: 'Холодный душ', exact: true })).toHaveCount(0);
   await row.getByText('Подробности действия').click();
   await expect(page).toHaveURL(/#\/v2\/actions\/daily-action-0$/);
   await page.goto('/#/v2/today');
@@ -282,15 +287,19 @@ test('Actions shows one recurring series and can remove one occurrence or the wh
   ).toEqual({ removed: true, open: 0 });
 });
 
-test('Tomorrow moves an existing ready action, creates with an optional date and keeps daily directions', async ({
+test('Tomorrow moves an existing ready action, creates with an optional date and keeps monthly main direction', async ({
   page,
 }) => {
   const { today, tomorrow } = await seed(page);
   await page.getByLabel('Главное направление', { exact: true }).selectOption('daily-direction-0');
-  await expect(page.getByRole('status')).toContainText('Главное направление сохранено');
+  await expect(page.locator('.planner-notice')).toContainText(
+    'Главное направление месяца сохранено',
+  );
+  await expect(page.locator('.planner-month-focus')).toContainText('Здоровье QA → Тело');
   await page.getByRole('button', { name: 'Завтра', exact: true }).click();
-  await page.getByLabel('Главное направление', { exact: true }).selectOption('daily-direction-1');
-  await expect(page.getByRole('status')).toContainText('Главное направление сохранено');
+  await expect(page.getByLabel('Главное направление', { exact: true })).toHaveValue(
+    'daily-direction-0',
+  );
   await page.getByRole('button', { name: '+ Выбрать существующее действие', exact: true }).click();
   const candidate = page
     .locator('.planner-tomorrow-candidates li')
@@ -323,7 +332,7 @@ test('Tomorrow moves an existing ready action, creates with an optional date and
   await expect(page.getByRole('heading', { name: 'Завтра', exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByLabel('Главное направление', { exact: true })).toHaveValue(
-    'daily-direction-1',
+    'daily-direction-0',
   );
   await page.getByRole('button', { name: 'Сегодня', exact: true }).click();
   await expect(page.getByLabel('Главное направление', { exact: true })).toHaveValue(
@@ -334,7 +343,7 @@ test('Tomorrow moves an existing ready action, creates with an optional date and
   ).toHaveCount(0);
   await page.getByLabel('Главное направление', { exact: true }).selectOption('');
   await expect(page.getByLabel('Главное направление', { exact: true })).toHaveValue('');
-  await expect(page.locator('.planner-eyebrow').last()).toContainText(
+  await expect(page.locator('.planner-page-heading .planner-eyebrow')).toContainText(
     String(Number(today.slice(-2))),
   );
 });

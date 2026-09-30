@@ -17,8 +17,8 @@ import { GoalRecordMapper } from '../../src/infrastructure/persistence/mappers/G
 
 const panel = (page: Page) => page.getByRole('dialog', { name: 'Быстрый доступ', exact: true });
 const search = (page: Page) => panel(page).getByRole('searchbox');
-async function seed(page: Page) {
-  await page.goto('/#/v2/today');
+async function seed(page: Page, entry = '/') {
+  await page.goto(`${entry}#/v2/today`);
   await expect(page.getByRole('heading', { name: 'Сегодня', exact: true })).toBeVisible();
   const now = new Date();
   const sphere = Sphere.create({ id: EntityId.create('quick-sphere'), name: 'Работа QA', now });
@@ -154,8 +154,9 @@ test('quick access above a modal creates once, restores focus and guards result 
 test('quick access works in account and sleep, preserving their unfinished fields', async ({
   page,
 }) => {
-  await seed(page);
-  await page.goto('/#/v2/account');
+  const entry = '/tests/fixtures/quick-access-account.html';
+  await seed(page, entry);
+  await page.goto(`${entry}?screen=account#/v2/account`);
   const email = page.getByLabel('Электронная почта', { exact: true });
   await email.fill('draft@example.test');
   await open(page);

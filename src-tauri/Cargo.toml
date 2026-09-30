@@ -1,6 +1,6 @@
 [package]
 name = "lifeos"
-version = "1.0.22"
+version = "1.0.25"
 description = "LifeOS Windows desktop application"
 authors = ["LifeOS"]
 license = ""
@@ -36,4 +36,5 @@ windows-sys = { version = "0.59.0", features = [
   "Win32_Foundation",
   "Win32_Security_Cryptography",
   "Win32_Storage_FileSystem",
+  "Win32_UI_Input_KeyboardAndMouse",
 ] }

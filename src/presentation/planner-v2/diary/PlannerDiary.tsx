@@ -21,19 +21,94 @@ import { DiaryDayView, type DiarySaveStatus } from './DiaryDayView';
 import { DiaryMonthView } from './DiaryMonthView';
 import { DiaryWeekView } from './DiaryWeekView';
 import { useDiaryAutosave } from './useDiaryAutosave';
+import type { MemoryServices } from '../../../application/memory/MemoryServices';
+import type { DiaryMemoryField, MemoryDraft } from '../../../domain/memory';
+import { MemoryEditor } from '../memory/MemoryEditor';
+import { memoryError, type MemoryCatalog } from '../memory/memoryPresentation';
+
+type DiaryMemoryTransfer = (field: DiaryMemoryField, getVersion: () => number | null) => void;
 
 export function PlannerDiary({
   service,
   route,
   currentDate,
   onNavigate,
+  memory,
 }: {
   readonly service: DiaryService;
   readonly route: Extract<PlannerRoute, { view: 'diary' }>;
   readonly currentDate: DayDate;
   readonly onNavigate: (route: PlannerRoute) => void;
+  readonly memory?:
+    { readonly services: MemoryServices; readonly catalog: MemoryCatalog } | undefined;
 }) {
   const resolved = resolveDiaryRoute(route, currentDate);
+  const guard = useRouteLeaveGuard();
+  const periodKey = `${resolved.period}:${resolved.date}`;
+  const [preparedMemory, setPreparedMemory] = useState<{
+    periodKey: string;
+    draft: MemoryDraft;
+  } | null>(null);
+  const memoryDraft = preparedMemory?.periodKey === periodKey ? preparedMemory.draft : null;
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<{ periodKey: string; message: string } | null>(
+    null,
+  );
+  const [previousPeriod, setPreviousPeriod] = useState(periodKey);
+  if (previousPeriod !== periodKey) {
+    setPreviousPeriod(periodKey);
+    setPreparedMemory(null);
+    setImportError(null);
+  }
+  const importingNow = useRef(false);
+  const importGeneration = useRef(0);
+  const memoryOpener = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (memoryDraft === null && !importing && memoryOpener.current) {
+      if (memoryOpener.current.isConnected) memoryOpener.current.focus();
+      memoryOpener.current = null;
+    }
+  }, [memoryDraft, importing]);
+  useEffect(() => {
+    return () => {
+      importGeneration.current += 1;
+    };
+  }, [resolved.date, resolved.period]);
+  const importMemory = async (field: DiaryMemoryField, getVersion: () => number | null) => {
+    if (!memory?.services.commands.enabled || importingNow.current) return;
+    memoryOpener.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    importingNow.current = true;
+    setImporting(true);
+    setImportError(null);
+    const generation = importGeneration.current;
+    try {
+      if (!(await guard.flushBeforeLeave()))
+        throw new Error(
+          'Сначала повторите сохранение ответа дневника. Локальный текст остаётся на месте.',
+        );
+      const anchor = DayDate.create(resolved.date);
+      const sourceVersion = getVersion();
+      if (sourceVersion === null) throw new Error('Сначала сохраните ответ дневника.');
+      const draft = await memory.services.diaryImport.prepare(
+        resolved.period,
+        anchor,
+        field,
+        sourceVersion,
+      );
+      if (generation === importGeneration.current) setPreparedMemory({ periodKey, draft });
+    } catch (error: unknown) {
+      if (generation === importGeneration.current)
+        setImportError({ periodKey, message: memoryError(error) });
+    } finally {
+      importingNow.current = false;
+      setImporting(false);
+    }
+  };
+  const memoryAction = memory?.services.commands.enabled
+    ? (field: DiaryMemoryField, getVersion: () => number | null) =>
+        void importMemory(field, getVersion)
+    : undefined;
   const [state, setState] = useState<
     | { readonly kind: 'loading' }
     | { readonly kind: 'day'; readonly date: string; readonly entry: DiaryDayEntry | null }
@@ -84,6 +159,11 @@ export function PlannerDiary({
   return (
     <section className="planner-diary" aria-labelledby="planner-diary-title">
       <DiaryHeader route={resolved} currentDate={currentDate} onNavigate={onNavigate} />
+      {importError?.periodKey === periodKey && (
+        <p className="planner-error" role="alert">
+          {importError.message}
+        </p>
+      )}
       {state.kind === 'loading' ? (
         <div className="planner-diary-loading" role="status">
           <span />
@@ -103,15 +183,48 @@ export function PlannerDiary({
           service={service}
           date={DayDate.create(resolved.date)}
           entry={state.entry}
+          onMemory={memoryAction}
+          memoryBusy={importing}
         />
       ) : state.kind === 'week' && state.date === resolved.date ? (
-        <DiaryWeekEditor key={resolved.date} service={service} overview={state.overview} />
+        <DiaryWeekEditor
+          key={resolved.date}
+          service={service}
+          overview={state.overview}
+          onMemory={memoryAction}
+          memoryBusy={importing}
+        />
       ) : state.kind === 'month' && state.date === resolved.date ? (
-        <DiaryMonthEditor key={resolved.date} service={service} overview={state.overview} />
+        <DiaryMonthEditor
+          key={resolved.date}
+          service={service}
+          overview={state.overview}
+          onMemory={memoryAction}
+          memoryBusy={importing}
+        />
       ) : (
         <div className="planner-diary-loading" role="status">
           Загружаем дневник…
         </div>
+      )}
+      {memoryDraft && memory && (
+        <MemoryEditor
+          initialDraft={memoryDraft}
+          expectedVersion={null}
+          services={memory.services}
+          today={currentDate.toString()}
+          catalog={memory.catalog}
+          onCancel={() => setPreparedMemory(null)}
+          onSaved={(event) => {
+            setPreparedMemory(null);
+            onNavigate({
+              view: 'memory',
+              id: event.id.toString(),
+              year: Number(event.occurredOn.toString().slice(0, 4)),
+              mode: 'timeline',
+            });
+          }}
+        />
       )}
     </section>
   );
@@ -177,10 +290,14 @@ function DiaryDayEditor({
   service,
   date,
   entry,
+  onMemory,
+  memoryBusy = false,
 }: {
   readonly service: DiaryService;
   readonly date: DayDate;
   readonly entry: DiaryDayEntry | null;
+  readonly onMemory?: DiaryMemoryTransfer | undefined;
+  readonly memoryBusy?: boolean;
 }) {
   const guard = useRouteLeaveGuard();
   const initial = useMemo(
@@ -208,7 +325,7 @@ function DiaryDayEditor({
           ? 'completed'
           : 'saved';
   const change = (next: DiaryDayPayload) => {
-    if (completionInProgress.current) return;
+    if (completionInProgress.current || memoryBusy) return;
     setPayload(next);
     setCompleted(false);
     setConflictVersion(null);
@@ -277,7 +394,8 @@ function DiaryDayEditor({
       <DiaryDayView
         payload={payload}
         status={status}
-        disabled={completing}
+        disabled={completing || memoryBusy}
+        onMemory={onMemory ? (field) => onMemory(field, autosave.getVersion) : undefined}
         onChange={change}
         onComplete={() => void complete()}
       />
@@ -288,9 +406,13 @@ function DiaryDayEditor({
 function DiaryWeekEditor({
   service,
   overview,
+  onMemory,
+  memoryBusy = false,
 }: {
   readonly service: DiaryService;
   readonly overview: DiaryWeekOverview;
+  readonly onMemory?: DiaryMemoryTransfer | undefined;
+  readonly memoryBusy?: boolean;
 }) {
   const guard = useRouteLeaveGuard();
   const initial = useMemo(
@@ -384,7 +506,8 @@ function DiaryWeekEditor({
         completedActions={overview.planning.completed.length}
         goalsWithRecords={overview.planning.withRecords}
         status={status}
-        disabled={completing}
+        disabled={completing || memoryBusy}
+        onMemory={onMemory ? (field) => onMemory(field, autosave.getVersion) : undefined}
         onChange={change}
         onComplete={() => void complete()}
       />
@@ -395,9 +518,13 @@ function DiaryWeekEditor({
 function DiaryMonthEditor({
   service,
   overview,
+  onMemory,
+  memoryBusy = false,
 }: {
   readonly service: DiaryService;
   readonly overview: DiaryMonthOverview;
+  readonly onMemory?: DiaryMemoryTransfer | undefined;
+  readonly memoryBusy?: boolean;
 }) {
   const guard = useRouteLeaveGuard();
   const initial = useMemo(
@@ -493,7 +620,8 @@ function DiaryMonthEditor({
         completedActions={overview.planning.completed.length}
         goalsWithRecords={overview.planning.withRecords}
         status={status}
-        disabled={completing}
+        disabled={completing || memoryBusy}
+        onMemory={onMemory ? (field) => onMemory(field, autosave.getVersion) : undefined}
         onChange={change}
         onComplete={() => void complete()}
       />

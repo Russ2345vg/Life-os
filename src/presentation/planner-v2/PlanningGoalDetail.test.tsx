@@ -50,6 +50,29 @@ const operations: PlannerViewOperations = {
 };
 
 describe('V2 Goal action centre', () => {
+  it('shows the need before collapsed action and goal details', () => {
+    const item = Goal.create({
+      id: EntityId.create('visible-need'),
+      title: 'Учиться',
+      need: 'Развитие',
+      status: 'active',
+      now,
+    });
+    const html = renderToStaticMarkup(
+      createElement(GoalDetailContent, {
+        goal: item,
+        actions: [],
+        directions: [],
+        spheres: [],
+        facts: [],
+        today: '2026-09-28',
+        operations,
+      }),
+    );
+    expect(html.slice(0, html.indexOf('<details'))).toContain('Развитие');
+    expect(html.match(/Развитие/g)).toHaveLength(1);
+  });
+
   it('separates status and horizon, shows an empty action state and collapsed details before history', () => {
     const annual = Goal.create({
       id: EntityId.create('annual'),

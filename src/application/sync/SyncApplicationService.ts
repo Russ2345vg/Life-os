@@ -2,6 +2,7 @@ import type { SnapshotService } from './SnapshotService';
 import type { SyncStatusSource } from './SyncStatus';
 import type { AccountAuth, AccountSession } from './account/AccountAuth';
 import type { SyncRecovery } from './recovery/SyncRecovery';
+import type { SyncTransferGate } from './account/SyncTransferGate';
 import {
   createPairingSecret,
   parsePairingPayload,
@@ -71,6 +72,7 @@ export interface SyncApplication {
 }
 
 export interface SyncApplicationDependencies {
+  readonly transferGate?: SyncTransferGate;
   readonly statusSource?: SyncStatusSource;
   readonly recovery?: SyncRecovery;
   readonly auth: AccountAuth;
@@ -103,10 +105,36 @@ export class SyncApplicationService implements SyncApplication {
   }
 
   public async loadOverview(): Promise<SyncOverview> {
-    let installation = await this.ensureInstallation();
+    const installation = await this.ensureInstallation();
+    if (['sign_in_required', 'device_recovery_required'].includes(installation.accountSetupState)) {
+      const devices =
+        installation.spaceId === null
+          ? []
+          : await this.dependencies.deviceCacheRepository.list(installation.spaceId);
+      return {
+        installation,
+        devices,
+        connection: 'local',
+        warning: 'Для синхронизации восстановите доступ к устройству.',
+      };
+    }
     if (installation.spaceId === null || installation.membershipStatus !== 'active') {
       return { installation, devices: [], connection: 'local', warning: null };
     }
+    if (this.dependencies.transferGate !== undefined) {
+      const result = await this.dependencies.transferGate
+        .run(async () => this.loadConnectedOverview(await this.requireInstallation()))
+        .catch(() => null);
+      if (result !== null) return result;
+      const devices = await this.dependencies.deviceCacheRepository.list(installation.spaceId);
+      return { installation, devices, connection: 'local', warning: null };
+    }
+    return this.loadConnectedOverview(installation);
+  }
+
+  private async loadConnectedOverview(installation: SyncInstallation): Promise<SyncOverview> {
+    if (installation.spaceId === null)
+      return { installation, devices: [], connection: 'local', warning: null };
     if (installation.currentKeyEpoch === null) {
       throw new Error('Active Sync installation has no key epoch.');
     }
@@ -380,6 +408,12 @@ export class SyncApplicationService implements SyncApplication {
     let installation = await this.ensureInstallationForRecovery();
     const authorization =
       await this.dependencies.crypto.prepareRecoveryAuthorization(recoveryMaterial);
+    if (
+      ['configured', 'recovery_unconfirmed'].includes(installation.setupState) &&
+      installation.accountUserId !== null
+    ) {
+      return this.recoverConfiguredAccount(installation, authorization, recoveryMaterial);
+    }
     const pendingRetry =
       installation.accountSetupState === 'recovery_confirmation_pending' &&
       installation.membershipStatus === 'pending' &&
@@ -509,6 +543,81 @@ export class SyncApplicationService implements SyncApplication {
     if (installation.spaceId === null) throw new Error('Sync space is not configured.');
     await this.dependencies.crypto.requireRecoveryMaterial(installation.spaceId);
     return this.rotateAfterRevocation(installation, deviceId);
+  }
+
+  private async recoverConfiguredAccount(
+    installation: SyncInstallation,
+    authorization: { readonly spaceId: string; readonly authProof: string },
+    recoveryMaterial: string,
+  ): Promise<SyncOverview> {
+    if (installation.spaceId !== authorization.spaceId)
+      throw new Error('Recovery key does not match this Sync installation.');
+    await this.ensureAuthorized(installation);
+    let candidate = installation.accountRecoveryDeviceId ?? null;
+    if (candidate === null) {
+      const snapshot = await this.dependencies.snapshotService.createPreSyncSnapshot();
+      const verified = await this.dependencies.snapshotService.verifySnapshot(snapshot.snapshotId);
+      if (!verified.valid) throw new Error('Pre-sync local snapshot verification failed.');
+      candidate = this.dependencies.createId();
+      await this.dependencies.crypto.ensureDeviceIdentity(candidate, true);
+      installation = {
+        ...installation,
+        accountRecoveryDeviceId: candidate,
+        accountMigrationSnapshotId: snapshot.snapshotId,
+        updatedAt: this.now().toISOString(),
+      };
+      await this.dependencies.installationRepository.save(installation);
+    }
+    const identity = await this.dependencies.crypto.ensureDeviceIdentity(candidate, false);
+    const challenge = await this.dependencies.transport.beginRecovery({
+      spaceId: authorization.spaceId,
+      authProof: authorization.authProof,
+      deviceId: candidate,
+      publicKey: identity.publicKey,
+      platform: installation.platform,
+    });
+    // Never delete shared space keys on failure: the current installation and its outbox still use them.
+    await this.dependencies.crypto.recoverAndStoreKeyRing({
+      recoveryMaterial,
+      envelope: challenge.recoveryEnvelope,
+    });
+    const encryptedName = await this.dependencies.crypto.encryptDeviceName({
+      spaceId: authorization.spaceId,
+      deviceId: candidate,
+      keyEpoch: challenge.currentKeyEpoch,
+      deviceName: installation.deviceName,
+    });
+    await this.dependencies.transport.completeRecovery({
+      deviceId: candidate,
+      authProof: authorization.authProof,
+      recoveryEnvelopeSha256Hex: await recoveryEnvelopeDigest(
+        challenge.recoveryEnvelope,
+        this.random,
+      ),
+      encryptedDeviceName: encryptedName.ciphertext,
+      encryptedDeviceNameNonce: encryptedName.nonce,
+    });
+    const current = await this.requireInstallation();
+    if (
+      current.accountRecoveryDeviceId !== candidate ||
+      current.accountUserId !== installation.accountUserId ||
+      current.accountSessionId !== installation.accountSessionId
+    )
+      throw new Error('Recovery context changed.');
+    const updated: SyncInstallation = {
+      ...current,
+      deviceId: candidate,
+      publicKey: identity.publicKey,
+      currentKeyEpoch: challenge.currentKeyEpoch,
+      membershipStatus: 'active',
+      recoveryConfirmedAt: this.now().toISOString(),
+      setupState: 'configured',
+      accountRecoveryDeviceId: null,
+      accountSetupState: 'recovery_confirmation_pending',
+      updatedAt: this.now().toISOString(),
+    };
+    await this.dependencies.installationRepository.save(updated);
+    return { installation: updated, devices: [], connection: 'online', warning: null };
   }
 
   public async retryPendingRotation(): Promise<SyncOverview> {
@@ -700,6 +809,7 @@ export class SyncApplicationService implements SyncApplication {
     if (
       session === null ||
       session.isAnonymous ||
+      !session.emailVerified ||
       session.userId !== installation.accountUserId ||
       session.sessionId !== installation.accountSessionId ||
       session.email !== installation.accountEmail

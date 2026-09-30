@@ -1400,9 +1400,6 @@
   .planner-v2--sleep .planner-rollback {
     display: none;
   }
-  .planner-v2--sleep .planner-sidebar nav > a:nth-of-type(3) {
-    display: none;
-  }
   .planner-v2--sleep .planner-sidebar nav {
     padding: 4px 10px calc(4px + env(safe-area-inset-bottom));
   }
@@ -1419,10 +1416,6 @@
   .planner-sleep-nav-current > span:first-child {
     width: auto;
     font-size: 21px;
-  }
-  .planner-v2--sleep .planner-sidebar nav > a:nth-of-type(4) {
-    grid-column: 4;
-    grid-row: 1;
   }
   .planner-v2--sleep .planner-sleep-nav-current {
     grid-column: 3;

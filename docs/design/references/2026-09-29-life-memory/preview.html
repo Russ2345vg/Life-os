@@ -1,0 +1,661 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Память жизни · LifeOS</title>
+    <link rel="stylesheet" href="/src/presentation/styles/global.css" />
+    <link rel="stylesheet" href="/src/presentation/planner-v2/planner-v2.css" />
+    <link rel="stylesheet" href="/src/presentation/planner-v2/planner-master.css" />
+    <link rel="stylesheet" href="/src/presentation/planner-v2/planner-premium.css" />
+    <style>
+      .memory-page {
+        max-width: 1180px;
+        margin: auto;
+      }
+      .memory-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: var(--space-6);
+        margin-bottom: var(--space-8);
+      }
+      .memory-header h1 {
+        margin: 0 0 var(--space-2);
+        font-size: clamp(30px, 4vw, 44px);
+        letter-spacing: -0.04em;
+      }
+      .memory-header p {
+        color: var(--text-secondary);
+        margin: 0;
+      }
+      .memory-header-actions {
+        display: flex;
+        gap: var(--space-3);
+        flex-shrink: 0;
+      }
+      .planner-v2 .memory-header-actions select {
+        width: 100px;
+        padding-inline: var(--space-3);
+        flex-shrink: 0;
+      }
+      .memory-header-actions button {
+        white-space: nowrap;
+      }
+      .memory-toolbar {
+        display: flex;
+        gap: var(--space-4);
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: var(--space-8);
+      }
+      .memory-filters {
+        display: flex;
+        gap: var(--space-3);
+      }
+      .memory-filters input {
+        min-width: 240px;
+      }
+      .memory-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 180px;
+        gap: var(--space-12);
+      }
+      .memory-month {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin: 0 0 var(--space-4);
+      }
+      .memory-month h2 {
+        font-size: 20px;
+        margin: 0;
+      }
+      .memory-month span,
+      .memory-meta,
+      .memory-date {
+        color: var(--text-muted);
+        font-size: 13px;
+      }
+      .memory-card {
+        display: grid;
+        grid-template-columns: 68px minmax(0, 1fr);
+        gap: var(--space-4);
+        margin-bottom: var(--space-6);
+      }
+      .memory-date {
+        text-align: center;
+        padding-top: var(--space-4);
+      }
+      .memory-date strong {
+        font-size: 25px;
+        display: block;
+        color: var(--text-secondary);
+      }
+      .memory-surface {
+        border: 1px solid var(--border-soft);
+        background: var(--surface-1);
+        border-radius: var(--radius-large);
+        overflow: hidden;
+      }
+      .memory-card-content {
+        padding: var(--space-6);
+      }
+      .memory-card-heading {
+        display: flex;
+        gap: var(--space-4);
+        justify-content: space-between;
+        align-items: flex-start;
+      }
+      .memory-card-heading button {
+        border: 0;
+        background: none;
+        padding: 0;
+        min-height: 44px;
+        color: var(--text-primary);
+        text-align: left;
+        font-size: 20px;
+        font-weight: 650;
+      }
+      .memory-card-heading .memory-star {
+        min-width: 44px;
+        color: var(--priority);
+        text-align: center;
+        font-size: 22px;
+      }
+      .memory-card p {
+        margin: var(--space-3) 0 var(--space-4);
+        line-height: 1.65;
+        color: var(--text-secondary);
+      }
+      .memory-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-2) var(--space-4);
+      }
+      .memory-photo {
+        width: 100%;
+        height: 220px;
+        display: block;
+        object-fit: cover;
+        object-position: center 55%;
+      }
+      .memory-months {
+        position: sticky;
+        top: var(--space-8);
+        align-self: start;
+      }
+      .memory-months h2 {
+        color: var(--text-muted);
+        font-size: 13px;
+        font-weight: 500;
+        margin: 0 0 var(--space-4);
+      }
+      .memory-months button {
+        display: block;
+        width: 100%;
+        text-align: left;
+        margin-bottom: var(--space-2);
+      }
+      .memory-year-head {
+        display: flex;
+        gap: var(--space-6);
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: var(--space-6);
+      }
+      .memory-year-head h2 {
+        margin: 0;
+        font-size: 26px;
+      }
+      .memory-year-head span {
+        color: var(--text-muted);
+      }
+      .memory-year-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--space-6);
+        margin-bottom: var(--space-8);
+      }
+      .memory-year-grid article {
+        padding: var(--space-6);
+      }
+      .memory-year-grid h3 {
+        margin: var(--space-2) 0;
+        font-size: 20px;
+      }
+      .memory-year-grid p {
+        line-height: 1.65;
+        color: var(--text-secondary);
+      }
+      .memory-empty {
+        text-align: center;
+        padding: var(--space-12);
+        border: 1px dashed var(--border-soft);
+        border-radius: var(--radius-large);
+      }
+      .memory-empty p {
+        color: var(--text-secondary);
+      }
+      .preview-note {
+        color: var(--text-muted);
+        font-size: 12px;
+        margin: var(--space-8) 0;
+      }
+      .memory-form {
+        display: grid;
+        gap: var(--space-4);
+      }
+      .planner-sheet > header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-4);
+        margin-bottom: var(--space-6);
+      }
+      .planner-sheet > header h2 {
+        margin: 0;
+        font-size: 22px;
+      }
+      .memory-form label {
+        display: grid;
+        gap: var(--space-2);
+      }
+      .memory-form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: var(--space-4);
+      }
+      .memory-form textarea {
+        resize: vertical;
+        min-height: 140px;
+      }
+      .memory-form footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: var(--space-3);
+        padding-top: var(--space-4);
+      }
+      .memory-detail {
+        padding: var(--space-6);
+      }
+      .memory-detail h2 {
+        font-size: 28px;
+        margin: var(--space-3) 0;
+      }
+      .memory-detail p {
+        line-height: 1.75;
+      }
+      .memory-pending {
+        padding: var(--space-8);
+        text-align: center;
+        color: var(--text-secondary);
+        background: var(--surface-2);
+      }
+      .memory-icon {
+        width: 20px;
+        height: 20px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 1.7;
+        flex-shrink: 0;
+      }
+      [hidden] {
+        display: none !important;
+      }
+      @media (max-width: 760px) {
+        .memory-header {
+          display: block;
+          margin-bottom: var(--space-6);
+        }
+        .memory-header-actions {
+          margin-top: var(--space-4);
+        }
+        .planner-v2 .memory-header-actions select {
+          width: 80px;
+          padding-inline: var(--space-2);
+        }
+        .memory-header-actions .planner-primary {
+          flex: 1;
+        }
+        .memory-toolbar {
+          display: block;
+        }
+        .memory-filters {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 120px;
+          margin-top: var(--space-4);
+        }
+        .memory-filters input {
+          min-width: 0;
+          width: 100%;
+        }
+        .memory-layout {
+          grid-template-columns: minmax(0, 1fr);
+          gap: var(--space-6);
+        }
+        .memory-months {
+          display: none;
+        }
+        .memory-card {
+          grid-template-columns: minmax(0, 1fr);
+          gap: var(--space-2);
+        }
+        .memory-date {
+          display: flex;
+          gap: var(--space-2);
+          align-items: baseline;
+          text-align: left;
+          padding: 0;
+        }
+        .memory-date strong {
+          font-size: 15px;
+        }
+        .memory-card-content {
+          padding: var(--space-4);
+        }
+        .memory-card-heading button {
+          font-size: 18px;
+        }
+        .memory-photo {
+          height: 180px;
+        }
+        .memory-year-grid {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .memory-year-head {
+          display: block;
+        }
+        .memory-form-row {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .memory-empty {
+          padding: var(--space-8) var(--space-4);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <svg hidden>
+      <symbol id="memory-icon" viewBox="0 0 24 24">
+        <rect x="4" y="3" width="16" height="18" rx="2" />
+        <path d="M8 7h8M8 11h5M8 15h8" />
+      </symbol>
+    </svg>
+    <div class="planner-v2">
+      <aside class="planner-sidebar">
+        <a class="planner-brand" href="#">LifeOS</a>
+        <button type="button">⌕ Поиск и добавление</button>
+        <nav aria-label="Рабочий интерфейс">
+          <a href="#">◷ <span>Сегодня</span></a>
+          <a href="#" class="planner-nav-secondary">◎ <span>Сферы</span></a>
+          <a href="#" class="planner-nav-secondary">◎ <span>Направления</span></a>
+          <a href="#">◎ <span>Цели</span></a>
+          <a href="#">ϟ <span>Действия</span></a>
+          <a href="#" class="planner-nav-secondary">↳ <span>Входящие</span></a>
+          <a href="#" class="planner-nav-secondary">◷ <span>Дневник</span></a>
+          <a href="#" aria-current="page"
+            ><svg class="memory-icon"><use href="#memory-icon" /></svg><span>Память жизни</span></a
+          >
+          <button class="planner-nav-more" type="button">••• <span>Ещё</span></button>
+        </nav>
+      </aside>
+      <main class="planner-content">
+        <section class="memory-page" aria-labelledby="memory-title">
+          <header class="memory-header">
+            <div>
+              <span class="planner-eyebrow">Личная история</span>
+              <h1 id="memory-title">Память жизни</h1>
+              <p>Моменты, к которым хочется возвращаться.</p>
+            </div>
+            <div class="memory-header-actions">
+              <select aria-label="Год">
+                <option>2026</option></select
+              ><button class="planner-primary" id="add" type="button">
+                + Добавить воспоминание
+              </button>
+            </div>
+          </header>
+          <div class="memory-toolbar">
+            <div class="planner-segments" aria-label="Представление">
+              <button id="timeline-tab" aria-pressed="true" type="button">Лента</button
+              ><button id="year-tab" aria-pressed="false" type="button">Мой год</button>
+            </div>
+            <div class="memory-filters" id="filters">
+              <input
+                id="search"
+                type="search"
+                aria-label="Поиск воспоминаний"
+                placeholder="Найти воспоминание"
+              /><select id="kind" aria-label="Тип события">
+                <option value="">Все события</option>
+                <option>Момент</option>
+                <option>Достижение</option>
+                <option>Поездка</option>
+                <option>Решение</option>
+                <option>Мысль</option>
+              </select>
+            </div>
+          </div>
+          <section id="timeline" class="memory-layout">
+            <div>
+              <div class="memory-month">
+                <h2>Сентябрь</h2>
+                <span id="count"></span>
+              </div>
+              <div id="events"></div>
+            </div>
+            <aside class="memory-months">
+              <h2>Месяцы 2026</h2>
+              <button aria-pressed="true" type="button">Сентябрь</button
+              ><button disabled type="button">Август</button
+              ><button disabled type="button">Июль</button>
+              <p class="preview-note">
+                Связи со сферами, направлениями и дневником остаются рядом с событием.
+              </p>
+            </aside>
+          </section>
+          <section id="year" hidden>
+            <div class="memory-year-head">
+              <h2>Главные моменты 2026</h2>
+              <span>Твоя история складывается весь год</span>
+            </div>
+            <div id="highlights" class="memory-year-grid"></div>
+            <h2>Достижения</h2>
+            <div id="achievements" class="memory-year-grid"></div>
+            <h2>История по месяцам</h2>
+            <p id="year-count" class="preview-note"></p>
+            <div id="year-months"></div>
+          </section>
+          <p class="preview-note">
+            Макет для обсуждения · события и фотография демонстрационные. Изменения в этом макете
+            исчезнут после перезагрузки.
+          </p>
+        </section>
+      </main>
+      <dialog class="planner-sheet" id="editor" aria-labelledby="editor-title">
+        <header>
+          <h2 id="editor-title">Новое воспоминание</h2>
+          <button type="button" class="close" aria-label="Закрыть редактор">×</button>
+        </header>
+        <form class="memory-form" id="form">
+          <label
+            >Название<input
+              name="title"
+              required
+              maxlength="160"
+              placeholder="Что хочется сохранить?"
+          /></label>
+          <div class="memory-form-row">
+            <label
+              >Дата события<input
+                type="date"
+                name="date"
+                value="2026-09-29"
+                max="2026-09-29"
+                required /></label
+            ><label
+              >Тип<select name="kind">
+                <option>Момент</option>
+                <option>Достижение</option>
+                <option>Поездка</option>
+                <option>Решение</option>
+                <option>Мысль</option>
+              </select></label
+            >
+          </div>
+          <label
+            >История<textarea
+              name="body"
+              placeholder="Что произошло и почему это важно для тебя?"
+              maxlength="10000"
+            ></textarea></label
+          ><label
+            >Сфера<select name="sphere">
+              <option value="">Без связи</option>
+              <option>Развитие</option>
+              <option>Отдых</option>
+              <option>Здоровье</option>
+            </select></label
+          >
+          <div class="memory-form-row">
+            <label
+              >Направление<select name="direction">
+                <option value="">Без связи</option>
+                <option>Инвестиции</option>
+                <option>Время для себя</option>
+              </select></label
+            ><label
+              >Цель<select name="goal">
+                <option value="">Без связи</option>
+                <option>Изучить основы инвестиций</option>
+              </select></label
+            >
+          </div>
+          <label>Фотография<input type="file" accept="image/jpeg,image/png,image/webp" /></label
+          ><label style="display: flex; align-items: center"
+            ><input name="highlight" type="checkbox" /> Главное событие года</label
+          >
+          <footer>
+            <button type="button" class="close">Отмена</button
+            ><button type="submit" class="planner-primary">Сохранить</button>
+          </footer>
+        </form>
+      </dialog>
+      <dialog class="planner-sheet" id="detail" aria-label="Воспоминание">
+        <header>
+          <span>Воспоминание</span
+          ><button type="button" class="close" aria-label="Закрыть воспоминание">×</button>
+        </header>
+        <div id="detail-body"></div>
+      </dialog>
+    </div>
+    <script type="module">
+      const data = [
+        {
+          id: 1,
+          date: '2026-09-28',
+          title: 'Выбрался на прогулку в лес',
+          body: 'Тихий вечер без спешки. Хочется сохранить этот момент и чаще оставлять время на такие прогулки.',
+          kind: 'Момент',
+          context: 'Отдых · Время для себя',
+          highlight: true,
+          photo: true,
+        },
+        {
+          id: 2,
+          date: '2026-09-24',
+          title: 'Закончил первую книгу по инвестициям',
+          body: 'Разобрался в базовых понятиях и записал вопросы, которые хочу изучить дальше. Маленький, но важный шаг.',
+          kind: 'Достижение',
+          context: 'Деньги · Инвестиции · Из дневника',
+          highlight: true,
+        },
+        {
+          id: 3,
+          date: '2026-09-20',
+          title: 'Решил выделять вечер для себя',
+          body: 'Не заполнять каждую свободную минуту делами. Оставлять место для отдыха и общения.',
+          kind: 'Решение',
+          context: 'Личное',
+          highlight: false,
+        },
+      ];
+      const $ = (id) => document.getElementById(id);
+      const previewState = new URLSearchParams(location.search).get('state');
+      if (previewState === 'empty') data.splice(0);
+      if (previewState === 'pending') data[0].photo = 'pending';
+      const escape = (text) => {
+        const span = document.createElement('span');
+        span.textContent = text;
+        return span.innerHTML;
+      };
+      const dateLabel = (date) =>
+        new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }).format(
+          new Date(date + 'T12:00:00Z'),
+        );
+      const monthLabel = (date) =>
+        new Intl.DateTimeFormat('ru-RU', { month: 'long' }).format(new Date(date + 'T12:00:00Z'));
+      const pendingPhoto =
+        '<div class="memory-pending" role="status">Фотография загружается<br/><small>История уже доступна</small></div>';
+      function card(e) {
+        return `<article class="memory-card"><div class="memory-date"><strong>${Number(e.date.slice(8))}</strong>${dateLabel(e.date).split(' ')[1]}</div><div class="memory-surface">${e.photo === 'pending' ? pendingPhoto : e.photo ? '<img class="memory-photo" src="/lifeos-forest-atmosphere.png" alt="Лесной пейзаж, пример фотографии"/>' : ''}<div class="memory-card-content"><div class="memory-card-heading"><button data-open="${e.id}" type="button">${escape(e.title)}</button><button class="memory-star" data-star="${e.id}" aria-label="${e.highlight ? 'Убрать из главных' : 'Отметить главным'}" aria-pressed="${e.highlight}" type="button">${e.highlight ? '★' : '☆'}</button></div><p>${escape(e.body)}</p><div class="memory-meta"><span>${e.kind}</span><span>${escape(e.context)}</span></div></div></div></article>`;
+      }
+      function render() {
+        const query = $('search').value.toLocaleLowerCase('ru');
+        const kind = $('kind').value;
+        const matches = data.filter(
+          (e) =>
+            (!kind || e.kind === kind) &&
+            `${e.title} ${e.body}`.toLocaleLowerCase('ru').includes(query),
+        );
+        $('count').textContent = `Событий: ${matches.length}`;
+        $('events').innerHTML = matches.length
+          ? matches.map(card).join('')
+          : '<div class="memory-empty"><h2>Пока нет воспоминаний</h2><p>Сохрани событие, которое хочется помнить.</p><button class="planner-primary" type="button" data-add>Добавить воспоминание</button></div>';
+        const summary = (e) =>
+          `<article class="memory-surface"><span class="memory-meta">${dateLabel(e.date)} · ${e.kind}</span><h3>${escape(e.title)}</h3><p>${escape(e.body)}</p><button data-open="${e.id}" type="button">Открыть воспоминание</button></article>`;
+        $('highlights').innerHTML = data
+          .filter((e) => e.highlight)
+          .map(summary)
+          .join('');
+        $('achievements').innerHTML = data
+          .filter((e) => e.kind === 'Достижение')
+          .map(summary)
+          .join('');
+        $('year-count').textContent =
+          `Воспоминаний за год: ${data.length}. События в нескольких блоках учитываются один раз.`;
+        const months = [...new Set(data.map((event) => event.date.slice(0, 7)))];
+        $('year-months').innerHTML = months.length
+          ? months
+              .map(
+                (month) =>
+                  `<section><h3>${monthLabel(month + '-01')}</h3><div class="memory-year-grid">${data
+                    .filter((event) => event.date.startsWith(month))
+                    .map(summary)
+                    .join('')}</div></section>`,
+              )
+              .join('')
+          : '<p class="preview-note">Здесь появится история твоего года, когда ты сохранишь первое воспоминание.</p>';
+        if (!$('highlights').innerHTML)
+          $('highlights').innerHTML =
+            '<p class="preview-note">Отметь важное событие как главное, чтобы выделить его здесь.</p>';
+        if (!$('achievements').innerHTML)
+          $('achievements').innerHTML =
+            '<p class="preview-note">Пока нет событий с типом «Достижение».</p>';
+      }
+      function setMode(year) {
+        $('timeline').hidden = year;
+        $('year').hidden = !year;
+        $('filters').hidden = year;
+        $('timeline-tab').setAttribute('aria-pressed', String(!year));
+        $('year-tab').setAttribute('aria-pressed', String(year));
+      }
+      $('timeline-tab').onclick = () => setMode(false);
+      $('year-tab').onclick = () => setMode(true);
+      $('search').oninput = render;
+      $('kind').onchange = render;
+      $('add').onclick = () => $('editor').showModal();
+      document.addEventListener('click', (e) => {
+        const b = e.target.closest('button');
+        if (!b) return;
+        if (b.classList.contains('close')) b.closest('dialog').close();
+        if (b.hasAttribute('data-add')) $('editor').showModal();
+        if (b.dataset.star) {
+          const event = data.find((x) => x.id === Number(b.dataset.star));
+          event.highlight = !event.highlight;
+          render();
+        }
+        if (b.dataset.open) {
+          const event = data.find((x) => x.id === Number(b.dataset.open));
+          $('detail-body').innerHTML =
+            `${event.photo === 'pending' ? pendingPhoto : event.photo ? '<img class="memory-photo" src="/lifeos-forest-atmosphere.png" alt="Пример фотографии"/>' : ''}<div class="memory-detail"><span class="memory-meta">${dateLabel(event.date)} · ${event.kind}</span><h2>${escape(event.title)}</h2><p>${escape(event.body)}</p><span class="memory-meta">${escape(event.context)}</span></div>`;
+          $('detail').showModal();
+        }
+      });
+      $('form').onsubmit = (e) => {
+        e.preventDefault();
+        const f = new FormData(e.target);
+        data.unshift({
+          id: Date.now(),
+          date: f.get('date'),
+          title: f.get('title'),
+          body: f.get('body'),
+          kind: f.get('kind'),
+          context:
+            ['sphere', 'direction', 'goal']
+              .map((name) => f.get(name))
+              .filter(Boolean)
+              .join(' · ') || 'Личное',
+          highlight: f.has('highlight'),
+        });
+        data.sort((a, b) => b.date.localeCompare(a.date));
+        $('editor').close();
+        e.target.reset();
+        render();
+      };
+      render();
+    </script>
+  </body>
+</html>

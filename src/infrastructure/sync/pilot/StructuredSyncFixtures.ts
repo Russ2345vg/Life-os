@@ -15,6 +15,7 @@ import {
   LifeAction,
   LifeActionTitle,
   MorningCycle,
+  changeMonthlyDirectionFocus,
   PreparationPlan,
   PreparationRule,
   Project,
@@ -61,6 +62,26 @@ export function structuredSyncFixtures(): Readonly<
     now,
   );
   return {
+    memory_event: {
+      id: 'sync04-memory',
+      occurredOn: '2026-09-07',
+      title: 'Важный момент',
+      body: 'Запомнить',
+      kind: 'moment',
+      isHighlight: true,
+      context: null,
+      diarySource: null,
+      photo: null,
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+      deletedAt: null,
+      version: 1,
+    },
+    monthly_direction_focus: {
+      ...mappers.MonthlyDirectionFocusRecordMapper.toRecord(
+        changeMonthlyDirectionFocus(null, '2026-09', 'sync04-direction', now),
+      ),
+    },
     time_capacity: {
       schemaVersion: 1,
       id: 'time-capacity',
@@ -351,6 +372,17 @@ export function structuredSyncFixtures(): Readonly<
       ),
     },
     sleep_schedule: {
+      coldShowerEntries: [
+        {
+          date: '2026-09-08',
+          status: 'completed',
+          energy: 4,
+          feeling: 'better',
+          skipReason: null,
+          recordedAt: now.toISOString(),
+          updatedAt: now.toISOString(),
+        },
+      ],
       ...SleepScheduleRecordMapper.toRecord(
         updateSleepSettings(
           createEmptySleepSchedule(),

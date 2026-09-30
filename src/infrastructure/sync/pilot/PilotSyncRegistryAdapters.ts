@@ -33,6 +33,7 @@ import {
   JournalEntryRecordMapper,
   LifeActionRecordMapper,
   MorningCycleRecordMapper,
+  MonthlyDirectionFocusRecordMapper,
   PreparationPlanRecordMapper,
   PreparationRuleRecordMapper,
   ProjectRecordMapper,
@@ -46,6 +47,7 @@ import {
 } from '../../persistence/mappers';
 import { WalkCaptureRecordMapper } from '../../persistence/mappers/WalkCaptureRecordMapper';
 import { SleepScheduleRecordMapper } from '../../persistence/mappers/SleepScheduleRecordMapper';
+import { MemoryEventRecordMapper } from '../../persistence/mappers/MemoryEventRecordMapper';
 import { LIFE_OS_SYNC_REGISTRY } from '../LifeOsSyncRegistry';
 import { attachmentReference } from '../../../application/sync/attachments/AttachmentContracts';
 import {
@@ -283,6 +285,40 @@ const PILOT_BINDINGS: Readonly<Record<PilotEntityType, PilotAdapterBinding>> = O
     ...optional(record, 'sphereId', 'sphere'),
   ]),
   diary_entry: mapped(DiaryEntryRecordMapper),
+  memory_event: {
+    normalize: (value) => {
+      const candidate = isRecord(value) ? { ...withValidationVersion(value), photo: null } : value;
+      const record = withoutFields(
+        asRecord(MemoryEventRecordMapper.toRecord(MemoryEventRecordMapper.fromRecord(candidate))),
+        ['photo', 'version'],
+      );
+      return isRecord(value) && Object.hasOwn(value, 'syncAttachment')
+        ? { ...record, syncAttachment: attachmentReference(value.syncAttachment) }
+        : record;
+    },
+    prepare: (value, existing) =>
+      asRecord(
+        MemoryEventRecordMapper.toRecord(
+          MemoryEventRecordMapper.fromRecord({
+            ...value,
+            photo: existing?.photo ?? null,
+            version: receiverVersion(existing),
+          }),
+        ),
+      ),
+    references: (record) => [
+      ...(isRecord(record.context)
+        ? [
+            ...optional(record.context, 'sphereId', 'sphere'),
+            ...optional(record.context, 'directionId', 'direction'),
+            ...optional(record.context, 'goalId', 'goal'),
+          ].map((reference) => ({ ...reference, required: false }))
+        : []),
+      ...(isRecord(record.diarySource)
+        ? orphanSafe(record.diarySource, 'entryId', 'diary_entry')
+        : []),
+    ],
+  },
   life_action: lifeActionMapped(),
   time_capacity: mapped({
     fromRecord: parseTimeCapacityRecord,
@@ -348,6 +384,9 @@ const PILOT_BINDINGS: Readonly<Record<PilotEntityType, PilotAdapterBinding>> = O
     recommendationApplicationReferences,
   ),
   morning_cycle: mapped(MorningCycleRecordMapper, morningCycleReferences),
+  monthly_direction_focus: mapped(MonthlyDirectionFocusRecordMapper, (record) =>
+    optional(record, 'directionId', 'direction'),
+  ),
   sleep_schedule: mapped(SleepScheduleRecordMapper),
   inbox_idea: mapped(InboxIdeaRecordMapper, (record) =>
     record.targetType === 'goal'
@@ -488,7 +527,8 @@ export function prepareRemotePilotRecord(
     normalizeLinks(entityType, value) as Readonly<Record<string, unknown>>,
     existing,
   );
-  return (entityType === 'goal' || entityType === 'walk') && Object.hasOwn(value, 'syncAttachment')
+  return (entityType === 'goal' || entityType === 'walk' || entityType === 'memory_event') &&
+    Object.hasOwn(value, 'syncAttachment')
     ? { ...prepared, syncAttachment: attachmentReference(value.syncAttachment) }
     : prepared;
 }

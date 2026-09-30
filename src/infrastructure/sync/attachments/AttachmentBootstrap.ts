@@ -14,7 +14,7 @@ export async function bootstrapAttachments(
 ): Promise<void> {
   const db = await database.open();
   const tx = db.transaction(
-    [...new Set(['goals', 'walks', ...PILOT_MUTATION_STORES])],
+    [...new Set(['goals', 'walks', 'memoryEvents', ...PILOT_MUTATION_STORES])],
     'readwrite',
   );
   const completion = done(tx);
@@ -30,32 +30,42 @@ export async function bootstrapAttachments(
       await completion;
       return;
     }
-    const checkpoint = `attachment-bootstrap:${installation.spaceId}`;
-    if (await request(settings.get(checkpoint))) {
-      await completion;
-      return;
-    }
-    for (const type of ['goal', 'walk'] as const) {
-      const records = await request<Record<string, unknown>[]>(
-        tx.objectStore(type === 'goal' ? 'goals' : 'walks').getAll(),
-      );
-      for (const record of records) {
-        const queued = await request<DurableAttachment[]>(
+    const groups = [
+      {
+        checkpoint: `attachment-bootstrap:${installation.spaceId}`,
+        types: ['goal', 'walk'] as const,
+      },
+      {
+        checkpoint: `attachment-bootstrap:memory-v1:${installation.spaceId}`,
+        types: ['memory_event'] as const,
+      },
+    ];
+    for (const { checkpoint, types } of groups) {
+      if (await request(settings.get(checkpoint))) continue;
+      for (const type of types) {
+        const records = await request<Record<string, unknown>[]>(
           tx
-            .objectStore(LIFE_OS_SYNC_STORE.attachmentQueue)
-            .index('byParentObjectId')
-            .getAll(String(record.id)),
+            .objectStore(type === 'goal' ? 'goals' : type === 'walk' ? 'walks' : 'memoryEvents')
+            .getAll(),
         );
-        if (
-          record[type === 'goal' ? 'coverImage' : 'photo'] &&
-          !queued.some(
-            (entry) => entry.spaceId === installation.spaceId && entry.deletedAt === null,
+        for (const record of records) {
+          const queued = await request<DurableAttachment[]>(
+            tx
+              .objectStore(LIFE_OS_SYNC_STORE.attachmentQueue)
+              .index('byParentObjectId')
+              .getAll(String(record.id)),
+          );
+          if (
+            record[type === 'goal' ? 'coverImage' : 'photo'] &&
+            !queued.some(
+              (entry) => entry.spaceId === installation.spaceId && entry.deletedAt === null,
+            )
           )
-        )
-          await recorder.recordUpsert(tx, type, record);
+            await recorder.recordUpsert(tx, type, record);
+        }
       }
+      settings.put({ id: checkpoint, completedAt: new Date().toISOString() });
     }
-    settings.put({ id: checkpoint, completedAt: new Date().toISOString() });
     await completion;
   } catch (error) {
     try {

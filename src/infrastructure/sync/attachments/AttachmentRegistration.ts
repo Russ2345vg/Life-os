@@ -16,7 +16,7 @@ export async function registerLocalAttachment(
   now: string,
   createId: () => string,
 ): Promise<AttachmentReference | null | undefined> {
-  if (type !== 'goal' && type !== 'walk') return undefined;
+  if (type !== 'goal' && type !== 'walk' && type !== 'memory_event') return undefined;
   const store = tx.objectStore(LIFE_OS_SYNC_STORE.attachmentQueue);
   const current = await request<DurableAttachment[]>(
     store.index('byParentObjectId').getAll(String(source.id)),
@@ -27,7 +27,13 @@ export async function registerLocalAttachment(
   // A downloaded reference may still be pending. A metadata-only edit must retain it.
   if (!image && incoming !== null) return incoming;
   const active = current.find((entry) => entry.spaceId === spaceId && entry.deletedAt === null);
-  if (!image && active && active.localImage === null) return reference(active);
+  if (
+    !image &&
+    active &&
+    active.localImage === null &&
+    !(type === 'memory_event' && source.syncAttachment === null)
+  )
+    return reference(active);
   if (image && active?.localImage?.dataUrl === image.dataUrl) return reference(active);
   for (const entry of current.filter(
     (entry) => entry.spaceId === spaceId && entry.deletedAt === null,
@@ -66,7 +72,10 @@ export async function registerRemoteAttachment(
   spaceId: string,
   now: string,
 ): Promise<Readonly<Record<string, unknown>>> {
-  if ((type !== 'goal' && type !== 'walk') || !Object.hasOwn(record, 'syncAttachment'))
+  if (
+    (type !== 'goal' && type !== 'walk' && type !== 'memory_event') ||
+    !Object.hasOwn(record, 'syncAttachment')
+  )
     return record;
   const ref = attachmentReference(record.syncAttachment);
   const store = tx.objectStore(LIFE_OS_SYNC_STORE.attachmentQueue);

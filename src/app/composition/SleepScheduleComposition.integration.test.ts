@@ -6,6 +6,39 @@ import { FakeClock, FakeCurrentDateProvider, FakeIdGenerator } from '../../test/
 import { createLifeOsApplication } from './createLifeOsApplication';
 
 describe('sleep schedule application composition', () => {
+  it('reopens shower marks without requiring a configured alarm', async () => {
+    const factory = new IDBFactory();
+    const options = {
+      clock: new FakeClock(new Date('2026-09-28T00:00:00Z')),
+      currentDateProvider: new FakeCurrentDateProvider(DayDate.create('2026-09-28')),
+      idGenerator: new FakeIdGenerator('shower'),
+    };
+    const first = await createLifeOsApplication({
+      ...options,
+      database: new LifeOsIndexedDb(factory),
+    });
+    await first.coldShower!.record({
+      date: '2026-09-28',
+      status: 'completed',
+      energy: 4,
+      feeling: 'better',
+    });
+    first.close();
+    const reopened = await createLifeOsApplication({
+      ...options,
+      database: new LifeOsIndexedDb(factory),
+    });
+    try {
+      expect(await reopened.coldShower!.getEntries()).toHaveLength(1);
+      expect((await reopened.coldShower!.getEntries())[0]).toMatchObject({
+        date: '2026-09-28',
+        energy: 4,
+      });
+      expect((await reopened.sleepSchedule.getState()).settings).toBeNull();
+    } finally {
+      reopened.close();
+    }
+  });
   it('persists the current preparation list and cycle across application reopen', async () => {
     const factory = new IDBFactory();
     const date = DayDate.create('2026-09-20');

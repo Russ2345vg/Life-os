@@ -16,6 +16,25 @@ class FixtureAccountSync implements AccountSync {
   #overview = localOverview();
   #signOutAttempts = 0;
   #syncAttempts = 0;
+  public constructor() {
+    const state = new URLSearchParams(location.search).get('state');
+    if (state === 'sign-in-required')
+      this.#overview = { ...readyOverview(), state: 'sign_in_required', pendingMutations: 2 };
+    if (state === 'recovery-required')
+      this.#overview = {
+        ...readyOverview(),
+        state: 'device_recovery_required',
+        pendingMutations: 2,
+      };
+    if (state === 'unavailable')
+      this.#overview = {
+        ...localOverview(),
+        availability: {
+          available: false,
+          reason: 'Синхронизация доступна только в приложении LifeOS.',
+        },
+      };
+  }
 
   public async load(): Promise<AccountOverview> {
     return structuredClone(this.#overview);
@@ -57,6 +76,15 @@ class FixtureAccountSync implements AccountSync {
   }
 
   public async signIn(email: string): Promise<AccountOverview> {
+    if (this.#overview.state === 'sign_in_required') {
+      this.#overview = {
+        ...this.#overview,
+        email,
+        state: 'device_recovery_required',
+        connection: 'online',
+      };
+      return this.load();
+    }
     this.#overview = {
       ...localOverview(),
       state: 'recovery_confirmation_pending',
@@ -72,6 +100,14 @@ class FixtureAccountSync implements AccountSync {
   }
 
   public async requestPasswordReset(): Promise<void> {}
+  public async completePasswordReset(_email: string, proof: string): Promise<void> {
+    await new Promise<void>((resolve) => setTimeout(resolve, 150));
+    if (proof !== '123456')
+      throw new DomainError(
+        'account.recovery_invalid',
+        'Код или ссылка недействительны либо уже использованы. Запросите новое письмо.',
+      );
+  }
 
   public async updatePassword(): Promise<AccountOverview> {
     return this.load();

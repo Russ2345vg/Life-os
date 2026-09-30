@@ -6,6 +6,7 @@ import type {
   RecoveryState,
 } from '../../../application/sync/recovery/SyncRecovery';
 import { normalizeGoalRecoveryState } from './normalizeGoalRecoveryState';
+import { validateMemoryPhoto } from '../../../domain/memory';
 import type { DurableAttachment } from '../../../application/sync/attachments/AttachmentContracts';
 import { attachmentReference } from '../../../application/sync/attachments/AttachmentContracts';
 import type { PilotEntityType } from '../../../application/sync/pilot';
@@ -123,7 +124,7 @@ export class IndexedDbRecoveryStore implements RecoveryDataStore {
       for (const source of values) {
         if (!shouldSyncPilotRecord(entityType, source)) continue;
         let record = await canonicalSyncRecord(tx, entityType, source);
-        if (entityType === 'goal' || entityType === 'walk') {
+        if (entityType === 'goal' || entityType === 'walk' || entityType === 'memory_event') {
           const file = files.find((f) => f.parentObjectId === source.id && f.deletedAt === null);
           const image = source[entityType === 'goal' ? 'coverImage' : 'photo'];
           record = {
@@ -166,6 +167,14 @@ export class IndexedDbRecoveryStore implements RecoveryDataStore {
         throw new Error('Invalid recovery record.');
       const type = candidate.entityType as PilotEntityType;
       const record = normalizePilotRecord(type, candidate.record);
+      if (
+        type === 'memory_event' &&
+        typeof candidate.record === 'object' &&
+        candidate.record !== null &&
+        'syncSnapshotImage' in candidate.record &&
+        candidate.record.syncSnapshotImage != null
+      )
+        validateMemoryPhoto(candidate.record.syncSnapshotImage);
       const key = `${type}:${String(record.id)}`;
       if (seen.has(key)) throw new Error('Duplicate snapshot object.');
       seen.add(key);
@@ -287,7 +296,9 @@ export class IndexedDbRecoveryStore implements RecoveryDataStore {
           );
           if (
             item.record.syncSnapshotImage &&
-            (item.entityType === 'goal' || item.entityType === 'walk')
+            (item.entityType === 'goal' ||
+              item.entityType === 'walk' ||
+              item.entityType === 'memory_event')
           )
             prepared = {
               ...prepared,
@@ -422,7 +433,11 @@ export class IndexedDbRecoveryStore implements RecoveryDataStore {
       ? normalizePilotRecord(history.entityType, record)
       : await canonicalSyncRecord(tx, history.entityType, record);
     const image = record[history.entityType === 'goal' ? 'coverImage' : 'photo'];
-    if (history.entityType === 'goal' || history.entityType === 'walk')
+    if (
+      history.entityType === 'goal' ||
+      history.entityType === 'walk' ||
+      history.entityType === 'memory_event'
+    )
       normalized = {
         ...normalized,
         syncAttachment: record.syncAttachment ?? null,

@@ -1,16 +1,13 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useQuickAccessGuard } from './QuickAccessContext';
-import type { PlannerScenarios } from '../../application/planner/PlannerScenarios';
 import type { TaskScenario } from '../../domain/planner/TaskScenario';
 import type { LifeAction } from '../../domain';
 import { VoiceTextInput } from '../voice-input/VoiceTextInput';
 import { useSyncContentChanged } from '../sync/SyncStatusContext';
 import './planner-scenarios.css';
+import type { ScenarioService } from '../../application/planner/PlannerServices';
 
-export type ScenarioService = Pick<
-  PlannerScenarios,
-  'list' | 'create' | 'update' | 'addAction' | 'removeAction' | 'archive'
->;
+export type { ScenarioService } from '../../application/planner/PlannerServices';
 
 // eslint-disable-next-line react-refresh/only-export-components
 export function scenarioCandidates(

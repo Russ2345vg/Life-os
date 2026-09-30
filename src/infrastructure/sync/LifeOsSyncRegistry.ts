@@ -62,6 +62,10 @@ export const LIFE_OS_SYNC_REGISTRY = Object.freeze([
   registration('diary_entry', LIFE_OS_STORE.diaryEntries, 'IndexedDbDiaryRepository', {
     idSource: 'deterministic_period_id',
   }),
+  registration('memory_event', LIFE_OS_STORE.memoryEvents, 'IndexedDbMemoryRepository', {
+    deletionMode: 'soft_delete',
+    attachmentFields: ['photo'],
+  }),
   registration('life_action', LIFE_OS_STORE.lifeActions, 'IndexedDbLifeActionRepository', {
     deletionMode: 'archive',
     dependencies: ['decision', 'sphere', 'direction', 'goal', 'recurrence_rule', 'life_action'],
@@ -169,6 +173,12 @@ export const LIFE_OS_SYNC_REGISTRY = Object.freeze([
   registration('morning_cycle', LIFE_OS_STORE.morningCycles, 'IndexedDbMorningCycleRepository', {
     dependencies: ['day', 'exercise_definition'],
   }),
+  registration(
+    'monthly_direction_focus',
+    LIFE_OS_STORE.monthlyDirectionFocuses,
+    'IndexedDbMonthlyDirectionFocusRepository',
+    { idSource: 'deterministic_period_id', dependencies: ['direction'] },
+  ),
   registration('sleep_schedule', LIFE_OS_STORE.sleepSchedules, 'IndexedDbSleepScheduleRepository', {
     idSource: 'fixed_or_crypto_uuid',
   }),

@@ -5,6 +5,146 @@ const USER_ID = '10000000-0000-4000-8000-000000000001';
 const SESSION_ID = '20000000-0000-4000-8000-000000000001';
 
 describe('SupabaseAccountAuth', () => {
+  it('validates password before consuming reset proof and ignores cleanup failure after success', async () => {
+    const recovered = session({ emailConfirmedAt: '2026-09-22T08:00:00.000Z' });
+    const verifyOtp = vi.fn(async () => ({
+      data: { user: recovered.user, session: recovered },
+      error: null,
+    }));
+    const isolated = client({
+      session: null,
+      verifyOtp,
+      updateUser: async () => ({ data: { user: recovered.user }, error: null }),
+      signOut: async () => {
+        throw new Error('cleanup unavailable');
+      },
+    });
+    const auth = new SupabaseAccountAuth(client({ session: null }), {
+      url: 'https://example.supabase.co',
+      createClient: () => isolated,
+    });
+    await expect(
+      auth.completePasswordReset({
+        email: 'person@example.com',
+        codeOrLink: '123456',
+        newPassword: 'weak',
+        expectedUserId: USER_ID,
+      }),
+    ).rejects.toMatchObject({ code: 'account.password_invalid' });
+    expect(verifyOtp).not.toHaveBeenCalled();
+    await expect(
+      auth.completePasswordReset({
+        email: 'person@example.com',
+        codeOrLink: '123456',
+        newPassword: 'correct horse battery',
+        expectedUserId: USER_ID,
+      }),
+    ).resolves.toBeUndefined();
+  });
+  it('changes a reset password in an isolated session without touching main auth', async () => {
+    const recovered = session({ emailConfirmedAt: '2026-09-22T08:00:00.000Z' });
+    const main = client({ session: recovered });
+    const verifyOtp = vi.fn(async () => ({
+      data: { user: recovered.user, session: recovered },
+      error: null,
+    }));
+    const updateUser = vi.fn(async () => ({ data: { user: recovered.user }, error: null }));
+    const isolated = client({ session: null, verifyOtp, updateUser });
+    const auth = new SupabaseAccountAuth(main, {
+      url: 'https://example.supabase.co',
+      createClient: () => isolated,
+    });
+    await auth.completePasswordReset({
+      email: 'person@example.com',
+      codeOrLink: '123456',
+      newPassword: 'correct horse battery',
+      expectedUserId: USER_ID,
+    });
+    expect(verifyOtp).toHaveBeenCalledWith({
+      email: 'person@example.com',
+      token: '123456',
+      type: 'recovery',
+    });
+    expect(updateUser).toHaveBeenCalledWith({ password: 'correct horse battery' });
+    expect(main.auth.verifyOtp).not.toHaveBeenCalled();
+    expect(main.auth.updateUser).not.toHaveBeenCalled();
+    expect(main.auth.signOut).not.toHaveBeenCalled();
+    expect(isolated.auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
+  });
+
+  it('rejects another recovery owner before updating password', async () => {
+    const recovered = session({
+      email: 'other@example.com',
+      emailConfirmedAt: '2026-09-22T08:00:00.000Z',
+    });
+    const updateUser = vi.fn();
+    const isolated = client({
+      session: null,
+      updateUser,
+      verifyOtp: async () => ({ data: { user: recovered.user, session: recovered }, error: null }),
+    });
+    const auth = new SupabaseAccountAuth(client({ session: null }), {
+      url: 'https://example.supabase.co',
+      createClient: () => isolated,
+    });
+    await expect(
+      auth.completePasswordReset({
+        email: 'person@example.com',
+        codeOrLink: '123456',
+        newPassword: 'correct horse battery',
+        expectedUserId: USER_ID,
+      }),
+    ).rejects.toMatchObject({ code: 'account.recovery_invalid' });
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+  it('sends an existing short password unchanged instead of applying creation policy', async () => {
+    const verified = session({ emailConfirmedAt: '2026-09-22T08:00:00.000Z' });
+    const signInWithPassword = vi.fn(async () => ({
+      data: { user: verified.user, session: verified },
+      error: null,
+    }));
+    const auth = new SupabaseAccountAuth(client({ session: null, signInWithPassword }));
+    await expect(auth.signIn('person@example.com', ' old8 ')).resolves.toMatchObject({
+      emailVerified: true,
+    });
+    expect(signInWithPassword).toHaveBeenCalledWith({
+      email: 'person@example.com',
+      password: ' old8 ',
+    });
+  });
+
+  it.each([
+    ['email_not_confirmed', 400, 'account.email_not_verified'],
+    ['over_request_rate_limit', 429, 'account.rate_limited'],
+    ['session_not_found', 401, 'account.auth_invalid'],
+  ])('classifies %s without displaying the provider response', async (code, status, expected) => {
+    const signInWithPassword = vi.fn(async () => ({
+      data: { user: null, session: null },
+      error: { code, status, message: 'private-provider-details' },
+    }));
+    const auth = new SupabaseAccountAuth(client({ session: null, signInWithPassword }));
+    const error = await auth
+      .signIn('person@example.com', 'synthetic-password')
+      .catch((reason: unknown) => reason);
+    expect(error).toMatchObject({ code: expected });
+    expect(JSON.stringify(error)).not.toContain('private-provider-details');
+  });
+
+  it('normalizes thrown network failures without exposing secrets', async () => {
+    const auth = new SupabaseAccountAuth(
+      client({
+        session: null,
+        signInWithPassword: async () => {
+          throw new TypeError('Failed to fetch private-password');
+        },
+      }),
+    );
+    const error = await auth
+      .signIn('person@example.com', 'synthetic-password')
+      .catch((reason: unknown) => reason);
+    expect(error).toMatchObject({ code: 'account.network_error' });
+    expect(JSON.stringify(error)).not.toContain('private-password');
+  });
   it('parses the session id and verified normalized email from a persisted session', async () => {
     const auth = new SupabaseAccountAuth(
       client({

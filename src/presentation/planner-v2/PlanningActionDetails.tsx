@@ -8,6 +8,8 @@ import type { ProgressContribution } from '../../domain/planner/ProgressContribu
 import { contributionIsEffective } from '../../domain/planner/CompletionContributions';
 import { usePlanning } from './PlanningContext';
 import { defaultRecurrence, RecurrenceFields } from './RecurrenceFields';
+import { AppIcon } from '../components/AppIcon';
+import { PlannerDisclosureCard } from './PlannerDisclosureCard';
 export function PlanningActionDetails({
   action,
   today,
@@ -118,10 +120,15 @@ export function PlanningActionDetails({
             />
           ))}
       </div>
-      <details onToggle={(e) => setOpen(e.currentTarget.open)}>
-        <summary>Повторение и вклад в цели</summary>
+      <PlannerDisclosureCard
+        className="planner-action-recurrence"
+        icon="routine"
+        title="Повторение и вклад в цели"
+        description={`${rule ? 'Повторение настроено' : 'Без повторения'} · ${links.length ? `связей с целями: ${links.length}` : 'вклад не настроен'}`}
+        onToggle={(event) => setOpen(event.currentTarget.open)}
+      >
         {open && (
-          <fieldset disabled={busy}>
+          <fieldset className="planner-action-recurrence__content" disabled={busy}>
             <p className="planner-muted">
               Связь с целью сама по себе не добавляет прогресс. Вклад настраивается явно.
             </p>
@@ -137,82 +144,87 @@ export function PlanningActionDetails({
                 />
               ))}
             {storedRule?.removedAt == null && (
-              <details>
-                <summary>{rule ? 'Изменить будущие повторения' : 'Сделать повторяющимся'}</summary>
-                <RecurrenceFields value={draft} onChange={setDraft} />
-                <label>
-                  <span>Потребность повторений</span>
-                  <input
-                    maxLength={500}
-                    value={
-                      draft.need === undefined
-                        ? rule
-                          ? (rule.need ?? '')
-                          : (action.need ?? '')
-                        : (draft.need ?? '')
-                    }
-                    onChange={(event) =>
-                      setDraft((current) => ({ ...current, need: event.target.value }))
-                    }
-                    placeholder="Пустое поле использует потребность родителя"
-                  />
-                </label>
-                <button
-                  onClick={() => {
-                    void run(async () => {
-                      await c.services.recurrence.save(
-                        {
-                          ...draft,
-                          need:
-                            draft.need === undefined
-                              ? rule
-                                ? (rule.need ?? null)
-                                : action.need
-                              : draft.need,
-                        },
-                        rule?.id,
-                        rule ? undefined : action.id.toString(),
-                      );
-                      recurrenceSaved();
-                    });
-                  }}
-                >
-                  Сохранить расписание
-                </button>
-                {rule && (
-                  <>
-                    <label>
-                      Пауза до · необязательно
-                      <input
-                        type="date"
-                        value={pauseUntil}
-                        onChange={(e) => setPauseUntil(e.target.value)}
-                      />
-                    </label>
-                    <button
-                      onClick={() => {
-                        void run(async () => {
-                          await (rule.paused
-                            ? c.services.recurrence.resume(rule.id)
-                            : c.services.recurrence.pause(rule.id, pauseUntil || null));
-                          setPauseUntil('');
-                        });
-                      }}
-                    >
-                      {rule.paused ? 'Возобновить' : 'Приостановить'}
-                    </button>
-                    {rule.schedule.kind !== 'count' &&
-                      !['completed', 'cancelled', 'archived'].includes(action.status) && (
-                        <button
-                          onClick={() => {
-                            void run(() => c.services.recurrence.skip(action.id.toString()));
-                          }}
-                        >
-                          Пропустить это повторение
-                        </button>
-                      )}
-                  </>
-                )}
+              <details className="planner-disclosure-card__nested">
+                <summary className="planner-disclosure-card__nested-summary">
+                  <span>{rule ? 'Изменить будущие повторения' : 'Сделать повторяющимся'}</span>
+                  <AppIcon name="chevron-down" />
+                </summary>
+                <div className="planner-disclosure-card__nested-body">
+                  <RecurrenceFields value={draft} onChange={setDraft} />
+                  <label>
+                    <span>Потребность повторений</span>
+                    <input
+                      maxLength={500}
+                      value={
+                        draft.need === undefined
+                          ? rule
+                            ? (rule.need ?? '')
+                            : (action.need ?? '')
+                          : (draft.need ?? '')
+                      }
+                      onChange={(event) =>
+                        setDraft((current) => ({ ...current, need: event.target.value }))
+                      }
+                      placeholder="Пустое поле использует потребность родителя"
+                    />
+                  </label>
+                  <button
+                    onClick={() => {
+                      void run(async () => {
+                        await c.services.recurrence.save(
+                          {
+                            ...draft,
+                            need:
+                              draft.need === undefined
+                                ? rule
+                                  ? (rule.need ?? null)
+                                  : action.need
+                                : draft.need,
+                          },
+                          rule?.id,
+                          rule ? undefined : action.id.toString(),
+                        );
+                        recurrenceSaved();
+                      });
+                    }}
+                  >
+                    Сохранить расписание
+                  </button>
+                  {rule && (
+                    <>
+                      <label>
+                        Пауза до · необязательно
+                        <input
+                          type="date"
+                          value={pauseUntil}
+                          onChange={(e) => setPauseUntil(e.target.value)}
+                        />
+                      </label>
+                      <button
+                        onClick={() => {
+                          void run(async () => {
+                            await (rule.paused
+                              ? c.services.recurrence.resume(rule.id)
+                              : c.services.recurrence.pause(rule.id, pauseUntil || null));
+                            setPauseUntil('');
+                          });
+                        }}
+                      >
+                        {rule.paused ? 'Возобновить' : 'Приостановить'}
+                      </button>
+                      {rule.schedule.kind !== 'count' &&
+                        !['completed', 'cancelled', 'archived'].includes(action.status) && (
+                          <button
+                            onClick={() => {
+                              void run(() => c.services.recurrence.skip(action.id.toString()));
+                            }}
+                          >
+                            Пропустить это повторение
+                          </button>
+                        )}
+                    </>
+                  )}
+                </div>
               </details>
             )}
             <label>
@@ -328,7 +340,7 @@ export function PlanningActionDetails({
             {error && <p role="alert">{error}</p>}
           </fieldset>
         )}
-      </details>
+      </PlannerDisclosureCard>
     </>
   );
 }

@@ -1,4 +1,6 @@
 import { PlanningProgress } from './PlanningProgress';
+import { resolveGoalNeed } from '../../domain/planner/resolveEntityNeed';
+import { EntityNeedText } from './EntityNeedText';
 import { usePlanning } from './PlanningContext';
 import { useRef, useState } from 'react';
 import {
@@ -412,6 +414,7 @@ export function PlannerGoalList({
                         <a className="planner-goal-title" href={detailHref}>
                           {goal.title}
                         </a>
+                        <EntityNeedText need={resolveGoalNeed(goal, directions)} prominent />
                         <PlannerGoalContext goal={goal} directions={directions} spheres={spheres} />
                         {(open.length > 0 || completed.length > 0) && (
                           <a className="planner-text-link" href={detailHref}>

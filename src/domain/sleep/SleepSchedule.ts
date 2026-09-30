@@ -1,4 +1,5 @@
 import { calculateNightWindow } from './NightTime';
+import type { ColdShowerEntry } from './ColdShower';
 
 export const SLEEP_SCHEDULE_ID = 'sleep-schedule';
 
@@ -169,6 +170,7 @@ export interface SleepHistoryEntry {
 }
 
 export interface SleepScheduleState {
+  readonly coldShowerEntries?: readonly ColdShowerEntry[];
   readonly id: typeof SLEEP_SCHEDULE_ID;
   readonly version: number;
   readonly settings: SleepSettings | null;

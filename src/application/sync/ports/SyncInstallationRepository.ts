@@ -8,6 +8,8 @@ export type AccountSetupState =
   | 'email_verification_pending'
   | 'account_migration_pending'
   | 'recovery_confirmation_pending'
+  | 'sign_in_required'
+  | 'device_recovery_required'
   | 'ready'
   | 'sign_out_pending';
 
@@ -17,6 +19,7 @@ export interface SyncAccountMetadata {
   readonly accountSessionId: string | null;
   readonly accountEmail: string | null;
   readonly accountMigrationSnapshotId: string | null;
+  readonly accountRecoveryDeviceId?: string | null;
 }
 
 interface SyncAccountMetadataInput {
@@ -25,6 +28,7 @@ interface SyncAccountMetadataInput {
   readonly accountSessionId?: unknown;
   readonly accountEmail?: unknown;
   readonly accountMigrationSnapshotId?: unknown;
+  readonly accountRecoveryDeviceId?: unknown;
 }
 
 export function normalizeSyncAccountMetadata(value: SyncAccountMetadataInput): SyncAccountMetadata {
@@ -33,11 +37,14 @@ export function normalizeSyncAccountMetadata(value: SyncAccountMetadataInput): S
   const sessionId = value.accountSessionId ?? null;
   const email = value.accountEmail ?? null;
   const snapshotId = value.accountMigrationSnapshotId ?? null;
+  const recoveryDeviceId = value.accountRecoveryDeviceId ?? null;
   const states: readonly AccountSetupState[] = [
     'local_anonymous',
     'email_verification_pending',
     'account_migration_pending',
     'recovery_confirmation_pending',
+    'sign_in_required',
+    'device_recovery_required',
     'ready',
     'sign_out_pending',
   ];
@@ -45,7 +52,13 @@ export function normalizeSyncAccountMetadata(value: SyncAccountMetadataInput): S
   if (!states.includes(state as AccountSetupState)) throw invalidAccountMetadata();
 
   if (state === 'local_anonymous') {
-    if (userId !== null || sessionId !== null || email !== null || snapshotId !== null) {
+    if (
+      userId !== null ||
+      sessionId !== null ||
+      email !== null ||
+      snapshotId !== null ||
+      recoveryDeviceId !== null
+    ) {
       throw invalidAccountMetadata();
     }
     return {
@@ -65,7 +78,10 @@ export function normalizeSyncAccountMetadata(value: SyncAccountMetadataInput): S
     typeof email !== 'string' ||
     !isNormalizedEmail(email) ||
     (snapshotId !== null && (typeof snapshotId !== 'string' || !isUuid(snapshotId))) ||
-    ((state === 'account_migration_pending' || state === 'sign_out_pending') && snapshotId === null)
+    ((state === 'account_migration_pending' || state === 'sign_out_pending') &&
+      snapshotId === null) ||
+    (recoveryDeviceId !== null &&
+      (typeof recoveryDeviceId !== 'string' || !isUuid(recoveryDeviceId)))
   ) {
     throw invalidAccountMetadata();
   }
@@ -76,6 +92,9 @@ export function normalizeSyncAccountMetadata(value: SyncAccountMetadataInput): S
     accountSessionId: sessionId,
     accountEmail: email,
     accountMigrationSnapshotId: snapshotId,
+    ...(value.accountRecoveryDeviceId === undefined
+      ? {}
+      : { accountRecoveryDeviceId: recoveryDeviceId }),
   };
 }
 

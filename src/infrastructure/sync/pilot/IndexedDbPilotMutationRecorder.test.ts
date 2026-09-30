@@ -16,6 +16,56 @@ import { LIFE_OS_SYNC_REGISTRY } from '../LifeOsSyncRegistry';
 import { normalizePilotRecord } from './PilotSyncRegistryAdapters';
 
 describe('IndexedDbPilotMutationRecorder', () => {
+  it.each(['sign_in_required', 'device_recovery_required'] as const)(
+    'queues local edits during %s and rebases them after recovery',
+    async (state) => {
+      const indexedDb = new LifeOsIndexedDb(new IDBFactory());
+      const database = await indexedDb.open();
+      await putSettings(database, {
+        ...activeSettings(),
+        accountSetupState: state,
+        accountUserId: '30000000-0000-4000-8000-000000000001',
+        accountSessionId: '40000000-0000-4000-8000-000000000001',
+        accountEmail: 'person@example.com',
+        accountMigrationSnapshotId: null,
+      });
+      const recorder = new IndexedDbPilotMutationRecorder({
+        createId: (() => {
+          const ids = ['transport-local', 'event-local'];
+          return () => ids.shift() ?? 'unexpected';
+        })(),
+      });
+      const transaction = database.transaction(
+        [LIFE_OS_STORE.goals, ...PILOT_MUTATION_STORES],
+        'readwrite',
+      );
+      const record = goalRecord();
+      transaction.objectStore(LIFE_OS_STORE.goals).put(record);
+      expect(await recorder.recordUpsert(transaction, 'goal', record)).toBe(true);
+      await done(transaction);
+      const syncStore = new IndexedDbPilotSyncStore(
+        indexedDb,
+        () => 'unused',
+        () => new Date('2026-09-29T12:00:00Z'),
+      );
+      await syncStore.prepareOutboxForInstallation({
+        deviceId: '10000000-0000-4000-8000-000000000009',
+        keyEpoch: 4,
+      });
+      const read = database.transaction(LIFE_OS_SYNC_STORE.outbox, 'readonly');
+      const outbox = await get<{ serializedPayload: string }>(
+        read.objectStore(LIFE_OS_SYNC_STORE.outbox),
+        'event-local',
+      );
+      expect(parsePilotSyncPayload(outbox?.serializedPayload ?? '')).toMatchObject({
+        eventId: 'event-local',
+        originDeviceId: '10000000-0000-4000-8000-000000000009',
+        keyEpoch: 4,
+        revision: 1,
+      });
+      indexedDb.close();
+    },
+  );
   it('commits domain record, metadata, HLC and immutable outbox payload in one transaction', async () => {
     const indexedDb = new LifeOsIndexedDb(new IDBFactory());
     const database = await indexedDb.open();

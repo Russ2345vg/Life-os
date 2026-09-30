@@ -63,4 +63,11 @@ export default tseslint.config(
       'no-restricted-imports': restrictedLayers(['infrastructure']),
     },
   },
+  {
+    files: ['src/app/composition/LifeOsApplication.ts', 'src/app/composition/modules/**/*.ts'],
+    ignores: ['**/*.test.ts'],
+    rules: {
+      'no-restricted-imports': restrictedLayers(['presentation']),
+    },
+  },
 );

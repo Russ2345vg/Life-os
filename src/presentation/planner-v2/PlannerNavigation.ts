@@ -1,4 +1,5 @@
 import { DayDate } from '../../domain';
+import { MEMORY_KINDS, type MemoryKind } from '../../domain/memory';
 import { addDays, automaticPeriod } from '../../domain/planner/PlanningPeriod';
 
 export type PlannerRoute =
@@ -11,6 +12,17 @@ export type PlannerRoute =
   | { readonly view: 'today'; readonly day?: 'tomorrow' }
   | { readonly view: 'sleep' }
   | { readonly view: 'account' }
+  | {
+      readonly view: 'memory';
+      readonly id?: string | undefined;
+      readonly year?: number | undefined;
+      readonly mode?: 'timeline' | 'year' | undefined;
+      readonly kind?: MemoryKind | undefined;
+      readonly sphereId?: string | undefined;
+      readonly search?: string | undefined;
+      readonly highlight?: boolean | undefined;
+      readonly deleted?: boolean | undefined;
+    }
   | {
       readonly view: 'diary';
       readonly period?: 'day' | 'week' | 'month';
@@ -74,6 +86,33 @@ export function parsePlannerRoute(hash: string): PlannerRoute | null {
     };
   if (path === '#/v2/sleep') return { view: 'sleep' };
   if (path === '#/v2/account') return { view: 'account' };
+  if (path === '#/v2/memory' || path?.startsWith('#/v2/memory/')) {
+    const params = new URLSearchParams(query);
+    const yearText = params.get('year') ?? '';
+    const year = /^\d{1,4}$/.test(yearText) ? Number(yearText) : 0;
+    const mode = params.get('mode');
+    const kind = params.get('kind');
+    try {
+      const id =
+        path === '#/v2/memory'
+          ? undefined
+          : decodeURIComponent(path.slice('#/v2/memory/'.length)).trim();
+      if (id === '') return null;
+      return {
+        view: 'memory',
+        ...(id ? { id } : {}),
+        ...(year >= 1 && year <= 9999 ? { year } : {}),
+        ...(mode === 'year' || mode === 'timeline' ? { mode } : {}),
+        ...(kind && MEMORY_KINDS.includes(kind as MemoryKind) ? { kind: kind as MemoryKind } : {}),
+        ...filter,
+        ...(params.get('search') ? { search: params.get('search')! } : {}),
+        ...(params.get('highlight') === '1' ? { highlight: true } : {}),
+        ...(params.get('deleted') === '1' ? { deleted: true } : {}),
+      };
+    } catch {
+      return null;
+    }
+  }
   if (path === '#/v2/diary') {
     const params = new URLSearchParams(query);
     const period = params.get('period');
@@ -163,6 +202,17 @@ export function buildPlannerRoute(route: PlannerRoute): string {
     return route.day === 'tomorrow' ? '#/v2/today?day=tomorrow' : '#/v2/today';
   if (route.view === 'sleep') return '#/v2/sleep';
   if (route.view === 'account') return '#/v2/account';
+  if (route.view === 'memory') {
+    const params = new URLSearchParams();
+    if (route.year) params.set('year', String(route.year));
+    if (route.mode) params.set('mode', route.mode);
+    if (route.kind) params.set('kind', route.kind);
+    if (route.sphereId) params.set('sphereId', route.sphereId);
+    if (route.highlight) params.set('highlight', '1');
+    if (route.deleted) params.set('deleted', '1');
+    if (route.search) params.set('search', route.search);
+    return `#/v2/memory${route.id ? `/${encodeURIComponent(route.id)}` : ''}${params.size ? `?${params}` : ''}`;
+  }
   if (route.view === 'diary') {
     const params = new URLSearchParams();
     if (route.period) params.set('period', route.period);

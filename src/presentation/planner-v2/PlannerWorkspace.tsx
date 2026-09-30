@@ -3,9 +3,7 @@ import {
   completionSummaryTarget,
   type CompletionSummaryTarget,
 } from './CompletionResult';
-import type { BalanceServices } from '../../application/balance/BalanceServices';
 import { BalanceWorkspace } from './balance/BalanceWorkspace';
-import type { PlanningServices } from '../../application/planner/PlanningServices';
 import { PlanningProvider } from './PlanningContext';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { QuickAccessPanel } from './QuickAccessPanel';
@@ -15,27 +13,13 @@ import {
   useQuickAccess,
   useQuickAccessGuard,
 } from './QuickAccessContext';
-import type {
-  CreateGoal,
-  CreateLifeActionDraft,
-  CompleteLifeAction,
-  DiaryService,
-  AccountSync,
-  GetDirections,
-  GetGoals,
-  GetPlannerToday,
-  PlannerTodayOverview,
-  SetLifeActionPlan,
-  SleepScheduleService,
-} from '../../application';
+import type { PlannerTodayOverview } from '../../application';
 import { DayDate, EntityId, type Goal, type LifeAction } from '../../domain';
 import { addDays } from '../../domain/planner/PlanningPeriod';
-import type { DailyDirection } from '../../application/planner/DailyDirection';
 import { AppIcon, type AppIconName } from '../components/AppIcon';
 import { PlannerActionForm, type PlannerOption } from './PlannerActionForm';
 import { PlannerGoalForm } from './PlannerGoalForm';
 import { PlannerToday } from './PlannerToday';
-import type { ScenarioService } from './PlannerScenariosPanel';
 import { buildPlannerRoute, type PlannerRoute } from './PlannerNavigation';
 import {
   emptyActionDraft,
@@ -46,7 +30,7 @@ import { completePlannerAction, planPlannerAction } from './plannerTodayCommands
 import { useSyncContentChanged } from '../sync/SyncStatusContext';
 import { finishPlannerSubmission } from './plannerRouteSubmission';
 import './planner-v2.css';
-import { PlannerLibraryWorkspace, type PlannerLibraryServices } from './PlannerLibraryWorkspace';
+import { PlannerLibraryWorkspace } from './PlannerLibraryWorkspace';
 import { usePlannerWorkTime } from './usePlannerWorkTime';
 import type { EntityMenuAction } from './EntityContextMenu';
 import { DomainError } from '../../shared/errors/DomainError';
@@ -58,36 +42,24 @@ import {
   selectSleepTodayEntry,
   type SleepTodayEntry,
 } from '../../application/sleep/SleepTodayEntry';
-
 import './planner-premium.css';
 import './diary/diary.css';
 import type { LifeActionDateUndoReceipt } from '../../application/commands/SetLifeActionPlan';
 import './planner-date-undo.css';
 import { PlannerDiary } from './diary/PlannerDiary';
+import type { MonthlyDirectionFocusView } from './MonthlyDirectionFocusCard';
+import { PlannerMemory } from './memory/PlannerMemory';
+import './memory/memory.css';
+import type { PlannerServices } from '../../application/planner/PlannerServices';
 
-export interface PlannerServices extends PlannerLibraryServices {
-  readonly diary: DiaryService;
-  readonly plannerScenarios?: ScenarioService;
-  readonly balance?: BalanceServices;
-  readonly planning?: PlanningServices;
-  readonly createLifeActionDraft: Pick<CreateLifeActionDraft, 'execute'>;
-  readonly createGoal: Pick<CreateGoal, 'execute'>;
-  readonly completeLifeAction: Pick<CompleteLifeAction, 'execute'>;
-  readonly setLifeActionPlan: Pick<SetLifeActionPlan, 'execute' | 'changeDate' | 'undoDate'>;
-  readonly getPlannerToday: Pick<GetPlannerToday, 'execute'>;
-  readonly getGoals: Pick<GetGoals, 'execute'>;
-  readonly getDirections: Pick<GetDirections, 'execute'>;
-  readonly dailyDirection: Pick<DailyDirection, 'get' | 'set'>;
-  readonly sleepSchedule: SleepScheduleService;
-  readonly accountSync: AccountSync;
-}
+export type { PlannerServices } from '../../application/planner/PlannerServices';
 interface PlannerData {
   readonly overview: PlannerTodayOverview;
   readonly goals: readonly PlannerOption[];
   readonly directions: readonly PlannerOption[];
+  readonly spheres: readonly PlannerOption[];
   readonly actions: readonly LifeAction[];
-  readonly mainDirectionId: string | null;
-  readonly directionChoices: readonly PlannerOption[];
+  readonly monthlyDirectionFocus: MonthlyDirectionFocusView;
   readonly sleepEntry: SleepTodayEntry;
   readonly timeCapacity: readonly (number | null)[];
 }
@@ -137,7 +109,6 @@ function PlannerWorkspaceContent({
     receipt: LifeActionDateUndoReceipt;
     title: string;
   } | null>(null);
-  const [dateRevision, setDateRevision] = useState(0);
   const changeDate = async (id: string, date: string) => {
     const result = await services.setLifeActionPlan.changeDate({
       lifeActionId: EntityId.create(id),
@@ -180,42 +151,85 @@ function PlannerWorkspaceContent({
       services.getGoals.execute(),
       services.getDirections.execute(),
       services.plannerCatalog.actions(),
-      services.dailyDirection.get(date),
+      services.monthlyDirectionFocus.get(currentDate),
       services.getSpheres.execute(),
       services.sleepSchedule.getState(),
       services.timeCapacity?.get() ?? Promise.resolve([null, null, null, null, null, null, null]),
     ])
-      .then(([overview, goals, directions, actions, day, spheres, sleepState, timeCapacity]) => {
-        if (sequence !== request.current) return;
-        setData({
+      .then(
+        ([
           overview,
-          goals: goals
-            .filter((goal) => goal.status !== 'archived')
-            .map((goal) => ({
-              id: goal.id.toString(),
-              title: goal.title,
-              directionId: goal.directionId?.toString() ?? null,
-            })),
-          directions: directions
-            .filter((direction) => direction.status !== 'archived')
-            .map((direction) => ({ id: direction.id.toString(), title: direction.name })),
+          goals,
+          directions,
           actions,
-          mainDirectionId: day?.mainDirectionId?.toString() ?? null,
-          directionChoices: directions
+          monthlyFocus,
+          spheres,
+          sleepState,
+          timeCapacity,
+        ]) => {
+          if (sequence !== request.current) return;
+          const allSpheres = [...spheres.active, ...spheres.archived];
+          const directionLabel = (direction: (typeof directions)[number]) =>
+            `${allSpheres.find((sphere) => sphere.id.toString() === direction.sphereId?.toString())?.name ?? 'Без сферы'} → ${direction.name}`;
+          const choices = directions
             .filter((direction) => direction.status === 'active')
             .map((direction) => ({
               id: direction.id.toString(),
-              title: `${spheres.active.find((sphere) => sphere.id.toString() === direction.sphereId?.toString())?.name ?? 'Без сферы'} → ${direction.name}`,
+              title: directionLabel(direction),
+            }));
+          const currentDirectionId = monthlyFocus.current?.directionId ?? null;
+          const currentDirection = directions.find(
+            (direction) => direction.id.toString() === currentDirectionId,
+          );
+          const suggestedDirection = directions.find(
+            (direction) => direction.id.toString() === monthlyFocus.suggestion?.directionId,
+          );
+          setData({
+            overview,
+            goals: goals
+              .filter((goal) => goal.status !== 'archived')
+              .map((goal) => ({
+                id: goal.id.toString(),
+                title: goal.title,
+                directionId: goal.directionId?.toString() ?? null,
+                sphereId: goal.sphereId?.toString() ?? null,
+              })),
+            directions: directions
+              .filter((direction) => direction.status !== 'archived')
+              .map((direction) => ({
+                id: direction.id.toString(),
+                title: direction.name,
+                sphereId: direction.sphereId?.toString() ?? null,
+              })),
+            spheres: allSpheres.map((sphere) => ({
+              id: sphere.id.toString(),
+              title: sphere.name,
             })),
-          sleepEntry: selectSleepTodayEntry(sleepState, new Date()),
-          timeCapacity,
-        });
-        setError(null);
-      })
+            actions,
+            monthlyDirectionFocus: {
+              month: monthlyFocus.month,
+              hasCurrent: monthlyFocus.current !== null,
+              directionId: currentDirectionId,
+              directionLabel: currentDirection ? directionLabel(currentDirection) : null,
+              suggestion:
+                monthlyFocus.suggestion && suggestedDirection?.status === 'active'
+                  ? {
+                      directionId: monthlyFocus.suggestion.directionId,
+                      directionLabel: directionLabel(suggestedDirection),
+                    }
+                  : null,
+              choices,
+            },
+            sleepEntry: selectSleepTodayEntry(sleepState, new Date()),
+            timeCapacity,
+          });
+          setError(null);
+        },
+      )
       .catch((reason: unknown) => {
         if (sequence === request.current) throw reason;
       });
-  }, [services, selectedDateKey, route.view]);
+  }, [services, selectedDateKey, route.view, currentDate]);
   const report = useCallback(
     (reason: unknown) =>
       setError(
@@ -228,7 +242,10 @@ function PlannerWorkspaceContent({
   const refresh = useCallback(() => {
     void load().catch(report);
   }, [load, report]);
-  useSyncContentChanged('lifeActions|timeCapacity|goals|directions|days', refresh);
+  useSyncContentChanged(
+    'lifeActions|timeCapacity|goals|directions|days|monthlyDirectionFocuses',
+    refresh,
+  );
   useEffect(() => {
     routeGeneration.current += 1;
     void load().catch(report);
@@ -367,29 +384,13 @@ function PlannerWorkspaceContent({
     else navigate({ view: 'actions' });
   };
   const navLink = (target: PlannerRoute, label: string, icon: AppIconName) => (
-    <a
-      href={buildPlannerRoute(target)}
-      aria-current={
-        route.view === target.view ||
-        (target.view === 'spheres' && route.view === 'sphere') ||
-        (target.view === 'directions' && route.view === 'direction') ||
-        ('section' in route && route.section === target.view) ||
-        (target.view === 'goals' &&
-          ['focus', 'review', 'new-goal', 'goal', 'planning'].includes(route.view)) ||
-        (target.view === 'actions' && ['action', 'new-action', 'time'].includes(route.view))
-          ? 'page'
-          : undefined
-      }
-      onClick={(event) => {
-        if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey)
-          return;
-        event.preventDefault();
-        navigate(target);
-      }}
-    >
-      <AppIcon name={icon} />
-      <span>{label}</span>
-    </a>
+    <PlannerWorkspaceNavLink
+      route={route}
+      target={target}
+      label={label}
+      icon={icon}
+      onNavigate={navigate}
+    />
   );
   return (
     <PlanningProvider
@@ -442,6 +443,11 @@ function PlannerWorkspaceContent({
               'Дневник',
               'history',
             )}
+            {services.memory && (
+              <span className="planner-nav-secondary">
+                {navLink({ view: 'memory' }, 'Память жизни', 'history')}
+              </span>
+            )}
             <button
               className="planner-nav-more"
               type="button"
@@ -454,6 +460,7 @@ function PlannerWorkspaceContent({
                   'directions',
                   'direction',
                   'sleep',
+                  'memory',
                 ].includes(route.view)
                   ? 'page'
                   : undefined
@@ -467,6 +474,7 @@ function PlannerWorkspaceContent({
             </button>
           </nav>
           <div id="planner-more-menu" className="planner-more-menu" hidden={!moreOpen}>
+            {services.memory && navLink({ view: 'memory' }, 'Память жизни', 'history')}
             {navLink({ view: 'spheres' }, 'Сферы', 'goals')}
             {navLink({ view: 'directions' }, 'Направления', 'goals')}
             {navLink({ view: 'inbox' }, 'Входящие', 'history')}
@@ -498,7 +506,6 @@ function PlannerWorkspaceContent({
                         'Не удалось отменить перенос: действие уже изменилось или прежнее главное дело дня занято. Обновите список.',
                       );
                     setDateUndo(null);
-                    setDateRevision((value) => value + 1);
                     document.getElementById('planner-main-content')?.focus();
                   }, 'Прежняя дата восстановлена')
                 }
@@ -539,7 +546,35 @@ function PlannerWorkspaceContent({
               route={route}
               currentDate={currentDate}
               onNavigate={navigate}
+              memory={
+                services.memory
+                  ? {
+                      services: services.memory,
+                      catalog: {
+                        spheres: data?.spheres ?? [],
+                        directions: data?.directions ?? [],
+                        goals: data?.goals ?? [],
+                      },
+                    }
+                  : undefined
+              }
             />
+          ) : route.view === 'memory' ? (
+            services.memory ? (
+              <PlannerMemory
+                services={services.memory}
+                route={route}
+                currentDate={currentDate}
+                catalog={{
+                  spheres: data?.spheres ?? [],
+                  directions: data?.directions ?? [],
+                  goals: data?.goals ?? [],
+                }}
+                onNavigate={navigate}
+              />
+            ) : (
+              <p role="alert">Память жизни недоступна в этой сборке.</p>
+            )
           ) : route.view === 'account' ? (
             <AccountSyncPage
               service={services.accountSync}
@@ -567,7 +602,6 @@ function PlannerWorkspaceContent({
             <PlannerLibraryWorkspace
               onActionCompleted={promptForResult}
               onChangeDate={changeDate}
-              dateRevision={dateRevision}
               services={services}
               route={{
                 view: 'goals',
@@ -593,7 +627,6 @@ function PlannerWorkspaceContent({
             <PlannerLibraryWorkspace
               onActionCompleted={promptForResult}
               onChangeDate={changeDate}
-              dateRevision={dateRevision}
               key={buildPlannerRoute(route)}
               services={services}
               route={route}
@@ -617,24 +650,29 @@ function PlannerWorkspaceContent({
               overview={data.overview}
               scenarios={services.plannerScenarios}
               goals={data.goals}
+              directions={data.directions}
+              spheres={data.spheres}
               availableActions={data.actions}
               capacityMinutes={
                 data.timeCapacity[
                   (new Date(`${selectedDate.toString()}T12:00:00Z`).getUTCDay() + 6) % 7
                 ] ?? null
               }
-              mainDirectionId={data.mainDirectionId}
-              directionChoices={data.directionChoices}
+              monthlyDirectionFocus={data.monthlyDirectionFocus}
               busy={busy}
               menuForAction={menuForAction}
               onSelectDay={(day) =>
                 navigate(day === 'tomorrow' ? { view: 'today', day } : { view: 'today' })
               }
               onOpenAction={(id) => navigate({ view: 'action', id })}
-              onMainDirection={(id) => {
+              onMonthlyDirectionChange={(id) => {
                 void run(
-                  () => services.dailyDirection.set(selectedDate, id ? EntityId.create(id) : null),
-                  'Главное направление сохранено',
+                  () =>
+                    services.monthlyDirectionFocus.set(
+                      currentDate,
+                      id ? EntityId.create(id) : null,
+                    ),
+                  'Главное направление месяца сохранено',
                 );
               }}
               onNewAction={() =>
@@ -715,7 +753,6 @@ function PlannerWorkspaceContent({
               <PlannerLibraryWorkspace
                 onActionCompleted={promptForResult}
                 onChangeDate={changeDate}
-                dateRevision={dateRevision}
                 services={services}
                 route={{ view: 'actions' }}
                 today={currentDate.toString()}
@@ -818,7 +855,6 @@ function PlannerWorkspaceContent({
               <PlannerLibraryWorkspace
                 onActionCompleted={promptForResult}
                 onChangeDate={changeDate}
-                dateRevision={dateRevision}
                 services={services}
                 route={{ view: 'goals' }}
                 today={currentDate.toString()}
@@ -875,5 +911,45 @@ function PlannerWorkspaceContent({
         />
       </div>
     </PlanningProvider>
+  );
+}
+
+function PlannerWorkspaceNavLink({
+  route,
+  target,
+  label,
+  icon,
+  onNavigate,
+}: {
+  readonly route: PlannerRoute;
+  readonly target: PlannerRoute;
+  readonly label: string;
+  readonly icon: AppIconName;
+  readonly onNavigate: (route: PlannerRoute) => void;
+}) {
+  return (
+    <a
+      href={buildPlannerRoute(target)}
+      aria-current={
+        route.view === target.view ||
+        (target.view === 'spheres' && route.view === 'sphere') ||
+        (target.view === 'directions' && route.view === 'direction') ||
+        ('section' in route && route.section === target.view) ||
+        (target.view === 'goals' &&
+          ['focus', 'review', 'new-goal', 'goal', 'planning'].includes(route.view)) ||
+        (target.view === 'actions' && ['action', 'new-action', 'time'].includes(route.view))
+          ? 'page'
+          : undefined
+      }
+      onClick={(event) => {
+        if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey)
+          return;
+        event.preventDefault();
+        onNavigate(target);
+      }}
+    >
+      <AppIcon name={icon} />
+      <span>{label}</span>
+    </a>
   );
 }

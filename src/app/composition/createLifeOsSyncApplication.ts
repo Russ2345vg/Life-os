@@ -40,9 +40,13 @@ import { SupabaseSyncTrustTransport } from '../../infrastructure/sync/supabase/S
 import { SupabasePilotSyncTransport } from '../../infrastructure/sync/supabase/SupabasePilotSyncTransport';
 import { SupabaseAccountAuth } from '../../infrastructure/sync/supabase/SupabaseAccountAuth';
 import { TauriSupabaseAuthStorage } from '../../infrastructure/sync/supabase/TauriSupabaseAuthStorage';
-import { createLifeOsSupabaseClient } from '../../infrastructure/sync/supabase/createLifeOsSupabaseClient';
+import {
+  createLifeOsSupabaseClient,
+  createPasswordRecoveryClient,
+} from '../../infrastructure/sync/supabase/createLifeOsSupabaseClient';
 import type { LifeOsIndexedDb } from '../../infrastructure/persistence/indexed-db/LifeOsIndexedDb';
 import { PilotSyncLifecycle } from '../lifecycle/PilotSyncLifecycle';
+import { SyncTransferGate } from '../../application/sync/account/SyncTransferGate';
 import type { MeaningfulLocalSettingsSync } from '../../infrastructure/sync/MeaningfulLocalSettingsSync';
 
 interface CreateLifeOsSyncApplicationInput {
@@ -81,7 +85,10 @@ export function createLifeOsSyncApplication({
   }
   const authStorage = new TauriSupabaseAuthStorage(invoke);
   const client = createLifeOsSupabaseClient(config, { authStorage });
-  const auth = new SupabaseAccountAuth(client);
+  const auth = new SupabaseAccountAuth(client, {
+    url: config.url,
+    createClient: () => createPasswordRecoveryClient(config),
+  });
   const crypto = new TauriSyncCryptoService(invoke);
   const installationRepository = new IndexedDbSyncInstallationRepository(database);
   const statusSource = new IndexedDbSyncStatusSource(database);
@@ -102,6 +109,37 @@ export function createLifeOsSyncApplication({
     meaningfulSettingsSync ?? null,
   );
   const pilotTransport = new SupabasePilotSyncTransport(client);
+  const transferGate = new SyncTransferGate(
+    async () => {
+      const installation = await installationRepository.find();
+      if (
+        installation === null ||
+        installation.setupState !== 'configured' ||
+        installation.membershipStatus !== 'active'
+      )
+        return false;
+      if (
+        [
+          'sign_in_required',
+          'device_recovery_required',
+          'email_verification_pending',
+          'account_migration_pending',
+        ].includes(installation.accountSetupState)
+      )
+        return false;
+      const session = await auth.current();
+      if (session === null) return false;
+      if (installation.accountSetupState === 'local_anonymous') return session.isAnonymous;
+      return (
+        !session.isAnonymous &&
+        session.emailVerified &&
+        session.userId === installation.accountUserId &&
+        session.sessionId === installation.accountSessionId &&
+        session.email === installation.accountEmail
+      );
+    },
+    () => pilotTransport.closeHints(),
+  );
   const blobTransport = new SupabaseEncryptedBlobTransport(client);
   const attachments = new AttachmentTransferService(database, crypto, blobTransport, () =>
     clock.now(),
@@ -120,7 +158,7 @@ export function createLifeOsSyncApplication({
       retry: async (id) => {
         const { spaceId } = await recoveryStore.context();
         await attachments.retry(id);
-        void attachments.run(spaceId).catch(() => undefined);
+        void transferGate.run(() => attachments.run(spaceId)).catch(() => undefined);
       },
     },
     () => clock.now(),
@@ -132,6 +170,7 @@ export function createLifeOsSyncApplication({
     meaningfulSettingsSync ?? null,
   );
   const pilotCoordinator = new PilotSyncCoordinator({
+    transferGate,
     isOnline: () => navigator.onLine,
     bootstrap: {
       run: async () => {
@@ -143,9 +182,9 @@ export function createLifeOsSyncApplication({
     afterStructured: () => {
       void recoveryStore
         .context()
-        .then(({ spaceId }) => attachments.run(spaceId))
+        .then(({ spaceId }) => transferGate.run(() => attachments.run(spaceId)))
         .catch(() => undefined);
-      void recovery.runMaintenance().catch(() => undefined);
+      void transferGate.run(() => recovery.runMaintenance()).catch(() => undefined);
     },
     push: new PilotPushEngine(pilotStore, crypto, pilotTransport),
     pull: new PilotPullEngine(pilotStore, crypto, pilotTransport),
@@ -172,6 +211,7 @@ export function createLifeOsSyncApplication({
   mutationRecorder.setNotify(() => pilotCoordinator.trigger());
   pilotLifecycle.start();
   const sync = new SyncApplicationService({
+    transferGate,
     statusSource,
     recovery,
     auth,
@@ -196,6 +236,7 @@ export function createLifeOsSyncApplication({
         crypto,
         recovery,
         localData: new IndexedDbAccountLocalData(database),
+        transferGate,
         now: () => clock.now(),
       })
     : new UnavailableAccountSync('Аккаунт и синхронизация отключены в этой сборке LifeOS.');

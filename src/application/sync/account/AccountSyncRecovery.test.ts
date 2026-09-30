@@ -113,6 +113,7 @@ function recoveryFixture(initial: SyncInstallation) {
     setPassword: vi.fn(async () => accountSession()),
     signIn: vi.fn(async () => accountSession()),
     requestPasswordReset: vi.fn(async () => undefined),
+    completePasswordReset: vi.fn(async () => undefined),
     updatePassword: vi.fn(async () => accountSession()),
     signOutCurrent: vi.fn(async () => undefined),
     close: vi.fn(async () => undefined),

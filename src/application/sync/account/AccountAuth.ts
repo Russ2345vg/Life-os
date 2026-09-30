@@ -15,6 +15,12 @@ export interface AccountAuth {
   setPassword(password: string): Promise<AccountSession>;
   signIn(email: string, password: string): Promise<AccountSession>;
   requestPasswordReset(email: string): Promise<void>;
+  completePasswordReset(input: {
+    readonly email: string;
+    readonly codeOrLink: string;
+    readonly newPassword: string;
+    readonly expectedUserId: string | null;
+  }): Promise<void>;
   updatePassword(password: string): Promise<AccountSession>;
   signOutCurrent(): Promise<void>;
   close(): Promise<void>;

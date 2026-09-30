@@ -16,6 +16,8 @@ describe('Direction dependency classification', () => {
     ['day', { date: today, status: 'completed' }, 'live'],
     ['tomorrow_plan', { targetDateKey: '2026-09-13', status: 'COMPLETED' }, 'historical'],
     ['tomorrow_plan', { targetDateKey: today, status: 'COMPLETED' }, 'live'],
+    ['monthly_direction_focus', { month: '2026-08' }, 'historical'],
+    ['monthly_direction_focus', { month: '2026-09' }, 'live'],
   ] as const)('%s with %j is %s', (entityType, record, relation) => {
     expect(
       directionDependency(entityType, { id: 'child', title: 'Linked', ...record }, today),

@@ -5,15 +5,19 @@ import { DayDate, diaryPeriod, createDiaryDraft } from '../../../domain';
 import type { DiaryService } from '../../../application';
 import { DiaryDayView } from './DiaryDayView';
 import { PlannerDiary } from './PlannerDiary';
+import { createRouteLeaveGuard, RouteLeaveGuardProvider } from '../../navigation/RouteLeaveGuard';
 
 describe('PlannerDiary daily view', () => {
   it('renders an accessible loading state before the entry arrives', () => {
     const html = renderToStaticMarkup(
-      createElement(PlannerDiary, {
-        service: { get: vi.fn(() => new Promise(() => undefined)) } as unknown as DiaryService,
-        route: { view: 'diary', period: 'day', date: '2026-09-29' },
-        currentDate: DayDate.create('2026-09-29'),
-        onNavigate: vi.fn(),
+      createElement(RouteLeaveGuardProvider, {
+        guard: createRouteLeaveGuard(),
+        children: createElement(PlannerDiary, {
+          service: { get: vi.fn(() => new Promise(() => undefined)) } as unknown as DiaryService,
+          route: { view: 'diary', period: 'day', date: '2026-09-29' },
+          currentDate: DayDate.create('2026-09-29'),
+          onNavigate: vi.fn(),
+        }),
       }),
     );
     expect(html).toContain('role="status"');

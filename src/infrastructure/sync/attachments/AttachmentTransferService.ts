@@ -1,4 +1,5 @@
 import { protect, unprotect } from '../../../application/sync/attachments/ProtectedPayload';
+import { validateMemoryPhoto } from '../../../domain/memory';
 import type {
   DurableAttachment,
   EncryptedBlobTransport,
@@ -89,7 +90,8 @@ export class AttachmentTransferService {
         if (upload && downloaded !== encrypted)
           throw new Error('Immutable blob verification failed.');
         const value = await unprotect(this.crypto, metadata, downloaded);
-        const image = validateImage(value);
+        const image =
+          entry.entityType === 'memory_event' ? validateMemoryPhoto(value) : validateImage(value);
         await this.materialize(entry, image, downloaded);
       } catch {
         const retryCount = entry.retryCount + 1;
@@ -178,7 +180,12 @@ export class AttachmentTransferService {
     encryptedBlob: string,
   ): Promise<void> {
     const db = await this.db.open();
-    const parentStore = entry.entityType === 'goal' ? 'goals' : 'walks';
+    const parentStore =
+      entry.entityType === 'goal'
+        ? 'goals'
+        : entry.entityType === 'walk'
+          ? 'walks'
+          : 'memoryEvents';
     const tx = await this.db.withMutationCaptureSuppressed(async () =>
       db.transaction(
         [parentStore, LIFE_OS_SYNC_STORE.attachmentQueue, LIFE_OS_SYNC_STORE.objectMeta],

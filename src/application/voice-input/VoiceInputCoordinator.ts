@@ -137,6 +137,8 @@ export class VoiceInputCoordinator {
           ...this.state,
           interimTranscript: event.isFinal ? '' : event.transcript,
         });
+    } else if (event.type === 'external-dictation-started') {
+      this.finish(this.base, false);
     } else if (event.type === 'error') {
       this.finish({ status: 'error', ownerId, sessionId, failure: event.error }, true);
     } else {

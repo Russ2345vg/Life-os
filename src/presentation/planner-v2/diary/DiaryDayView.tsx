@@ -1,6 +1,8 @@
 import type { DiaryDayPayload } from '../../../domain';
 import { VoiceTextArea } from '../../voice-input/VoiceTextArea';
 import { DiaryRatingScale } from './DiaryRatingScale';
+import type { DiaryMemoryField } from '../../../domain/memory';
+import { DiaryMemoryButton } from './DiaryMemoryButton';
 
 export type DiarySaveStatus = 'saved' | 'saving' | 'failed' | 'completed';
 
@@ -10,12 +12,14 @@ export function DiaryDayView({
   disabled = false,
   onChange,
   onComplete,
+  onMemory,
 }: {
   readonly payload: DiaryDayPayload;
   readonly status: DiarySaveStatus;
   readonly disabled?: boolean;
   readonly onChange: (payload: DiaryDayPayload) => void;
   readonly onComplete: () => void;
+  readonly onMemory?: ((field: DiaryMemoryField) => void) | undefined;
 }) {
   const rating = (field: 'productivity' | 'energy' | 'mood' | 'overall', label: string) => (
     <DiaryRatingScale
@@ -30,16 +34,25 @@ export function DiaryDayView({
     label: string,
     rows = 3,
   ) => (
-    <label className="planner-diary-question">
-      <span>{label}</span>
-      <VoiceTextArea
-        value={payload[field] ?? ''}
+    <div className="planner-diary-question">
+      <label>
+        <span>{label}</span>
+        <VoiceTextArea
+          value={payload[field] ?? ''}
+          disabled={disabled}
+          onValueChange={(value) => onChange({ ...payload, [field]: value })}
+          maxLength={field === 'note' ? 12_000 : 4_000}
+          rows={rows}
+        />
+      </label>
+      <DiaryMemoryButton
+        field={field}
+        label={label}
+        text={payload[field]}
         disabled={disabled}
-        onValueChange={(value) => onChange({ ...payload, [field]: value })}
-        maxLength={field === 'note' ? 12_000 : 4_000}
-        rows={rows}
+        onMemory={onMemory}
       />
-    </label>
+    </div>
   );
   const canComplete = [payload.productivity, payload.energy, payload.mood, payload.overall].every(
     (value) => value !== null,

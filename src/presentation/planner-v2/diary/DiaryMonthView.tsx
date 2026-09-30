@@ -4,6 +4,8 @@ import { VoiceTextArea } from '../../voice-input/VoiceTextArea';
 import type { DiarySaveStatus } from './DiaryDayView';
 import { DiarySummaryCards } from './DiarySummaryCards';
 import { ReflectionActions } from './DiaryWeekView';
+import type { DiaryMemoryField } from '../../../domain/memory';
+import { DiaryMemoryButton } from './DiaryMemoryButton';
 
 export function DiaryMonthView({
   payload,
@@ -16,6 +18,7 @@ export function DiaryMonthView({
   disabled = false,
   onChange,
   onComplete,
+  onMemory,
 }: {
   readonly payload: DiaryMonthPayload;
   readonly summary: DiaryRatingSummary;
@@ -27,6 +30,7 @@ export function DiaryMonthView({
   readonly disabled?: boolean;
   readonly onChange: (payload: DiaryMonthPayload) => void;
   readonly onComplete: () => void;
+  readonly onMemory?: ((field: DiaryMemoryField) => void) | undefined;
 }) {
   const questions = [
     ['biggestAchievement', 'Какое самое важное достижение месяца?'],
@@ -83,16 +87,25 @@ export function DiaryMonthView({
       >
         <h2 id="diary-month-heading">Итоги месяца</h2>
         {questions.map(([field, label]) => (
-          <label className="planner-diary-question" key={field}>
-            <span>{label}</span>
-            <VoiceTextArea
-              value={payload[field] ?? ''}
+          <div className="planner-diary-question" key={field}>
+            <label>
+              <span>{label}</span>
+              <VoiceTextArea
+                value={payload[field] ?? ''}
+                disabled={disabled}
+                onValueChange={(value) => onChange({ ...payload, [field]: value })}
+                maxLength={4_000}
+                rows={3}
+              />
+            </label>
+            <DiaryMemoryButton
+              field={field}
+              label={label}
+              text={payload[field]}
               disabled={disabled}
-              onValueChange={(value) => onChange({ ...payload, [field]: value })}
-              maxLength={4_000}
-              rows={3}
+              onMemory={onMemory}
             />
-          </label>
+          </div>
         ))}
         <ReflectionActions
           status={status}

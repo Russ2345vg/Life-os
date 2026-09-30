@@ -20,6 +20,7 @@ export type AppIconName =
   | 'account'
   | 'collapse'
   | 'expand'
+  | 'chevron-down'
   | 'arrow-right'
   | 'menu'
   | 'close'
@@ -63,6 +64,8 @@ function iconPath(name: AppIconName) {
       );
     case 'arrow-right':
       return <path d="M4 12h16m-6-6 6 6-6 6" />;
+    case 'chevron-down':
+      return <path d="m6 9 6 6 6-6" />;
     case 'microphone':
       return (
         <>

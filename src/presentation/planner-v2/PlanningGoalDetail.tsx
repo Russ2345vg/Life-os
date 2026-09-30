@@ -121,6 +121,7 @@ export function GoalDetailContent({
             .join(' · ')}
         </span>
       </div>
+      <EntityNeedText need={resolveGoalNeed(goal, directions)} prominent />
       <section className="planner-goal-result" aria-label="Желаемый результат">
         <p className="planner-eyebrow">Желаемый результат</p>
         <p>{goal.achievementCriteria ?? 'Результат пока не описан.'}</p>
@@ -242,7 +243,6 @@ export function GoalDetailContent({
       <GoalPeriodMembership goalId={id} today={today} periods={periods} memberships={memberships} />
       <details className="planner-goal-details">
         <summary>Детали</summary>
-        <EntityNeedText need={resolveGoalNeed(goal, directions)} />
         <p>{goal.description || 'Описание пока не добавлено.'}</p>
         {goal.whyImportant && <p>Почему важно: {goal.whyImportant}</p>}
         {goal.whyNow && <p>Почему сейчас: {goal.whyNow}</p>}

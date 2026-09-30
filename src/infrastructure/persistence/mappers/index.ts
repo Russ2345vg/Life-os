@@ -11,6 +11,7 @@ export { RecommendationApplicationRecordMapper } from './RecommendationApplicati
 export { PreparationRuleRecordMapper } from './PreparationRuleRecordMapper';
 export { LifeActionRecordMapper } from './LifeActionRecordMapper';
 export { MorningCycleRecordMapper } from './MorningCycleRecordMapper';
+export { MonthlyDirectionFocusRecordMapper } from './MonthlyDirectionFocusRecordMapper';
 export { GoalRecordMapper } from './GoalRecordMapper';
 export { ProjectRecordMapper } from './ProjectRecordMapper';
 export { JournalEntryRecordMapper } from './JournalEntryRecordMapper';
@@ -19,3 +20,4 @@ export { RoutineOccurrenceOverrideRecordMapper } from './RoutineOccurrenceOverri
 export { RoutineOccurrenceExecutionRecordMapper } from './RoutineOccurrenceExecutionRecordMapper';
 export { WalkRecordMapper } from './WalkRecordMapper';
 export { SphereRecordMapper } from './SphereRecordMapper';
+export { MemoryEventRecordMapper } from './MemoryEventRecordMapper';

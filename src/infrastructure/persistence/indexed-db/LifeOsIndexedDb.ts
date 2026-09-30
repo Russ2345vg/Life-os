@@ -46,7 +46,7 @@ interface MutationCaptureConfiguration {
 }
 
 export const LIFE_OS_DATABASE_NAME = 'lifeos';
-export const LIFE_OS_DATABASE_VERSION = 29;
+export const LIFE_OS_DATABASE_VERSION = 31;
 
 export const LIFE_OS_DOMAIN_STORE = {
   directionIndicators: 'directionIndicators',
@@ -60,6 +60,7 @@ export const LIFE_OS_DOMAIN_STORE = {
   days: 'days',
   decisions: 'decisions',
   diaryEntries: 'diaryEntries',
+  memoryEvents: 'memoryEvents',
   lifeActions: 'lifeActions',
   actionSessions: 'actionSessions',
   routineBlocks: 'routineBlocks',
@@ -78,6 +79,7 @@ export const LIFE_OS_DOMAIN_STORE = {
   preparationRules: 'preparationRules',
   recommendationApplications: 'recommendationApplications',
   morningCycles: 'morningCycles',
+  monthlyDirectionFocuses: 'monthlyDirectionFocuses',
   goals: 'goals',
   inboxIdeas: 'inboxIdeas',
   focusPeriods: 'focusPeriods',
@@ -303,6 +305,8 @@ export class LifeOsIndexedDb {
           )
             request.result.createObjectStore(LIFE_OS_STORE.timeCapacity, { keyPath: 'id' });
           if (oldVersion < 29) createVersionTwentyNineSchema(request.result);
+          if (oldVersion < 30) createVersionThirtySchema(request.result);
+          if (oldVersion < 31) createVersionThirtyOneSchema(request.result);
           if (oldVersion < 22 && request.transaction)
             upgradeLegacyProjects(request.result, request.transaction);
         } catch (error: unknown) {
@@ -594,6 +598,17 @@ function createVersionTwentyNineSchema(database: IDBDatabase): void {
   const entries = database.createObjectStore(LIFE_OS_STORE.diaryEntries, { keyPath: 'id' });
   entries.createIndex('byPeriodKey', 'periodKey', { unique: true });
   entries.createIndex('byKindAndPeriodStart', ['kind', 'periodStart'], { unique: false });
+}
+
+function createVersionThirtySchema(database: IDBDatabase): void {
+  if (!database.objectStoreNames.contains(LIFE_OS_STORE.monthlyDirectionFocuses))
+    database.createObjectStore(LIFE_OS_STORE.monthlyDirectionFocuses, { keyPath: 'id' });
+}
+
+function createVersionThirtyOneSchema(database: IDBDatabase): void {
+  if (database.objectStoreNames.contains(LIFE_OS_STORE.memoryEvents)) return;
+  const store = database.createObjectStore(LIFE_OS_STORE.memoryEvents, { keyPath: 'id' });
+  store.createIndex('byOccurrence', ['occurredOn', 'createdAt', 'id'], { unique: true });
 }
 
 function createVersionTwentyOneSchema(transaction: IDBTransaction | null): void {

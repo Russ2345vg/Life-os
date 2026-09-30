@@ -20,19 +20,24 @@ import { EntityContextMenu, type EntityMenuAction } from './EntityContextMenu';
 import type { SleepTodayEntry } from '../../application/sleep/SleepTodayEntry';
 import { buildTimeScheduleDay } from '../../application/queries/GetTimeSchedule';
 import { clockTime, durationLabel } from './timePresentation';
+import {
+  MonthlyDirectionFocusCard,
+  type MonthlyDirectionFocusView,
+} from './MonthlyDirectionFocusCard';
 
 export function PlannerToday({
   date,
   day,
   overview,
   goals,
+  directions = [],
+  spheres = [],
   availableActions,
-  mainDirectionId,
-  directionChoices,
+  monthlyDirectionFocus,
   busy,
   onSelectDay,
   onOpenAction,
-  onMainDirection,
+  onMonthlyDirectionChange,
   onComplete,
   onPlan,
   onReschedule,
@@ -49,13 +54,14 @@ export function PlannerToday({
   readonly day: 'today' | 'tomorrow';
   readonly overview: PlannerTodayOverview;
   readonly goals: readonly PlannerOption[];
+  readonly directions?: readonly PlannerOption[];
+  readonly spheres?: readonly PlannerOption[];
   readonly availableActions: readonly LifeAction[];
-  readonly mainDirectionId: string | null;
-  readonly directionChoices: readonly PlannerOption[];
+  readonly monthlyDirectionFocus: MonthlyDirectionFocusView;
   readonly busy: boolean;
   readonly onSelectDay: (day: 'today' | 'tomorrow') => void;
   readonly onOpenAction: (id: string) => void;
-  readonly onMainDirection: (id: string | null) => void;
+  readonly onMonthlyDirectionChange: (id: string | null) => void;
   readonly onComplete: (id: string) => void;
   readonly onSelectAction?: (selection: ActionSelection) => void;
   readonly onPlan: (id: string, main: boolean) => void;
@@ -106,6 +112,7 @@ export function PlannerToday({
   );
 
   const total = overview.actions.length + overview.completed.length + (overview.main ? 1 : 0);
+  const plannedCount = overview.actions.length + (overview.main ? 1 : 0);
   const schedule = buildTimeScheduleDay(date.toString(), availableActions, capacityMinutes);
   const percent = total ? Math.round((overview.completed.length / total) * 100) : 0;
   const dateLabel = new Intl.DateTimeFormat('ru-RU', {
@@ -120,6 +127,14 @@ export function PlannerToday({
   ) => {
     const id = action.id.toString();
     const goal = goals.find((item) => item.id === action.goalId?.toString());
+    const direction = directions.find(
+      (item) => item.id === (goal ? goal.directionId : action.directionId?.toString()),
+    );
+    const sphere = spheres.find(
+      (item) => item.id === (direction?.sphereId ?? goal?.sphereId ?? action.sphereId?.toString()),
+    );
+    const hasContext = Boolean(sphere || direction);
+    const contextId = `planner-action-context-${id}`;
     return (
       <li key={id}>
         <EntityContextMenu
@@ -141,12 +156,28 @@ export function PlannerToday({
                 className="planner-action-title planner-action-open"
                 type="button"
                 aria-label={action.title.toString()}
+                aria-describedby={hasContext ? contextId : undefined}
                 onClick={() => onOpenAction(id)}
               >
                 <span>
                   {action.title.toString()} <RecurrenceBadge action={action} />
                 </span>
                 {goal ? <span className="planner-muted">{goal.title}</span> : null}
+                {hasContext ? (
+                  <span className="planner-action-context" id={contextId}>
+                    {sphere ? (
+                      <span>
+                        <span className="planner-action-context__label">Сфера</span> {sphere.title}
+                      </span>
+                    ) : null}
+                    {direction ? (
+                      <span>
+                        <span className="planner-action-context__label">Направление</span>{' '}
+                        {direction.title}
+                      </span>
+                    ) : null}
+                  </span>
+                ) : null}
                 {action.scheduledStartMinute !== null ? (
                   <span className="planner-muted">
                     {clockTime(action.scheduledStartMinute)}–
@@ -225,37 +256,40 @@ export function PlannerToday({
             </button>
           </div>
         </header>
-        <section className="planner-main-direction">
-          <label htmlFor="planner-main-direction">
-            <span>Главное направление</span>
-          </label>
-          <select
-            id="planner-main-direction"
-            value={mainDirectionId ?? ''}
-            disabled={busy}
-            onChange={(event) => onMainDirection(event.target.value || null)}
-          >
-            <option value="">Не выбрано</option>
-            {mainDirectionId && !directionChoices.some((item) => item.id === mainDirectionId) ? (
-              <option value={mainDirectionId}>Недоступное направление</option>
-            ) : null}
-            {directionChoices.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.title}
-              </option>
-            ))}
-          </select>
-        </section>
+        <MonthlyDirectionFocusCard
+          value={monthlyDirectionFocus}
+          busy={busy}
+          onChange={onMonthlyDirectionChange}
+        />
         <section
           className="planner-day-workspace"
           aria-label={day === 'tomorrow' ? 'План на завтра' : 'План на сегодня'}
         >
-          <section className="planner-quick-create" aria-labelledby="planner-quick-create-title">
-            <h2 id="planner-quick-create-title">
-              {day === 'tomorrow' ? 'План на завтра' : 'План на сегодня'}
-            </h2>
+          <header className="planner-day-center__header">
+            <div>
+              <span className="planner-eyebrow">
+                {day === 'tomorrow' ? 'Планирование следующего дня' : 'Центр дня'}
+              </span>
+              <h2 id="planner-day-center-title">
+                {day === 'tomorrow' ? 'План на завтра' : 'План на сегодня'}
+              </h2>
+            </div>
+            <div className="planner-day-center__stats" role="group" aria-label="Состояние плана">
+              <span>
+                В плане <strong>{plannedCount}</strong>
+              </span>
+              <span>
+                Готово <strong>{overview.completed.length}</strong>
+              </span>
+            </div>
+          </header>
+          <section className="planner-quick-create" aria-labelledby="planner-day-center-title">
             {(schedule.timed.length + schedule.untimed.length > 0 || capacityMinutes !== null) && (
-              <p className={schedule.overCapacity ? 'planner-error' : 'planner-muted'}>
+              <p
+                className={`planner-day-center__capacity ${
+                  schedule.overCapacity ? 'planner-error' : 'planner-muted'
+                }`}
+              >
                 План: {durationLabel(schedule.plannedMinutes)} ·{' '}
                 {capacityMinutes === null
                   ? 'Доступное время не задано'
@@ -268,6 +302,9 @@ export function PlannerToday({
             )}
             <form
               className="planner-quick-add"
+              aria-label={
+                day === 'tomorrow' ? 'Быстро добавить на завтра' : 'Быстро добавить на сегодня'
+              }
               onSubmit={(event) => {
                 event.preventDefault();
                 if (adding.current || busy || !title.trim()) return;

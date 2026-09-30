@@ -634,4 +634,12 @@ mod tests {
         assert!(SecretId::auth_session("supabase-auth-pkce-flow-not-hex").is_err());
         assert!(SecretId::auth_session("device-private-key").is_err());
     }
+
+    #[test]
+    fn auth_storage_user_slot_does_not_replace_existing_session() {
+        let user = SecretId::auth_session("supabase-auth-user").expect("SDK user slot");
+        let session = SecretId::auth_session("supabase-auth-session").expect("existing slot");
+        assert_ne!(user.storage_name(), session.storage_name());
+        assert!(SecretId::auth_session("supabase-auth-user-private-key").is_err());
+    }
 }

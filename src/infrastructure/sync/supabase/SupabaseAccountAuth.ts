@@ -1,5 +1,10 @@
 import type { AccountAuth, AccountSession } from '../../../application/sync/account/AccountAuth';
 import { DomainError } from '../../../shared/errors/DomainError';
+import {
+  parsePasswordRecoveryProof,
+  invalidRecoveryProof,
+  type PasswordRecoveryProof,
+} from './PasswordRecoveryProof';
 
 interface AuthUserView {
   readonly id: string;
@@ -17,6 +22,8 @@ interface AuthSessionView {
 
 interface AuthErrorView {
   readonly code?: string | undefined;
+  readonly status?: number | undefined;
+  readonly name?: string | undefined;
   readonly message: string;
 }
 
@@ -38,11 +45,15 @@ export interface SupabaseAccountAuthClientPort {
       readonly email?: string;
       readonly password?: string;
     }): Promise<AuthResult<{ readonly user: AuthUserView | null }>>;
-    verifyOtp(input: {
-      readonly email: string;
-      readonly token: string;
-      readonly type: 'email_change';
-    }): Promise<
+    verifyOtp(
+      input:
+        | PasswordRecoveryProof
+        | {
+            readonly email: string;
+            readonly token: string;
+            readonly type: 'email_change';
+          },
+    ): Promise<
       AuthResult<{
         readonly user: AuthUserView | null;
         readonly session: AuthSessionView | null;
@@ -65,11 +76,17 @@ export interface SupabaseAccountAuthClientPort {
 }
 
 export class SupabaseAccountAuth implements AccountAuth {
-  public constructor(private readonly client: SupabaseAccountAuthClientPort) {}
+  public constructor(
+    private readonly client: SupabaseAccountAuthClientPort,
+    private readonly recovery?: {
+      readonly url: string;
+      readonly createClient: () => SupabaseAccountAuthClientPort;
+    },
+  ) {}
 
   public async current(): Promise<AccountSession | null> {
-    const result = await this.client.auth.getSession();
-    if (result.error !== null) throw authUnavailable();
+    const result = await this.callProvider(() => this.client.auth.getSession());
+    if (result.error !== null) throw mapProviderError(result.error, 'session');
     return result.data.session === null ? null : parseSession(result.data.session);
   }
 
@@ -77,8 +94,9 @@ export class SupabaseAccountAuth implements AccountAuth {
     const current = await this.providerSession();
     if (current !== null) return parseSession(current);
 
-    const created = await this.client.auth.signInAnonymously();
-    if (created.error !== null || created.data.session === null) throw authUnavailable();
+    const created = await this.callProvider(() => this.client.auth.signInAnonymously());
+    if (created.error !== null) throw mapProviderError(created.error, 'session');
+    if (created.data.session === null) throw authInvalid();
     return parseSession(created.data.session);
   }
 
@@ -93,7 +111,9 @@ export class SupabaseAccountAuth implements AccountAuth {
       );
     }
 
-    const updated = await this.client.auth.updateUser({ email: normalized });
+    const updated = await this.callProvider(() =>
+      this.client.auth.updateUser({ email: normalized }),
+    );
     if (updated.error !== null) throw mapProviderError(updated.error, 'registration');
     if (updated.data.user === null) throw authInvalid();
     return parseSession({ ...current, user: updated.data.user });
@@ -101,21 +121,25 @@ export class SupabaseAccountAuth implements AccountAuth {
 
   public async resendVerification(email: string): Promise<void> {
     const normalized = normalizeEmail(email);
-    const result = await this.client.auth.resend({
-      type: 'email_change',
-      email: normalized,
-    });
+    const result = await this.callProvider(() =>
+      this.client.auth.resend({
+        type: 'email_change',
+        email: normalized,
+      }),
+    );
     if (result.error !== null) throw mapProviderError(result.error, 'verification');
   }
 
   public async verifyEmail(email: string, token: string): Promise<AccountSession> {
     const normalized = normalizeEmail(email);
     if (!/^\d{6}$/.test(token)) throw verificationInvalid();
-    const result = await this.client.auth.verifyOtp({
-      email: normalized,
-      token,
-      type: 'email_change',
-    });
+    const result = await this.callProvider(() =>
+      this.client.auth.verifyOtp({
+        email: normalized,
+        token,
+        type: 'email_change',
+      }),
+    );
     if (result.error !== null) throw mapProviderError(result.error, 'verification');
     if (result.data.session === null) throw authInvalid();
     const session = parseSession(result.data.session);
@@ -129,8 +153,11 @@ export class SupabaseAccountAuth implements AccountAuth {
 
   public async signIn(email: string, password: string): Promise<AccountSession> {
     const normalized = normalizeEmail(email);
-    requirePassword(password);
-    const result = await this.client.auth.signInWithPassword({ email: normalized, password });
+    if (password.length === 0)
+      throw new DomainError('account.password_required', 'Введите пароль.');
+    const result = await this.callProvider(() =>
+      this.client.auth.signInWithPassword({ email: normalized, password }),
+    );
     if (result.error !== null) throw mapProviderError(result.error, 'sign_in');
     if (result.data.session === null) throw authInvalid();
     const session = parseSession(result.data.session);
@@ -139,17 +166,58 @@ export class SupabaseAccountAuth implements AccountAuth {
   }
 
   public async requestPasswordReset(email: string): Promise<void> {
-    const result = await this.client.auth.resetPasswordForEmail(normalizeEmail(email));
-    if (result.error !== null) throw authUnavailable();
+    const result = await this.callProvider(() =>
+      this.client.auth.resetPasswordForEmail(normalizeEmail(email)),
+    );
+    if (result.error !== null) throw mapProviderError(result.error, 'password');
   }
 
   public async updatePassword(password: string): Promise<AccountSession> {
     return this.savePassword(password);
   }
 
+  public async completePasswordReset(
+    input: Parameters<AccountAuth['completePasswordReset']>[0],
+  ): Promise<void> {
+    requirePassword(input.newPassword);
+    const email = normalizeEmail(input.email);
+    if (this.recovery === undefined) throw authUnavailable();
+    const proof = parsePasswordRecoveryProof(input.codeOrLink, this.recovery.url, email);
+    const isolated = this.recovery.createClient();
+    try {
+      const verified = await this.callProvider(() => isolated.auth.verifyOtp(proof));
+      if (verified.error !== null) {
+        if (['otp_expired', 'otp_disabled', 'token_expired'].includes(verified.error.code ?? ''))
+          throw invalidRecoveryProof();
+        throw mapProviderError(verified.error, 'password');
+      }
+      if (verified.data.session === null) throw invalidRecoveryProof();
+      const session = parseSession(verified.data.session);
+      if (
+        session.isAnonymous ||
+        !session.emailVerified ||
+        session.email !== email ||
+        (input.expectedUserId !== null && session.userId !== input.expectedUserId)
+      )
+        throw invalidRecoveryProof();
+      const updated = await this.callProvider(() =>
+        isolated.auth.updateUser({ password: input.newPassword }),
+      );
+      if (updated.error !== null) throw mapProviderError(updated.error, 'password');
+      if (
+        updated.data.user?.id !== session.userId ||
+        updated.data.user.email?.toLowerCase() !== email
+      )
+        throw authInvalid();
+    } finally {
+      isolated.auth.stopAutoRefresh();
+      await isolated.auth.signOut({ scope: 'local' }).catch(() => undefined);
+    }
+  }
+
   public async signOutCurrent(): Promise<void> {
-    const result = await this.client.auth.signOut({ scope: 'local' });
-    if (result.error !== null) throw authUnavailable();
+    const result = await this.callProvider(() => this.client.auth.signOut({ scope: 'local' }));
+    if (result.error !== null) throw mapProviderError(result.error, 'session');
   }
 
   public async close(): Promise<void> {
@@ -168,8 +236,8 @@ export class SupabaseAccountAuth implements AccountAuth {
       );
     }
 
-    const updated = await this.client.auth.updateUser({ password });
-    if (updated.error !== null) throw authUnavailable();
+    const updated = await this.callProvider(() => this.client.auth.updateUser({ password }));
+    if (updated.error !== null) throw mapProviderError(updated.error, 'password');
     if (updated.data.user === null) throw authInvalid();
     const session = parseSession({ ...current, user: updated.data.user });
     if (session.isAnonymous || !session.emailVerified) throw authInvalid();
@@ -177,17 +245,30 @@ export class SupabaseAccountAuth implements AccountAuth {
   }
 
   private async providerSession(): Promise<AuthSessionView | null> {
-    const result = await this.client.auth.getSession();
-    if (result.error !== null) throw authUnavailable();
+    const result = await this.callProvider(() => this.client.auth.getSession());
+    if (result.error !== null) throw mapProviderError(result.error, 'session');
     return result.data.session;
   }
 
   private async providerSessionOrAnonymous(): Promise<AuthSessionView> {
     const current = await this.providerSession();
     if (current !== null) return current;
-    const created = await this.client.auth.signInAnonymously();
-    if (created.error !== null || created.data.session === null) throw authUnavailable();
+    const created = await this.callProvider(() => this.client.auth.signInAnonymously());
+    if (created.error !== null) throw mapProviderError(created.error, 'session');
+    if (created.data.session === null) throw authInvalid();
     return created.data.session;
+  }
+
+  private async callProvider<T>(work: () => Promise<T>): Promise<T> {
+    try {
+      return await work();
+    } catch (reason: unknown) {
+      if (reason instanceof DomainError) throw reason;
+      if (reason instanceof TypeError) throw networkError();
+      if (reason instanceof Error && reason.message === 'LifeOS request timed out.')
+        throw requestTimeout();
+      throw authUnavailable();
+    }
   }
 }
 
@@ -255,9 +336,45 @@ function requirePassword(value: string): void {
 
 function mapProviderError(
   error: AuthErrorView,
-  operation: 'registration' | 'verification' | 'sign_in',
+  operation: 'registration' | 'verification' | 'sign_in' | 'session' | 'password',
 ): DomainError {
   const code = error.code?.toLowerCase() ?? '';
+  if (
+    error.status === 429 ||
+    ['over_request_rate_limit', 'over_email_send_rate_limit', 'over_sms_send_rate_limit'].includes(
+      code,
+    )
+  ) {
+    return new DomainError(
+      'account.rate_limited',
+      'Слишком много попыток. Подождите немного и повторите.',
+    );
+  }
+  if (error.message === 'LifeOS request timed out.') return requestTimeout();
+  if (
+    error.status === 0 ||
+    (error.name === 'AuthRetryableFetchError' && error.status === undefined)
+  )
+    return networkError();
+  if (
+    [
+      'session_not_found',
+      'refresh_token_not_found',
+      'refresh_token_already_used',
+      'bad_jwt',
+    ].includes(code)
+  )
+    return authInvalid();
+  if (code === 'email_not_confirmed')
+    return new DomainError(
+      'account.email_not_verified',
+      'Почта не подтверждена. Подтвердите её по письму и повторите вход.',
+    );
+  if (code === 'weak_password')
+    return new DomainError(
+      'account.password_weak',
+      'Этот пароль недостаточно надёжен. Выберите другой.',
+    );
   if (
     operation === 'registration' &&
     ['email_exists', 'identity_already_exists', 'user_already_exists'].includes(code)
@@ -287,6 +404,20 @@ function authUnavailable(): DomainError {
 
 function authInvalid(): DomainError {
   return new DomainError('account.auth_invalid', 'Сессия аккаунта повреждена или устарела.');
+}
+
+function networkError(): DomainError {
+  return new DomainError(
+    'account.network_error',
+    'Не удалось связаться с сервером. Проверьте интернет и повторите.',
+  );
+}
+
+function requestTimeout(): DomainError {
+  return new DomainError(
+    'account.request_timeout',
+    'Сервер не ответил вовремя. Повторите действие; при смене пароля сначала попробуйте войти с новым паролем.',
+  );
 }
 
 function isUuid(value: string): boolean {

@@ -1,7 +1,30 @@
 import { describe, expect, it, vi } from 'vitest';
 import { PilotSyncCoordinator } from './PilotSyncCoordinator';
+import { SyncTransferGate } from '../account/SyncTransferGate';
 
 describe('PilotSyncCoordinator', () => {
+  it('does not transfer, subscribe or start attachment maintenance while account access is blocked', async () => {
+    const bootstrap = { run: vi.fn(async () => undefined) };
+    const afterStructured = vi.fn();
+    const hints = { ensure: vi.fn(async () => undefined), close: vi.fn(async () => undefined) };
+    const coordinator = new PilotSyncCoordinator({
+      transferGate: new SyncTransferGate(async () => false),
+      bootstrap,
+      afterStructured,
+      hints,
+      push: { run: vi.fn(async () => ({ failed: 0 })) },
+      pull: { run: vi.fn(async () => ({ quarantined: 0 })) },
+      metrics: { counts: async () => ({ pending: 3, conflicts: 0, quarantined: 0 }) },
+    });
+    await expect(coordinator.runAndReport()).resolves.toMatchObject({
+      pending: 3,
+      lastSequence: null,
+    });
+    expect(coordinator.status()).toMatchObject({ state: 'attention', lastSuccessfulSyncAt: null });
+    expect(bootstrap.run).not.toHaveBeenCalled();
+    expect(hints.ensure).not.toHaveBeenCalled();
+    expect(afterStructured).not.toHaveBeenCalled();
+  });
   it('reports durable convergence metrics and the cursor after pull', async () => {
     const coordinator = new PilotSyncCoordinator({
       bootstrap: { run: vi.fn(async () => undefined) },

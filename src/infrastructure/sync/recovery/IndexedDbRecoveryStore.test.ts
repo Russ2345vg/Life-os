@@ -55,6 +55,47 @@ async function fixture() {
   return { db, connection, recorder, goal, store: new IndexedDbRecoveryStore(db, recorder) };
 }
 describe('IndexedDB recovery transactions', () => {
+  it('preserves deleted memory and its offline photo in a recovery snapshot without the diary source', async () => {
+    const f = await fixture();
+    try {
+      const photo = {
+        dataUrl: 'data:image/png;base64,aGVsbG8=',
+        mimeType: 'image/png',
+        sizeBytes: 5,
+      };
+      const seed = f.connection.transaction('memoryEvents', 'readwrite');
+      seed.objectStore('memoryEvents').put({
+        ...structuredSyncFixtures().memory_event,
+        photo,
+        deletedAt: '2026-09-07T00:00:00.000Z',
+      });
+      await done(seed);
+      const snapshot = await f.store.readState();
+      const item = snapshot.items.find((i) => i.entityType === 'memory_event')!;
+      expect(item.record.syncSnapshotImage).toEqual(photo);
+      const clear = f.connection.transaction('memoryEvents', 'readwrite');
+      clear.objectStore('memoryEvents').clear();
+      await done(clear);
+      await f.store.apply(snapshot, JSON.stringify(await f.store.readState()), true);
+      const restored = await request<Record<string, unknown>>(
+        f.connection.transaction('memoryEvents').objectStore('memoryEvents').get('sync04-memory'),
+      );
+      expect(restored).toMatchObject({ photo, deletedAt: '2026-09-07T00:00:00.000Z' });
+      const before = await f.store.readState();
+      const corrupt = {
+        schemaVersion: 1 as const,
+        items: before.items.map((i) =>
+          i.entityType === 'memory_event'
+            ? { ...i, record: { ...i.record, syncSnapshotImage: { ...photo, sizeBytes: 99 } } }
+            : i,
+        ),
+      };
+      await expect(f.store.apply(corrupt, JSON.stringify(before), true)).rejects.toThrow();
+      expect(await f.store.readState()).toEqual(before);
+    } finally {
+      f.db.close();
+    }
+  });
   it('restores work history even when the original action is no longer present', async () => {
     const f = await fixture();
     try {
@@ -396,7 +437,7 @@ describe('IndexedDB recovery transactions', () => {
         );
       await completion;
       const state = await f.store.readState();
-      expect(new Set(state.items.map((item) => item.entityType)).size).toBe(34);
+      expect(new Set(state.items.map((item) => item.entityType)).size).toBe(36);
       expect(state.items.find((item) => item.entityType === 'life_action')?.record).toMatchObject(
         expectedFields,
       );

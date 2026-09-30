@@ -13,8 +13,10 @@ import type { SyncTrustTransport } from '../ports/SyncTrustTransport';
 import type { PilotSyncRunResult, PilotSyncState } from '../pilot/PilotSyncCoordinator';
 import type { AccountAuth, AccountSession } from './AccountAuth';
 import type { AccountLocalData } from './AccountLocalData';
+import type { SyncTransferGate } from './SyncTransferGate';
 
 export interface AccountOverview {
+  readonly availability?: { readonly available: boolean; readonly reason: string };
   readonly state: AccountSetupState;
   readonly email: string | null;
   readonly emailVerified: boolean;
@@ -38,6 +40,7 @@ export interface AccountSync {
   signIn(email: string, password: string): Promise<AccountOverview>;
   recoverDevice(recoveryMaterial: string): Promise<AccountOverview>;
   requestPasswordReset(email: string): Promise<void>;
+  completePasswordReset(email: string, codeOrLink: string, newPassword: string): Promise<void>;
   updatePassword(password: string): Promise<AccountOverview>;
   syncNow(): Promise<AccountOverview>;
   revokeDevice(deviceId: string): Promise<AccountOverview>;
@@ -54,6 +57,7 @@ export interface AccountSyncDependencies {
   readonly recovery: SyncRecovery;
   readonly localData: AccountLocalData;
   readonly now?: () => Date;
+  readonly transferGate?: SyncTransferGate;
 }
 
 export class AccountSyncService implements AccountSync {
@@ -64,7 +68,58 @@ export class AccountSyncService implements AccountSync {
   }
 
   public async load(): Promise<AccountOverview> {
+    const existing = await this.dependencies.installations.find();
+    if (
+      existing !== null &&
+      ['configured', 'recovery_unconfirmed'].includes(existing.setupState) &&
+      existing.accountUserId !== null &&
+      !['email_verification_pending', 'sign_out_pending', 'account_migration_pending'].includes(
+        existing.accountSetupState,
+      )
+    ) {
+      const session = await this.dependencies.auth.current().catch((error: unknown) => {
+        if (error instanceof DomainError && error.code === 'account.auth_invalid') return null;
+        throw error;
+      });
+      if (
+        session === null ||
+        session.isAnonymous ||
+        !session.emailVerified ||
+        session.userId !== existing.accountUserId ||
+        session.email !== existing.accountEmail ||
+        session.sessionId !== existing.accountSessionId
+      ) {
+        await this.dependencies.transferGate?.pauseAndDrain();
+        try {
+          const current = await this.requireInstallation();
+          if (current.accountSetupState !== 'sign_out_pending') {
+            if (
+              session === null ||
+              session.isAnonymous ||
+              !session.emailVerified ||
+              session.userId !== current.accountUserId ||
+              session.email !== current.accountEmail
+            ) {
+              await this.dependencies.installations.save({
+                ...current,
+                accountSetupState: 'sign_in_required',
+                updatedAt: this.now().toISOString(),
+              });
+            } else if (session.sessionId !== current.accountSessionId)
+              await this.saveSession(current, session, 'device_recovery_required');
+          }
+        } finally {
+          this.dependencies.transferGate?.resume();
+        }
+      }
+    }
     const overview = await this.dependencies.sync.loadOverview();
+    if (
+      overview.installation.accountSetupState === 'recovery_confirmation_pending' &&
+      overview.installation.setupState === 'recovery_unconfirmed' &&
+      overview.installation.spaceId !== null
+    )
+      return this.present(overview, await this.dependencies.sync.exportRecoveryMaterial());
     if (overview.installation.accountSetupState === 'account_migration_pending') {
       return this.resumeMigration(overview.installation);
     }
@@ -126,84 +181,159 @@ export class AccountSyncService implements AccountSync {
     if (installation.accountEmail === null) throw invalidAccountState();
     const session = await this.dependencies.auth.verifyEmail(installation.accountEmail, token);
     if (!session.emailVerified) throw invalidAccountState();
-    const updated = await this.saveSession(installation, session, 'email_verification_pending');
-    return this.present(await this.overviewWith(updated), null, undefined, true);
+    await this.saveSession(installation, session, 'email_verification_pending');
+    return this.present(await this.dependencies.sync.loadOverview(), null, undefined, true);
   }
 
   public async setPasswordAndAdopt(password: string): Promise<AccountOverview> {
     const installation = await this.requireInstallation('email_verification_pending');
-    const session = requirePermanentSession(await this.dependencies.auth.setPassword(password));
-    const snapshot = await this.dependencies.snapshots.createPreSyncSnapshot();
-    await this.requireVerifiedSnapshot(snapshot.snapshotId);
-    const pending: SyncInstallation = {
-      ...installation,
-      accountSetupState: 'account_migration_pending',
-      accountUserId: session.userId,
-      accountSessionId: session.sessionId,
-      accountEmail: requireEmail(session),
-      accountMigrationSnapshotId: snapshot.snapshotId,
-      updatedAt: this.now().toISOString(),
-    };
-    await this.dependencies.installations.save(pending);
-    return this.resumeMigration(pending);
+    await this.dependencies.transferGate?.pauseAndDrain();
+    try {
+      const session = requirePermanentSession(await this.dependencies.auth.setPassword(password));
+      const snapshot = await this.dependencies.snapshots.createPreSyncSnapshot();
+      await this.requireVerifiedSnapshot(snapshot.snapshotId);
+      const pending: SyncInstallation = {
+        ...installation,
+        accountSetupState: 'account_migration_pending',
+        accountUserId: session.userId,
+        accountSessionId: session.sessionId,
+        accountEmail: requireEmail(session),
+        accountMigrationSnapshotId: snapshot.snapshotId,
+        updatedAt: this.now().toISOString(),
+      };
+      await this.dependencies.installations.save(pending);
+      return await this.resumeMigration(pending);
+    } finally {
+      this.dependencies.transferGate?.resume();
+    }
   }
 
   public async confirmRecoverySaved(): Promise<AccountOverview> {
-    await this.requireInstallation('recovery_confirmation_pending');
+    await this.requireCurrentSession(
+      await this.requireInstallation('recovery_confirmation_pending'),
+    );
     const overview = await this.dependencies.sync.confirmRecoverySaved();
     const updated: SyncInstallation = {
       ...overview.installation,
-      accountSetupState: 'ready',
+      accountSetupState: 'recovery_confirmation_pending',
       accountMigrationSnapshotId: null,
       updatedAt: this.now().toISOString(),
     };
     await this.dependencies.installations.save(updated);
-    return this.present({ ...overview, installation: updated });
+    return this.finishRecoveryConvergence({ ...overview, installation: updated });
   }
 
   public async revealRecoveryMaterial(): Promise<AccountOverview> {
     const installation = await this.requireInstallation('ready');
     await this.requireCurrentSession(installation);
     const recoveryMaterial = await this.dependencies.sync.exportRecoveryMaterial();
-    return this.present(await this.overviewWith(installation), recoveryMaterial);
+    return this.present(await this.dependencies.sync.loadOverview(), recoveryMaterial);
   }
 
   public async signIn(email: string, password: string): Promise<AccountOverview> {
     const overview = await this.dependencies.sync.loadOverview();
-    const session = requirePermanentSession(await this.dependencies.auth.signIn(email, password));
-    const updated = await this.saveSession(
-      overview.installation,
-      session,
-      'recovery_confirmation_pending',
-    );
-    return this.present({ ...overview, installation: updated, connection: 'online' });
+    const original = overview.installation;
+    this.requireOwnerEmail(original, email);
+    await this.dependencies.transferGate?.pauseAndDrain();
+    try {
+      if (original.spaceId !== null && original.accountUserId !== null) {
+        await this.dependencies.installations.save({
+          ...original,
+          accountSetupState: 'sign_in_required',
+          updatedAt: this.now().toISOString(),
+        });
+      }
+      const session = requirePermanentSession(await this.dependencies.auth.signIn(email, password));
+      if (original.accountUserId !== null && session.userId !== original.accountUserId)
+        throw ownerMismatch();
+      const current = await this.requireInstallation();
+      const updated = await this.saveSession(
+        current,
+        session,
+        current.spaceId !== null && current.membershipStatus === 'active'
+          ? 'device_recovery_required'
+          : 'recovery_confirmation_pending',
+      );
+      return this.present({ ...overview, installation: updated, connection: 'online' });
+    } catch (error) {
+      const session = await this.dependencies.auth.current().catch(() => null);
+      if (
+        session !== null &&
+        session.userId === original.accountUserId &&
+        session.sessionId === original.accountSessionId &&
+        session.email === original.accountEmail
+      ) {
+        const current = await this.requireInstallation();
+        await this.dependencies.installations.save({
+          ...current,
+          accountSetupState: original.accountSetupState,
+        });
+      }
+      throw error;
+    } finally {
+      this.dependencies.transferGate?.resume();
+    }
   }
 
   public async recoverDevice(recoveryMaterial: string): Promise<AccountOverview> {
-    const installation = await this.requireInstallation('recovery_confirmation_pending');
+    const installation = await this.requireInstallation();
+    if (
+      !['recovery_confirmation_pending', 'device_recovery_required'].includes(
+        installation.accountSetupState,
+      )
+    )
+      throw invalidAccountState();
     const session = requirePermanentSession(await this.requireCurrentSession(installation));
-    const overview = await this.dependencies.sync.recover(recoveryMaterial);
-    const recovered = await this.saveSession(
-      overview.installation,
-      session,
-      'recovery_confirmation_pending',
-    );
+    await this.dependencies.transferGate?.pauseAndDrain();
+    let overview: SyncOverview;
+    let recovered: SyncInstallation;
+    try {
+      overview = await this.dependencies.sync.recover(recoveryMaterial);
+      recovered = await this.saveSession(
+        overview.installation,
+        session,
+        'recovery_confirmation_pending',
+      );
+    } finally {
+      this.dependencies.transferGate?.resume();
+    }
     return this.finishRecoveryConvergence({ ...overview, installation: recovered });
   }
 
   public async requestPasswordReset(email: string): Promise<void> {
+    const installation = await this.dependencies.installations.find();
+    if (installation !== null) this.requireOwnerEmail(installation, email);
     await this.dependencies.auth.requestPasswordReset(email);
+  }
+
+  public async completePasswordReset(
+    email: string,
+    codeOrLink: string,
+    newPassword: string,
+  ): Promise<void> {
+    const installation = await this.dependencies.installations.find();
+    if (installation !== null) this.requireOwnerEmail(installation, email);
+    await this.dependencies.auth.completePasswordReset({
+      email,
+      codeOrLink,
+      newPassword,
+      expectedUserId: installation?.accountUserId ?? null,
+    });
   }
 
   public async updatePassword(password: string): Promise<AccountOverview> {
     const installation = await this.requireInstallation();
     if (installation.accountSetupState === 'local_anonymous') throw invalidAccountState();
+    await this.requireCurrentSession(installation);
     const session = requirePermanentSession(await this.dependencies.auth.updatePassword(password));
-    const updated = await this.saveSession(installation, session, installation.accountSetupState);
-    return this.present(await this.overviewWith(updated));
+    await this.saveSession(installation, session, installation.accountSetupState);
+    return this.present(await this.dependencies.sync.loadOverview());
   }
 
   public async syncNow(): Promise<AccountOverview> {
+    const initial = await this.load();
+    if (['sign_in_required', 'device_recovery_required'].includes(initial.state))
+      return { ...initial, syncState: 'attention' };
     const report = await this.dependencies.sync.syncPilotNow();
     const overview = await this.load();
     return {
@@ -278,47 +408,51 @@ export class AccountSyncService implements AccountSync {
   }
 
   private async resumeMigration(installation: SyncInstallation): Promise<AccountOverview> {
-    await this.requireCurrentSession(installation);
-    if (installation.accountMigrationSnapshotId === null) throw invalidAccountState();
-    await this.requireVerifiedSnapshot(installation.accountMigrationSnapshotId);
-
+    await this.dependencies.transferGate?.pauseAndDrain();
     let migrated: SyncInstallation;
     let recoveryMaterial: string | null = null;
-    if (installation.spaceId === null) {
-      const setup = await this.dependencies.sync.setupFirstSpace();
-      migrated = setup.overview.installation;
-      recoveryMaterial = setup.recoveryMaterial;
-    } else {
-      if (installation.currentKeyEpoch === null) throw invalidAccountState();
-      const adopted = await this.dependencies.transport.adoptCurrentSpace(installation.deviceId);
-      if (
-        adopted.spaceId !== installation.spaceId ||
-        adopted.currentKeyEpoch !== installation.currentKeyEpoch
-      ) {
-        throw new DomainError(
-          'account.adoption_mismatch',
-          'Сервер вернул другое пространство синхронизации.',
-        );
-      }
-      migrated = installation;
-    }
+    try {
+      await this.requireCurrentSession(installation);
+      if (installation.accountMigrationSnapshotId === null) throw invalidAccountState();
+      await this.requireVerifiedSnapshot(installation.accountMigrationSnapshotId);
 
-    const report = await this.dependencies.sync.syncPilotNow();
-    requireConverged(report);
-    const accountSetupState =
-      migrated.setupState === 'recovery_unconfirmed' ? 'recovery_confirmation_pending' : 'ready';
-    const completed: SyncInstallation = {
-      ...migrated,
-      accountSetupState,
-      accountUserId: installation.accountUserId,
-      accountSessionId: installation.accountSessionId,
-      accountEmail: installation.accountEmail,
-      accountMigrationSnapshotId: null,
-      updatedAt: this.now().toISOString(),
-    };
-    await this.dependencies.installations.save(completed);
-    const overview = await this.overviewWith(completed);
-    return this.present(overview, recoveryMaterial, report);
+      if (installation.spaceId === null) {
+        const setup = await this.dependencies.sync.setupFirstSpace();
+        migrated = setup.overview.installation;
+        recoveryMaterial = setup.recoveryMaterial;
+      } else {
+        if (installation.currentKeyEpoch === null) throw invalidAccountState();
+        const adopted = await this.dependencies.transport.adoptCurrentSpace(installation.deviceId);
+        if (
+          adopted.spaceId !== installation.spaceId ||
+          adopted.currentKeyEpoch !== installation.currentKeyEpoch
+        ) {
+          throw new DomainError(
+            'account.adoption_mismatch',
+            'Сервер вернул другое пространство синхронизации.',
+          );
+        }
+        migrated = installation;
+      }
+
+      const completed: SyncInstallation = {
+        ...migrated,
+        accountSetupState: 'recovery_confirmation_pending',
+        accountUserId: installation.accountUserId,
+        accountSessionId: installation.accountSessionId,
+        accountEmail: installation.accountEmail,
+        accountMigrationSnapshotId: null,
+        updatedAt: this.now().toISOString(),
+      };
+      await this.dependencies.installations.save(completed);
+      migrated = completed;
+    } finally {
+      this.dependencies.transferGate?.resume();
+    }
+    const overview = await this.dependencies.sync.loadOverview();
+    return migrated.setupState === 'recovery_unconfirmed'
+      ? this.present(overview, recoveryMaterial)
+      : this.finishRecoveryConvergence(overview);
   }
 
   private async finishRecoveryConvergence(overview: SyncOverview): Promise<AccountOverview> {
@@ -328,8 +462,15 @@ export class AccountSyncService implements AccountSync {
     }
     const report = await this.dependencies.sync.syncPilotNow();
     requireConverged(report);
+    const current = await this.requireInstallation();
+    if (
+      current.deviceId !== installation.deviceId ||
+      current.accountSessionId !== installation.accountSessionId ||
+      current.accountSetupState !== 'recovery_confirmation_pending'
+    )
+      throw invalidAccountState();
     const ready: SyncInstallation = {
-      ...installation,
+      ...current,
       accountSetupState: 'ready',
       accountMigrationSnapshotId: null,
       updatedAt: this.now().toISOString(),
@@ -348,10 +489,20 @@ export class AccountSyncService implements AccountSync {
     }
   }
 
+  private requireOwnerEmail(installation: SyncInstallation, email: string): void {
+    if (
+      installation.accountEmail !== null &&
+      email.trim().toLowerCase() !== installation.accountEmail
+    )
+      throw ownerMismatch();
+  }
+
   private async requireCurrentSession(installation: SyncInstallation): Promise<AccountSession> {
     const session = await this.dependencies.auth.current();
     if (
       session === null ||
+      session.isAnonymous ||
+      !session.emailVerified ||
       session.userId !== installation.accountUserId ||
       session.sessionId !== installation.accountSessionId ||
       session.email !== installation.accountEmail
@@ -383,15 +534,14 @@ export class AccountSyncService implements AccountSync {
       accountUserId: session.userId,
       accountSessionId: session.sessionId,
       accountEmail: requireEmail(session),
+      accountRecoveryDeviceId:
+        installation.accountSessionId === session.sessionId
+          ? (installation.accountRecoveryDeviceId ?? null)
+          : null,
       updatedAt: this.now().toISOString(),
     };
     await this.dependencies.installations.save(updated);
     return updated;
-  }
-
-  private async overviewWith(installation: SyncInstallation): Promise<SyncOverview> {
-    const overview = await this.dependencies.sync.loadOverview();
-    return { ...overview, installation };
   }
 
   private present(
@@ -431,6 +581,13 @@ function requireEmail(session: AccountSession): string {
 
 function invalidTransition(message: string): DomainError {
   return new DomainError('account.transition_invalid', message);
+}
+
+function ownerMismatch(): DomainError {
+  return new DomainError(
+    'account.owner_mismatch',
+    'На этом устройстве сохранены данные другого аккаунта. Войдите в подключённый аккаунт.',
+  );
 }
 
 function invalidAccountState(): DomainError {

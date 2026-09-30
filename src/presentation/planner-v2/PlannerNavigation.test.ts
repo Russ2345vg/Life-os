@@ -1,12 +1,50 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { IDBFactory } from 'fake-indexeddb';
+import { createLifeOsApplication } from '../../app/composition/createLifeOsApplication';
 import { DayDate } from '../../domain';
 import { buildPlannerRoute, parsePlannerRoute, resolveDiaryRoute } from './PlannerNavigation';
 import { PlannerWorkspace, type PlannerServices } from './PlannerWorkspace';
 import { PlannerViewSwitcher } from './PlannerViewSwitcher';
+import { PlannerLibraryReadModels } from '../../application/planner/PlannerLibraryReadModels';
+
+const unexpectedRead = vi.fn(async (): Promise<never> => {
+  throw new Error('Static navigation rendering must not read application data.');
+});
+const libraryReads = new PlannerLibraryReadModels(
+  {
+    getGoals: unexpectedRead,
+    getDirections: unexpectedRead,
+    getSpheres: unexpectedRead,
+    getActions: unexpectedRead,
+    getIdeas: unexpectedRead,
+    getFocus: unexpectedRead,
+    getTimeCapacity: unexpectedRead,
+  },
+  {
+    subscribe: () => {
+      throw new Error('Static rendering must not subscribe.');
+    },
+  },
+);
 
 describe('V2 preview routes', () => {
+  let application: Awaited<ReturnType<typeof createLifeOsApplication>>;
+  let services: PlannerServices;
+  beforeAll(async () => {
+    vi.stubGlobal('indexedDB', new IDBFactory());
+    // These cases cover the base navigation without the optional memory section.
+    application = await createLifeOsApplication({ memoryEnabled: false });
+    const { memory, ...baseServices } = application;
+    void memory;
+    services = { ...baseServices, libraryReads };
+  });
+  afterAll(() => {
+    application?.close();
+    vi.unstubAllGlobals();
+  });
+
   it('opens work time and preserves an optional selected action', () => {
     expect(parsePlannerRoute('#/v2/actions?view=time&actionId=work')).toEqual({
       view: 'time',
@@ -111,7 +149,7 @@ describe('V2 preview routes', () => {
     ).not.toContain('Планы');
     const markup = renderToStaticMarkup(
       createElement(PlannerWorkspace, {
-        services: { planning: {} } as PlannerServices,
+        services,
         route: { view: 'goals', period: 'week' },
         currentDate: DayDate.create('2026-09-13'),
         onNavigate: vi.fn(),
@@ -126,6 +164,7 @@ describe('V2 preview routes', () => {
     expect(mainNav).not.toContain('Планирование');
     expect(mainNav).toMatch(/href="#\/v2\/goals" aria-current="page"/);
     expect(markup).not.toContain('Планы');
+    expect(unexpectedRead).not.toHaveBeenCalled();
   });
   it('roundtrips a Goal and its optional first step without losing the original id', () => {
     const route = { view: 'new-action', goalId: 'цель / 1', title: 'Первый шаг & ещё' } as const;
@@ -139,7 +178,7 @@ describe('V2 preview routes', () => {
     for (const view of ['sleep', 'inbox', 'spheres', 'directions', 'account'] as const) {
       const markup = renderToStaticMarkup(
         createElement(PlannerWorkspace, {
-          services: {} as PlannerServices,
+          services,
           route: { view },
           currentDate: DayDate.create('2026-09-24'),
           onNavigate: vi.fn(),
@@ -149,12 +188,13 @@ describe('V2 preview routes', () => {
       expect(nav?.match(/<a /g)).toHaveLength(7);
       expect(nav).toContain('class="planner-nav-more" type="button" aria-current="page"');
       expect(markup).toContain('href="#/v2/sleep"');
+      expect(unexpectedRead).not.toHaveBeenCalled();
     }
   });
   it('offers the working entries without an old-version exit', () => {
     const markup = renderToStaticMarkup(
       createElement(PlannerWorkspace, {
-        services: {} as PlannerServices,
+        services,
         route: { view: 'today' },
         currentDate: DayDate.create('2026-09-13'),
         onNavigate: vi.fn(),

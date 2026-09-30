@@ -17,9 +17,88 @@ import type {
   SyncBinaryCrypto,
   EncryptedBlobTransport,
 } from '../../../application/sync/attachments/AttachmentContracts';
+import { binaryMetadata } from '../../../application/sync/attachments/AttachmentContracts';
+import { protect } from '../../../application/sync/attachments/ProtectedPayload';
 
 describe('durable attachment transfers', () => {
-  it.each(['goal', 'walk'] as const)(
+  it('quarantines authenticated memory bytes that violate the memory photo contract', async () => {
+    const db = new LifeOsIndexedDb(new IDBFactory());
+    try {
+      const connection = await db.open();
+      const ref = {
+        attachmentId: '11111111-1111-4111-8111-111111111111',
+        blobVersion: 1,
+        keyEpoch: 1,
+      };
+      const record: Readonly<Record<string, unknown>> = {
+        ...structuredSyncFixtures().memory_event,
+        syncAttachment: ref,
+      };
+      const now = new Date('2026-09-29T00:00:00Z');
+      const entry: DurableAttachment = {
+        ...ref,
+        entityType: 'memory_event',
+        parentObjectId: String(record.id),
+        spaceId: 'space',
+        localImage: null,
+        localUri: '',
+        state: 'pending-download',
+        retryCount: 0,
+        nextAttemptAt: now.toISOString(),
+        leaseUntil: null,
+        updatedAt: now.toISOString(),
+        deletedAt: null,
+        encryptedBlob: null,
+        integrity: null,
+        lastErrorCode: null,
+      };
+      const tx = connection.transaction(
+        ['memoryEvents', LIFE_OS_SYNC_STORE.attachmentQueue],
+        'readwrite',
+      );
+      tx.objectStore('memoryEvents').put(record);
+      tx.objectStore(LIFE_OS_SYNC_STORE.attachmentQueue).put(entry);
+      await done(tx);
+      const crypto: SyncBinaryCrypto = {
+        encryptBinary: async (metadata, plaintext) => ({
+          metadata,
+          ciphertext: btoa(plaintext),
+          nonce: 'test',
+        }),
+        decryptBinary: async (envelope) => atob(envelope.ciphertext),
+      };
+      const encrypted = await protect(crypto, binaryMetadata('space', ref), {
+        dataUrl: 'data:image/svg+xml;base64,aGVsbG8=',
+        mimeType: 'image/svg+xml',
+        sizeBytes: 5,
+      });
+      const transfer = new AttachmentTransferService(
+        db,
+        crypto,
+        {
+          upload: async () => undefined,
+          download: async () => encrypted,
+          listSnapshots: async () => [],
+        },
+        () => now,
+      );
+      await transfer.run('space');
+      expect((await transfer.list())[0]?.state).toBe('quarantined');
+      expect(
+        (
+          await request<Record<string, unknown>>(
+            connection
+              .transaction('memoryEvents')
+              .objectStore('memoryEvents')
+              .get(String(record.id)),
+          )
+        ).photo,
+      ).toBeNull();
+    } finally {
+      db.close();
+    }
+  });
+  it.each(['goal', 'walk', 'memory_event'] as const)(
     '%s transfers independently, survives restart and quarantines corrupted data',
     async (type) => {
       const spaceId = '11111111-1111-4111-8111-111111111111';
@@ -28,7 +107,7 @@ describe('durable attachment transfers', () => {
       const receiver = new LifeOsIndexedDb(factory);
       const source = await db.open();
       const target = await receiver.open();
-      const storeName = type === 'goal' ? 'goals' : 'walks';
+      const storeName = type === 'goal' ? 'goals' : type === 'walk' ? 'walks' : 'memoryEvents';
       const tx = source.transaction([storeName, ...PILOT_MUTATION_STORES], 'readwrite');
       const completion = done(tx);
       tx.objectStore(LIFE_OS_SYNC_STORE.settings).put({
