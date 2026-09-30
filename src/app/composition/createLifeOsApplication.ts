@@ -177,7 +177,7 @@ export async function createLifeOsApplication(
       currentDateProvider,
       idGenerator,
       writesEnabled:
-        dependencies.memoryEnabled ?? import.meta.env.VITE_LIFEOS_MEMORY_ENABLED === 'true',
+        dependencies.memoryEnabled ?? import.meta.env.VITE_LIFEOS_MEMORY_ENABLED !== 'false',
       diary: diaryRepository,
       spheres: sphereRepository,
       directions: directionRepository,

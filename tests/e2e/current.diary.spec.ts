@@ -2,7 +2,10 @@ import { expect, test, type Page } from '@playwright/test';
 import { addDays } from '../../src/domain/planner/PlanningPeriod';
 
 test.describe('diary memory transfer', () => {
-  test.skip(process.env.VITE_LIFEOS_MEMORY_ENABLED !== 'true', 'Memory writes require rollout B.');
+  test.skip(
+    process.env.VITE_LIFEOS_MEMORY_ENABLED === 'false',
+    'Memory writes were explicitly disabled for this build.',
+  );
 
   test('diary memory transfer does not reopen a clean prepared draft after leaving its period', async ({
     page,

@@ -2,10 +2,10 @@ import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const enabled = process.env.VITE_LIFEOS_MEMORY_ENABLED === 'true';
+const enabled = process.env.VITE_LIFEOS_MEMORY_ENABLED !== 'false';
 const png = readFileSync('public/lifeos-forest-atmosphere.png');
 
-test('memory reads an empty timeline and year with the compatibility flag', async ({ page }) => {
+test('memory reads an empty timeline and year', async ({ page }) => {
   await page.goto('/#/v2/memory');
   await expect(page.getByRole('heading', { name: 'Память жизни', exact: true })).toBeVisible();
   await expect(
@@ -25,7 +25,7 @@ test('memory reads an empty timeline and year with the compatibility flag', asyn
 test('memory compatibility reads existing events while every write control is disabled', async ({
   page,
 }) => {
-  test.skip(enabled, 'This scenario exercises the default-off compatibility build.');
+  test.skip(enabled, 'This scenario exercises a build with memory writes explicitly disabled.');
   await page.goto('/#/v2/memory?year=2026');
   await expect(page.getByRole('heading', { name: 'Память жизни', exact: true })).toBeVisible();
   await seedMemories(page, '2026-02-24');
@@ -46,8 +46,8 @@ test('memory compatibility reads existing events while every write control is di
   await expect(page.getByText('Воспоминаний за год: 32', { exact: true })).toBeVisible();
 });
 
-test.describe('memory writes after device compatibility rollout', () => {
-  test.skip(!enabled, 'Creation is intentionally disabled until devices support memory_event.');
+test.describe('memory writes in the standard build', () => {
+  test.skip(!enabled, 'Memory writes were explicitly disabled for this build.');
   test('memory permits text edits with an unchanged date from another time zone', async ({
     page,
   }) => {

@@ -67,7 +67,26 @@ describe('memory compatibility composition', () => {
     }
   });
 
-  it('keeps stored memory readable on restart with writes disabled by default', async () => {
+  it('enables memory creation in the standard application build', async () => {
+    const application = await createLifeOsApplication({
+      database: new LifeOsIndexedDb(new IDBFactory()),
+      clock: new FakeClock(new Date('2026-09-29T12:00:00Z')),
+      currentDateProvider: new FakeCurrentDateProvider(DayDate.create('2026-09-29')),
+      idGenerator: new FakeIdGenerator('memory-default-on'),
+    });
+    try {
+      expect(application.memory.commands.enabled).toBe(true);
+      const saved = await application.memory.commands.save(
+        { ...application.memory.commands.prepareCreate(), title: 'Открытое воспоминание' },
+        null,
+      );
+      expect((await application.memory.queries.get(saved.id))?.title).toBe('Открытое воспоминание');
+    } finally {
+      application.close();
+    }
+  });
+
+  it('keeps stored memory readable on restart with writes explicitly disabled', async () => {
     const factory = new IDBFactory();
     const options = {
       clock: new FakeClock(new Date('2026-09-29T12:00:00Z')),
@@ -88,6 +107,7 @@ describe('memory compatibility composition', () => {
     const next = await createLifeOsApplication({
       ...options,
       database: new LifeOsIndexedDb(factory),
+      memoryEnabled: false,
     });
     try {
       expect(next.memory.commands.enabled).toBe(false);
