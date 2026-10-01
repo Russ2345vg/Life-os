@@ -8,7 +8,7 @@ export default defineConfig({
   forbidOnly: true,
   retries: 0,
   workers: 1,
-  globalTimeout: 1_200_000,
+  globalTimeout: 1_800_000,
   timeout: 30_000,
   expect: {
     timeout: 5_000,

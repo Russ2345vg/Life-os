@@ -1,0 +1,30 @@
+[
+  {
+    "width": 1440,
+    "name": "entry",
+    "foreground": "rgb(178, 191, 190)",
+    "background": "rgb(13, 20, 22)",
+    "contrast": 9.82392012834523
+  },
+  {
+    "width": 1440,
+    "name": "metric-label",
+    "foreground": "rgb(178, 191, 190)",
+    "background": "rgb(13, 20, 23)",
+    "contrast": 9.817076440200514
+  },
+  {
+    "width": 1280,
+    "name": "entry",
+    "foreground": "rgb(178, 191, 190)",
+    "background": "rgb(13, 20, 22)",
+    "contrast": 9.82392012834523
+  },
+  {
+    "width": 1280,
+    "name": "metric-label",
+    "foreground": "rgb(178, 191, 190)",
+    "background": "rgb(13, 20, 23)",
+    "contrast": 9.817076440200514
+  }
+]

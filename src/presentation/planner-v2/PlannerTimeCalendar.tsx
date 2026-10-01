@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type FormEvent } from 'react';
+import { useState, type CSSProperties, type FormEvent, type MouseEvent } from 'react';
 import type { LifeAction } from '../../domain';
 import { buildTimeScheduleDay } from '../../application/queries/GetTimeSchedule';
 import { PlannerSheet } from './PlannerSheet';
@@ -21,6 +21,7 @@ interface Props {
     expectedVersion: number,
   ) => Promise<void>;
   readonly onSetCapacity: (weekday: number, minutes: number | null) => Promise<void>;
+  readonly onOpenAction?: ((id: string) => void) | undefined;
 }
 
 function shiftDays(date: string, amount: number): string {
@@ -41,6 +42,7 @@ export function PlannerTimeCalendar({
   capacity,
   onSetTime,
   onSetCapacity,
+  onOpenAction,
 }: Props) {
   const [selected, setSelected] = useState(today);
   const [editing, setEditing] = useState<LifeAction | null>(null);
@@ -81,6 +83,19 @@ export function PlannerTimeCalendar({
 
   const openTime = (action: LifeAction) => {
     setEditing(action);
+  };
+  const openAction = (event: MouseEvent<HTMLAnchorElement>, id: string) => {
+    if (
+      !onOpenAction ||
+      event.button !== 0 ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.shiftKey ||
+      event.altKey
+    )
+      return;
+    event.preventDefault();
+    onOpenAction(id);
   };
   const saveCapacity = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -283,7 +298,10 @@ export function PlannerTimeCalendar({
               <h3>По времени</h3>
               {selectedDay.timed.map((action) => (
                 <div className="planner-time-untimed" key={action.id.toString()}>
-                  <a href={`#/v2/actions/${encodeURIComponent(action.id.toString())}`}>
+                  <a
+                    href={`#/v2/actions/${encodeURIComponent(action.id.toString())}`}
+                    onClick={(event) => openAction(event, action.id.toString())}
+                  >
                     {action.title.toString()}
                   </a>
                   <span>
@@ -336,7 +354,10 @@ export function PlannerTimeCalendar({
             )}
             {selectedDay.untimed.map((action) => (
               <div className="planner-time-untimed" key={action.id.toString()}>
-                <a href={`#/v2/actions/${encodeURIComponent(action.id.toString())}`}>
+                <a
+                  href={`#/v2/actions/${encodeURIComponent(action.id.toString())}`}
+                  onClick={(event) => openAction(event, action.id.toString())}
+                >
                   {action.title.toString()}
                 </a>
                 <span>
@@ -377,6 +398,7 @@ export function PlannerTimeCalendar({
           <a
             className="planner-time-goal"
             href={`#/v2/actions/${encodeURIComponent(action.id.toString())}`}
+            onClick={(event) => openAction(event, action.id.toString())}
             key={action.id.toString()}
           >
             {action.title.toString()}

@@ -197,10 +197,14 @@ test('MASTER hierarchy creates and edits linked records through contextual panel
   await expect(
     page.getByRole('heading', { name: 'Позвонить владельцу MASTER', exact: true }),
   ).toBeVisible();
-  await page.getByText('Редактировать действие', { exact: true }).click();
+  await expect(page.getByRole('textbox', { name: 'Название', exact: true })).toBeVisible();
+  await page.getByText('Описание и потребность', { exact: true }).click();
   await page.getByLabel('Описание', { exact: true }).fill('Уточнить время просмотра');
-  await page.getByRole('button', { name: 'Сохранить', exact: true }).click();
+  await page.getByRole('button', { name: 'Сохранить название', exact: true }).click();
   await expect(page.locator('.planner-action-note')).toHaveText('Уточнить время просмотра');
+  await expect(page.getByRole('button', { name: 'Сохранить название', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: 'Закрыть панель' }).click();
+  await expect(page.getByRole('dialog', { name: 'Действие', exact: true })).toHaveCount(0);
   await page.goto('/#/v2/goals');
   await expect(
     page.getByRole('link', { name: 'Снять квартиру MASTER', exact: true }),

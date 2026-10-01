@@ -4,8 +4,12 @@ import { DayDate, EntityId, type LifeActionStatus } from '../../domain';
 export async function completePlannerAction(
   command: Pick<CompleteLifeAction, 'execute'>,
   id: string,
+  expectedCompletionKey?: string,
 ) {
-  const result = await command.execute({ lifeActionId: EntityId.create(id) });
+  const result = await command.execute({
+    lifeActionId: EntityId.create(id),
+    ...(expectedCompletionKey === undefined ? {} : { expectedCompletionKey }),
+  });
   if (!result.ok) throw result.error;
   return result.value;
 }

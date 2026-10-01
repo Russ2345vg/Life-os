@@ -3,6 +3,24 @@ import { expect, test, type Page } from '@playwright/test';
 const PASSWORD = 'correct horse battery';
 const RECOVERY = 'LIFEOS-RECOVERY-V1:fixture-private-material';
 
+test('ready, offline, pending and error states explain the existing counters without auto-sync', async ({
+  page,
+}) => {
+  for (const state of ['ready', 'offline', 'pending', 'error'] as const) {
+    await page.goto(`/tests/fixtures/account-sync.html?state=${state}`);
+    await expect(page.getByRole('heading', { name: 'Состояние данных' })).toBeVisible();
+    await expect(page.getByText('Количество изменений, а не задач')).toBeVisible();
+    await expect(page.getByText('Сохранённые конфликтные версии')).toBeVisible();
+    await expect(page.locator('html')).not.toHaveAttribute('data-sync-attempts', /[1-9]/);
+    await expect(page.getByRole('button', { name: 'Синхронизировать сейчас' })).toHaveCount(1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+  }
+  await page.getByRole('button', { name: 'Синхронизировать сейчас' }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-sync-attempts', '1');
+});
+
 test('completes password reset, rejects mismatched passwords and returns to sign-in', async ({
   page,
 }, info) => {

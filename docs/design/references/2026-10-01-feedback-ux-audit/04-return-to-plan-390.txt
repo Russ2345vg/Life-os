@@ -1,0 +1,70 @@
+- link "К содержимому":
+  - /url: "#planner-main-content"
+- complementary:
+  - link "LifeOS":
+    - /url: "#/v2/today"
+  - button "Поиск и добавление"
+  - navigation "Рабочий интерфейс":
+    - link "Сегодня":
+      - /url: "#/v2/today"
+    - link "Цели":
+      - /url: "#/v2/goals"
+    - link "Действия":
+      - /url: "#/v2/actions"
+    - link "Дневник":
+      - /url: "#/v2/diary?period=day&date=2026-10-01"
+    - button "Ещё"
+- main:
+  - heading "Сегодня" [level=1]
+  - paragraph: четверг, 1 октября
+  - link "Рабочее время":
+    - /url: "#/v2/actions?view=time"
+  - group "План на день":
+    - button "Сегодня" [pressed]
+    - button "Завтра"
+  - region "План на сегодня":
+    - text: Центр дня
+    - heading "План на сегодня" [level=2]
+    - group "Состояние плана":
+      - text: В плане
+      - strong: "0"
+      - text: Готово
+      - strong: "1"
+    - region "План на сегодня":
+      - paragraph: "План: 0 мин · Доступное время не задано · Без оценки: 1"
+      - form "Быстро добавить на сегодня":
+        - textbox "Новое действие на сегодня":
+          - /placeholder: Что нужно сделать?
+        - button "Начать голосовой ввод": Голосовой ввод
+        - button "Создать" [disabled]
+        - button "Создать с параметрами"
+    - heading "На сегодня 0" [level=2]
+    - paragraph: Всё выполнено. Можно спокойно завершить день.
+    - group: Выполнено 1
+    - region "Сценарии задач":
+      - heading "Сценарий" [level=2]
+      - button "Создать сценарий"
+      - text: Сейчас я…
+      - combobox "Сейчас я…":
+        - option "Все задачи" [selected]
+  - complementary "Обзор дня":
+    - region "Выберите главное направление":
+      - text: Фокус месяца · октябрь 2026 г.
+      - strong: Выберите главное направление
+      - paragraph: Выберите направление, которое хотите держать в поле зрения.
+      - combobox "Главное направление":
+        - option "Не выбрано" [selected]
+    - heading "Прогресс дня" [level=2]
+    - strong: 1 из 1
+    - text: 100%
+    - progressbar "Прогресс дня"
+    - paragraph: 0 осталось · 1 выполнено
+    - heading "Быстрые действия" [level=2]
+    - button "Планировать завтра"
+    - link "Открыть входящие →":
+      - /url: "#/v2/inbox"
+    - link "Открыть календарь →":
+      - /url: "#/v2/actions?view=calendar"
+    - button "Подготовка ко сну Настроить вечерний список и отметить готовность":
+      - strong: Подготовка ко сну
+      - text: Настроить вечерний список и отметить готовность

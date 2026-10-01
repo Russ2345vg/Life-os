@@ -55,6 +55,7 @@ export function PlannerCalendar({
           capacity={capacity}
           onSetTime={onSetTime}
           onSetCapacity={onSetCapacity}
+          onOpenAction={operations.onOpenAction}
         />
       )}
     </section>

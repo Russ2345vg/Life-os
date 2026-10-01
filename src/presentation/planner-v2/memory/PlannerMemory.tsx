@@ -14,6 +14,7 @@ import { useSyncContentChanged } from '../../sync/SyncStatusContext';
 import { PlannerSheet } from '../PlannerSheet';
 import type { PlannerRoute } from '../PlannerNavigation';
 import { MemoryEditor } from './MemoryEditor';
+import { MemoryOnThisDay } from './MemoryOnThisDay';
 import { MemoryTimeline } from './MemoryTimeline';
 import { MemoryYearView } from './MemoryYearView';
 import {
@@ -49,6 +50,9 @@ export function PlannerMemory({
     if (inputRoute.search !== route.search) setSearch(route.search ?? '');
   }
   const [page, setPage] = useState<MemoryPage | null>(null);
+  const [onThisDay, setOnThisDay] = useState<readonly MemoryEventSummary[] | null>(null);
+  const [onThisDayLoadedKey, setOnThisDayLoadedKey] = useState<string | null>(null);
+  const [onThisDayError, setOnThisDayError] = useState<string | null>(null);
   const [overview, setOverview] = useState<MemoryYearOverview | null>(null);
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -85,11 +89,36 @@ export function PlannerMemory({
   };
   const queryKey = JSON.stringify(query);
   const loadKey = JSON.stringify([queryKey, mode, revision]);
+  const onThisDayKey = JSON.stringify([currentDate.toString(), revision]);
+  const onThisDayLoading = onThisDayLoadedKey !== onThisDayKey;
   const loading = loadedKey !== loadKey;
   const detailKey = route.id ? JSON.stringify([route.id, revision]) : null;
   const detailLoading = loadedDetailKey !== detailKey;
   const refresh = useCallback(() => setRevision((value) => value + 1), []);
   useSyncContentChanged('memoryEvents|sync_attachment_queue|diaryEntries', refresh);
+  useEffect(() => {
+    let active = true;
+    void services.queries
+      .getOnThisDay(currentDate)
+      .then((items) => {
+        if (active) {
+          setOnThisDay(items);
+          setOnThisDayError(null);
+        }
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setOnThisDay(null);
+          setOnThisDayError(memoryError(error));
+        }
+      })
+      .finally(() => {
+        if (active) setOnThisDayLoadedKey(onThisDayKey);
+      });
+    return () => {
+      active = false;
+    };
+  }, [services.queries, currentDate, onThisDayKey]);
   useEffect(() => {
     if (search === (route.search ?? '')) return;
     const timer = setTimeout(
@@ -278,6 +307,16 @@ export function PlannerMemory({
           доступна для просмотра.
         </p>
       )}
+      <MemoryOnThisDay
+        key={currentDate.toString()}
+        today={currentDate}
+        items={onThisDay}
+        loading={onThisDayLoading}
+        error={onThisDayError}
+        queries={services.queries}
+        onRetry={refresh}
+        onOpen={open}
+      />
       <div className="memory-toolbar">
         <div className="planner-segments" aria-label="Представление">
           <button

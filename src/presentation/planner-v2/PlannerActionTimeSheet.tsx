@@ -5,6 +5,7 @@ import { plannerDateLabel } from './plannerViewsModel';
 import './planner-time-calendar.css';
 import { useQuickAccessGuard } from './QuickAccessContext';
 import { clockTime } from './timePresentation';
+import { PlannerUnsavedChangesConfirmation } from './PlannerUnsavedChangesConfirmation';
 
 export type SetActionTime = (
   id: string,
@@ -36,15 +37,29 @@ export function PlannerActionTimeSheet({
   );
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [confirm, setConfirm] = useState(false);
+  const [busyMessage, setBusyMessage] = useState(false);
   const working = useRef(false);
+  const dirty =
+    estimate !== (action.estimateMinutes === null ? '' : String(action.estimateMinutes)) ||
+    start !==
+      (action.scheduledStartMinute === null ? '09:00' : clockTime(action.scheduledStartMinute)) ||
+    duration !== String(action.scheduledDurationMinutes ?? action.estimateMinutes ?? 60);
   useQuickAccessGuard(() => ({
-    dirty:
-      estimate !== (action.estimateMinutes === null ? '' : String(action.estimateMinutes)) ||
-      start !==
-        (action.scheduledStartMinute === null ? '09:00' : clockTime(action.scheduledStartMinute)) ||
-      duration !== String(action.scheduledDurationMinutes ?? action.estimateMinutes ?? 60),
+    dirty,
     busy: working.current,
   }));
+  const requestClose = () => {
+    if (confirm) {
+      setConfirm(false);
+    } else if (working.current) {
+      setBusyMessage(true);
+    } else if (dirty) {
+      setConfirm(true);
+    } else {
+      onClose();
+    }
+  };
   const save = async (onlyEstimate: boolean) => {
     if (working.current) return;
     const nextEstimate = estimate.trim() === '' ? null : Number(estimate);
@@ -83,12 +98,7 @@ export function PlannerActionTimeSheet({
     void save(action.plannedDate === null);
   };
   return (
-    <PlannerSheet
-      title="Запланировать действие"
-      onClose={() => {
-        if (!working.current) onClose();
-      }}
-    >
+    <PlannerSheet title="Запланировать действие" onClose={requestClose}>
       <form className="planner-time-form" onSubmit={submit}>
         <h2>{action.title.toString()}</h2>
         <p className="planner-muted">
@@ -145,7 +155,7 @@ export function PlannerActionTimeSheet({
               {action.scheduledStartMinute !== null ? 'Убрать время' : 'Сохранить только оценку'}
             </button>
           )}
-          <button type="button" onClick={onClose} disabled={saving}>
+          <button type="button" onClick={requestClose} disabled={saving}>
             Отмена
           </button>
           <button type="submit" className="planner-primary" disabled={saving}>
@@ -153,6 +163,13 @@ export function PlannerActionTimeSheet({
           </button>
         </div>
       </form>
+      {busyMessage && <p role="status">Дождитесь завершения сохранения.</p>}
+      {confirm && (
+        <PlannerUnsavedChangesConfirmation
+          onContinue={() => setConfirm(false)}
+          onDiscard={onClose}
+        />
+      )}
     </PlannerSheet>
   );
 }

@@ -18,6 +18,13 @@ class FixtureAccountSync implements AccountSync {
   #syncAttempts = 0;
   public constructor() {
     const state = new URLSearchParams(location.search).get('state');
+    if (state === 'ready') this.#overview = readyOverview();
+    if (state === 'offline')
+      this.#overview = { ...readyOverview(), connection: 'offline', pendingMutations: 2 };
+    if (state === 'pending')
+      this.#overview = { ...readyOverview(), pendingMutations: 2, syncState: 'syncing' };
+    if (state === 'error')
+      this.#overview = { ...readyOverview(), syncState: 'error', conflicts: 1 };
     if (state === 'sign-in-required')
       this.#overview = { ...readyOverview(), state: 'sign_in_required', pendingMutations: 2 };
     if (state === 'recovery-required')
@@ -115,6 +122,7 @@ class FixtureAccountSync implements AccountSync {
 
   public async syncNow(): Promise<AccountOverview> {
     this.#syncAttempts += 1;
+    document.documentElement.dataset.syncAttempts = String(this.#syncAttempts);
     if (this.#syncAttempts > 1) {
       this.#overview = {
         ...readyOverview(),

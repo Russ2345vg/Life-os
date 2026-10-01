@@ -385,6 +385,7 @@ function transactionFailed(error: unknown): DomainError {
   if (
     error instanceof DomainError &&
     [
+      'persistence.version_conflict',
       'life_action.time_conflict',
       'session.unfinished_exists',
       'session.action_unavailable',

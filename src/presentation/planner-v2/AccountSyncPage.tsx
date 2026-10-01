@@ -23,9 +23,14 @@ export type AccountPageStep =
 interface AccountSyncPageProps {
   readonly service: AccountSync;
   readonly onBack: () => void;
+  readonly backLabel?: string;
 }
 
-export function AccountSyncPage({ service, onBack }: AccountSyncPageProps) {
+export function AccountSyncPage({
+  service,
+  onBack,
+  backLabel = 'К плану дня',
+}: AccountSyncPageProps) {
   const [overview, setOverview] = useState<AccountOverview | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
@@ -51,7 +56,7 @@ export function AccountSyncPage({ service, onBack }: AccountSyncPageProps) {
         className="account-sync-page account-sync-page--loading"
         aria-labelledby="account-title"
       >
-        <AccountHeader onBack={onBack} />
+        <AccountHeader onBack={onBack} backLabel={backLabel} />
         {loadError ? (
           <div className="account-feedback account-feedback--error" role="alert">
             <p>{loadError}</p>
@@ -81,6 +86,7 @@ export function AccountSyncPage({ service, onBack }: AccountSyncPageProps) {
       overview={overview}
       onOverview={setOverview}
       onBack={onBack}
+      backLabel={backLabel}
     />
   );
 }
@@ -90,12 +96,14 @@ export function AccountSyncPageView({
   overview,
   onOverview,
   onBack,
+  backLabel = 'К плану дня',
   initialStep,
 }: {
   readonly service: AccountSync;
   readonly overview: AccountOverview;
   readonly onOverview: (overview: AccountOverview) => void;
   readonly onBack: () => void;
+  readonly backLabel?: string;
   readonly initialStep?: AccountPageStep;
 }) {
   const [step, setStep] = useState<AccountPageStep>(() => initialStep ?? stepFor(overview));
@@ -159,7 +167,7 @@ export function AccountSyncPageView({
   if (overview.availability?.available === false) {
     return (
       <section className="account-sync-page" aria-labelledby="account-title">
-        <AccountHeader onBack={onBack} />
+        <AccountHeader onBack={onBack} backLabel={backLabel} />
         <div className="account-panel" role="status">
           <h2>Аккаунт недоступен</h2>
           <p>{overview.availability.reason}</p>
@@ -170,7 +178,7 @@ export function AccountSyncPageView({
   }
   return (
     <section className="account-sync-page" aria-labelledby="account-title">
-      <AccountHeader onBack={onBack} />
+      <AccountHeader onBack={onBack} backLabel={backLabel} />
       <div className={`account-hero account-hero--${status.tone}`}>
         <span className="account-hero__icon" aria-hidden="true">
           <AppIcon name={overview.state === 'ready' ? 'lock' : 'account'} />
@@ -650,10 +658,16 @@ export function AccountSyncPageView({
   );
 }
 
-function AccountHeader({ onBack }: { readonly onBack: () => void }) {
+function AccountHeader({
+  onBack,
+  backLabel,
+}: {
+  readonly onBack: () => void;
+  readonly backLabel: string;
+}) {
   return (
     <header className="account-header">
-      <button className="account-back" type="button" onClick={onBack} aria-label="Вернуться назад">
+      <button className="account-back" type="button" onClick={onBack} aria-label={backLabel}>
         ←
       </button>
       <div>
@@ -803,21 +817,28 @@ function ReadyAccountPanel({
     <div className="account-ready-grid">
       <section className="account-panel account-panel--important">
         <p className="account-eyebrow">Состояние</p>
-        <h3>{overview.email}</h3>
+        <h3>Состояние данных</h3>
         <dl className="account-metrics">
           <div>
             <dt>Соединение</dt>
             <dd>{connectionLabel(overview.connection)}</dd>
           </div>
           <div>
-            <dt>Изменения</dt>
-            <dd>{overview.pendingMutations}</dd>
+            <dt>Ожидают отправки</dt>
+            <dd>
+              {overview.pendingMutations}
+              <small>Количество изменений, а не задач</small>
+            </dd>
           </div>
           <div>
-            <dt>Конфликты</dt>
+            <dt>Сохранённые конфликтные версии</dt>
             <dd>{overview.conflicts}</dd>
           </div>
         </dl>
+        <p className="account-muted">
+          Сохранение на устройстве и обмен между устройствами — разные этапы. Сохранение текущего
+          текста проверяйте в его редакторе.
+        </p>
         <p className="account-muted">
           Последний успешный обмен в этом сеансе:{' '}
           {overview.lastSuccessfulSyncAt

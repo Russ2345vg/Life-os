@@ -1,0 +1,30 @@
+[
+  {
+    "width": 390,
+    "name": "entry",
+    "foreground": "rgb(166, 166, 166)",
+    "background": "rgb(24, 33, 37)",
+    "contrast": 6.723212800063466
+  },
+  {
+    "width": 390,
+    "name": "metric-label",
+    "foreground": "rgb(178, 191, 190)",
+    "background": "rgb(13, 20, 23)",
+    "contrast": 9.817076440200514
+  },
+  {
+    "width": 320,
+    "name": "entry",
+    "foreground": "rgb(166, 166, 166)",
+    "background": "rgb(24, 33, 37)",
+    "contrast": 6.723212800063466
+  },
+  {
+    "width": 320,
+    "name": "metric-label",
+    "foreground": "rgb(178, 191, 190)",
+    "background": "rgb(13, 20, 23)",
+    "contrast": 9.817076440200514
+  }
+]

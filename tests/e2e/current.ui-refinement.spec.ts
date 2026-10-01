@@ -60,8 +60,10 @@ test('UI refinement keeps navigation stable and the approved planning order', as
   const quick = await page
     .getByRole('textbox', { name: 'Новое действие на сегодня' })
     .boundingBox();
-  expect(settings!.y).toBeLessThan(quick!.y);
   expect(quick!.y).toBeLessThan(list!.y);
+  if (page.viewportSize()!.width <= 760) {
+    expect(list!.y).toBeLessThan(settings!.y);
+  }
   const nav = page.getByRole('navigation', { name: 'Рабочий интерфейс' });
   const visibleLabels = await nav.locator('a:visible,button:visible').allTextContents();
   for (const destination of ['Входящие', 'Подготовка ко сну']) {

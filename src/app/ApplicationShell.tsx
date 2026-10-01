@@ -1,16 +1,16 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { DayDate } from '../domain';
 import {
-  parseApplicationRoute,
-  resolveInitialApplicationRoute,
-} from '../presentation/navigation/ApplicationRoute';
-import {
   buildPlannerRoute,
   resolveDiaryRoute,
   type PlannerRoute,
 } from '../presentation/planner-v2/PlannerNavigation';
+import {
+  parsePlannerLocation,
+  type PlannerLocation,
+} from '../presentation/planner-v2/PlannerLocation';
 import { SyncStatusProvider } from '../presentation/sync/SyncStatusContext';
-import { startBrowserApplicationRouteSync } from './lifecycle/BrowserApplicationRouteSync';
+import { createPlannerLocationNavigation } from './lifecycle/PlannerLocationNavigation';
 import { startBrowserCurrentDateRefresh } from './lifecycle/BrowserCurrentDateRefresh';
 import { useLifeOsApplication } from './providers';
 import { createApplicationUpdateService } from './composition/createApplicationUpdateService';
@@ -33,37 +33,63 @@ export function ApplicationShell() {
   useEffect(() => {
     void updates.start();
   }, [updates]);
-  const [route, setRoute] = useState<PlannerRoute>(() => {
-    const initial = resolveInitialApplicationRoute(parseApplicationRoute(window.location.hash));
-    return initial.view === 'diary' ? resolveDiaryRoute(initial, application.currentDate) : initial;
+  const [location, setLocation] = useState<PlannerLocation>(() => {
+    const initial = parsePlannerLocation(window.location.hash) ?? {
+      page: { view: 'today' } as const,
+      actionPanel: null,
+    };
+    return { ...initial, page: resolveShellRoute(initial.page, application.currentDate) };
   });
   const [leaveGuard] = useState(createRouteLeaveGuard);
-  const acceptedHash = useRef(buildPlannerRoute(route));
+  const panelGuard = useRef<{
+    requestLeave(): Promise<boolean>;
+    shouldBlockUnload(): boolean;
+  } | null>(null);
   const [currentDate, setCurrentDate] = useState<DayDate>(application.currentDate);
+  // The factory stores guard callbacks; it does not read the ref during render.
+  // eslint-disable-next-line react-hooks/refs
+  const [navigation] = useState(() =>
+    createPlannerLocationNavigation(
+      {
+        read: () => ({ hash: window.location.hash, state: window.history.state }),
+        push: (hash, state) => window.history.pushState(state, '', hash),
+        replace: (hash, state) => window.history.replaceState(state, '', hash),
+        go: (delta) => window.history.go(delta),
+        listen: (listener) => {
+          window.addEventListener('popstate', listener);
+          window.addEventListener('hashchange', listener);
+          return () => {
+            window.removeEventListener('popstate', listener);
+            window.removeEventListener('hashchange', listener);
+          };
+        },
+      },
+      async ({ from, to }) => {
+        if (
+          from.actionPanel &&
+          (to.actionPanel?.actionId !== from.actionPanel.actionId ||
+            buildPlannerRoute(from.page) !== buildPlannerRoute(to.page)) &&
+          panelGuard.current &&
+          !(await panelGuard.current.requestLeave())
+        )
+          return false;
+        if (buildPlannerRoute(from.page) !== buildPlannerRoute(to.page))
+          return leaveGuard.flushBeforeLeave();
+        return true;
+      },
+      setLocation,
+      (page) => resolveShellRoute(page, application.currentDateProvider.getCurrentDate()),
+    ),
+  );
 
   useEffect(() => {
-    if (window.location.hash !== acceptedHash.current)
-      window.history.replaceState(null, '', acceptedHash.current);
-    return startBrowserApplicationRouteSync({
-      windowTarget: window,
-      readHash: () => window.location.hash,
-      readAcceptedHash: () => acceptedHash.current,
-      replaceHash: (hash) => window.history.replaceState(null, '', hash),
-      beforeRestore: () => leaveGuard.flushBeforeLeave(),
-      restore: (nextRoute) => {
-        const resolved = resolveShellRoute(
-          nextRoute,
-          application.currentDateProvider.getCurrentDate(),
-        );
-        acceptedHash.current = buildPlannerRoute(resolved);
-        setRoute(resolved);
-      },
-    });
-  }, [application.currentDateProvider, leaveGuard]);
+    navigation.start();
+    return () => navigation.stop();
+  }, [navigation]);
 
   useEffect(() => {
     const beforeUnload = (event: BeforeUnloadEvent) => {
-      if (!leaveGuard.shouldBlockUnload()) return;
+      if (!leaveGuard.shouldBlockUnload() && !panelGuard.current?.shouldBlockUnload()) return;
       event.preventDefault();
       event.returnValue = '';
     };
@@ -88,20 +114,20 @@ export function ApplicationShell() {
   );
 
   const navigate = useCallback(
-    async (nextRoute: PlannerRoute): Promise<boolean> => {
-      if (!(await leaveGuard.flushBeforeLeave())) return false;
-      const resolved = resolveShellRoute(
-        nextRoute,
-        application.currentDateProvider.getCurrentDate(),
-      );
-      const hash = buildPlannerRoute(resolved);
-      window.history.pushState(null, '', hash);
-      acceptedHash.current = hash;
-      setRoute(resolved);
-      return true;
-    },
-    [application.currentDateProvider, leaveGuard],
+    (nextRoute: PlannerRoute) => navigation.navigate(nextRoute),
+    [navigation],
   );
+  const openAction = useCallback(
+    (actionId: string) => navigation.openAction(actionId),
+    [navigation],
+  );
+  const closeAction = useCallback(() => navigation.closeAction(), [navigation]);
+  const registerPanelGuard = useCallback((guard: NonNullable<typeof panelGuard.current>) => {
+    panelGuard.current = guard;
+    return () => {
+      if (panelGuard.current === guard) panelGuard.current = null;
+    };
+  }, []);
 
   return (
     <SyncStatusProvider sync={application.sync}>
@@ -110,9 +136,13 @@ export function ApplicationShell() {
           <PlannerWorkspace
             systemNotice={<ApplicationUpdateNotice service={updates} />}
             services={application}
-            route={route}
+            route={location.page}
+            actionPanelId={location.actionPanel?.actionId ?? null}
             currentDate={currentDate}
-            onNavigate={(nextRoute) => void navigate(nextRoute)}
+            onNavigate={navigate}
+            onOpenAction={openAction}
+            onCloseAction={closeAction}
+            registerPanelGuard={registerPanelGuard}
           />
         </Suspense>
       </RouteLeaveGuardProvider>

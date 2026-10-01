@@ -1,6 +1,6 @@
 import type { ActionActualResult, EntityId, LifeAction } from '../../domain';
-import type { DomainError } from '../../shared/errors/DomainError';
-import { success, type Result } from '../../shared/result/Result';
+import { DomainError } from '../../shared/errors/DomainError';
+import { failure, success, type Result } from '../../shared/result/Result';
 import type { Clock } from '../ports/Clock';
 import type { IdGenerator } from '../ports/IdGenerator';
 import type { LifeActionRepository } from '../ports/LifeActionRepository';
@@ -11,6 +11,7 @@ import { lifeActionDomainFailure, lifeActionNotFound } from './lifeActionCommand
 export interface CompleteLifeActionInput {
   readonly lifeActionId: EntityId;
   readonly actualResult?: ActionActualResult | null;
+  readonly expectedCompletionKey?: string;
 }
 
 export class CompleteLifeAction {
@@ -37,6 +38,18 @@ export class CompleteLifeAction {
     if (lifeAction === null) {
       return lifeActionNotFound();
     }
+    const completionKey = lifeAction.completionKey;
+    if (
+      input.expectedCompletionKey !== undefined &&
+      input.expectedCompletionKey !== completionKey
+    ) {
+      return failure(
+        new DomainError(
+          'action.completion_changed',
+          'Действие изменилось. Обновите список перед выполнением.',
+        ),
+      );
+    }
 
     try {
       const expectedVersion = lifeAction.version;
@@ -56,6 +69,12 @@ export class CompleteLifeAction {
       }
       return success(lifeAction);
     } catch (error: unknown) {
+      if (error instanceof DomainError && error.code === 'persistence.version_conflict') {
+        const winner = await this.#repository.findById(input.lifeActionId);
+        if (winner?.status === 'completed' && winner.completionKey === completionKey) {
+          return success(winner);
+        }
+      }
       return lifeActionDomainFailure(error);
     }
   }

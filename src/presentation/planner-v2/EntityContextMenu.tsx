@@ -47,7 +47,9 @@ export function EntityContextMenu({
     if (working.current) return;
     const rect = moreButton.current?.getBoundingClientRect();
     openedAnchor.current = rect ? { top: rect.top, left: rect.left } : null;
-    setPortalTarget(root.current?.closest('.planner-v2') ?? document.body);
+    setPortalTarget(
+      root.current?.closest('dialog') ?? root.current?.closest('.planner-v2') ?? document.body,
+    );
     setOpen(true);
   }, []);
   const gesture = useRef<LongPressController | null>(null);
@@ -62,6 +64,8 @@ export function EntityContextMenu({
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && (open || confirm) && !working.current) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
         setOpen(false);
         setConfirm(null);
         moreButton.current?.focus();

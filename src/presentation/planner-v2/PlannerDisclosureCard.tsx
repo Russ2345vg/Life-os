@@ -8,6 +8,7 @@ export function PlannerDisclosureCard({
   description,
   children,
   onToggle,
+  initiallyOpen = false,
   name = 'planner-action-panels',
 }: {
   readonly className?: string;
@@ -16,12 +17,14 @@ export function PlannerDisclosureCard({
   readonly description: string;
   readonly children: ReactNode;
   readonly onToggle?: React.ToggleEventHandler<HTMLDetailsElement>;
+  readonly initiallyOpen?: boolean;
   readonly name?: string;
 }) {
   return (
     <details
       className={[className, 'planner-disclosure-card'].filter(Boolean).join(' ')}
       name={name}
+      open={initiallyOpen || undefined}
       onToggle={onToggle}
     >
       <summary className="planner-disclosure-card__summary">

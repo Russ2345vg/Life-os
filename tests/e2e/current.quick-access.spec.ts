@@ -67,9 +67,11 @@ async function seed(page: Page, entry = '/') {
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Сегодня', exact: true })).toBeVisible();
 }
-async function open(page: Page) {
+async function open(page: Page, returnToResult = false) {
   await page.getByRole('button', { name: 'Поиск и добавление', exact: true }).last().click();
-  await expect(search(page)).toBeFocused();
+  if (returnToResult)
+    await expect(panel(page).getByRole('button', { name: /^Подготовить отчёт/ })).toBeFocused();
+  else await expect(search(page)).toBeFocused();
   await expect(panel(page).getByRole('list', { name: 'Результаты поиска' })).toBeVisible();
 }
 
@@ -108,7 +110,7 @@ test('quick access searches all sections, changes date and preserves the Today d
   expect(errors).toEqual([]);
 });
 
-test('quick access above a modal creates once, restores focus and guards result navigation', async ({
+test('quick access above a modal creates once, preserves its draft and guards page navigation', async ({
   page,
 }) => {
   await seed(page);
@@ -134,20 +136,29 @@ test('quick access above a modal creates once, restores focus and guards result 
   await panel(page)
     .getByRole('button', { name: /^Задача из панели/ })
     .click();
+  const actionPanel = page.getByRole('dialog', { name: 'Действие', exact: true });
+  await expect(actionPanel).toBeVisible();
+  await expect(page).toHaveURL(/#\/v2\/actions\/new\?date=\d{4}-\d{2}-\d{2}&action=/);
+  await actionPanel.getByRole('button', { name: 'Закрыть панель' }).click();
+  await expect(panel(page)).toBeVisible();
+  await expect(title).toHaveValue('Черновик редактора');
+  await search(page).fill('Запустить проект');
+  await panel(page)
+    .getByRole('button', { name: /^Запустить проект/ })
+    .first()
+    .click();
   await expect(panel(page).getByRole('alertdialog')).toBeVisible();
   await expect(panel(page).getByRole('button', { name: 'Остаться', exact: true })).toBeFocused();
   await panel(page).getByRole('button', { name: 'Остаться', exact: true }).click();
-  await page.keyboard.press('Escape');
-  await expect(panel(page)).toHaveCount(0);
   await expect(title).toHaveValue('Черновик редактора');
-  await open(page);
   await panel(page)
-    .getByRole('button', { name: /^Задача из панели/ })
+    .getByRole('button', { name: /^Запустить проект/ })
+    .first()
     .click();
   await panel(page).getByRole('button', { name: 'Перейти без сохранения', exact: true }).click();
   await expect(panel(page)).toHaveCount(0);
   await expect(editor).toHaveCount(0);
-  await expect(page).toHaveURL(/#\/v2\/actions\//);
+  await expect(page).toHaveURL(/#\/v2\/goals\/quick-goal$/);
   await expect(page.locator('#planner-main-content')).toBeFocused();
 });
 
@@ -164,10 +175,15 @@ test('quick access works in account and sleep, preserving their unfinished field
   await panel(page)
     .getByRole('button', { name: /^Подготовить отчёт/ })
     .click();
-  await expect(panel(page).getByRole('alertdialog')).toBeVisible();
-  await page.keyboard.press('Escape');
+  const actionPanel = page.getByRole('dialog', { name: 'Действие', exact: true });
+  await expect(actionPanel).toBeVisible();
+  await expect(page).toHaveURL(/#\/v2\/account\?action=quick-action$/);
+  await actionPanel.getByRole('button', { name: 'Закрыть панель' }).click();
+  await expect(panel(page)).toBeVisible();
+  await panel(page).getByRole('button', { name: 'Закрыть быстрый доступ' }).click();
+  await expect(panel(page)).toHaveCount(0);
   await expect(email).toHaveValue('draft@example.test');
-  await open(page);
+  await open(page, true);
   await panel(page).getByRole('button', { name: 'Добавить действие', exact: true }).click();
   await panel(page).getByLabel('Что хотите сделать?', { exact: true }).fill('Создано из аккаунта');
   await panel(page).getByRole('button', { name: 'Создать действие', exact: true }).click();
@@ -183,10 +199,14 @@ test('quick access works in account and sleep, preserving their unfinished field
   await panel(page)
     .getByRole('button', { name: /^Подготовить отчёт/ })
     .click();
-  await expect(panel(page).getByRole('alertdialog')).toBeVisible();
-  await page.keyboard.press('Escape');
+  await expect(actionPanel).toBeVisible();
+  await expect(page).toHaveURL(/#\/v2\/sleep\?action=quick-action$/);
+  await actionPanel.getByRole('button', { name: 'Закрыть панель' }).click();
+  await expect(panel(page)).toBeVisible();
+  await panel(page).getByRole('button', { name: 'Закрыть быстрый доступ' }).click();
+  await expect(panel(page)).toHaveCount(0);
   await expect(bedtime).toHaveValue('23:17');
-  await open(page);
+  await open(page, true);
   await panel(page).getByRole('button', { name: 'Добавить действие', exact: true }).click();
   await panel(page).getByLabel('Что хотите сделать?', { exact: true }).fill('Создано из сна');
   await panel(page).getByRole('button', { name: 'Создать действие', exact: true }).click();
@@ -253,7 +273,8 @@ test('quick access respects composition, keyboard selection and reduced motion',
   await expect(panel(page).getByRole('button', { name: /^Подготовить отчёт/ })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(panel(page)).toHaveCount(0);
-  await expect(page).toHaveURL(/#\/v2\/actions\/quick-action/);
+  await expect(page).toHaveURL(/#\/v2\/today\?action=quick-action$/);
+  await expect(page.getByRole('dialog', { name: 'Действие', exact: true })).toBeVisible();
 });
 
 test('quick access date changes preserve the inline action editor and its save remains valid', async ({
@@ -349,7 +370,10 @@ test('quick access protects goal and sphere drafts in existing editor sheets', a
     await open(page);
     await search(page).fill('Подготовить отчёт');
     await search(page).press('Enter');
-    await expect(panel(page).getByRole('alertdialog')).toBeVisible();
+    const actionPanel = page.getByRole('dialog', { name: 'Действие', exact: true });
+    await expect(actionPanel).toBeVisible();
+    await actionPanel.getByRole('button', { name: 'Закрыть панель' }).click();
+    await expect(panel(page)).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(panel(page)).toHaveCount(0);
     await expect(title).toHaveValue(`Черновик ${editorKind}`);

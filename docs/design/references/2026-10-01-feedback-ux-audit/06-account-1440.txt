@@ -1,0 +1,34 @@
+- link "К содержимому":
+  - /url: "#planner-main-content"
+- complementary:
+  - link "LifeOS":
+    - /url: "#/v2/today"
+  - button "Поиск и добавление": Поиск и добавление Ctrl K
+  - navigation "Рабочий интерфейс":
+    - link "Сегодня":
+      - /url: "#/v2/today"
+    - link "Сферы":
+      - /url: "#/v2/spheres"
+    - link "Направления":
+      - /url: "#/v2/directions"
+    - link "Цели":
+      - /url: "#/v2/goals"
+    - link "Действия":
+      - /url: "#/v2/actions"
+    - link "Входящие":
+      - /url: "#/v2/inbox"
+    - link "Дневник":
+      - /url: "#/v2/diary?period=day&date=2026-10-01"
+    - link "Память жизни":
+      - /url: "#/v2/memory"
+    - button "Ещё"
+- main:
+  - region "Аккаунт и синхронизация":
+    - button "Вернуться назад": ←
+    - paragraph: Настройки
+    - heading "Аккаунт и синхронизация" [level=1]
+    - paragraph: Одни данные на ваших устройствах — в зашифрованном виде.
+    - status:
+      - heading "Аккаунт недоступен" [level=2]
+      - paragraph: Синхронизация доступна только в приложении LifeOS.
+      - paragraph: Ваши данные сохранены на этом устройстве.

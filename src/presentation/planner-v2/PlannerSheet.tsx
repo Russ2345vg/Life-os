@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -17,6 +18,7 @@ import {
   resizePlannerSheetFromPointer,
 } from './PlannerSheetResize';
 import { QuickAccessTrigger } from './QuickAccessContext';
+import { acquirePlannerDialogScrollLock } from './PlannerDialogScrollLock';
 
 function viewportWidth(): number {
   return typeof window === 'undefined' ? 1280 : window.innerWidth;
@@ -49,13 +51,25 @@ export function PlannerSheet({
   onClose,
   children,
   quickAccess = false,
+  lockScroll = quickAccess,
+  initialFocus,
+  returnFocus,
 }: {
   readonly title: string;
   readonly onClose: () => void;
   readonly children: ReactNode;
   readonly quickAccess?: boolean;
+  readonly lockScroll?: boolean;
+  readonly initialFocus?: () => HTMLElement | null;
+  readonly returnFocus?: () => HTMLElement | null;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const initialFocusRef = useRef(initialFocus);
+  const returnFocusRef = useRef(returnFocus);
+  useLayoutEffect(() => {
+    initialFocusRef.current = initialFocus;
+    returnFocusRef.current = returnFocus;
+  }, [initialFocus, returnFocus]);
   const drag = useRef<{
     pointerId: number;
     startX: number;
@@ -66,20 +80,22 @@ export function PlannerSheet({
   useEffect(() => {
     const element = dialog.current;
     const opener = document.activeElement;
-    const previousOverflow = document.documentElement.style.overflow;
-    if (quickAccess) document.documentElement.style.overflow = 'hidden';
+    const releaseScroll = lockScroll ? acquirePlannerDialogScrollLock(document) : () => undefined;
     element?.showModal();
-    element
-      ?.querySelector<HTMLElement>(
+    const target =
+      initialFocusRef.current?.() ??
+      element?.querySelector<HTMLElement>(
         'input:not([type="hidden"]):not(:disabled), textarea:not(:disabled), select:not(:disabled)',
-      )
-      ?.focus();
+      );
+    target?.focus({ preventScroll: true });
     return () => {
       element?.close();
-      if (quickAccess) document.documentElement.style.overflow = previousOverflow;
-      if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
+      releaseScroll();
+      const restore = returnFocusRef.current?.() ?? opener;
+      if (restore instanceof HTMLElement && restore.isConnected)
+        restore.focus({ preventScroll: true });
     };
-  }, [quickAccess]);
+  }, [quickAccess, lockScroll]);
   useEffect(() => {
     const clampToViewport = () =>
       setWidth((current) => clampPlannerSheetWidth(current, viewportWidth()));
@@ -129,6 +145,7 @@ export function PlannerSheet({
       }}
       onCancel={(event) => {
         event.preventDefault();
+        event.stopPropagation();
         onClose();
       }}
     >

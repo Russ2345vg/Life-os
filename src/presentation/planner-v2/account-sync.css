@@ -289,6 +289,14 @@
   font-size: 1.1rem;
   font-weight: 750;
 }
+.account-metrics dd small {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.4;
+}
 
 .account-devices ul {
   display: grid;

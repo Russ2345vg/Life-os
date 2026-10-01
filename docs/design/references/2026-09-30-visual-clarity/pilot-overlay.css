@@ -1,0 +1,164 @@
+:root {
+  --planner-type-title: clamp(1.75rem, 3vw, 2.375rem);
+  --planner-type-focus-title: clamp(1.875rem, 2.8vw, 2.25rem);
+  --planner-type-detail-title: clamp(1.75rem, 2.4vw, 2.125rem);
+  --planner-type-section: 1.25rem;
+  --planner-type-item: 1rem;
+  --planner-type-body: 0.9375rem;
+  --planner-type-meta: 0.8125rem;
+  --planner-type-reading: 1rem;
+}
+
+.planner-v2 {
+  --planner-font-body: var(--planner-type-body);
+  --planner-font-meta: var(--planner-type-meta);
+}
+
+.planner-v2 :is(.planner-page-heading, .balance-header, .account-header) h1 {
+  font-size: var(--planner-type-title);
+  line-height: 1.2;
+}
+
+.planner-v2 .planner-page-heading {
+  margin-bottom: var(--space-4);
+}
+
+.planner-v2 .planner-today .planner-page-heading h1 {
+  font-size: var(--planner-type-focus-title);
+}
+
+.planner-v2 .planner-today .planner-main-direction.planner-month-focus {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-medium);
+  background: var(--surface-1);
+  box-shadow: none;
+}
+
+.planner-month-focus__summary strong {
+  font-size: var(--planner-type-item);
+  font-weight: 600;
+}
+
+.planner-v2 .planner-month-focus__summary {
+  gap: 3px;
+}
+
+.planner-v2 .planner-month-focus__summary p {
+  font-size: var(--planner-type-meta);
+}
+
+.planner-v2 .planner-month-focus__summary .planner-eyebrow {
+  color: var(--text-muted);
+}
+
+.planner-v2 .planner-day-workspace {
+  border-radius: var(--radius-large);
+  border-top: 2px solid var(--border-accent);
+  box-shadow: none;
+}
+
+.planner-v2 .planner-day-center__header {
+  padding-block: 20px 18px;
+}
+
+.planner-v2 .planner-day-workspace .planner-quick-create {
+  padding-block: 16px;
+}
+
+.planner-v2 .planner-day-center__header h2 {
+  font-size: 1.75rem;
+  line-height: 1.2;
+}
+
+.planner-v2 .planner-today .planner-action-row {
+  font-size: var(--planner-type-item);
+  font-weight: 600;
+  margin-bottom: var(--space-2);
+  padding: 16px 52px 16px 16px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-small);
+  background: var(--surface-2);
+}
+
+.planner-v2 .planner-today .planner-action-row:focus-within {
+  border-color: var(--border-accent);
+}
+
+.planner-v2 .planner-today .planner-main .planner-action-row {
+  border-left: 2px solid var(--warning);
+}
+
+.planner-v2 .planner-today .planner-quick-create .planner-primary:disabled {
+  background: var(--surface-3);
+  border-color: var(--border-soft);
+  color: var(--text-muted);
+  opacity: 1;
+}
+
+.planner-v2 .planner-action-panel__heading h2 {
+  font-size: var(--planner-type-detail-title);
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.planner-v2 .planner-action-panel__heading {
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.planner-v2 .planner-action-panel__heading .planner-eyebrow {
+  color: var(--planner-accent);
+}
+
+@media (max-width: 640px) {
+  .planner-v2 .planner-today .planner-main-direction.planner-month-focus {
+    gap: var(--space-3);
+    padding: var(--space-4);
+  }
+
+  .planner-v2
+    .planner-today
+    .planner-main-direction.planner-month-focus
+    .planner-month-focus__controls {
+    gap: var(--space-2);
+  }
+
+  .planner-v2 .planner-day-center__header h2 {
+    font-size: 1.5rem;
+  }
+
+  .planner-v2 .planner-day-center__header {
+    padding-block: 16px 14px;
+  }
+
+  .planner-v2 .planner-day-workspace .planner-quick-create {
+    padding-block: 14px;
+  }
+
+  .planner-v2 .planner-today .planner-action-row {
+    padding: 14px 52px 14px 12px;
+  }
+}
+
+.planner-v2 .planner-disclosure-card[open] {
+  border-color: var(--border-strong);
+  background: var(--surface-1);
+  box-shadow: inset 2px 0 var(--planner-accent);
+}
+
+.planner-v2 .planner-disclosure-card__copy strong {
+  font-size: var(--planner-type-item);
+}
+
+.planner-v2 .planner-disclosure-card__copy small {
+  font-size: var(--planner-type-meta);
+}
+
+.planner-v2 .planner-action-panel__confirm {
+  border-radius: var(--radius-large);
+}

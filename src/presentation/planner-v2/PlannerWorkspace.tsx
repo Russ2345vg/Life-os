@@ -5,10 +5,28 @@ import {
 } from './CompletionResult';
 import { BalanceWorkspace } from './balance/BalanceWorkspace';
 import { PlanningProvider } from './PlanningContext';
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { usePlanningState } from './usePlanningState';
+import { usePlannerActionCompletion } from './usePlannerActionCompletion';
+import {
+  createCompletionLibraryTask,
+  LatestPlannerRefresh,
+  requireRefreshOutcome,
+} from './plannerCompletionRefresh';
+import type { CompletionRefreshTask } from './PlannerActionCompletion';
+import { usePlannerLibraryReadModel } from './usePlannerLibraryReadModel';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { QuickAccessPanel } from './QuickAccessPanel';
 import {
   QuickAccessProvider,
+  QuickAccessGuardScope,
   QuickAccessTrigger,
   useQuickAccess,
   useQuickAccessGuard,
@@ -26,11 +44,14 @@ import {
   submitPlannerAction,
   submitPlannerGoalWithPeriod,
 } from './plannerFormSubmission';
-import { completePlannerAction, planPlannerAction } from './plannerTodayCommands';
+import { planPlannerAction } from './plannerTodayCommands';
 import { useSyncContentChanged } from '../sync/SyncStatusContext';
 import { finishPlannerSubmission } from './plannerRouteSubmission';
 import './planner-v2.css';
 import { PlannerLibraryWorkspace } from './PlannerLibraryWorkspace';
+import { PlannerActionPanel } from './PlannerActionPanel';
+import { PlannerUnsavedChangesConfirmation } from './PlannerUnsavedChangesConfirmation';
+import { createPlannerActionOperations } from './plannerActionOperations';
 import { usePlannerWorkTime } from './usePlannerWorkTime';
 import type { EntityMenuAction } from './EntityContextMenu';
 import { DomainError } from '../../shared/errors/DomainError';
@@ -51,6 +72,12 @@ import type { MonthlyDirectionFocusView } from './MonthlyDirectionFocusCard';
 import { PlannerMemory } from './memory/PlannerMemory';
 import './memory/memory.css';
 import type { PlannerServices } from '../../application/planner/PlannerServices';
+import {
+  buildTodayGoalGuidance,
+  type TodayGoalGuidanceSelection,
+} from '../../application/queries/GetTodayGoalGuidance';
+import { PlannerGoalGuidance } from './PlannerGoalGuidance';
+import { planGoalGuidanceStep } from './plannerGoalGuidanceOperations';
 
 export type { PlannerServices } from '../../application/planner/PlannerServices';
 interface PlannerData {
@@ -77,30 +104,71 @@ function PlannerWorkspaceContent({
   route,
   currentDate,
   onNavigate,
+  actionPanelId,
+  onOpenAction,
+  onCloseAction,
+  registerPanelGuard,
 }: {
   readonly systemNotice?: ReactNode;
   readonly services: PlannerServices;
   readonly route: PlannerRoute;
   readonly currentDate: DayDate;
-  readonly onNavigate: (route: PlannerRoute) => void;
+  readonly onNavigate: (route: PlannerRoute) => Promise<boolean> | void;
+  readonly actionPanelId?: string | null;
+  readonly onOpenAction?: (actionId: string) => Promise<boolean>;
+  readonly onCloseAction?: () => Promise<boolean>;
+  readonly registerPanelGuard?: (guard: {
+    requestLeave(): Promise<boolean>;
+    shouldBlockUnload(): boolean;
+  }) => () => void;
 }) {
+  const actionOpener = useRef<HTMLElement | null>(null);
+  const [returnToQuickAccess, setReturnToQuickAccess] = useState<{
+    readonly source: string;
+    readonly resultId: string;
+  } | null>(null);
+  const openActionFromSource = (id: string): Promise<boolean> | void => {
+    if (!actionPanelId) setReturnToQuickAccess(null);
+    actionOpener.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    return onOpenAction?.(id) ?? onNavigate({ view: 'action', id });
+  };
   const workTime = usePlannerWorkTime(services.workSessions);
-  const [completionSummary, setCompletionSummary] = useState<CompletionSummaryTarget | null>(null);
+  const [completionSummary, setCompletionSummary] = useState<{
+    readonly target: CompletionSummaryTarget;
+    readonly origin: 'source' | { readonly panelId: string };
+  } | null>(null);
+  const completionOrigin = useRef<{ readonly key: string; readonly panelId: string } | null>(null);
   const promptedCompletions = useRef(new Set<string>());
   const promptForResult = (action: LifeAction) => {
     const target = completionSummaryTarget(action);
     if (!services.planning || !target || promptedCompletions.current.has(target.completionKey))
       return;
     promptedCompletions.current.add(target.completionKey);
-    setCompletionSummary(target);
+    const origin = completionOrigin.current;
+    setCompletionSummary({
+      target,
+      origin: origin?.key === target.completionKey ? { panelId: origin.panelId } : 'source',
+    });
   };
+  if (
+    completionSummary &&
+    completionSummary.origin !== 'source' &&
+    completionSummary.origin.panelId !== actionPanelId
+  )
+    setCompletionSummary(null);
 
   const [data, setData] = useState<PlannerData | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const revision = useQuickAccess()?.revision ?? 0;
-  const refreshToken = useMemo(() => ({ data, revision }), [data, revision]);
-  useQuickAccessGuard(() => ({ dirty: false, busy: busy || workTime.busy }));
+  const [commandBusy, setBusy] = useState(false);
+  const [planningRevision, setPlanningRevision] = useState(0);
+  const quickAccess = useQuickAccess();
+  const revision = quickAccess?.revision ?? 0;
+  const refreshToken = useMemo(
+    () => ({ planningRevision, revision }),
+    [planningRevision, revision],
+  );
+  const planningContext = usePlanningState(services.planning, currentDate.toString(), refreshToken);
   const working = useRef(false);
   const [createdGoal, setCreatedGoal] = useState<Goal | null>(null);
   const [createdGoalWarning, setCreatedGoalWarning] = useState<string | null>(null);
@@ -109,10 +177,11 @@ function PlannerWorkspaceContent({
     receipt: LifeActionDateUndoReceipt;
     title: string;
   } | null>(null);
-  const changeDate = async (id: string, date: string) => {
+  const changeDate = async (id: string, date: string, expectedVersion?: number) => {
     const result = await services.setLifeActionPlan.changeDate({
       lifeActionId: EntityId.create(id),
       plannedDate: date ? DayDate.create(date) : null,
+      ...(expectedVersion === undefined ? {} : { expectedVersion }),
     });
     if (!result.ok) throw result.error;
     if (result.value.receipt)
@@ -125,15 +194,118 @@ function PlannerWorkspaceContent({
     return () => clearTimeout(timer);
   }, [notice]);
   const [moreOpen, setMoreOpen] = useState(false);
-  const request = useRef(0);
+  const moreButton = useRef<HTMLButtonElement>(null);
+  const [confirmAccountLeave, setConfirmAccountLeave] = useState(false);
+  const accountLeaveDialog = useRef<HTMLDialogElement>(null);
+  const accountLeaveOpener = useRef<HTMLElement | null>(null);
+  const accountLeaveDecision = useRef<((allowed: boolean) => void) | null>(null);
+  useEffect(() => {
+    if (confirmAccountLeave && !accountLeaveDialog.current?.open) {
+      accountLeaveDialog.current?.showModal();
+      accountLeaveDialog.current?.querySelector('button')?.focus();
+    }
+  }, [confirmAccountLeave]);
+  useEffect(() => {
+    if (route.view === 'account' || !accountLeaveDecision.current) return;
+    accountLeaveDecision.current(false);
+    accountLeaveDecision.current = null;
+    setConfirmAccountLeave(false);
+  }, [route.view]);
+  useEffect(
+    () => () => {
+      accountLeaveDecision.current?.(false);
+      accountLeaveDecision.current = null;
+    },
+    [],
+  );
+  const answerAccountLeave = (allowed: boolean) => {
+    accountLeaveDialog.current?.close();
+    setConfirmAccountLeave(false);
+    accountLeaveDecision.current?.(allowed);
+    accountLeaveDecision.current = null;
+    if (!allowed)
+      requestAnimationFrame(() => {
+        if (accountLeaveOpener.current?.isConnected) accountLeaveOpener.current.focus();
+      });
+  };
+  const [accountReturnRoute, setAccountReturnRoute] = useState<PlannerRoute | null>(null);
+  const previousRouteView = useRef(route.view);
+  useEffect(() => {
+    if (previousRouteView.current === 'account' && route.view !== 'account')
+      setAccountReturnRoute(null);
+    previousRouteView.current = route.view;
+  }, [route.view]);
   const routeGeneration = useRef(0);
   const mainContent = useRef<HTMLElement>(null);
   const routeKey = buildPlannerRoute(route);
+  const validReturnTarget = returnToQuickAccess?.source === routeKey ? returnToQuickAccess : null;
+  if (returnToQuickAccess && !validReturnTarget) setReturnToQuickAccess(null);
+  const previousPanelId = useRef(actionPanelId);
+  useEffect(() => {
+    const previous = previousPanelId.current;
+    previousPanelId.current = actionPanelId;
+    if (!validReturnTarget) return;
+    if (previous && !actionPanelId) quickAccess?.show();
+    if (!previous && actionPanelId && quickAccess?.open) quickAccess.close();
+  }, [actionPanelId, validReturnTarget, quickAccess]);
   const selectedDate =
     route.view === 'today' && route.day === 'tomorrow'
       ? DayDate.create(addDays(currentDate.toString(), 1))
       : currentDate;
   const selectedDateKey = selectedDate.toString();
+  const guidanceScope = `${routeKey}|${selectedDateKey}`;
+  const guidanceRequest = useRef(0);
+  const [guidanceSession, setGuidanceSession] = useState<{
+    readonly id: number;
+    readonly scope: string;
+    readonly selection: TodayGoalGuidanceSelection | null;
+    readonly readError: string | null;
+    readonly writeError: string | null;
+    readonly confirmedSourceKey: string | null;
+    readonly mustConfirm: boolean;
+  } | null>(null);
+  const [guidanceRefreshError, setGuidanceRefreshError] = useState<string | null>(null);
+  const [renderedGuidanceScope, setRenderedGuidanceScope] = useState(guidanceScope);
+  if (renderedGuidanceScope !== guidanceScope) {
+    setRenderedGuidanceScope(guidanceScope);
+    setGuidanceSession(null);
+    setGuidanceRefreshError(null);
+  }
+  const guidanceOpen =
+    route.view === 'today' && route.day !== 'tomorrow' && guidanceSession?.scope === guidanceScope
+      ? guidanceSession
+      : null;
+  const libraryRoute = [
+    'planning',
+    'goal',
+    'goals',
+    'focus',
+    'review',
+    'actions',
+    'action',
+    'inbox',
+    'kanban',
+    'calendar',
+    'time',
+    'tree',
+    'new-goal',
+    'new-action',
+  ].includes(route.view);
+  const libraryScope = `${routeKey}|${selectedDateKey}`;
+  const [activatedLibraryScope, setActivatedLibraryScope] = useState<string | null>(null);
+  if (actionPanelId && activatedLibraryScope !== libraryScope)
+    setActivatedLibraryScope(libraryScope);
+  const libraryEnabled =
+    libraryRoute || Boolean(actionPanelId) || activatedLibraryScope === libraryScope;
+  const libraryReads = usePlannerLibraryReadModel(services.libraryReads, selectedDateKey, {
+    scope: libraryScope,
+    enabled: libraryEnabled,
+  });
+  const refreshScope = useMemo(
+    () => ({ services, selectedDateKey, routeKey, session: new LatestPlannerRefresh() }),
+    [services, selectedDateKey, routeKey],
+  );
+  const refreshSession = refreshScope.session;
   const [renderedRoute, setRenderedRoute] = useState(routeKey);
   if (renderedRoute !== routeKey) {
     setRenderedRoute(routeKey);
@@ -141,22 +313,25 @@ function PlannerWorkspaceContent({
     setCreatedGoal(null);
     setError(null);
   }
-  const load = useCallback(async () => {
-    if (route.view === 'sleep' || route.view === 'account' || route.view === 'diary') return;
-    const sequence = ++request.current;
-    const date = DayDate.create(selectedDateKey);
-    if (services.planning) await services.planning.recurrence.materialize(selectedDateKey);
-    return Promise.all([
-      services.getPlannerToday.execute(date),
-      services.getGoals.execute(),
-      services.getDirections.execute(),
-      services.plannerCatalog.actions(),
-      services.monthlyDirectionFocus.get(currentDate),
-      services.getSpheres.execute(),
-      services.sleepSchedule.getState(),
-      services.timeCapacity?.get() ?? Promise.resolve([null, null, null, null, null, null, null]),
-    ])
-      .then(
+  const load = useCallback(
+    async (options?: { readonly refreshPlanning?: boolean }) => {
+      if (route.view === 'sleep' || route.view === 'account' || route.view === 'diary') return;
+      const outcome = await refreshSession.run(
+        async () => {
+          const date = DayDate.create(selectedDateKey);
+          if (services.planning) await services.planning.recurrence.materialize(selectedDateKey);
+          return Promise.all([
+            services.getPlannerToday.execute(date),
+            services.getGoals.execute(),
+            services.getDirections.execute(),
+            services.plannerCatalog.actions(),
+            services.monthlyDirectionFocus.get(currentDate),
+            services.getSpheres.execute(),
+            services.sleepSchedule.getState(),
+            services.timeCapacity?.get() ??
+              Promise.resolve([null, null, null, null, null, null, null]),
+          ]);
+        },
         ([
           overview,
           goals,
@@ -167,7 +342,6 @@ function PlannerWorkspaceContent({
           sleepState,
           timeCapacity,
         ]) => {
-          if (sequence !== request.current) return;
           const allSpheres = [...spheres.active, ...spheres.archived];
           const directionLabel = (direction: (typeof directions)[number]) =>
             `${allSpheres.find((sphere) => sphere.id.toString() === direction.sphereId?.toString())?.name ?? 'Без сферы'} → ${direction.name}`;
@@ -224,12 +398,55 @@ function PlannerWorkspaceContent({
             timeCapacity,
           });
           setError(null);
+          if (options?.refreshPlanning !== false) setPlanningRevision((value) => value + 1);
         },
-      )
-      .catch((reason: unknown) => {
-        if (sequence === request.current) throw reason;
-      });
-  }, [services, selectedDateKey, route.view, currentDate]);
+      );
+      if (outcome.status === 'failed') throw outcome.error;
+    },
+    [services, selectedDateKey, route.view, currentDate, refreshSession, setError],
+  );
+  const planningRefresh = planningContext?.refreshWithOutcome;
+  const libraryTask = useMemo(
+    () => createCompletionLibraryTask(libraryReads.model),
+    [libraryReads.model],
+  );
+  const libraryCompletionState = useRef({ enabled: libraryEnabled, task: libraryTask });
+  useLayoutEffect(() => {
+    libraryCompletionState.current = { enabled: libraryEnabled, task: libraryTask };
+  }, [libraryEnabled, libraryTask]);
+  const completionTasks = useMemo<readonly CompletionRefreshTask[]>(
+    () => [
+      ...(route.view === 'today'
+        ? [{ key: 'workspace' as const, run: () => load({ refreshPlanning: false }) }]
+        : []),
+      {
+        key: 'planning',
+        run: async () => {
+          if (planningRefresh) requireRefreshOutcome(await planningRefresh());
+        },
+      },
+      {
+        key: 'library',
+        run: async () => {
+          const current = libraryCompletionState.current;
+          if (current.enabled) await current.task.run();
+        },
+      },
+    ],
+    [route.view, load, planningRefresh],
+  );
+  const completion = usePlannerActionCompletion(
+    services.completeLifeAction,
+    `${routeKey}|${selectedDateKey}`,
+    completionTasks,
+    (action) => {
+      setNotice('Действие выполнено');
+      promptForResult(action);
+    },
+  );
+  const busy = commandBusy || completion.busy;
+  useQuickAccessGuard(() => ({ dirty: false, busy: busy || workTime.busy }));
+  const visibleError = libraryRoute ? error : (completion.error ?? error);
   const report = useCallback(
     (reason: unknown) =>
       setError(
@@ -237,7 +454,7 @@ function PlannerWorkspaceContent({
           ? reason.message
           : 'Не удалось загрузить данные. Попробуйте ещё раз.',
       ),
-    [],
+    [setError],
   );
   const refresh = useCallback(() => {
     void load().catch(report);
@@ -247,15 +464,18 @@ function PlannerWorkspaceContent({
     refresh,
   );
   useEffect(() => {
+    return () => refreshSession.reset();
+  }, [refreshSession]);
+  useEffect(() => {
     routeGeneration.current += 1;
     void load().catch(report);
     return () => {
-      request.current += 1;
       routeGeneration.current += 1;
     };
   }, [load, routeKey, report, revision]);
   const run = async (work: () => Promise<unknown>, message: string | null, rethrow = false) => {
-    if (working.current) return;
+    if (working.current || completion.busy) return;
+    completion.dismiss();
     working.current = true;
     setBusy(true);
     setError(null);
@@ -276,7 +496,9 @@ function PlannerWorkspaceContent({
       ? [
           {
             label: 'Редактировать',
-            run: () => navigate({ view: 'action', id: action.id.toString() }),
+            run: () => {
+              void openActionFromSource(action.id.toString());
+            },
           },
         ]
       : []),
@@ -356,14 +578,39 @@ function PlannerWorkspaceContent({
           } satisfies EntityMenuAction,
         ]),
   ];
-  const navigate = (target: PlannerRoute) => {
+  const navigate = async (target: PlannerRoute): Promise<boolean> => {
+    if (route.view === 'account' && target.view !== 'account') {
+      const account = quickAccess?.inspect('account');
+      if (account?.busy || accountLeaveDecision.current) return false;
+      if (account?.dirty) {
+        const allowed = await new Promise<boolean>((resolve) => {
+          accountLeaveOpener.current =
+            document.activeElement instanceof HTMLElement ? document.activeElement : null;
+          accountLeaveDecision.current = resolve;
+          setConfirmAccountLeave(true);
+        });
+        if (!allowed) return false;
+      }
+    }
+    const accepted = await onNavigate(target);
+    if (accepted === false) return false;
+    if (route.view === 'account' && target.view !== 'account') setAccountReturnRoute(null);
     routeGeneration.current += 1;
     setNotice(null);
     setMoreOpen(false);
     if (target.view === 'new-goal') setCreatedGoal(null);
-    onNavigate(target);
+    return true;
   };
-  const today = () => onNavigate({ view: 'today' });
+  const openDataStatus = async (): Promise<boolean> => {
+    if (route.view === 'account') return true;
+    const previous = accountReturnRoute;
+    setAccountReturnRoute(route);
+    const accepted = await navigate({ view: 'account' });
+    if (!accepted) setAccountReturnRoute(previous);
+    return accepted;
+  };
+  const returnFromDataStatus = () => navigate(accountReturnRoute ?? { view: 'today' });
+  const today = () => navigate({ view: 'today' });
   const closeForm = () => {
     requestAnimationFrame(() => mainContent.current?.focus());
     if (route.view === 'new-goal')
@@ -392,12 +639,249 @@ function PlannerWorkspaceContent({
       onNavigate={navigate}
     />
   );
+  // This factory captures callbacks for later user events; it does not read refs during render.
+  // eslint-disable-next-line react-hooks/refs
+  const panelOperations = createPlannerActionOperations({
+    services,
+    actions: () => libraryReads.snapshot.data?.actions ?? [],
+    busy: commandBusy || completion.snapshot.phase === 'saving',
+    run: (work, message) => run(work, message, true),
+    changeDate,
+    complete: (target) => {
+      if (actionPanelId)
+        completionOrigin.current = { key: target.completionKey, panelId: actionPanelId };
+      return completion.complete(target);
+    },
+    menuForAction,
+    onOpenAction: (id) => void openActionFromSource(id),
+  });
+  if (
+    guidanceOpen &&
+    guidanceOpen.selection === null &&
+    planningContext?.state &&
+    !planningContext.refreshing &&
+    !planningContext.error &&
+    !guidanceOpen.readError
+  ) {
+    const initial = buildTodayGoalGuidance(planningContext.state, selectedDateKey);
+    setGuidanceSession((previous) =>
+      previous?.id === guidanceOpen.id
+        ? {
+            ...previous,
+            selection: {
+              goal: initial.goalId ? { id: initial.goalId, origin: 'default' } : null,
+              action: initial.actionId ? { id: initial.actionId, origin: 'default' } : null,
+            },
+          }
+        : previous,
+    );
+  }
+  if (
+    guidanceOpen?.selection &&
+    guidanceOpen.selection.action === undefined &&
+    planningContext?.state &&
+    !planningContext.refreshing
+  ) {
+    const next = buildTodayGoalGuidance(
+      planningContext.state,
+      selectedDateKey,
+      guidanceOpen.selection,
+    );
+    setGuidanceSession((previous) =>
+      previous?.id === guidanceOpen.id
+        ? {
+            ...previous,
+            selection: {
+              ...guidanceOpen.selection,
+              action: next.actionId ? { id: next.actionId, origin: 'default' } : null,
+            },
+          }
+        : previous,
+    );
+  }
+  const guidance =
+    guidanceOpen?.selection && planningContext?.state
+      ? buildTodayGoalGuidance(planningContext.state, selectedDateKey, guidanceOpen.selection)
+      : null;
+  const guidanceNeedsConfirmation = Boolean(
+    guidanceOpen?.mustConfirm ||
+    (guidance?.status === 'ready' &&
+      (guidance.goalReason === 'source-changed' || guidance.actionReason === 'source-changed') &&
+      guidanceOpen?.confirmedSourceKey !== guidance.sourceKey),
+  );
+  const closeGuidance = (expectedId?: number) => {
+    if (expectedId !== undefined && guidanceRequest.current !== expectedId) return;
+    guidanceRequest.current += 1;
+    setGuidanceSession(null);
+  };
+  const openGuidance = async () => {
+    const id = ++guidanceRequest.current;
+    setGuidanceSession({
+      id,
+      scope: guidanceScope,
+      selection: null,
+      readError: null,
+      writeError: null,
+      confirmedSourceKey: null,
+      mustConfirm: false,
+    });
+    if (!planningContext) {
+      setGuidanceSession((previous) =>
+        previous?.id === id
+          ? {
+              ...previous,
+              readError: 'Планирование недоступно в этой сборке.',
+            }
+          : previous,
+      );
+      return;
+    }
+    const outcome = await planningContext.refreshWithOutcome();
+    if (guidanceRequest.current !== id) return;
+    if (outcome.status !== 'ready')
+      setGuidanceSession((previous) =>
+        previous?.id === id
+          ? {
+              ...previous,
+              readError:
+                outcome.status === 'failed'
+                  ? outcome.error.message
+                  : 'Данные изменились. Повторите загрузку.',
+            }
+          : previous,
+      );
+  };
+  const retryGuidance = async () => {
+    if (!guidanceOpen || !planningContext) return;
+    const id = guidanceOpen.id;
+    setGuidanceSession((previous) =>
+      previous?.id === id
+        ? {
+            ...previous,
+            readError: null,
+            writeError: null,
+          }
+        : previous,
+    );
+    const outcome = await planningContext.refreshWithOutcome();
+    if (guidanceRequest.current !== id) return;
+    if (outcome.status !== 'ready')
+      setGuidanceSession((previous) =>
+        previous?.id === id
+          ? {
+              ...previous,
+              readError:
+                outcome.status === 'failed' ? outcome.error.message : 'Повторите загрузку.',
+            }
+          : previous,
+      );
+  };
+  const refreshGoalGuidanceData = async (generation: number) => {
+    const results = await Promise.allSettled([
+      load({ refreshPlanning: false }),
+      planningContext?.refreshWithOutcome() ??
+        Promise.reject(new Error('Планирование недоступно.')),
+    ]);
+    if (generation !== routeGeneration.current)
+      throw new Error('Экран изменился во время обновления.');
+    const workspace = results[0];
+    const planning = results[1];
+    if (workspace.status === 'rejected') throw workspace.reason;
+    if (planning.status === 'rejected') throw planning.reason;
+    requireRefreshOutcome(planning.value);
+  };
+  const submitGuidance = async () => {
+    if (
+      guidance?.status !== 'ready' ||
+      guidance.cta === 'open-action' ||
+      guidanceNeedsConfirmation ||
+      planningContext?.refreshing ||
+      planningContext?.error ||
+      guidanceOpen?.readError ||
+      working.current ||
+      completion.busy ||
+      !guidanceOpen
+    )
+      return;
+    const id = guidanceOpen.id;
+    const generation = routeGeneration.current;
+    working.current = true;
+    setBusy(true);
+    setGuidanceSession((previous) =>
+      previous?.id === id
+        ? {
+            ...previous,
+            writeError: null,
+          }
+        : previous,
+    );
+    try {
+      const outcome = await planGoalGuidanceStep(
+        async () => {
+          await changeDate(guidance.actionId, selectedDateKey, guidance.actionVersion);
+          closeGuidance(id);
+          return { actionId: guidance.actionId, date: selectedDateKey };
+        },
+        () => refreshGoalGuidanceData(generation),
+      );
+      if (outcome.status === 'not-committed') {
+        setGuidanceSession((previous) =>
+          previous?.id === id
+            ? {
+                ...previous,
+                writeError: outcome.message,
+                mustConfirm: true,
+                confirmedSourceKey: null,
+              }
+            : previous,
+        );
+        if (outcome.message.includes('изменилось') && planningContext) {
+          void planningContext.refreshWithOutcome().then((refreshOutcome) => {
+            if (refreshOutcome.status === 'failed')
+              setGuidanceSession((previous) =>
+                previous?.id === id
+                  ? {
+                      ...previous,
+                      readError: refreshOutcome.error.message,
+                    }
+                  : previous,
+              );
+          });
+        }
+      } else if (generation === routeGeneration.current) {
+        if (outcome.refresh === 'ready') {
+          setGuidanceRefreshError(null);
+          setNotice('Шаг добавлен на сегодня');
+          requestAnimationFrame(() =>
+            document
+              .querySelector<HTMLElement>(
+                `[data-planner-action-id="${CSS.escape(outcome.actionId)}"]`,
+              )
+              ?.focus(),
+          );
+        } else {
+          setGuidanceRefreshError(outcome.message ?? 'Не удалось обновить план.');
+        }
+      }
+    } finally {
+      working.current = false;
+      setBusy(false);
+    }
+  };
+  const retryGuidanceRefresh = async () => {
+    const generation = routeGeneration.current;
+    try {
+      await refreshGoalGuidanceData(generation);
+      if (generation === routeGeneration.current) setGuidanceRefreshError(null);
+    } catch (reason: unknown) {
+      if (generation === routeGeneration.current)
+        setGuidanceRefreshError(
+          reason instanceof Error ? reason.message : 'Не удалось обновить план.',
+        );
+    }
+  };
   return (
-    <PlanningProvider
-      services={services.planning}
-      refreshToken={refreshToken}
-      today={currentDate.toString()}
-    >
+    <PlanningProvider value={planningContext}>
       <div className={`planner-v2${route.view === 'sleep' ? ' planner-v2--sleep' : ''}`}>
         <a
           className="planner-skip"
@@ -421,6 +905,14 @@ function PlannerWorkspaceContent({
             LifeOS
           </a>
           <QuickAccessTrigger />
+          <PlannerWorkspaceNavLink
+            className="planner-data-status-link"
+            route={route}
+            target={{ view: 'account' }}
+            label="Состояние данных"
+            icon="account"
+            onNavigate={() => void openDataStatus()}
+          />
           <nav aria-label="Рабочий интерфейс">
             {navLink({ view: 'today' }, 'Сегодня', 'today')}
             <span className="planner-nav-secondary">
@@ -449,6 +941,7 @@ function PlannerWorkspaceContent({
               </span>
             )}
             <button
+              ref={moreButton}
               className="planner-nav-more"
               type="button"
               aria-current={
@@ -468,18 +961,38 @@ function PlannerWorkspaceContent({
               aria-expanded={moreOpen}
               aria-controls="planner-more-menu"
               onClick={() => setMoreOpen((value) => !value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') setMoreOpen(false);
+              }}
             >
               <AppIcon name="history" />
               <span>Ещё</span>
             </button>
           </nav>
-          <div id="planner-more-menu" className="planner-more-menu" hidden={!moreOpen}>
+          <div
+            id="planner-more-menu"
+            className="planner-more-menu"
+            hidden={!moreOpen}
+            onKeyDown={(event) => {
+              if (event.key !== 'Escape') return;
+              event.preventDefault();
+              setMoreOpen(false);
+              moreButton.current?.focus();
+            }}
+          >
+            <PlannerWorkspaceNavLink
+              className="planner-data-status-menu-link"
+              route={route}
+              target={{ view: 'account' }}
+              label="Состояние данных"
+              icon="account"
+              onNavigate={() => void openDataStatus()}
+            />
             {services.memory && navLink({ view: 'memory' }, 'Память жизни', 'history')}
             {navLink({ view: 'spheres' }, 'Сферы', 'goals')}
             {navLink({ view: 'directions' }, 'Направления', 'goals')}
             {navLink({ view: 'inbox' }, 'Входящие', 'history')}
             {navLink({ view: 'sleep' }, 'Подготовка ко сну', 'today')}
-            {navLink({ view: 'account' }, 'Аккаунт и синхронизация', 'account')}
           </div>
         </aside>
         <main
@@ -522,18 +1035,35 @@ function PlannerWorkspaceContent({
               </button>
             </div>
           )}
+          {route.view === 'today' && guidanceRefreshError ? (
+            <div className="planner-error" role="alert">
+              <p>Дата сохранена. Не удалось обновить план: {guidanceRefreshError}</p>
+              <button type="button" onClick={() => void retryGuidanceRefresh()} disabled={busy}>
+                Повторить загрузку
+              </button>
+            </div>
+          ) : null}
           {notice ? (
             <p className="planner-notice" role="status">
               {notice}
             </p>
           ) : null}
-          {error ? (
+          {visibleError ? (
             <div className="planner-error" role="alert">
-              <p>{error}</p>
+              <p>{visibleError}</p>
               <button
                 type="button"
+                disabled={busy}
                 onClick={() => {
-                  void load().catch(report);
+                  if (
+                    completion.snapshot.phase === 'saved' &&
+                    completion.snapshot.refresh === 'failed'
+                  )
+                    void completion.retry();
+                  else {
+                    completion.dismiss();
+                    void load().catch(report);
+                  }
                 }}
               >
                 Повторить загрузку
@@ -576,10 +1106,13 @@ function PlannerWorkspaceContent({
               <p role="alert">Память жизни недоступна в этой сборке.</p>
             )
           ) : route.view === 'account' ? (
-            <AccountSyncPage
-              service={services.accountSync}
-              onBack={() => navigate({ view: 'today' })}
-            />
+            <QuickAccessGuardScope scope="account">
+              <AccountSyncPage
+                service={services.accountSync}
+                backLabel={accountReturnRoute ? 'Вернуться в предыдущий раздел' : 'К плану дня'}
+                onBack={() => void returnFromDataStatus()}
+              />
+            </QuickAccessGuardScope>
           ) : ['spheres', 'sphere', 'directions', 'direction'].includes(route.view) ? (
             services.balance ? (
               <BalanceWorkspace
@@ -600,7 +1133,9 @@ function PlannerWorkspaceContent({
             />
           ) : route.view === 'planning' ? (
             <PlannerLibraryWorkspace
-              onActionCompleted={promptForResult}
+              reads={libraryReads}
+              completion={completion}
+              onOpenAction={openActionFromSource}
               onChangeDate={changeDate}
               services={services}
               route={{
@@ -625,7 +1160,9 @@ function PlannerWorkspaceContent({
               'tree',
             ].includes(route.view) ? (
             <PlannerLibraryWorkspace
-              onActionCompleted={promptForResult}
+              reads={libraryReads}
+              completion={completion}
+              onOpenAction={openActionFromSource}
               onChangeDate={changeDate}
               key={buildPlannerRoute(route)}
               services={services}
@@ -664,7 +1201,7 @@ function PlannerWorkspaceContent({
               onSelectDay={(day) =>
                 navigate(day === 'tomorrow' ? { view: 'today', day } : { view: 'today' })
               }
-              onOpenAction={(id) => navigate({ view: 'action', id })}
+              onOpenAction={openActionFromSource}
               onMonthlyDirectionChange={(id) => {
                 void run(
                   () =>
@@ -684,12 +1221,17 @@ function PlannerWorkspaceContent({
                 })
               }
               onOpenSleep={() => navigate({ view: 'sleep' })}
+              onOpenGoalGuidance={() => void openGuidance()}
               sleepEntry={data.sleepEntry}
               onComplete={(id) => {
-                void run(async () => {
-                  const action = await completePlannerAction(services.completeLifeAction, id);
-                  promptForResult(action);
-                }, 'Действие выполнено');
+                if (working.current) return;
+                const action = data.actions.find((candidate) => candidate.id.toString() === id);
+                if (!action) {
+                  report(new Error('Действие изменилось. Обновите список перед выполнением.'));
+                  return;
+                }
+                setError(null);
+                void completion.complete({ actionId: id, completionKey: action.completionKey });
               }}
               onSelectAction={(selection) => {
                 void run(async () => {
@@ -751,7 +1293,9 @@ function PlannerWorkspaceContent({
           ) : route.view === 'new-action' ? (
             <>
               <PlannerLibraryWorkspace
-                onActionCompleted={promptForResult}
+                reads={libraryReads}
+                completion={completion}
+                onOpenAction={openActionFromSource}
                 onChangeDate={changeDate}
                 services={services}
                 route={{ view: 'actions' }}
@@ -853,7 +1397,9 @@ function PlannerWorkspaceContent({
           ) : (
             <>
               <PlannerLibraryWorkspace
-                onActionCompleted={promptForResult}
+                reads={libraryReads}
+                completion={completion}
+                onOpenAction={openActionFromSource}
                 onChangeDate={changeDate}
                 services={services}
                 route={{ view: 'goals' }}
@@ -892,22 +1438,173 @@ function PlannerWorkspaceContent({
               </PlannerSheet>
             </>
           )}
+          {guidanceOpen && route.view === 'today' && (
+            <PlannerSheet title="Шаг к цели" onClose={() => closeGuidance()} lockScroll>
+              <PlannerGoalGuidance
+                guidance={guidance}
+                loading={planningContext?.refreshing ?? true}
+                error={guidanceOpen.readError ?? planningContext?.error ?? null}
+                writeError={guidanceOpen.writeError}
+                busy={busy}
+                needsConfirmation={guidanceNeedsConfirmation}
+                onSelectGoal={(goalId) =>
+                  setGuidanceSession((previous) =>
+                    previous?.id === guidanceOpen.id
+                      ? {
+                          ...previous,
+                          selection: {
+                            goal: goalId ? { id: goalId, origin: 'user' } : null,
+                          },
+                          writeError: null,
+                          confirmedSourceKey: null,
+                          mustConfirm: false,
+                        }
+                      : previous,
+                  )
+                }
+                onSelectAction={(actionId) =>
+                  setGuidanceSession((previous) =>
+                    previous?.id === guidanceOpen.id
+                      ? {
+                          ...previous,
+                          selection: {
+                            ...previous.selection,
+                            action: actionId ? { id: actionId, origin: 'user' } : null,
+                          },
+                          writeError: null,
+                          confirmedSourceKey: null,
+                          mustConfirm: false,
+                        }
+                      : previous,
+                  )
+                }
+                onConfirm={() =>
+                  setGuidanceSession((previous) =>
+                    previous?.id === guidanceOpen.id
+                      ? {
+                          ...previous,
+                          confirmedSourceKey:
+                            guidance?.status === 'ready' ? guidance.sourceKey : null,
+                          mustConfirm: false,
+                          writeError: null,
+                        }
+                      : previous,
+                  )
+                }
+                onPlan={() => void submitGuidance()}
+                onOpenAction={(id) => {
+                  closeGuidance();
+                  requestAnimationFrame(() => void openActionFromSource(id));
+                }}
+                onOpenGoal={(id) => {
+                  closeGuidance();
+                  void navigate({ view: 'goal', id });
+                }}
+                onCreateAction={(goalId, title) => {
+                  closeGuidance();
+                  void navigate({ view: 'new-action', goalId, title, date: selectedDateKey });
+                }}
+                onCreateGoal={() => {
+                  closeGuidance();
+                  void navigate({ view: 'new-goal' });
+                }}
+                onRetry={() => void retryGuidance()}
+                onClose={() => closeGuidance()}
+              />
+            </PlannerSheet>
+          )}
         </main>
+        {confirmAccountLeave && (
+          <dialog
+            ref={accountLeaveDialog}
+            className="planner-account-leave-dialog"
+            aria-label="Подтверждение ухода"
+            onKeyDown={(event) => {
+              if (event.key !== 'Tab') return;
+              const controls = accountLeaveDialog.current?.querySelectorAll('button');
+              const first = controls?.[0];
+              const last = controls?.[controls.length - 1];
+              if (!first || !last) return;
+              if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last.focus();
+              } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
+              }
+            }}
+            onCancel={(event) => {
+              event.preventDefault();
+              answerAccountLeave(false);
+            }}
+          >
+            <PlannerUnsavedChangesConfirmation
+              onContinue={() => answerAccountLeave(false)}
+              onDiscard={() => answerAccountLeave(true)}
+              continueLabel="Остаться"
+              discardLabel="Перейти без сохранения"
+            />
+          </dialog>
+        )}
         {completionSummary && (
-          <CompletionResultPrompt
-            key={completionSummary.completionKey}
-            target={completionSummary}
-            onClose={() =>
-              setCompletionSummary((current) =>
-                current?.completionKey === completionSummary.completionKey ? null : current,
-              )
+          <QuickAccessGuardScope
+            scope={completionSummary.origin === 'source' ? 'completion-summary' : 'action-summary'}
+          >
+            <CompletionResultPrompt
+              guardScope={
+                completionSummary.origin === 'source' ? 'completion-summary' : 'action-summary'
+              }
+              key={completionSummary.target.completionKey}
+              target={completionSummary.target}
+              onClose={() =>
+                setCompletionSummary((current) =>
+                  current?.target.completionKey === completionSummary.target.completionKey
+                    ? null
+                    : current,
+                )
+              }
+            />
+          </QuickAccessGuardScope>
+        )}
+        {actionPanelId && onCloseAction && registerPanelGuard && (
+          <PlannerActionPanel
+            actionId={actionPanelId}
+            today={selectedDateKey}
+            reads={libraryReads}
+            operations={panelOperations}
+            onSetTime={panelOperations.onSetTime}
+            onClose={() => void onCloseAction()}
+            onRetry={libraryReads.refresh}
+            onReturnFocus={() =>
+              actionOpener.current?.isConnected ? actionOpener.current : mainContent.current
             }
+            registerGuard={registerPanelGuard}
+            feedback={completion.error}
+            onRetryCompletion={() => {
+              if (completion.snapshot.phase === 'saved' && completion.snapshot.refresh === 'failed')
+                void completion.retry();
+              else {
+                completion.dismiss();
+                void load().catch(report);
+              }
+            }}
+            commandError={error}
+            onDismissCommandError={() => setError(null)}
           />
         )}
         <QuickAccessPanel
           services={services}
           today={currentDate.toString()}
           onNavigate={navigate}
+          {...(onOpenAction
+            ? {
+                onOpenAction: async (id: string) => {
+                  if (!actionPanelId) setReturnToQuickAccess({ source: routeKey, resultId: id });
+                  return onOpenAction(id);
+                },
+              }
+            : {})}
+          returnFocusId={validReturnTarget?.resultId ?? null}
         />
       </div>
     </PlanningProvider>
@@ -915,12 +1612,14 @@ function PlannerWorkspaceContent({
 }
 
 function PlannerWorkspaceNavLink({
+  className,
   route,
   target,
   label,
   icon,
   onNavigate,
 }: {
+  readonly className?: string;
   readonly route: PlannerRoute;
   readonly target: PlannerRoute;
   readonly label: string;
@@ -929,6 +1628,7 @@ function PlannerWorkspaceNavLink({
 }) {
   return (
     <a
+      className={className}
       href={buildPlannerRoute(target)}
       aria-current={
         route.view === target.view ||

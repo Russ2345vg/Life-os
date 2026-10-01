@@ -117,9 +117,18 @@ describe('current library rendering', () => {
         devices: [],
       }),
     } as unknown as AccountSync;
+    const emptyLibrarySnapshot = { data: null, refreshing: false, error: null };
+    const libraryReads = {
+      create: () => ({
+        getSnapshot: () => emptyLibrarySnapshot,
+        subscribe: () => () => undefined,
+        refresh: async () => undefined,
+        whenSettled: async () => undefined,
+      }),
+    };
     const html = renderToStaticMarkup(
       createElement(PlannerWorkspace, {
-        services: { accountSync } as PlannerServices,
+        services: { accountSync, libraryReads } as unknown as PlannerServices,
         route: { view: 'account' },
         currentDate: DayDate.create('2026-09-22'),
         onNavigate: () => undefined,

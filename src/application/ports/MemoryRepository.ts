@@ -1,4 +1,4 @@
-import type { EntityId } from '../../domain';
+import type { DayDate, EntityId } from '../../domain';
 import type { MemoryEvent, MemoryEventSummary, MemoryKind } from '../../domain/memory';
 
 export interface MemoryCursor {
@@ -33,4 +33,5 @@ export interface MemoryRepository {
   ): Promise<MemoryEvent>;
   list(query: MemoryQuery): Promise<MemoryPage>;
   listYear(year: number): Promise<readonly MemoryEventSummary[]>;
+  listOnThisDay(today: DayDate): Promise<readonly MemoryEventSummary[]>;
 }

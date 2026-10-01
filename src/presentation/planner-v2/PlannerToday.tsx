@@ -45,6 +45,7 @@ export function PlannerToday({
   onQuickAdd,
   onNewAction,
   onOpenSleep,
+  onOpenGoalGuidance,
   sleepEntry,
   scenarios,
   menuForAction,
@@ -69,6 +70,7 @@ export function PlannerToday({
   readonly onQuickAdd: (title: string) => Promise<void>;
   readonly onNewAction: () => void;
   readonly onOpenSleep: () => void;
+  readonly onOpenGoalGuidance?: () => void;
   readonly sleepEntry?: SleepTodayEntry;
   readonly scenarios?: ScenarioService | undefined;
   readonly menuForAction?: (action: LifeAction) => readonly EntityMenuAction[];
@@ -155,6 +157,7 @@ export function PlannerToday({
               <button
                 className="planner-action-title planner-action-open"
                 type="button"
+                data-planner-action-id={id}
                 aria-label={action.title.toString()}
                 aria-describedby={hasContext ? contextId : undefined}
                 onClick={() => onOpenAction(id)}
@@ -235,9 +238,16 @@ export function PlannerToday({
               {day === 'tomorrow' ? 'Завтра' : 'Сегодня'}
             </h1>
             <p className="planner-eyebrow">{dateLabel}</p>
-            <a className="planner-text-link" href="#/v2/actions?view=time">
-              Рабочее время
-            </a>
+            <div className="planner-today-heading-links">
+              <a className="planner-text-link" href="#/v2/actions?view=time">
+                Рабочее время
+              </a>
+              {day === 'today' && onOpenGoalGuidance ? (
+                <button className="planner-text-link" type="button" onClick={onOpenGoalGuidance}>
+                  Выбрать шаг к цели
+                </button>
+              ) : null}
+            </div>
           </div>
           <div className="planner-day-switch" role="group" aria-label="План на день">
             <button
@@ -256,11 +266,6 @@ export function PlannerToday({
             </button>
           </div>
         </header>
-        <MonthlyDirectionFocusCard
-          value={monthlyDirectionFocus}
-          busy={busy}
-          onChange={onMonthlyDirectionChange}
-        />
         <section
           className="planner-day-workspace"
           aria-label={day === 'tomorrow' ? 'План на завтра' : 'План на сегодня'}
@@ -496,6 +501,11 @@ export function PlannerToday({
         </section>
       </div>
       <aside className="planner-today-sidebar" aria-label="Обзор дня">
+        <MonthlyDirectionFocusCard
+          value={monthlyDirectionFocus}
+          busy={busy}
+          onChange={onMonthlyDirectionChange}
+        />
         <section className="planner-day-progress">
           <h2>Прогресс дня</h2>
           <div hidden={!total}>

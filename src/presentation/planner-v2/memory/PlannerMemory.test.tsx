@@ -22,6 +22,7 @@ describe('Memory screen', () => {
       }),
     );
     expect(html).toContain('Загружаем воспоминания');
+    expect(html).toContain('В этот день');
     expect(html).toContain('после обновления устройств');
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Добавить воспоминание/);
   });

@@ -198,4 +198,72 @@ describe('IndexedDbMemoryRepository', () => {
       database.close();
     }
   });
+
+  it('finds this calendar day in past years only, with stable order and photo metadata', async () => {
+    const database = new LifeOsIndexedDb(new IDBFactory());
+    try {
+      const repository = new IndexedDbMemoryRepository(database);
+      await repository.save(event('recent-a', '2025-10-01'), null);
+      await repository.save(event('recent-b', '2025-10-01'), null);
+      await repository.save(event('older', '2023-10-01'), null);
+      await repository.save(event('other-day', '2024-10-02'), null);
+      await repository.save(event('current', '2026-10-01'), null);
+      const deleted = await repository.save(event('deleted', '2024-10-01'), null);
+      await repository.save({ ...deleted, deletedAt: '2026-09-29T12:00:00.000Z' }, deleted.version);
+
+      const items = await repository.listOnThisDay(DayDate.create('2026-10-01'));
+      expect(items.map((item) => item.id.toString())).toEqual(['recent-b', 'recent-a', 'older']);
+      expect(items[0]?.hasPhoto).toBe(true);
+      expect(items[0]).not.toHaveProperty('photo');
+      expect(items[0]).not.toHaveProperty('syncAttachment');
+      expect(await repository.listOnThisDay(DayDate.create('2026-01-01'))).toEqual([]);
+    } finally {
+      database.close();
+    }
+  });
+
+  it('matches February 29 only on a leap day and excludes the current leap year', async () => {
+    const database = new LifeOsIndexedDb(new IDBFactory());
+    try {
+      const repository = new IndexedDbMemoryRepository(database);
+      await repository.save(event('leap', '2024-02-29'), null);
+      await repository.save(event('feb-28', '2024-02-28'), null);
+      await repository.save(event('march-1', '2024-03-01'), null);
+      await repository.save(event('current-leap', '2028-02-29'), null);
+      expect(
+        (await repository.listOnThisDay(DayDate.create('2028-02-29'))).map((item) =>
+          item.id.toString(),
+        ),
+      ).toEqual(['leap']);
+      expect(await repository.listOnThisDay(DayDate.create('2024-02-29'))).toEqual([]);
+    } finally {
+      database.close();
+    }
+  });
+
+  it('does not read full records or photo bytes for nonmatching anniversaries', async () => {
+    const database = new LifeOsIndexedDb(new IDBFactory());
+    try {
+      const repository = new IndexedDbMemoryRepository(database);
+      await repository.save(event('match', '2025-10-01'), null);
+      for (let day = 2; day <= 20; day++)
+        await repository.save(
+          event(`other-${day}`, `2025-10-${String(day).padStart(2, '0')}`),
+          null,
+        );
+      const get = vi.spyOn(FakeObjectStore.prototype, 'get');
+      try {
+        expect(
+          (await repository.listOnThisDay(DayDate.create('2026-10-01'))).map((item) =>
+            item.id.toString(),
+          ),
+        ).toEqual(['match']);
+        expect(get).toHaveBeenCalledTimes(1);
+      } finally {
+        get.mockRestore();
+      }
+    } finally {
+      database.close();
+    }
+  });
 });

@@ -69,7 +69,12 @@ export class IndexedDbPilotMutationRecorder {
   }
 
   public notifyCommitted(recorded: boolean): void {
-    if (recorded) this.#notify();
+    if (!recorded) return;
+    try {
+      this.#notify();
+    } catch {
+      // The durable outbox is already committed. Lifecycle wakeups can retry delivery.
+    }
   }
 
   public setNotify(notify: () => void): void {

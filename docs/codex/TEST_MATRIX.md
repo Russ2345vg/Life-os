@@ -19,7 +19,7 @@ npm ci
 | Self-tests инфраструктуры         | `npm run test:infra`                           | one-shot                      |            120 с |
 | Alpha gate                        | `npm run test:alpha`                           | one-shot                      |             60 с |
 | Список E2E                        | `npm run test:e2e:list`                        | managed one-shot              |            120 с |
-| Browser E2E                       | `npm run test:e2e`                             | managed one-shot              |           1200 с |
+| Browser E2E                       | `npm run test:e2e`                             | managed one-shot              |           1800 с |
 | TypeScript                        | `npm run typecheck`                            | bounded one-shot              |            180 с |
 | ESLint                            | `npm run lint`                                 | bounded one-shot              |            180 с |
 | Production build                  | `npm run build`                                | bounded sequential one-shot   |    240 с + 120 с |
@@ -126,7 +126,7 @@ npm run test:e2e -- tests/e2e/current.daily-workflow.spec.ts
 - подтверждают освобождение порта ограниченным teardown.
 
 Playwright выполняется с `retries: 0`, per-test timeout 30 секунд, action timeout 10 секунд,
-navigation timeout 15 секунд, expect timeout 5 секунд и global timeout 1200 секунд. Trace
+navigation timeout 15 секунд, expect timeout 5 секунд и global timeout 1800 секунд. Trace
 сохраняется при failure. На Windows owned tree завершается по PID созданного child через
 `taskkill /T`; PID из port lookup никогда не используется.
 

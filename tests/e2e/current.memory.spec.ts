@@ -22,6 +22,34 @@ test('memory reads an empty timeline and year', async ({ page }) => {
     .toBe(true);
 });
 
+test('on this day opens a past memory while keeping the selected year', async ({ page }) => {
+  await page.goto('/#/v2/memory');
+  await expect(page.getByRole('heading', { name: 'Память жизни', exact: true })).toBeVisible();
+  const { currentYear, pastDate } = await page.evaluate(() => {
+    const today = new Date();
+    const yearsBack = today.getMonth() === 1 && today.getDate() === 29 ? 4 : 1;
+    const previousYear = today.getFullYear() - yearsBack;
+    return {
+      currentYear: today.getFullYear(),
+      pastDate: `${previousYear}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`,
+    };
+  });
+  await seedMemories(page, pastDate);
+  await page.goto(`/#/v2/memory?year=${currentYear}`);
+  await page.reload();
+  const anniversary = page.getByRole('region', { name: 'В этот день', exact: true });
+  await anniversary.getByRole('button', { name: 'Показать все (32)', exact: true }).click();
+  await anniversary.getByRole('button', { name: 'Событие 31', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/#/v2/memory/memory-31\\?year=${currentYear}`));
+  await expect(page.getByRole('dialog', { name: 'Воспоминание', exact: true })).toContainText(
+    'Событие 31',
+  );
+  await page.reload();
+  await expect(page.getByRole('dialog', { name: 'Воспоминание', exact: true })).toContainText(
+    'Событие 31',
+  );
+});
+
 test('memory compatibility reads existing events while every write control is disabled', async ({
   page,
 }) => {

@@ -1,4 +1,4 @@
-import type { EntityId } from '../../domain';
+import type { DayDate, EntityId } from '../../domain';
 import type { MemoryEventSummary } from '../../domain/memory';
 import { DomainError } from '../../shared/errors/DomainError';
 import type { MemoryQuery, MemoryRepository } from '../ports/MemoryRepository';
@@ -60,5 +60,9 @@ export class MemoryQueries {
   }
   public async getYear(year: number): Promise<MemoryYearOverview> {
     return buildMemoryYearOverview(await this.repository.listYear(year), year);
+  }
+
+  public getOnThisDay(today: DayDate): Promise<readonly MemoryEventSummary[]> {
+    return this.repository.listOnThisDay(today);
   }
 }

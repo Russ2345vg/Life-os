@@ -36,6 +36,9 @@ describe('Planner scenarios presentation', () => {
     expect(html).toContain('Загружаем сценарии');
     expect(html).toContain('Обычный план дня');
     expect(html).toContain('Все задачи');
+    expect(html.indexOf('Обычный план дня')).toBeLessThan(
+      html.indexOf('class="planner-scenarios"'),
+    );
   });
   it('searches existing open tasks, prioritizes the selected date, and excludes existing links', () => {
     const actions = ['later', 'today', 'selected', 'done'].map((id) =>

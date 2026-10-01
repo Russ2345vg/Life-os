@@ -59,6 +59,63 @@ describe('SetLifeActionPlan caller status guard', () => {
   });
 });
 
+describe('SetLifeActionPlan.changeDate displayed-version guard', () => {
+  it('rejects a stale displayed version before changing or committing', async () => {
+    const action = createReadyLifeAction('stale-version', ORIGINAL_DATE);
+    const commits: unknown[] = [];
+    const command = new SetLifeActionPlan(
+      new SingleActionRepository(action),
+      {
+        commit: async (input) => {
+          commits.push(input);
+        },
+      },
+      new FakeClock(new Date('2026-09-25T12:00:00Z')),
+      new FakeIdGenerator('plan'),
+    );
+    const result = await command.changeDate({
+      lifeActionId: action.id,
+      plannedDate: NEXT_DATE,
+      expectedVersion: action.version - 1,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe('life_action.version_conflict');
+    expect(action.plannedDate?.toString()).toBe(ORIGINAL_DATE.toString());
+    expect(commits).toHaveLength(0);
+  });
+
+  it('allows the displayed version, then rejects another request with the old version', async () => {
+    const action = createReadyLifeAction('matching-version', ORIGINAL_DATE);
+    const displayedVersion = action.version;
+    const commits: unknown[] = [];
+    const command = new SetLifeActionPlan(
+      new SingleActionRepository(action),
+      {
+        commit: async (input) => {
+          commits.push(input);
+        },
+      },
+      new FakeClock(new Date('2026-09-25T12:00:00Z')),
+      new FakeIdGenerator('plan'),
+    );
+    const first = await command.changeDate({
+      lifeActionId: action.id,
+      plannedDate: NEXT_DATE,
+      expectedVersion: displayedVersion,
+    });
+    expect(first.ok).toBe(true);
+    expect(action.plannedDate?.toString()).toBe(NEXT_DATE.toString());
+    expect(commits).toHaveLength(1);
+    const repeated = await command.changeDate({
+      lifeActionId: action.id,
+      plannedDate: ORIGINAL_DATE,
+      expectedVersion: displayedVersion,
+    });
+    expect(repeated.ok).toBe(false);
+    expect(commits).toHaveLength(1);
+  });
+});
+
 class SingleActionRepository implements LifeActionRepository {
   public constructor(private readonly action: LifeAction) {}
 

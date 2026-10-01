@@ -18,7 +18,7 @@
 .planner-row-details label {
   display: grid;
   gap: var(--space-2);
-  font-size: 14px;
+  font-size: var(--planner-type-body);
   min-width: 0;
 }
 .planner-catalog-row {
@@ -63,7 +63,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-3);
-  font-size: 12px;
+  font-size: var(--planner-type-meta);
   color: var(--text-secondary);
 }
 .planner-measured-progress {
@@ -72,7 +72,7 @@
   flex-wrap: wrap;
   gap: var(--space-3);
   margin-top: var(--space-3);
-  font-size: 12px;
+  font-size: var(--planner-type-meta);
 }
 .planner-measured-progress progress {
   width: 160px;

@@ -192,6 +192,33 @@ describe('AccountSyncPage', () => {
     expect(offline).toContain('Конфликты: 2');
   });
 
+  it('explains what the ready-state counts and exchange time mean', () => {
+    const html = render({
+      ...localOverview(),
+      state: 'ready',
+      email: 'person@example.com',
+      connection: 'online',
+      pendingMutations: 2,
+      conflicts: 1,
+    });
+    expect(html).toContain('<h3>Состояние данных</h3>');
+    expect(html).toContain('<dt>Ожидают отправки</dt>');
+    expect(html).toContain('Количество изменений, а не задач');
+    expect(html).toContain('<dt>Сохранённые конфликтные версии</dt>');
+    expect(html).toContain('Последний успешный обмен в этом сеансе:');
+    expect(html).toContain('ещё не подтверждён');
+    expect(html).toContain('Сохранение на устройстве и обмен между устройствами — разные этапы.');
+    expect(html).toContain('Сохранение текущего текста проверяйте в его редакторе');
+    expect(html.match(/Синхронизировать сейчас/g)).toHaveLength(1);
+  });
+
+  it('uses a contextual back name while keeping the direct-entry fallback', () => {
+    expect(render(localOverview())).toContain('aria-label="К плану дня"');
+    expect(render(localOverview(), undefined, 'Вернуться в предыдущий раздел')).toContain(
+      'aria-label="Вернуться в предыдущий раздел"',
+    );
+  });
+
   it('explains local removal before sign-out and the safe retry when sign-out is pending', () => {
     const confirm = render(
       { ...localOverview(), state: 'ready', email: 'person@example.com' },
@@ -225,6 +252,7 @@ describe('AccountSyncPage', () => {
 function render(
   overview: AccountOverview,
   initialStep?: Parameters<typeof AccountSyncPageView>[0]['initialStep'],
+  backLabel?: string,
 ) {
   return renderToStaticMarkup(
     createElement(AccountSyncPageView, {
@@ -232,6 +260,7 @@ function render(
       overview,
       onOverview: vi.fn(),
       onBack: vi.fn(),
+      ...(backLabel ? { backLabel } : {}),
       ...(initialStep ? { initialStep } : {}),
     }),
   );

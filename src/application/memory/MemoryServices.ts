@@ -8,7 +8,7 @@ export interface MemoryServices {
     MemoryApplicationService,
     'enabled' | 'prepareCreate' | 'save' | 'remove' | 'restore'
   >;
-  readonly queries: Pick<MemoryQueries, 'get' | 'getSummary' | 'list' | 'getYear'>;
+  readonly queries: Pick<MemoryQueries, 'get' | 'getSummary' | 'list' | 'getYear' | 'getOnThisDay'>;
   readonly diaryImport: Pick<MemoryDiaryImport, 'prepare' | 'sourceStatus'>;
   readonly photoReader: MemoryPhotoReader;
 }

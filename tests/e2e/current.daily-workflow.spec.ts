@@ -165,7 +165,8 @@ test('Today opens the action body; completion stays completed until explicit reo
   await expect(row.locator('.planner-action-context')).toContainText('Направление Тело');
   await expect(page.getByRole('region', { name: 'Холодный душ', exact: true })).toHaveCount(0);
   await row.getByText('Подробности действия').click();
-  await expect(page).toHaveURL(/#\/v2\/actions\/daily-action-0$/);
+  await expect(page).toHaveURL(/#\/v2\/today\?action=daily-action-0$/);
+  await expect(page.getByRole('dialog', { name: 'Действие', exact: true })).toBeVisible();
   await page.goto('/#/v2/today');
   await page.getByRole('checkbox', { name: 'Выполнить: Прогулка', exact: true }).click();
   await page
@@ -310,7 +311,8 @@ test('Tomorrow moves an existing ready action, creates with an optional date and
     page.getByRole('button', { name: 'Подготовленное действие', exact: true }),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Подготовленное действие', exact: true }).click();
-  await expect(page).toHaveURL(/#\/v2\/actions\/daily-action-1$/);
+  await expect(page).toHaveURL(/#\/v2\/today\?day=tomorrow&action=daily-action-1$/);
+  await expect(page.getByRole('dialog', { name: 'Действие', exact: true })).toBeVisible();
   await expect(page.getByLabel('Плановая дата: Подготовленное действие')).toHaveValue(tomorrow);
   await page.goto('/#/v2/today?day=tomorrow');
   await page.getByLabel('Новое действие на завтра').fill('Быстрое действие завтра');

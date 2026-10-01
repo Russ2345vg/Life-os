@@ -1,0 +1,276 @@
+{
+  "evidence": [
+    {
+      "name": "01-today",
+      "route": "#/v2/today",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "scrollY": 0,
+      "focus": "\n    К содержимомуLifeOSПоиск и добавлениеCtrl KСегодняСферыНаправлени",
+      "feedback": []
+    },
+    {
+      "name": "01-today",
+      "route": "#/v2/today",
+      "width": 390,
+      "scrollWidth": 390,
+      "scrollY": 0,
+      "focus": "\n    К содержимомуLifeOSПоиск и добавлениеCtrl KСегодняСферыНаправлени",
+      "feedback": []
+    },
+    {
+      "name": "02-created",
+      "route": "#/v2/today",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "scrollY": 0,
+      "focus": "\n    К содержимомуLifeOSПоиск и добавлениеCtrl KСегодняСферыНаправлени",
+      "feedback": [
+        {
+          "text": "Действие добавлено на сегодня",
+          "role": "status",
+          "rect": {
+            "x": 599.0859375,
+            "y": 829.859375,
+            "width": 241.828125,
+            "height": 46.140625,
+            "top": 829.859375,
+            "right": 840.9140625,
+            "bottom": 876,
+            "left": 599.0859375
+          }
+        }
+      ]
+    },
+    {
+      "name": "02-created",
+      "route": "#/v2/today",
+      "width": 390,
+      "scrollWidth": 390,
+      "scrollY": 0,
+      "focus": "\n    К содержимомуLifeOSПоиск и добавлениеCtrl KСегодняСферыНаправлени",
+      "feedback": [
+        {
+          "text": "Действие добавлено на сегодня",
+          "role": "status",
+          "rect": {
+            "x": 74.0859375,
+            "y": 709.859375,
+            "width": 241.828125,
+            "height": 46.140625,
+            "top": 709.859375,
+            "right": 315.9140625,
+            "bottom": 756,
+            "left": 74.0859375
+          }
+        }
+      ]
+    },
+    {
+      "name": "03-completed-summary",
+      "route": "#/v2/today",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "scrollY": 0,
+      "focus": "",
+      "feedback": [
+        {
+          "text": "Действие выполнено",
+          "role": "status",
+          "rect": {
+            "x": 631.4921875,
+            "y": 829.859375,
+            "width": 177.015625,
+            "height": 46.140625,
+            "top": 829.859375,
+            "right": 808.5078125,
+            "bottom": 876,
+            "left": 631.4921875
+          }
+        }
+      ]
+    },
+    {
+      "name": "03-completed-summary",
+      "route": "#/v2/today",
+      "width": 390,
+      "scrollWidth": 390,
+      "scrollY": 0,
+      "focus": "",
+      "feedback": [
+        {
+          "text": "Действие выполнено",
+          "role": "status",
+          "rect": {
+            "x": 106.4921875,
+            "y": 709.859375,
+            "width": 177.015625,
+            "height": 46.140625,
+            "top": 709.859375,
+            "right": 283.5078125,
+            "bottom": 756,
+            "left": 106.4921875
+          }
+        }
+      ]
+    },
+    {
+      "name": "04-return-to-plan",
+      "route": "#/v2/today",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "scrollY": 0,
+      "focus": "\n    К содержимомуLifeOSПоиск и добавлениеCtrl KСегодняСферыНаправлени",
+      "feedback": []
+    },
+    {
+      "name": "04-return-to-plan",
+      "route": "#/v2/today",
+      "width": 390,
+      "scrollWidth": 390,
+      "scrollY": 0,
+      "focus": "\n    К содержимомуLifeOSПоиск и добавлениеCtrl KСегодняСферыНаправлени",
+      "feedback": []
+    },
+    {
+      "name": "05-more-menu",
+      "route": "#/v2/today",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "scrollY": 0,
+      "focus": "Ещё",
+      "feedback": []
+    },
+    {
+      "name": "05-more-menu",
+      "route": "#/v2/today",
+      "width": 390,
+      "scrollWidth": 390,
+      "scrollY": 0,
+      "focus": "Ещё",
+      "feedback": []
+    },
+    {
+      "name": "06-account",
+      "route": "#/v2/account",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "scrollY": 0,
+      "focus": "\n    К содержимомуLifeOSПоиск и добавлениеCtrl KСегодняСферыНаправлени",
+      "feedback": [
+        {
+          "text": "Аккаунт недоступенСинхронизация доступна только в приложении LifeOS.Ваши данные сохранены на этом устройстве.",
+          "role": "status",
+          "rect": {
+            "x": 276,
+            "y": 185.4375,
+            "width": 1120,
+            "height": 163.1875,
+            "top": 185.4375,
+            "right": 1396,
+            "bottom": 348.625,
+            "left": 276
+          }
+        }
+      ]
+    },
+    {
+      "name": "06-account",
+      "route": "#/v2/account",
+      "width": 390,
+      "scrollWidth": 390,
+      "scrollY": 0,
+      "focus": "\n    К содержимомуLifeOSПоиск и добавлениеCtrl KСегодняСферыНаправлени",
+      "feedback": [
+        {
+          "text": "Аккаунт недоступенСинхронизация доступна только в приложении LifeOS.Ваши данные сохранены на этом устройстве.",
+          "role": "status",
+          "rect": {
+            "x": 16,
+            "y": 317.9375,
+            "width": 358,
+            "height": 170.4375,
+            "top": 317.9375,
+            "right": 374,
+            "bottom": 488.375,
+            "left": 16
+          }
+        }
+      ]
+    },
+    {
+      "name": "07-sign-in-required-fixture",
+      "route": "",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "scrollY": 0,
+      "focus": "",
+      "feedback": []
+    },
+    {
+      "name": "07-sign-in-required-fixture",
+      "route": "",
+      "width": 390,
+      "scrollWidth": 390,
+      "scrollY": 0,
+      "focus": "",
+      "feedback": []
+    },
+    {
+      "name": "08-diary-saved",
+      "route": "#/v2/diary?period=day&date=2026-10-01",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "scrollY": 0,
+      "focus": "Подготовил разговор и записал следующий шаг.",
+      "feedback": [
+        {
+          "text": "Все изменения сохранены",
+          "role": "status",
+          "rect": {
+            "x": 275.1875,
+            "y": 1150.078125,
+            "width": 181.640625,
+            "height": 23.25,
+            "top": 1150.078125,
+            "right": 456.828125,
+            "bottom": 1173.328125,
+            "left": 275.1875
+          }
+        }
+      ]
+    },
+    {
+      "name": "08-diary-saved",
+      "route": "#/v2/diary?period=day&date=2026-10-01",
+      "width": 390,
+      "scrollWidth": 390,
+      "scrollY": 594,
+      "focus": "Подготовил разговор и записал следующий шаг.",
+      "feedback": [
+        {
+          "text": "Все изменения сохранены",
+          "role": "status",
+          "rect": {
+            "x": 29,
+            "y": 703.5,
+            "width": 170.25,
+            "height": 46.5,
+            "top": 703.5,
+            "right": 199.25,
+            "bottom": 750,
+            "left": 29
+          }
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "diaryReload": "Text preserved at both viewports",
+  "desktopAccountLinkBeforeScroll": {
+    "x": 25,
+    "y": 961.796875,
+    "width": 181,
+    "height": 70.5
+  }
+}

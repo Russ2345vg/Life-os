@@ -125,6 +125,7 @@ export function PlannerScenariosPanel({
   };
   return (
     <>
+      {!selected && children}
       <section className="planner-scenarios" aria-label="Сценарии задач" aria-busy={pending}>
         <div className="planner-scenarios-heading">
           <div>
@@ -359,7 +360,6 @@ export function PlannerScenariosPanel({
           </>
         )}
       </section>
-      {!selected && children}
     </>
   );
 }

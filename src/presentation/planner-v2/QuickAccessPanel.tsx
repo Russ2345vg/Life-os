@@ -33,10 +33,14 @@ export function QuickAccessPanel({
   services,
   today,
   onNavigate,
+  onOpenAction,
+  returnFocusId,
 }: {
   readonly services: PlannerServices;
   readonly today: string;
-  readonly onNavigate: (route: PlannerRoute) => void;
+  readonly onNavigate: (route: PlannerRoute) => Promise<boolean> | void;
+  readonly onOpenAction?: (id: string) => Promise<boolean>;
+  readonly returnFocusId?: string | null;
 }) {
   const quick = useQuickAccess();
   const open = quick?.open ?? false;
@@ -76,6 +80,13 @@ export function QuickAccessPanel({
   useEffect(() => {
     if (open) (mode === 'search' ? searchInput : createInput).current?.focus();
   }, [open, mode]);
+  useEffect(() => {
+    if (!open || !returnFocusId || mode !== 'search') return;
+    const result = [...document.querySelectorAll<HTMLButtonElement>('.planner-quick-result')].find(
+      (button) => button.dataset.recordId === returnFocusId,
+    );
+    result?.focus({ preventScroll: true });
+  }, [open, mode, records, returnFocusId]);
   const load = useCallback(async () => {
     if (!open || !isOpen.current || !mounted.current) return;
     const request = ++sequence.current;
@@ -111,8 +122,9 @@ export function QuickAccessPanel({
     setDateId(null);
     quick?.close();
   };
-  const navigate = (record: QuickAccessRecord, discard = false) => {
-    const guard = quick?.inspect();
+  const navigate = async (record: QuickAccessRecord, discard = false) => {
+    const actionHandoff = record.kind === 'action' && onOpenAction;
+    const guard = quick?.inspect(actionHandoff ? 'quick-access' : undefined);
     if (saving.current || guard?.busy) {
       setError('Дождитесь завершения сохранения.');
       return;
@@ -121,13 +133,17 @@ export function QuickAccessPanel({
       setPending(record);
       return;
     }
+    const accepted = actionHandoff
+      ? await onOpenAction(record.id)
+      : (await onNavigate({ view: record.kind, id: record.id })) !== false;
+    if (!accepted) return;
     if (discard) {
       setTitle('');
       setDateChoice('');
     }
     close();
-    onNavigate({ view: record.kind, id: record.id });
-    requestAnimationFrame(() => document.getElementById('planner-main-content')?.focus());
+    if (!actionHandoff)
+      requestAnimationFrame(() => document.getElementById('planner-main-content')?.focus());
   };
   const run = async (work: () => Promise<void>) => {
     if (saving.current) return;
@@ -254,6 +270,7 @@ export function QuickAccessPanel({
                     <div className="planner-quick-row">
                       <button
                         ref={index === 0 ? firstResult : undefined}
+                        data-record-id={record.id}
                         className="planner-quick-result"
                         type="button"
                         disabled={busy}

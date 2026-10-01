@@ -197,15 +197,18 @@ describe('Planner Today', () => {
     expect(html).toContain('Подготовка ко сну');
     expect(html).toContain('Прогресс дня');
     expect(html).toContain('planner-today-sidebar');
-    // Keyboard and screen-reader order follows the visible planning workflow.
+    // Keyboard and screen-reader order follows the plan-first visual workflow.
     expect(html.indexOf('aria-label="План на день"')).toBeLessThan(
-      html.indexOf('id="planner-month-direction"'),
-    );
-    expect(html.indexOf('id="planner-month-direction"')).toBeLessThan(
       html.indexOf('aria-label="Новое действие на сегодня"'),
     );
     expect(html.indexOf('aria-label="Новое действие на сегодня"')).toBeLessThan(
       html.indexOf('На сегодня пока ничего не запланировано.'),
+    );
+    expect(html.indexOf('На сегодня пока ничего не запланировано.')).toBeLessThan(
+      html.indexOf('id="planner-month-direction"'),
+    );
+    expect(html.indexOf('planner-today-sidebar')).toBeLessThan(
+      html.indexOf('id="planner-month-direction"'),
     );
   });
 

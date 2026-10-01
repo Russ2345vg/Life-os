@@ -7,14 +7,14 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: end;
-  gap: var(--space-5);
+  gap: var(--space-6);
   margin-bottom: var(--space-6);
 }
 
 .planner-v2 .planner-diary-header h1 {
   margin: 0;
-  font-size: clamp(32px, 4vw, 48px);
-  line-height: 1.1;
+  font-size: var(--planner-type-title);
+  line-height: 1.2;
   letter-spacing: -0.04em;
 }
 
@@ -42,7 +42,7 @@
 .planner-v2 .planner-diary-entry {
   display: grid;
   grid-template-columns: minmax(0, 0.88fr) minmax(0, 1.12fr);
-  gap: var(--space-5);
+  gap: var(--space-6);
 }
 
 .planner-v2 .planner-diary-card {
@@ -50,7 +50,7 @@
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-large);
   background: var(--surface-1);
-  box-shadow: var(--shadow-soft);
+  box-shadow: none;
 }
 
 .planner-v2 .planner-diary-period-layout {
@@ -58,7 +58,7 @@
   grid-template-areas: 'reflection context';
   grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
   align-items: start;
-  gap: var(--space-5);
+  gap: var(--space-6);
 }
 
 .planner-v2 .planner-diary-period-layout > .planner-diary-summary,
@@ -71,7 +71,7 @@
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-large);
   background: var(--surface-1);
-  box-shadow: var(--shadow-soft);
+  box-shadow: none;
 }
 
 .planner-v2 .planner-diary-summary h2,
@@ -80,7 +80,7 @@
 }
 
 .planner-v2 .planner-diary-coverage {
-  margin: var(--space-3) 0 var(--space-5);
+  margin: var(--space-3) 0 var(--space-6);
   color: var(--text-secondary);
 }
 
@@ -118,8 +118,8 @@
 .planner-v2 .planner-diary-facts {
   display: grid;
   gap: var(--space-2);
-  margin-top: var(--space-5);
-  padding-top: var(--space-5);
+  margin-top: var(--space-6);
+  padding-top: var(--space-6);
   border-top: 1px solid var(--border-soft);
 }
 
@@ -134,7 +134,7 @@
 .planner-v2 .planner-diary-reflection {
   grid-area: reflection;
   display: grid;
-  gap: var(--space-5);
+  gap: var(--space-6);
 }
 
 .planner-v2 .planner-diary-month-context {
@@ -143,7 +143,7 @@
 }
 
 .planner-v2 .planner-diary-month-context .planner-diary-card {
-  padding: var(--space-5);
+  padding: var(--space-6);
 }
 
 .planner-v2 .planner-diary-weeks ul {
@@ -180,13 +180,13 @@
 }
 
 .planner-v2 .planner-diary-card h2 {
-  margin: 0 0 var(--space-5);
-  font-size: 20px;
+  margin: 0 0 var(--space-6);
+  font-size: var(--planner-type-section);
 }
 
 .planner-v2 .planner-diary-ratings {
   display: grid;
-  gap: var(--space-5);
+  gap: var(--space-6);
 }
 
 .planner-v2 .planner-diary-rating {
@@ -241,7 +241,7 @@
 
 .planner-v2 .planner-diary-questions {
   display: grid;
-  gap: var(--space-5);
+  gap: var(--space-6);
 }
 
 .planner-v2 .planner-diary-question {
@@ -257,6 +257,8 @@
 .planner-v2 .planner-diary-question textarea {
   width: 100%;
   resize: vertical;
+  font-size: var(--planner-type-reading);
+  line-height: 1.65;
 }
 
 .planner-v2 .planner-diary-actions {

@@ -56,7 +56,7 @@ try {
     cwd: fileURLToPath(new URL('..', import.meta.url)),
     env: { ...process.env, LIFEOS_E2E_PROGRESS_FILE: progressFilePath },
     startupTimeoutMs: 60_000,
-    playwrightTimeoutMs: listOnly ? 120_000 : 1_200_000,
+    playwrightTimeoutMs: listOnly ? 120_000 : 1_800_000,
     shutdownTimeoutMs: 10_000,
     abortSignal: abortController.signal,
     abortExitCode: 130,

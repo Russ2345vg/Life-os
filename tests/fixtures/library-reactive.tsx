@@ -1,11 +1,14 @@
-import { StrictMode, useEffect, useState } from 'react';
+import { StrictMode, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createLifeOsApplication } from '../../src/app/composition/createLifeOsApplication';
 import type { LifeOsApplication } from '../../src/app/composition/LifeOsApplication';
 import { DayDate, EntityId, LifeActionTitle } from '../../src/domain';
 import { LifeOsIndexedDb } from '../../src/infrastructure/persistence/indexed-db/LifeOsIndexedDb';
 import { PlannerLibraryWorkspace } from '../../src/presentation/planner-v2/PlannerLibraryWorkspace';
+import { createCompletionLibraryTask } from '../../src/presentation/planner-v2/plannerCompletionRefresh';
 import { PlanningProvider } from '../../src/presentation/planner-v2/PlanningContext';
+import { usePlannerActionCompletion } from '../../src/presentation/planner-v2/usePlannerActionCompletion';
+import { usePlannerLibraryReadModel } from '../../src/presentation/planner-v2/usePlannerLibraryReadModel';
 import type { PlannerRoute } from '../../src/presentation/planner-v2/PlannerNavigation';
 import { VoiceInputProvider } from '../../src/app/providers/VoiceInputProvider';
 import '../../src/presentation/styles/global.css';
@@ -197,25 +200,54 @@ function Fixture({ app }: { readonly app: LifeOsApplication }) {
         <main className={`planner-content${'section' in route ? ' planner-content--views' : ''}`}>
           {mounted && (
             <PlanningProvider services={app.planning} today={today}>
-              <PlannerLibraryWorkspace
-                services={app}
-                route={route}
-                today={today}
-                onNavigate={setRoute}
-                onChangeDate={async (id, date) => {
-                  const result = await app.setLifeActionPlan.changeDate({
-                    lifeActionId: EntityId.create(id),
-                    plannedDate: date ? DayDate.create(date) : null,
-                  });
-                  if (!result.ok) throw result.error;
-                  return result.value.action;
-                }}
-              />
+              <LibrarySession app={app} route={route} today={today} onNavigate={setRoute} />
             </PlanningProvider>
           )}
         </main>
       </div>
     </>
+  );
+}
+
+function LibrarySession({
+  app,
+  route,
+  today,
+  onNavigate,
+}: {
+  readonly app: LifeOsApplication;
+  readonly route: PlannerRoute;
+  readonly today: string;
+  readonly onNavigate: (route: PlannerRoute) => void;
+}) {
+  const reads = usePlannerLibraryReadModel(app.libraryReads, today, {
+    scope: today,
+    enabled: true,
+  });
+  const completionTasks = useMemo(() => [createCompletionLibraryTask(reads.model)], [reads.model]);
+  const completion = usePlannerActionCompletion(
+    app.completeLifeAction,
+    today,
+    completionTasks,
+    () => undefined,
+  );
+  return (
+    <PlannerLibraryWorkspace
+      services={app}
+      route={route}
+      today={today}
+      onNavigate={onNavigate}
+      reads={reads}
+      completion={completion}
+      onChangeDate={async (id, date) => {
+        const result = await app.setLifeActionPlan.changeDate({
+          lifeActionId: EntityId.create(id),
+          plannedDate: date ? DayDate.create(date) : null,
+        });
+        if (!result.ok) throw result.error;
+        return result.value.action;
+      }}
+    />
   );
 }
 

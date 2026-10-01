@@ -7,7 +7,7 @@ import {
   type LifeActionStatus,
 } from '../../domain';
 import { DomainError } from '../../shared/errors/DomainError';
-import { success, type Result } from '../../shared/result/Result';
+import { failure, success, type Result } from '../../shared/result/Result';
 import type { Clock } from '../ports/Clock';
 import type { IdGenerator } from '../ports/IdGenerator';
 import type { JournalUnitOfWork } from '../ports/JournalUnitOfWork';
@@ -50,7 +50,9 @@ export class SetLifeActionPlan {
   }
 
   public async changeDate(
-    input: Pick<SetLifeActionPlanInput, 'lifeActionId' | 'plannedDate'>,
+    input: Pick<SetLifeActionPlanInput, 'lifeActionId' | 'plannedDate'> & {
+      readonly expectedVersion?: number;
+    },
   ): Promise<
     Result<
       { readonly action: LifeAction; readonly receipt: LifeActionDateUndoReceipt | null },
@@ -59,6 +61,13 @@ export class SetLifeActionPlan {
   > {
     const action = await this.repository.findById(input.lifeActionId);
     if (action === null) return lifeActionNotFound();
+    if (input.expectedVersion !== undefined && action.version !== input.expectedVersion)
+      return failure(
+        new DomainError(
+          'life_action.version_conflict',
+          'Действие изменилось. Обновите список и выберите шаг снова.',
+        ),
+      );
     const previous = {
       lifeActionId: action.id,
       previousDate: action.plannedDate,

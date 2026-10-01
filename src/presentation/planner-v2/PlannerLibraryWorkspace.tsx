@@ -14,9 +14,11 @@ import { buildWeeklyGoalReview } from '../../application/queries/GetWeeklyGoalRe
 import { PlannerFocus } from './PlannerFocus';
 import { PlannerActionList } from './PlannerActionList';
 import { activeFocusIds } from './plannerCatalogModel';
-import { completePlannerAction, planPlannerAction } from './plannerTodayCommands';
+import { planPlannerAction } from './plannerTodayCommands';
+import { createPlannerActionOperations } from './plannerActionOperations';
 import type { PlannerRoute } from './PlannerNavigation';
-import { usePlannerLibraryReadModel } from './usePlannerLibraryReadModel';
+import type { usePlannerActionCompletion } from './usePlannerActionCompletion';
+import type { usePlannerLibraryReadModel } from './usePlannerLibraryReadModel';
 import './planner-library.css';
 import './planner-views.css';
 import { buildPlannerViews } from './plannerViewsModel';
@@ -38,7 +40,9 @@ export function PlannerLibraryWorkspace({
   route,
   today,
   onNavigate,
-  onActionCompleted,
+  reads,
+  completion,
+  onOpenAction,
   onChangeDate,
   workTime,
 }: {
@@ -46,27 +50,26 @@ export function PlannerLibraryWorkspace({
   readonly route: PlannerRoute;
   readonly today: string;
   readonly onNavigate: (route: PlannerRoute) => void;
-  readonly onActionCompleted?: (action: LifeAction) => void;
+  readonly reads: ReturnType<typeof usePlannerLibraryReadModel>;
+  readonly completion: ReturnType<typeof usePlannerActionCompletion>;
+  readonly onOpenAction?: (id: string) => Promise<boolean> | void;
   readonly onChangeDate: (id: string, date: string) => Promise<LifeAction>;
   readonly workTime?: PlannerWorkTimeController;
 }) {
   const planningContext = usePlanning();
-  const {
-    snapshot,
-    refresh: refreshReads,
-    whenSettled,
-  } = usePlannerLibraryReadModel(services.libraryReads, today);
+  const { snapshot, refresh: refreshReads, whenSettled } = reads;
   const data = snapshot.data;
   const timeCapacity = data?.timeCapacity ?? [];
   const [commandError, setError] = useState<string | null>(null);
-  const error = commandError ?? snapshot.error?.message ?? null;
   const [notice, setNotice] = useState<string | null>(null);
   useEffect(() => {
     if (!notice) return;
     const timeout = window.setTimeout(() => setNotice(null), 3500);
     return () => window.clearTimeout(timeout);
   }, [notice]);
-  const [busy, setBusy] = useState(false);
+  const [commandBusy, setBusy] = useState(false);
+  const busy = commandBusy || completion.busy;
+  const error = completion.error ?? commandError ?? snapshot.error?.message ?? null;
   const [creatingStepFor, setCreatingStepFor] = useState<string | null>(null);
   useQuickAccessGuard(() => ({ dirty: false, busy }));
   const working = useRef(false);
@@ -100,7 +103,8 @@ export function PlannerLibraryWorkspace({
     };
   }, [route.view, refresh]);
   const run = async (work: () => Promise<unknown>, message: string | null) => {
-    if (working.current) return;
+    if (working.current || completion.busy) return;
+    completion.dismiss();
     working.current = true;
     setBusy(true);
     setError(null);
@@ -139,11 +143,16 @@ export function PlannerLibraryWorkspace({
       if (!result.ok) throw result.error;
     }, 'Время действия сохранено');
   };
-  const complete = (id: string) =>
-    perform(async () => {
-      const action = await completePlannerAction(services.completeLifeAction, id);
-      onActionCompleted?.(action);
-    }, 'Действие выполнено');
+  const complete = (id: string) => {
+    if (working.current) return;
+    const action = data?.actions.find((candidate) => candidate.id.toString() === id);
+    if (!action) {
+      report(new Error('Действие изменилось. Обновите список перед выполнением.'));
+      return;
+    }
+    setError(null);
+    void completion.complete({ actionId: id, completionKey: action.completionKey });
+  };
   const menuForGoal = (goal: Goal): EntityMenuAction[] => [
     {
       label: 'Редактировать',
@@ -265,26 +274,19 @@ export function PlannerLibraryWorkspace({
       ? planPlannerAction(services.setLifeActionPlan, id, date, undefined, ['completed'])
       : onChangeDate(id, date);
   const operations: PlannerViewOperations = {
-    busy,
-    onComplete: complete,
-    onPlan: async (id, date, main) => {
-      await run(
-        () =>
-          main === undefined
-            ? changeLibraryDate(id, date)
-            : planPlannerAction(services.setLifeActionPlan, id, date, main),
-        main === undefined ? null : 'Следующее действие выбрано',
-      );
-    },
-    onLink: async (id, goalId) => {
-      await run(async () => {
-        const result = await services.setLifeActionGoal.execute({
-          lifeActionId: EntityId.create(id),
-          goalId: goalId ? EntityId.create(goalId) : null,
-        });
-        if (!result.ok) throw result.error;
-      }, 'Связь с целью сохранена');
-    },
+    // The factory only captures these event handlers; it never invokes them during render.
+    // eslint-disable-next-line react-hooks/refs
+    ...createPlannerActionOperations({
+      services,
+      actions: () => data?.actions ?? [],
+      busy,
+      run,
+      changeDate: onChangeDate,
+      complete: completion.complete,
+      menuForAction,
+      onOpenAction: (id) =>
+        onOpenAction ? void onOpenAction(id) : onNavigate({ view: 'action', id }),
+    }),
     onGoalStatus: async (goal, status) => {
       await run(
         () => changePlannerGoalStatus(services.updateGoal, goal, status, services.archiveGoal),
@@ -305,41 +307,6 @@ export function PlannerLibraryWorkspace({
         });
         if (!result.ok) throw result.error;
       }, 'Следующее действие цели выбрано');
-    },
-    menuForAction,
-    onReopen: services.planning
-      ? async (id) => {
-          await run(() => services.planning!.progress.reopen(id), 'Действие возвращено в работу');
-        }
-      : undefined,
-    onEdit: async (action, title, description, need) => {
-      await run(async () => {
-        const result =
-          action.status === 'draft'
-            ? await services.editPlannerActionDraft.execute({
-                lifeActionId: action.id,
-                title,
-                description,
-                ...(need === undefined ? {} : { need }),
-              })
-            : await services.updateLifeActionDetails.execute({
-                lifeActionId: action.id,
-                title,
-                description,
-                ...(need === undefined ? {} : { need }),
-                expectedResult: action.expectedResult?.toString() ?? '',
-              });
-        if (!result.ok) throw result.error;
-      }, 'Действие изменено');
-    },
-    onUnlink: async (id) => {
-      await run(async () => {
-        const result = await services.setLifeActionParent.execute({
-          lifeActionId: EntityId.create(id),
-          parentActionId: null,
-        });
-        if (!result.ok) throw result.error;
-      }, 'Поддействие отделено');
     },
   };
   return (
@@ -381,7 +348,18 @@ export function PlannerLibraryWorkspace({
       {error && (
         <div className="planner-error" role="alert">
           <p>{error}</p>
-          <button type="button" onClick={refresh}>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              if (completion.snapshot.phase === 'saved' && completion.snapshot.refresh === 'failed')
+                void completion.retry();
+              else {
+                completion.dismiss();
+                refresh();
+              }
+            }}
+          >
             Повторить загрузку
           </button>
         </div>
@@ -556,6 +534,9 @@ export function PlannerLibraryWorkspace({
           today={today}
           busy={busy}
           selectedId={route.view === 'action' ? route.id : null}
+          onOpenAction={(id) =>
+            onOpenAction ? void onOpenAction(id) : onNavigate({ view: 'action', id })
+          }
           onNew={() => onNavigate({ view: 'new-action', goalId: null, title: null })}
           viewSwitcher={
             route.view === 'actions' ? (
@@ -612,7 +593,9 @@ export function PlannerLibraryWorkspace({
                 busy={busy}
                 onWeek={(week) => onNavigate({ view: 'review', week })}
                 onOpenGoal={(id) => onNavigate({ view: 'goal', id })}
-                onOpenAction={(id) => onNavigate({ view: 'action', id })}
+                onOpenAction={(id) =>
+                  onOpenAction ? void onOpenAction(id) : onNavigate({ view: 'action', id })
+                }
                 onSelectStep={operations.onGoalNextAction}
                 onCreateStep={setCreatingStepFor}
                 onPlan={async (id, date) => {

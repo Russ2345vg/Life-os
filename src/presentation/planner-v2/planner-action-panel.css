@@ -1,0 +1,86 @@
+.planner-v2 .planner-action-panel {
+  min-width: 0;
+}
+
+.planner-v2 .planner-action-panel__heading {
+  margin-bottom: var(--space-6);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.planner-v2 .planner-action-panel__heading h2 {
+  margin: 0;
+  font-size: var(--planner-type-detail-title);
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -0.035em;
+  overflow-wrap: anywhere;
+}
+
+.planner-v2 .planner-action-panel__heading .planner-eyebrow {
+  color: var(--planner-accent);
+}
+
+.planner-v2 .planner-action-panel .planner-action-detail-page--panel {
+  max-width: none;
+  min-width: 0;
+  padding: 0;
+}
+
+.planner-v2 .planner-action-panel .planner-action-detail-page--panel > * {
+  max-width: 100%;
+}
+
+.planner-v2 .planner-action-edit--compact .planner-disclosure-card__body form {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.planner-v2 .planner-action-edit--compact .planner-disclosure-card__body form > button {
+  grid-column: 2;
+  min-height: 44px;
+}
+
+.planner-v2 .planner-action-edit__more {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--border-soft);
+  padding-top: 10px;
+}
+
+.planner-v2 .planner-action-edit__more > summary {
+  cursor: pointer;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+
+.planner-v2 .planner-action-edit__more > label {
+  display: block;
+  margin-top: 12px;
+}
+
+@media (max-width: 640px) {
+  .planner-v2 .planner-action-edit--compact .planner-disclosure-card__body form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .planner-v2 .planner-action-edit--compact .planner-disclosure-card__body form > button {
+    grid-column: 1;
+  }
+}
+
+.planner-v2 .planner-action-panel__confirm {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  padding: var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-large);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-deep);
+}
+
+.planner-v2 .planner-action-panel__confirm .planner-inline-actions {
+  flex-wrap: wrap;
+}

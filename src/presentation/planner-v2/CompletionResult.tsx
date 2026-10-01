@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react';
-import { useQuickAccessGuard } from './QuickAccessContext';
+import { useQuickAccess, useQuickAccessGuard } from './QuickAccessContext';
 import type { LifeAction } from '../../domain';
 import { usePlanning } from './PlanningContext';
 import { VoiceField } from '../voice-input/VoiceField';
 import { VoiceTextArea } from '../voice-input/VoiceTextArea';
 import { PlannerSheet } from './PlannerSheet';
+import { PlannerUnsavedChangesConfirmation } from './PlannerUnsavedChangesConfirmation';
 
 export interface CompletionSummaryTarget {
   readonly actionId: string;
@@ -30,14 +31,35 @@ export function completionSummaryTarget(action: LifeAction): CompletionSummaryTa
 export function CompletionResultPrompt({
   target,
   onClose,
+  guardScope = 'completion-summary',
 }: {
   readonly target: CompletionSummaryTarget;
   readonly onClose: () => void;
+  readonly guardScope?: string;
 }) {
   const context = usePlanning();
+  const quick = useQuickAccess();
+  const [confirm, setConfirm] = useState(false);
+  const [busyMessage, setBusyMessage] = useState(false);
   if (!context) return null;
+  const requestClose = () => {
+    if (confirm) {
+      setConfirm(false);
+      return;
+    }
+    const state = quick?.inspect(guardScope);
+    if (state?.busy) {
+      setBusyMessage(true);
+      return;
+    }
+    if (state?.dirty) {
+      setConfirm(true);
+      return;
+    }
+    onClose();
+  };
   return (
-    <PlannerSheet title="Итог задачи" onClose={onClose}>
+    <PlannerSheet title="Итог задачи" onClose={requestClose}>
       <ResultForm
         target={target}
         prompt
@@ -48,6 +70,13 @@ export function CompletionResultPrompt({
           onClose();
         }}
       />
+      {busyMessage && <p role="status">Дождитесь завершения сохранения.</p>}
+      {confirm && (
+        <PlannerUnsavedChangesConfirmation
+          onContinue={() => setConfirm(false)}
+          onDiscard={onClose}
+        />
+      )}
     </PlannerSheet>
   );
 }

@@ -1,0 +1,38 @@
+[
+  {
+    "width": 1440,
+    "tag": "BUTTON",
+    "label": "Начать голосовой ввод",
+    "insideDialog": true
+  },
+  {
+    "width": 1440,
+    "tag": "BUTTON",
+    "label": "Пропустить",
+    "insideDialog": true
+  },
+  {
+    "width": 1440,
+    "tag": "BODY",
+    "label": "\n    К содержимомуLifeOSПоиск и добавлениеCtrl KСегодняСферыНаправленияЦелиДействияВходящиеДневникПа",
+    "insideDialog": false
+  },
+  {
+    "width": 390,
+    "tag": "BUTTON",
+    "label": "Начать голосовой ввод",
+    "insideDialog": true
+  },
+  {
+    "width": 390,
+    "tag": "BUTTON",
+    "label": "Пропустить",
+    "insideDialog": true
+  },
+  {
+    "width": 390,
+    "tag": "BODY",
+    "label": "\n    К содержимомуLifeOSПоиск и добавлениеCtrl KСегодняСферыНаправленияЦелиДействияВходящиеДневникПа",
+    "insideDialog": false
+  }
+]

@@ -134,17 +134,68 @@ export class IndexedDbMemoryRepository implements MemoryRepository {
     return this.scan(year, (event) => event.deletedAt === null);
   }
 
+  public async listOnThisDay(today: DayDate): Promise<readonly MemoryEventSummary[]> {
+    const date = today.toString();
+    const year = Number(date.slice(0, 4));
+    if (year <= 1) return [];
+    const previousYearEnd = `${String(year - 1).padStart(4, '0')}-12-31`;
+    const db = await this.database.open();
+    const transaction = db.transaction(LIFE_OS_STORE.memoryEvents);
+    const completion = done(transaction);
+    void completion.catch(() => undefined);
+    const store = transaction.objectStore(LIFE_OS_STORE.memoryEvents);
+    const range = IDBKeyRange.upperBound([previousYearEnd, '\uffff', '\uffff']);
+    const items = await new Promise<MemoryEventSummary[]>((resolve, reject) => {
+      const values: MemoryEventSummary[] = [];
+      const cursor = store.index('byOccurrence').openKeyCursor(range, 'prev');
+      cursor.onerror = () => reject(cursor.error);
+      cursor.onsuccess = () => {
+        const current = cursor.result;
+        if (current === null) {
+          resolve(values);
+          return;
+        }
+        const key = current.key;
+        if (
+          !Array.isArray(key) ||
+          typeof key[0] !== 'string' ||
+          key[0].slice(4) !== date.slice(4)
+        ) {
+          current.continue();
+          return;
+        }
+        const record = store.get(current.primaryKey);
+        record.onerror = () => reject(record.error);
+        record.onsuccess = () => {
+          try {
+            const raw = record.result as MemoryEventRecord | undefined;
+            if (raw !== undefined) {
+              const event = MemoryEventRecordMapper.fromRecord(raw);
+              if (
+                event.deletedAt === null &&
+                event.occurredOn.toString().slice(4) === date.slice(4)
+              )
+                values.push(
+                  summarizeMemoryEvent(event, event.photo !== null || raw.syncAttachment != null),
+                );
+            }
+            current.continue();
+          } catch (error: unknown) {
+            reject(error);
+          }
+        };
+      };
+    });
+    await completion;
+    return items;
+  }
+
   private async scan(
     year: number,
     matches: (event: MemoryEventSummary) => boolean,
     limit = Number.POSITIVE_INFINITY,
     after?: MemoryCursor,
   ): Promise<MemoryEventSummary[]> {
-    const db = await this.database.open();
-    const transaction = db.transaction(LIFE_OS_STORE.memoryEvents);
-    const completion = done(transaction);
-    void completion.catch(() => undefined);
-    const index = transaction.objectStore(LIFE_OS_STORE.memoryEvents).index('byOccurrence');
     const start = `${String(year).padStart(4, '0')}-01-01`;
     const end = `${String(year).padStart(4, '0')}-12-31`;
     const range = after
@@ -155,6 +206,19 @@ export class IndexedDbMemoryRepository implements MemoryRepository {
           true,
         )
       : IDBKeyRange.bound([start, '', ''], [end, '\uffff', '\uffff']);
+    return this.collect(range, matches, limit);
+  }
+
+  private async collect(
+    range: IDBKeyRange,
+    matches: (event: MemoryEventSummary) => boolean,
+    limit = Number.POSITIVE_INFINITY,
+  ): Promise<MemoryEventSummary[]> {
+    const db = await this.database.open();
+    const transaction = db.transaction(LIFE_OS_STORE.memoryEvents);
+    const completion = done(transaction);
+    void completion.catch(() => undefined);
+    const index = transaction.objectStore(LIFE_OS_STORE.memoryEvents).index('byOccurrence');
     const items = await new Promise<MemoryEventSummary[]>((resolve, reject) => {
       const values: MemoryEventSummary[] = [];
       const cursor = index.openCursor(range, 'prev');

@@ -81,6 +81,7 @@ test('completed standalone actions disappear immediately and remain available in
   page.on('pageerror', (error) => errors.push(error.message));
   await seed(page);
   await page.goto('/#/v2/actions');
+  await expect(page.getByRole('heading', { name: 'Действия', exact: true })).toBeVisible();
   const toggle = page.getByRole('button', { name: /^Фильтры(?: · \d+)?$/ });
   await toggle.click();
   const panel = page.getByRole('region', { name: 'Фильтры действий', exact: true });

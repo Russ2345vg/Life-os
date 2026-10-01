@@ -11,8 +11,8 @@
 }
 .planner-v2 .memory-header h1 {
   margin: 0;
-  font-size: clamp(32px, 4vw, 48px);
-  line-height: 1.1;
+  font-size: var(--planner-type-title);
+  line-height: 1.2;
   letter-spacing: -0.04em;
 }
 .planner-v2 .memory-header-actions {
@@ -20,6 +20,51 @@
   align-items: center;
   gap: var(--space-3);
   flex-shrink: 0;
+}
+.planner-v2 .memory-on-this-day {
+  margin-bottom: var(--space-8);
+  padding: var(--space-6);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-large);
+  background: var(--surface-1);
+}
+.planner-v2 .memory-on-this-day-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.planner-v2 .memory-on-this-day-head h2 {
+  margin: 0;
+  font-size: var(--planner-type-section);
+}
+.planner-v2 .memory-on-this-day-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+.planner-v2 .memory-on-this-day-grid .memory-photo {
+  height: 140px;
+}
+.planner-v2 .memory-on-this-day-grid .memory-card-content {
+  padding: var(--space-4);
+}
+.planner-v2 .memory-on-this-day-grid h3 {
+  margin: var(--space-3) 0 0;
+  font-size: var(--planner-type-reading);
+  overflow-wrap: anywhere;
+}
+.planner-v2 .memory-on-this-day-grid h3 button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-primary);
+  text-align: left;
+  font: inherit;
+}
+.planner-v2 .memory-on-this-day-more {
+  margin-top: var(--space-4);
 }
 .planner-v2 .memory-year-control input {
   width: 100px;
@@ -76,7 +121,7 @@
   margin: 0 0 var(--space-4);
 }
 .planner-v2 .memory-month h2 {
-  font-size: 20px;
+  font-size: var(--planner-type-section);
   margin: 0;
   text-transform: capitalize;
 }
@@ -122,7 +167,7 @@
   padding: 0;
   text-align: left;
   color: var(--text-primary);
-  font-size: 20px;
+  font-size: var(--planner-type-section);
   font-weight: 650;
   overflow-wrap: anywhere;
   min-width: 0;
@@ -140,6 +185,7 @@
 }
 .planner-v2 .memory-excerpt {
   color: var(--text-secondary);
+  font-size: var(--planner-type-reading);
   line-height: 1.65;
   margin: var(--space-3) 0 var(--space-4);
   display: -webkit-box;
@@ -326,6 +372,7 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   line-height: 1.7;
+  font-size: var(--planner-type-reading);
   color: var(--text-secondary);
 }
 .planner-v2 .memory-source {
@@ -342,12 +389,22 @@
   color: var(--text-secondary);
 }
 @media (max-width: 760px) {
+  .planner-v2 .memory-on-this-day {
+    padding: var(--space-4);
+    margin-bottom: var(--space-6);
+  }
+  .planner-v2 .memory-on-this-day-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .planner-v2 .memory-on-this-day-head {
+    align-items: start;
+  }
   .planner-v2 .memory-header {
     display: block;
     margin-bottom: var(--space-6);
   }
   .planner-v2 .memory-header h1 {
-    font-size: 32px;
+    font-size: var(--planner-type-title);
   }
   .planner-v2 .memory-header-actions {
     margin-top: var(--space-6);

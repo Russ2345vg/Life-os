@@ -21,29 +21,42 @@ interface QuickAccessState {
   readonly show: () => void;
   readonly close: () => void;
   readonly changed: () => void;
-  readonly inspect: GuardReader;
-  readonly register: (read: GuardReader) => () => void;
+  readonly inspect: (scope?: string) => QuickAccessGuard;
+  readonly register: (read: GuardReader, scope: string) => () => void;
 }
 const Context = createContext<QuickAccessState | null>(null);
+const GuardScopeContext = createContext('root');
+export function QuickAccessGuardScope({
+  scope,
+  children,
+}: {
+  readonly scope: string;
+  readonly children: ReactNode;
+}) {
+  return <GuardScopeContext.Provider value={scope}>{children}</GuardScopeContext.Provider>;
+}
 export function QuickAccessProvider({ children }: { readonly children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [revision, setRevision] = useState(0);
-  const readers = useRef(new Set<GuardReader>());
-  const register = useCallback((read: GuardReader) => {
-    readers.current.add(read);
+  const readers = useRef(new Set<{ readonly read: GuardReader; readonly scope: string }>());
+  const register = useCallback((read: GuardReader, scope: string) => {
+    const entry = { read, scope };
+    readers.current.add(entry);
     return () => {
-      readers.current.delete(read);
+      readers.current.delete(entry);
     };
   }, []);
   const inspect = useCallback(
-    () =>
-      [...readers.current].reduce<QuickAccessGuard>(
-        (state, read) => {
-          const next = read();
-          return { dirty: state.dirty || next.dirty, busy: state.busy || next.busy };
-        },
-        { dirty: false, busy: false },
-      ),
+    (scope?: string) =>
+      [...readers.current]
+        .filter((entry) => !scope || entry.scope === scope)
+        .reduce<QuickAccessGuard>(
+          (state, entry) => {
+            const next = entry.read();
+            return { dirty: state.dirty || next.dirty, busy: state.busy || next.busy };
+          },
+          { dirty: false, busy: false },
+        ),
     [],
   );
   const show = useCallback(() => {
@@ -85,11 +98,12 @@ export const useQuickAccess = () => useContext(Context);
 // eslint-disable-next-line react-refresh/only-export-components
 export function useQuickAccessGuard(read: GuardReader) {
   const register = useQuickAccess()?.register;
+  const scope = useContext(GuardScopeContext);
   const latest = useRef(read);
   useEffect(() => {
     latest.current = read;
   });
-  useEffect(() => register?.(() => latest.current()), [register]);
+  useEffect(() => register?.(() => latest.current(), scope), [register, scope]);
 }
 
 /** For controlled, mount-scoped drafts. Saved inline editors compare against current props instead. */

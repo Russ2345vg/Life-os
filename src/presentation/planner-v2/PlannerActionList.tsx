@@ -1,7 +1,7 @@
 import { resolveActionNeed } from '../../domain/planner/resolveEntityNeed';
 import { EntityNeedText } from './EntityNeedText';
 import { plannerDisplayDate } from './plannerDisplayDate';
-import { useQuickAccessGuard } from './QuickAccessContext';
+import { QuickAccessGuardScope, useQuickAccessGuard } from './QuickAccessContext';
 import { RecurrenceBadge } from './RecurrenceBadge';
 import { PlanningActionDetails } from './PlanningActionDetails';
 import { editPlannerField, plannerFieldState, type PlannerFieldDraft } from './plannerActionDraft';
@@ -9,7 +9,8 @@ import { useRef, useState, type ReactNode } from 'react';
 import type { Direction, Goal, LifeAction, Sphere } from '../../domain';
 import { VoiceField } from '../voice-input/VoiceField';
 import { VoiceTextInput } from '../voice-input/VoiceTextInput';
-import { EntityContextMenu, type EntityMenuAction } from './EntityContextMenu';
+import { EntityContextMenu } from './EntityContextMenu';
+import type { PlannerActionOperations } from './plannerActionOperations';
 import {
   actionViewLabels,
   filterPlannerActions,
@@ -18,22 +19,12 @@ import {
   type ActionView,
 } from './plannerCatalogModel';
 import { selectRecurringActionRepresentatives } from '../../application/planner/actionSelection';
+import { addDays } from '../../domain/planner/PlanningPeriod';
 import { PlannerActionTimeSheet, type SetActionTime } from './PlannerActionTimeSheet';
 import { clockTime, durationLabel } from './timePresentation';
 import { PlannerDisclosureCard } from './PlannerDisclosureCard';
 
-export interface PlannerActionOperations {
-  readonly busy: boolean;
-  readonly onComplete: (id: string) => void;
-  readonly onPlan: (id: string, date: string, main?: boolean) => Promise<void>;
-  readonly onLink: (id: string, goalId: string) => Promise<void>;
-  readonly menuForAction?: (action: LifeAction) => readonly EntityMenuAction[];
-  readonly onReopen?: ((id: string) => Promise<void>) | undefined;
-  readonly onEdit?:
-    | ((action: LifeAction, title: string, description: string, need?: string) => Promise<void>)
-    | undefined;
-  readonly onUnlink?: ((id: string) => Promise<void>) | undefined;
-}
+export type { PlannerActionOperations } from './plannerActionOperations';
 export function PlannerActionList({
   actions,
   goals,
@@ -45,6 +36,7 @@ export function PlannerActionList({
   viewSwitcher,
   initialView = 'open',
   onSetTime,
+  presentation = 'page',
   ...operations
 }: PlannerActionOperations & {
   readonly actions: readonly LifeAction[];
@@ -57,6 +49,7 @@ export function PlannerActionList({
   readonly viewSwitcher?: ReactNode;
   readonly initialView?: ActionView;
   readonly onSetTime?: SetActionTime | undefined;
+  readonly presentation?: 'page' | 'panel';
 }) {
   const [view, setView] = useState<ActionView>(initialView);
   const [search, setSearch] = useState('');
@@ -159,13 +152,19 @@ export function PlannerActionList({
     : [];
   if (selectedId)
     return (
-      <section className="planner-action-detail-page">
-        <a className="planner-text-link" href="#/v2/actions">
-          ← Все действия
-        </a>
+      <section
+        className={`planner-action-detail-page${presentation === 'panel' ? ' planner-action-detail-page--panel' : ''}`}
+      >
+        {presentation === 'page' && (
+          <a className="planner-text-link" href="#/v2/actions">
+            ← Все действия
+          </a>
+        )}
         {selected ? (
           <>
-            <h1 className="planner-detail-title">{selected.title.toString()}</h1>
+            {presentation === 'page' && (
+              <h1 className="planner-detail-title">{selected.title.toString()}</h1>
+            )}
             <RecurrenceBadge action={selected} />
             <p className="planner-muted">
               {(() => {
@@ -188,21 +187,48 @@ export function PlannerActionList({
                   .join(' / ');
               })()}
             </p>
+            {presentation === 'panel' &&
+              (selected.status === 'draft' || selected.status === 'ready') &&
+              operations.onEdit && (
+                <PlannerActionEdit
+                  key={selected.id.toString()}
+                  action={selected}
+                  onSave={operations.onEdit}
+                  initiallyOpen
+                  compact
+                />
+              )}
             <PlannerActionRow
               action={selected}
               goals={goals}
               directions={directions}
               spheres={spheres}
+              today={today}
               {...operations}
               expanded
+              panelSelected={presentation === 'panel'}
             />
-            {(selected.status === 'draft' || selected.status === 'ready') && operations.onEdit && (
-              <PlannerActionEdit
-                key={selected.id.toString()}
-                action={selected}
-                onSave={operations.onEdit}
-              />
+            {presentation === 'panel' && selected.status === 'completed' && operations.onReopen && (
+              <button
+                type="button"
+                className="planner-primary"
+                disabled={operations.busy}
+                onClick={() =>
+                  void operations.onReopen?.(selected.id.toString())?.catch(() => undefined)
+                }
+              >
+                Вернуть в работу
+              </button>
             )}
+            {presentation === 'page' &&
+              (selected.status === 'draft' || selected.status === 'ready') &&
+              operations.onEdit && (
+                <PlannerActionEdit
+                  key={selected.id.toString()}
+                  action={selected}
+                  onSave={operations.onEdit}
+                />
+              )}
             <PlanningActionDetails action={selected} today={today} />
             <section className="planner-subactions" aria-label="Время действия">
               <h2>Время</h2>
@@ -231,11 +257,13 @@ export function PlannerActionList({
                 </button>
               )}
               {timeOpen && onSetTime && (
-                <PlannerActionTimeSheet
-                  action={selected}
-                  onSave={onSetTime}
-                  onClose={() => setTimeOpen(false)}
-                />
+                <QuickAccessGuardScope scope={presentation === 'panel' ? 'action-time' : 'root'}>
+                  <PlannerActionTimeSheet
+                    action={selected}
+                    onSave={onSetTime}
+                    onClose={() => setTimeOpen(false)}
+                  />
+                </QuickAccessGuardScope>
               )}
             </section>
             {selected.parentActionId ? (
@@ -243,6 +271,19 @@ export function PlannerActionList({
                 <a
                   className="planner-text-link"
                   href={`#/v2/actions/${encodeURIComponent(selected.parentActionId.toString())}`}
+                  onClick={(event) => {
+                    if (
+                      !operations.onOpenAction ||
+                      event.button !== 0 ||
+                      event.ctrlKey ||
+                      event.metaKey ||
+                      event.shiftKey ||
+                      event.altKey
+                    )
+                      return;
+                    event.preventDefault();
+                    operations.onOpenAction(selected.parentActionId!.toString());
+                  }}
                 >
                   Открыть родительское действие
                 </a>
@@ -548,6 +589,8 @@ export function PlannerActionList({
 function PlannerActionEdit({
   action,
   onSave,
+  initiallyOpen = false,
+  compact = false,
 }: {
   readonly action: LifeAction;
   readonly onSave: (
@@ -556,6 +599,8 @@ function PlannerActionEdit({
     description: string,
     need?: string,
   ) => Promise<void>;
+  readonly initiallyOpen?: boolean;
+  readonly compact?: boolean;
 }) {
   const [titleDraft, setTitleDraft] = useState<PlannerFieldDraft | null>(null);
   const [descriptionDraft, setDescriptionDraft] = useState<PlannerFieldDraft | null>(null);
@@ -579,12 +624,41 @@ function PlannerActionEdit({
     busy,
   }));
   const [error, setError] = useState<string | null>(null);
+  const secondaryFields = (
+    <>
+      <label>
+        <span>Потребность</span>
+        <input
+          value={need}
+          maxLength={500}
+          disabled={busy}
+          placeholder="Пустое поле использует потребность родителя"
+          onChange={(event) =>
+            setNeedDraft((current) => editPlannerField(current, savedNeed, event.target.value))
+          }
+        />
+      </label>
+      <label>
+        <span>Описание</span>
+        <textarea
+          value={description}
+          disabled={busy}
+          onChange={(event) =>
+            setDescriptionDraft((current) =>
+              editPlannerField(current, savedDescription, event.target.value),
+            )
+          }
+        />
+      </label>
+    </>
+  );
   return (
     <PlannerDisclosureCard
-      className="planner-action-edit"
+      className={`planner-action-edit${compact ? ' planner-action-edit--compact' : ''}`}
       icon="settings"
       title="Редактировать действие"
-      description="Название, потребность и описание"
+      description={compact ? 'Название и дополнительные поля' : 'Название, потребность и описание'}
+      initiallyOpen={initiallyOpen}
     >
       <form
         onSubmit={(event) => {
@@ -616,30 +690,19 @@ function PlannerActionEdit({
             }
           />
         </label>
-        <label>
-          <span>Потребность</span>
-          <input
-            value={need}
-            maxLength={500}
-            disabled={busy}
-            placeholder="Пустое поле использует потребность родителя"
-            onChange={(event) =>
-              setNeedDraft((current) => editPlannerField(current, savedNeed, event.target.value))
-            }
-          />
-        </label>
-        <label>
-          <span>Описание</span>
-          <textarea
-            value={description}
-            disabled={busy}
-            onChange={(event) =>
-              setDescriptionDraft((current) =>
-                editPlannerField(current, savedDescription, event.target.value),
-              )
-            }
-          />
-        </label>
+        {compact && (
+          <button type="submit" disabled={busy || conflict || !title.trim()}>
+            Сохранить название
+          </button>
+        )}
+        {compact ? (
+          <details className="planner-action-edit__more">
+            <summary>Описание и потребность</summary>
+            {secondaryFields}
+          </details>
+        ) : (
+          secondaryFields
+        )}
         {conflict && (
           <p role="alert">
             Действие изменилось. Ваш текст сохранён в форме.{' '}
@@ -655,9 +718,11 @@ function PlannerActionEdit({
             </button>
           </p>
         )}
-        <button type="submit" disabled={busy || conflict || !title.trim()}>
-          Сохранить
-        </button>
+        {!compact && (
+          <button type="submit" disabled={busy || conflict || !title.trim()}>
+            Сохранить
+          </button>
+        )}
         {error && (
           <p role="alert" className="planner-error">
             {error}
@@ -674,6 +739,7 @@ export function PlannerActionRow({
   spheres = [],
   busy,
   onComplete,
+  onOpenAction,
   onPlan,
   onLink,
   menuForAction,
@@ -682,6 +748,7 @@ export function PlannerActionRow({
   goalContext = false,
   recurrenceLabel,
   catalogMode = false,
+  panelSelected = false,
   today,
 }: PlannerActionOperations & {
   readonly action: LifeAction;
@@ -693,6 +760,7 @@ export function PlannerActionRow({
   readonly goalContext?: boolean;
   readonly recurrenceLabel?: string | null;
   readonly catalogMode?: boolean;
+  readonly panelSelected?: boolean;
   readonly today?: string;
 }) {
   const [detailsOpen, setDetailsOpen] = useState(expanded);
@@ -757,12 +825,27 @@ export function PlannerActionRow({
             onChange={() => onComplete(action.id.toString())}
           />
           <div className="planner-action-copy">
-            <a
-              className="planner-action-title"
-              href={`#/v2/actions/${encodeURIComponent(action.id.toString())}`}
-            >
-              {action.title.toString()}
-            </a>
+            {!panelSelected && (
+              <a
+                className="planner-action-title"
+                href={`#/v2/actions/${encodeURIComponent(action.id.toString())}`}
+                onClick={(event) => {
+                  if (
+                    !onOpenAction ||
+                    event.button !== 0 ||
+                    event.ctrlKey ||
+                    event.metaKey ||
+                    event.shiftKey ||
+                    event.altKey
+                  )
+                    return;
+                  event.preventDefault();
+                  onOpenAction(action.id.toString());
+                }}
+              >
+                {action.title.toString()}
+              </a>
+            )}
             {catalogMode ? (
               <div className="planner-action-meta">
                 <span>{context || (action.goalId ? 'Связанная цель недоступна' : 'Без цели')}</span>
@@ -868,21 +951,45 @@ export function PlannerActionRow({
                         />
                       </label>
                       <div className="planner-inline-actions">
+                        {today && (
+                          <>
+                            {[
+                              { label: 'Сегодня', value: today },
+                              { label: 'Завтра', value: addDays(today, 1) },
+                            ].map((option) => (
+                              <button
+                                key={option.label}
+                                type="button"
+                                disabled={busy || pending || conflict || savedDate === option.value}
+                                onClick={() => {
+                                  void run(
+                                    () => onPlan(action.id.toString(), option.value),
+                                    () => setDateDraft(null),
+                                  );
+                                }}
+                              >
+                                {option.label}
+                              </button>
+                            ))}
+                          </>
+                        )}
                         <button disabled={busy || pending || conflict} type="submit">
                           Сохранить дату
                         </button>
-                        <button
-                          disabled={busy || pending || conflict}
-                          type="button"
-                          onClick={() => {
-                            void run(
-                              () => onPlan(action.id.toString(), ''),
-                              () => setDateDraft(null),
-                            );
-                          }}
-                        >
-                          Без даты
-                        </button>
+                        {(action.status === 'draft' || action.status === 'completed') && (
+                          <button
+                            disabled={busy || pending || conflict}
+                            type="button"
+                            onClick={() => {
+                              void run(
+                                () => onPlan(action.id.toString(), ''),
+                                () => setDateDraft(null),
+                              );
+                            }}
+                          >
+                            Без даты
+                          </button>
+                        )}
                       </div>
                     </form>
                   )}
