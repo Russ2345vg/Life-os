@@ -1,0 +1,29 @@
+{
+  "format": "lifeos-plan",
+  "version": 1,
+  "id": "sample-plan-2026",
+  "title": "Мой год спокойного развития",
+  "startDate": "2026-10-01",
+  "endDate": "2027-09-30",
+  "spheres": [{ "key": "health", "name": "Здоровье" }],
+  "directions": [{ "key": "movement", "sphereKey": "health", "name": "Движение" }],
+  "goals": [
+    {
+      "key": "walk",
+      "directionKey": "movement",
+      "title": "Регулярные прогулки",
+      "dueDate": "2026-12-31",
+      "outcome": "Найти удобный ритм прогулок",
+      "status": "active"
+    }
+  ],
+  "actions": [
+    {
+      "key": "first-walk",
+      "goalKey": "walk",
+      "title": "Выбрать маршрут прогулки",
+      "date": "2026-10-03",
+      "description": "Удобный маршрут рядом с домом"
+    }
+  ]
+}

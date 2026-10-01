@@ -80,6 +80,7 @@ import { IndexedDbPilotMutationRecorder } from '../../infrastructure/sync/pilot/
 import type { SupabasePublicEnvironment } from '../../infrastructure/sync/supabase/SupabaseConfig';
 import { BrowserLocalSettingsStore } from '../settings/BrowserLocalSettingsStore';
 import type { LifeOsApplication } from './LifeOsApplication';
+import { PlanImport } from '../../application/plan-import/PlanImport';
 import { LifeOsApplicationInitializationError } from './LifeOsApplicationInitializationError';
 import { createLifeOsSyncApplication } from './createLifeOsSyncApplication';
 import { createMemoryModule } from './modules/createMemoryModule';
@@ -271,6 +272,16 @@ export async function createLifeOsApplication(
     );
 
     const application: LifeOsApplication = {
+      planImport: new PlanImport({
+        spheres: sphereRepository,
+        directions: directionRepository,
+        goals: goalRepository,
+        actions: lifeActionRepository,
+        decisions: decisionRepository,
+        unitOfWork: journalUnitOfWork,
+        clock,
+        ids: idGenerator,
+      }),
       libraryReads,
       sync,
       accountSync,

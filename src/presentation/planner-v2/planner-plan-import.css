@@ -1,0 +1,65 @@
+.planner-plan-import input[type='file'] {
+  width: 100%;
+  min-height: 44px;
+  box-sizing: border-box;
+}
+
+.planner-import-preview,
+.planner-import-direction {
+  display: grid;
+  gap: var(--space-3, 12px);
+  min-width: 0;
+}
+
+.planner-import-direction {
+  padding-block: var(--space-4, 16px);
+  border-top: 1px solid var(--border-soft);
+}
+
+.planner-import-direction :is(h3, p) {
+  margin: 0;
+}
+
+.planner-plan-import .planner-import-preview header {
+  margin: 0;
+}
+
+.planner-plan-import .planner-import-preview h2 {
+  font-size: 1.125rem;
+  color: var(--text-primary);
+  margin-block: var(--space-4, 16px) var(--space-2, 8px);
+}
+
+.planner-import-result {
+  padding: var(--space-4, 16px);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+}
+
+.planner-import-preview summary {
+  min-height: 44px;
+  overflow-wrap: anywhere;
+}
+
+.planner-import-preview time {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.875em;
+}
+
+.planner-import-preview li {
+  padding-block: var(--space-2, 8px);
+  overflow-wrap: anywhere;
+}
+
+.planner-import-preview li small {
+  display: block;
+}
+
+.planner-plan-import .planner-form-actions {
+  position: sticky;
+  bottom: 0;
+  padding-block: var(--space-3, 12px);
+  background: var(--surface-1);
+}

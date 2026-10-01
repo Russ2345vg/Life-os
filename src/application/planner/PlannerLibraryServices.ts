@@ -22,8 +22,10 @@ import type { SelectGoalNextAction } from '../commands/SelectGoalNextAction';
 import type { UpdateLifeActionDetails } from '../commands/UpdateLifeActionDetails';
 import type { PlanningServices } from './PlanningServices';
 import type { PlannerLibraryReadModels } from './PlannerLibraryReadModels';
+import type { PlanImport } from '../plan-import/PlanImport';
 
 export interface PlannerLibraryServices {
+  readonly planImport?: Pick<PlanImport, 'preview' | 'execute'>;
   readonly libraryReads: Pick<PlannerLibraryReadModels, 'create'>;
   readonly setLifeActionTime?: Pick<SetLifeActionTime, 'execute'>;
   readonly timeCapacity?: Pick<TimeCapacityService, 'get' | 'setWeekday'>;

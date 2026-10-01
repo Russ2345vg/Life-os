@@ -3,6 +3,7 @@ import { PlannerActionForm } from './PlannerActionForm';
 import { submitPlannerAction } from './plannerFormSubmission';
 import { useQuickAccessGuard } from './QuickAccessContext';
 import { PlannerSheet } from './PlannerSheet';
+import { PlannerPlanImport } from './PlannerPlanImport';
 import { PlanningGoalDetail } from './PlanningGoalDetail';
 import { usePlanning } from './PlanningContext';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -62,6 +63,7 @@ export function PlannerLibraryWorkspace({
   const timeCapacity = data?.timeCapacity ?? [];
   const [commandError, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
   useEffect(() => {
     if (!notice) return;
     const timeout = window.setTimeout(() => setNotice(null), 3500);
@@ -311,6 +313,16 @@ export function PlannerLibraryWorkspace({
   };
   return (
     <>
+      {importOpen && services.planImport && (
+        <PlannerPlanImport
+          service={services.planImport}
+          onClose={() => setImportOpen(false)}
+          onImported={() => {
+            refresh();
+            void planningContext?.refresh();
+          }}
+        />
+      )}
       {route.view === 'review' && creatingStepFor && (
         <PlannerSheet
           title="Новое действие цели"
@@ -462,6 +474,11 @@ export function PlannerLibraryWorkspace({
         <section>
           <header className="planner-page-heading">
             <h1>{route.section === 'goals' ? 'Цели' : 'Действия'}</h1>
+            {route.section === 'goals' && services.planImport && (
+              <button type="button" onClick={() => setImportOpen(true)}>
+                Импорт плана
+              </button>
+            )}
             <button
               className="planner-primary"
               aria-label={route.section === 'goals' ? 'Новая цель' : 'Новое действие'}
@@ -566,6 +583,11 @@ export function PlannerLibraryWorkspace({
         <section>
           <header className="planner-page-heading">
             <h1>Цели</h1>
+            {services.planImport && (
+              <button type="button" onClick={() => setImportOpen(true)}>
+                Импорт плана
+              </button>
+            )}
             <button
               className="planner-primary"
               aria-label="Новая цель"
