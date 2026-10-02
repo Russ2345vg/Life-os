@@ -27,6 +27,7 @@ export function PlannerActionPanel({
   onRetryCompletion,
   commandError,
   onDismissCommandError,
+  onStartWalk,
 }: {
   readonly actionId: string;
   readonly today: string;
@@ -41,6 +42,7 @@ export function PlannerActionPanel({
   readonly onRetryCompletion: () => void;
   readonly commandError: string | null;
   readonly onDismissCommandError: () => void;
+  readonly onStartWalk?: ((actionId: string, requestId: string) => Promise<void>) | undefined;
 }) {
   const quick = useQuickAccess();
   const quickRef = useRef(quick);
@@ -50,6 +52,9 @@ export function PlannerActionPanel({
   const heading = useRef<HTMLHeadingElement>(null);
   const [confirm, setConfirm] = useState(false);
   const [busyMessage, setBusyMessage] = useState(false);
+  const [walkStartError, setWalkStartError] = useState('');
+  const [walkStartBusy, setWalkStartBusy] = useState(false);
+  const walkRequestId = useRef<string | null>(null);
   const decide = useRef<((value: boolean) => void) | null>(null);
   useEffect(() => {
     const guard = createPlannerActionPanelLeaveGuard(
@@ -112,6 +117,28 @@ export function PlannerActionPanel({
               {selected?.title.toString() ?? 'Действие'}
             </h2>
           </header>
+          {selected?.walkPlan && onStartWalk && (
+            <div>
+              <button
+                disabled={walkStartBusy}
+                onClick={() => {
+                  if (!walkRequestId.current) walkRequestId.current = crypto.randomUUID();
+                  setWalkStartBusy(true);
+                  setWalkStartError('');
+                  void onStartWalk(actionId, walkRequestId.current)
+                    .catch((failure: unknown) =>
+                      setWalkStartError(
+                        failure instanceof Error ? failure.message : 'Не удалось начать прогулку.',
+                      ),
+                    )
+                    .finally(() => setWalkStartBusy(false));
+                }}
+              >
+                Начать прогулку по плану
+              </button>
+              {walkStartError && <p role="alert">{walkStartError}</p>}
+            </div>
+          )}
           {data ? (
             <PlannerActionList
               key={actionId}

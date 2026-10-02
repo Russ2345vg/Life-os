@@ -1,6 +1,6 @@
 import { PlannerGoalForm } from './PlannerGoalForm';
 import { PlannerActionForm } from './PlannerActionForm';
-import { submitPlannerAction } from './plannerFormSubmission';
+import { submitPlannerActionWithScenario } from './plannerFormSubmission';
 import { useQuickAccessGuard } from './QuickAccessContext';
 import { PlannerSheet } from './PlannerSheet';
 import { PlannerPlanImport } from './PlannerPlanImport';
@@ -34,6 +34,7 @@ import type { EntityMenuAction } from './EntityContextMenu';
 import { PlannerWorkTime } from './PlannerWorkTime';
 import type { PlannerWorkTimeController } from './usePlannerWorkTime';
 import type { PlannerLibraryServices } from '../../application/planner/PlannerLibraryServices';
+import type { ScenarioService } from '../../application/planner/PlannerServices';
 
 export type { PlannerLibraryServices } from '../../application/planner/PlannerLibraryServices';
 export function PlannerLibraryWorkspace({
@@ -46,8 +47,9 @@ export function PlannerLibraryWorkspace({
   onOpenAction,
   onChangeDate,
   workTime,
+  onStartWalk,
 }: {
-  readonly services: PlannerLibraryServices;
+  readonly services: PlannerLibraryServices & { readonly plannerScenarios?: ScenarioService };
   readonly route: PlannerRoute;
   readonly today: string;
   readonly onNavigate: (route: PlannerRoute) => void;
@@ -56,6 +58,7 @@ export function PlannerLibraryWorkspace({
   readonly onOpenAction?: (id: string) => Promise<boolean> | void;
   readonly onChangeDate: (id: string, date: string) => Promise<LifeAction>;
   readonly workTime?: PlannerWorkTimeController;
+  readonly onStartWalk?: ((actionId: string, requestId: string) => Promise<void>) | undefined;
 }) {
   const planningContext = usePlanning();
   const { snapshot, refresh: refreshReads, whenSettled } = reads;
@@ -336,6 +339,7 @@ export function PlannerLibraryWorkspace({
               .map((goal) => ({ id: goal.id.toString(), title: goal.title }))}
             initialGoalId={creatingStepFor}
             lockGoal
+            scenarios={services.plannerScenarios}
             currentDate={today}
             contextLabel={
               planningContext?.state?.goals.find((goal) => goal.id.toString() === creatingStepFor)
@@ -343,9 +347,20 @@ export function PlannerLibraryWorkspace({
             }
             onCancel={() => setCreatingStepFor(null)}
             onSubmit={async (draft) => {
-              await run(
-                () => submitPlannerAction(services.createLifeActionDraft, draft),
-                'Действие создано. Выберите его следующим шагом цели.',
+              let warning: string | null = null;
+              await run(async () => {
+                const saved = await submitPlannerActionWithScenario(
+                  services.createLifeActionDraft,
+                  draft,
+                  services.plannerScenarios,
+                );
+                warning = saved.warning;
+              }, null);
+              setNotice(
+                warning ??
+                  (draft.scenarioId
+                    ? 'Действие добавлено в сценарий. Выберите его следующим шагом цели.'
+                    : 'Действие создано. Выберите его следующим шагом цели.'),
               );
               setCreatingStepFor(null);
             }}
@@ -544,6 +559,7 @@ export function PlannerLibraryWorkspace({
         />
       ) : route.view === 'actions' || route.view === 'action' ? (
         <PlannerActionList
+          onStartWalk={onStartWalk}
           actions={data.actions}
           goals={data.goals}
           directions={data.directions}

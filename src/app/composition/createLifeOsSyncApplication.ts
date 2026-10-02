@@ -48,6 +48,7 @@ import type { LifeOsIndexedDb } from '../../infrastructure/persistence/indexed-d
 import { PilotSyncLifecycle } from '../lifecycle/PilotSyncLifecycle';
 import { SyncTransferGate } from '../../application/sync/account/SyncTransferGate';
 import type { MeaningfulLocalSettingsSync } from '../../infrastructure/sync/MeaningfulLocalSettingsSync';
+import { saveConfirmedWalkDataFormat } from '../../infrastructure/sync/WalkDataFormat';
 
 interface CreateLifeOsSyncApplicationInput {
   readonly database: LifeOsIndexedDb;
@@ -171,6 +172,19 @@ export function createLifeOsSyncApplication({
   );
   const pilotCoordinator = new PilotSyncCoordinator({
     transferGate,
+    prepareDataFormat: async () => {
+      pilotTransport.setDataFormat(1);
+      const installation = await installationRepository.find();
+      if (installation?.spaceId === null || installation === null) return;
+      const format = await trustTransport.negotiateDataFormat(installation.deviceId);
+      await saveConfirmedWalkDataFormat(
+        database,
+        installation.spaceId,
+        installation.deviceId,
+        format,
+      );
+      pilotTransport.setDataFormat(format);
+    },
     isOnline: () => navigator.onLine,
     bootstrap: {
       run: async () => {

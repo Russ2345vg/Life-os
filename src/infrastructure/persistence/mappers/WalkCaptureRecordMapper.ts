@@ -7,11 +7,13 @@ import {
   readIsoDate,
   readNumber,
   readString,
+  readOptionalNullableEntityId,
 } from './RecordMapperSupport';
 
 export class WalkCaptureRecordMapper {
   public static toRecord(capture: WalkCapture): WalkCaptureRecord {
     return {
+      resultActionId: capture.resultActionId?.toString() ?? null,
       schemaVersion: 1,
       id: capture.id.toString(),
       walkId: capture.walkId.toString(),
@@ -34,6 +36,7 @@ export class WalkCaptureRecordMapper {
       throw invalidRecord('Неизвестный тип или статус сохранённой мысли.');
     }
     return WalkCapture.rehydrate({
+      resultActionId: readOptionalNullableEntityId(value, 'resultActionId'),
       id: readEntityId(value, 'id'),
       walkId: readEntityId(value, 'walkId'),
       type,

@@ -1,3 +1,5 @@
+import { assertWalkPayloadCompatible } from '../../../application/walk/WalkSyncCompatibility';
+import { confirmedWalkDataFormat } from '../WalkDataFormat';
 import {
   registerRemoteAttachment,
   tombstoneParentAttachments,
@@ -130,11 +132,16 @@ export class IndexedDbPilotSyncStore {
   }): Promise<void> {
     const database = await this.indexedDb.open();
     const transaction = database.transaction(
-      [LIFE_OS_SYNC_STORE.outbox, LIFE_OS_SYNC_STORE.objectMeta],
+      [LIFE_OS_SYNC_STORE.outbox, LIFE_OS_SYNC_STORE.objectMeta, LIFE_OS_SYNC_STORE.settings],
       'readwrite',
     );
     const outboxStore = transaction.objectStore(LIFE_OS_SYNC_STORE.outbox);
     const metaStore = transaction.objectStore(LIFE_OS_SYNC_STORE.objectMeta);
+    const installation = await request<SyncSettingsRecord | undefined>(
+      transaction.objectStore(LIFE_OS_SYNC_STORE.settings).get('sync'),
+    );
+    const dataFormat =
+      installation === undefined ? 1 : await confirmedWalkDataFormat(transaction, installation);
     const records = await request<SyncOutboxRecord[]>(outboxStore.getAll());
     const timestamp = this.now().toISOString();
     for (const record of records) {
@@ -151,6 +158,19 @@ export class IndexedDbPilotSyncStore {
         });
         continue;
       }
+      try {
+        if (payload.operation === 'upsert' && payload.record)
+          assertWalkPayloadCompatible(payload.entityType, payload.record, dataFormat);
+      } catch {
+        outboxStore.put({
+          ...record,
+          state: 'quarantined',
+          leaseUntil: null,
+          lastErrorCode: 'sync.client_update_required',
+          updatedAt: timestamp,
+        });
+        continue;
+      }
       if (!outboxMatchesPayload(record, payload)) {
         outboxStore.put({
           ...record,
@@ -162,6 +182,18 @@ export class IndexedDbPilotSyncStore {
         continue;
       }
       if (payload.originDeviceId === input.deviceId && payload.keyEpoch === input.keyEpoch) {
+        if (
+          record.state === 'quarantined' &&
+          record.lastErrorCode === 'sync.client_update_required'
+        )
+          outboxStore.put({
+            ...record,
+            state: 'pending',
+            leaseUntil: null,
+            nextAttemptAt: timestamp,
+            lastErrorCode: null,
+            updatedAt: timestamp,
+          });
         continue;
       }
       if ((record.encryptedPayload === null) !== (record.encryptedNonce === null)) {

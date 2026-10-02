@@ -31,6 +31,7 @@ describe('WalkRecordMapper', () => {
 
     const record = WalkRecordMapper.toRecord(walk);
     expect(record).toEqual({
+      deletedAt: null,
       schemaVersion: 1,
       goalLinksVersion: 1,
       id: 'walk-mapper',

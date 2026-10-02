@@ -1,5 +1,6 @@
 import type { ActionPriority, ActionOccurrence } from '../../../domain/planner/RecurrenceRule';
 export interface LifeActionRecord {
+  readonly walkPlan?: import('../../../domain/walk/WalkPlanMetadata').WalkPlanMetadata | null;
   readonly estimateMinutes?: number | null;
   readonly scheduledStartMinute?: number | null;
   readonly scheduledDurationMinutes?: number | null;

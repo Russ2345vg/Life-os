@@ -58,6 +58,20 @@ test('Today shows the first action before secondary context without horizontal o
   expect(layout.focusAfterPlan).toBe(true);
   expect(layout.focusInSidebar).toBe(true);
   expect(layout.overflow).toBeLessThanOrEqual(1);
+
+  for (const width of [360, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    const compactHeader = await page.evaluate(() => {
+      const links = document.querySelector('.planner-today-heading-links');
+      return {
+        rows: new Set([...(links?.children ?? [])].map((link) => link.getBoundingClientRect().top))
+          .size,
+        overflow: document.documentElement.scrollWidth - window.innerWidth,
+      };
+    });
+    expect(compactHeader.rows).toBe(1);
+    expect(compactHeader.overflow).toBeLessThanOrEqual(1);
+  }
 });
 
 test('Diary uses the shared 24 px header rhythm', async ({ page }) => {

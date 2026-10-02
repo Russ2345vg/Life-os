@@ -13,6 +13,65 @@ import { IndexedDbPilotMutationRecorder } from './IndexedDbPilotMutationRecorder
 import { LIFE_OS_SYNC_REGISTRY } from '../LifeOsSyncRegistry';
 
 describe('IndexedDbPilotSyncStore', () => {
+  it('quarantines incompatible queued walks before reusing ciphertext', async () => {
+    const indexedDb = new LifeOsIndexedDb(new IDBFactory());
+    try {
+      const database = await indexedDb.open();
+      const original = outbox();
+      const payload = {
+        ...goalPayload(),
+        entityType: 'walk' as const,
+        objectId: original.objectId,
+        eventId: original.eventId,
+        keyEpoch: original.keyEpoch,
+        baseRevision: original.baseRevision,
+        revision: original.proposedRevision,
+        hlc: { wallTime: original.hlcWallTime, logical: original.hlcLogical },
+        record: { id: original.objectId, status: 'running', reflectionQuestion: null },
+      };
+      const transaction = database.transaction(LIFE_OS_SYNC_STORE.outbox, 'readwrite');
+      transaction.objectStore(LIFE_OS_SYNC_STORE.outbox).put({
+        ...original,
+        entityType: 'walk',
+        serializedPayload: serializePilotSyncPayload(payload),
+        encryptedPayload: 'cipher',
+        encryptedNonce: 'nonce',
+      });
+      await done(transaction);
+      const store = new IndexedDbPilotSyncStore(indexedDb);
+      await store.prepareOutboxForInstallation({
+        deviceId: payload.originDeviceId,
+        keyEpoch: payload.keyEpoch,
+      });
+      expect((await allOutbox(database))[0]).toMatchObject({
+        state: 'quarantined',
+        lastErrorCode: 'sync.client_update_required',
+      });
+      const enable = database.transaction(LIFE_OS_SYNC_STORE.settings, 'readwrite');
+      enable.objectStore(LIFE_OS_SYNC_STORE.settings).put({
+        ...settings(),
+        deviceId: payload.originDeviceId,
+      });
+      enable.objectStore(LIFE_OS_SYNC_STORE.settings).put({
+        id: 'walk-data-format:v2',
+        spaceId: 'space',
+        deviceId: payload.originDeviceId,
+        minimumDataFormat: 2,
+      });
+      await done(enable);
+      await store.prepareOutboxForInstallation({
+        deviceId: payload.originDeviceId,
+        keyEpoch: payload.keyEpoch,
+      });
+      expect((await allOutbox(database))[0]).toMatchObject({
+        state: 'pending',
+        encryptedPayload: 'cipher',
+        lastErrorCode: null,
+      });
+    } finally {
+      indexedDb.close();
+    }
+  });
   it('recovers an expired sending lease and retains immutable ciphertext across retry', async () => {
     const indexedDb = new LifeOsIndexedDb(new IDBFactory());
     const database = await indexedDb.open();

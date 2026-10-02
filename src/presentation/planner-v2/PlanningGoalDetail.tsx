@@ -106,6 +106,12 @@ export function GoalDetailContent({
       <EntityContextMenu title={goal.title} entityLabel="цель" actions={menuForGoal?.(goal) ?? []}>
         <header className="planner-page-heading">
           <h1>{goal.title}</h1>
+          <a
+            className="planner-text-link"
+            href={`#/v2/walks?${new URLSearchParams({ sourceGoalId: goal.id.toString() })}`}
+          >
+            Прогуляться с мыслью об этой цели
+          </a>
         </header>
       </EntityContextMenu>
       <div className="planner-goal-context">

@@ -12,7 +12,7 @@ import { DomainError } from '../../shared/errors/DomainError';
 import { failure, success, type Result } from '../../shared/result/Result';
 import type { DirectionRepository } from '../ports/DirectionRepository';
 import type { GoalRepository } from '../ports/GoalRepository';
-import type { JournalUnitOfWork } from '../ports/JournalUnitOfWork';
+import type { JournalUnitOfWork, CommitJournalStateInput } from '../ports/JournalUnitOfWork';
 import { clearPreviousMainActions } from './lifeActionPlanning';
 import type { Clock } from '../ports/Clock';
 import type { DecisionRepository } from '../ports/DecisionRepository';
@@ -25,6 +25,7 @@ import {
 } from './lifeActionCommandResult';
 
 export interface CreateLifeActionDraftInput {
+  readonly walkPlan?: import('../../domain/walk/WalkPlanMetadata').WalkPlanMetadata | null;
   readonly recurrence?: RecurrenceInput | null;
   readonly contributions?: readonly ActionContributionInput[];
   readonly title: LifeActionTitle;
@@ -65,6 +66,21 @@ export class CreateLifeActionDraft {
   public async execute(
     input: CreateLifeActionDraftInput,
   ): Promise<Result<LifeAction, DomainError>> {
+    const prepared = await this.prepare(input);
+    if (!prepared.ok) return prepared;
+    try {
+      if (this.planning) await this.planning.unitOfWork.commit(prepared.value.commit);
+      else await this.#lifeActionRepository.save(prepared.value.action);
+      return success(prepared.value.action);
+    } catch (error: unknown) {
+      return lifeActionDomainFailure(error);
+    }
+  }
+
+  public async prepare(
+    input: CreateLifeActionDraftInput,
+    identity?: EntityId,
+  ): Promise<Result<{ action: LifeAction; commit: CommitJournalStateInput }, DomainError>> {
     if (
       (input.isNext || input.recurrence || input.contributions?.length || input.parentActionId) &&
       this.planning === undefined
@@ -125,7 +141,8 @@ export class CreateLifeActionDraft {
 
     try {
       const lifeAction = LifeAction.createDraft({
-        id: this.#idGenerator.generate(),
+        walkPlan: input.walkPlan ?? null,
+        id: identity ?? this.#idGenerator.generate(),
         title: input.title,
         ...(input.need === undefined ? {} : { need: input.need }),
         ...(input.description === undefined ? {} : { description: input.description }),
@@ -159,27 +176,23 @@ export class CreateLifeActionDraft {
         input.contributions ?? [],
         this.#clock.now(),
       );
-      if (this.planning === undefined) {
-        await this.#lifeActionRepository.save(lifeAction);
-      } else {
-        const previous =
-          lifeAction.isNext && lifeAction.plannedDate !== null
-            ? await clearPreviousMainActions(
-                this.#lifeActionRepository,
-                lifeAction.plannedDate,
-                lifeAction,
-              )
-            : [];
-        await this.planning.unitOfWork.commit({
-          ...(lifeAction.isNext && lifeAction.plannedDate !== null
-            ? { mainActionDate: lifeAction.plannedDate }
-            : {}),
-          lifeActions: [...previous, { lifeAction, expectedVersion: null }],
-          journalEntries: [],
-          planningSetup: setup,
-        });
-      }
-      return success(lifeAction);
+      const previous =
+        lifeAction.isNext && lifeAction.plannedDate !== null
+          ? await clearPreviousMainActions(
+              this.#lifeActionRepository,
+              lifeAction.plannedDate,
+              lifeAction,
+            )
+          : [];
+      const commit: CommitJournalStateInput = {
+        ...(lifeAction.isNext && lifeAction.plannedDate !== null
+          ? { mainActionDate: lifeAction.plannedDate }
+          : {}),
+        lifeActions: [...previous, { lifeAction, expectedVersion: null }],
+        journalEntries: [],
+        planningSetup: setup,
+      };
+      return success({ action: lifeAction, commit });
     } catch (error: unknown) {
       return lifeActionDomainFailure(error);
     }

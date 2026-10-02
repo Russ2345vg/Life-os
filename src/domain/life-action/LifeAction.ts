@@ -1,4 +1,5 @@
 import { normalizeEntityNeed } from '../shared/EntityNeed';
+import { validateWalkPlan, type WalkPlanMetadata } from '../walk/WalkPlanMetadata';
 import type { ActionPriority, ActionOccurrence } from '../planner/RecurrenceRule';
 import { DomainError } from '../../shared/errors/DomainError';
 import { DayDate } from '../day/DayDate';
@@ -23,6 +24,7 @@ import {
 } from './events';
 
 export interface LifeActionDraftInput {
+  readonly walkPlan?: WalkPlanMetadata | null;
   readonly id: EntityId;
   readonly title: LifeActionTitle;
   readonly need?: string | null;
@@ -57,6 +59,7 @@ export interface LifeActionDetailsUpdateInput {
 }
 
 export interface LifeActionRehydrationData {
+  readonly walkPlan?: WalkPlanMetadata | null;
   readonly estimateMinutes?: number | null;
   readonly scheduledStartMinute?: number | null;
   readonly scheduledDurationMinutes?: number | null;
@@ -94,6 +97,7 @@ export interface LifeActionRehydrationData {
 }
 
 export class LifeAction extends Entity {
+  #walkPlan: WalkPlanMetadata | null;
   #estimateMinutes: number | null;
   #scheduledStartMinute: number | null;
   #scheduledDurationMinutes: number | null;
@@ -141,6 +145,7 @@ export class LifeAction extends Entity {
         ))
     )
       throw new DomainError('progress.invalid_manifest', 'Неверный список ожидаемых вкладов.');
+    this.#walkPlan = validateWalkPlan(data.walkPlan);
     this.#completedOn = data.completedOn ?? data.completedAt?.toISOString().slice(0, 10) ?? null;
     if (this.#completedOn !== null) DayDate.create(this.#completedOn);
     this.#priority = null;
@@ -190,6 +195,9 @@ export class LifeAction extends Entity {
   public get expectedContributions() {
     return this.#expectedContributions;
   }
+  public get walkPlan(): WalkPlanMetadata | null {
+    return this.#walkPlan;
+  }
   public recordContributionManifest(values: readonly { id: string; goalId: string }[]): void {
     if (
       this.#status !== 'completed' ||
@@ -211,11 +219,13 @@ export class LifeAction extends Entity {
     date: DayDate,
     revision: number,
     need?: string | null,
+    walkPlan?: WalkPlanMetadata | null,
   ): void {
     if (!this.#occurrence || this.#status !== LIFE_ACTION_STATUS.draft) return;
     assertLifeActionTitle(title);
     assertDayDate(date);
     this.#title = title;
+    if (walkPlan !== undefined) this.#walkPlan = validateWalkPlan(walkPlan);
     if (need !== undefined) this.#need = normalizeEntityNeed(need);
     this.setGoal(goalId);
     if (!this.#occurrence.manualDate) this.setPlan(date, this.#isNext);
@@ -331,6 +341,7 @@ export class LifeAction extends Entity {
     const lifeAction = new LifeAction(
       {
         id: input.id,
+        walkPlan: input.walkPlan ?? null,
         title: input.title,
         need: input.need ?? null,
         description: input.description ?? null,

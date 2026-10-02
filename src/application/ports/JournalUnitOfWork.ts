@@ -1,5 +1,7 @@
 import type { RecurrenceRule } from '../../domain/planner/RecurrenceRule';
 import type { ContributionLink } from '../../domain/planner/ProgressContribution';
+import type { WalkCapture } from '../../domain/walk-capture/WalkCapture';
+import type { WalkRequest } from './WalkUnitOfWork';
 import type {
   ActionSession,
   Day,
@@ -43,6 +45,11 @@ export interface JournalProjectChange {
 }
 
 export interface CommitJournalStateInput {
+  readonly walkCaptureAction?: {
+    readonly capture: WalkCapture;
+    readonly expectedVersion: number;
+    readonly request: WalkRequest;
+  };
   /** Recheck the source action while atomically creating a work session. */
   readonly workSessionActionGuard?: { readonly id: EntityId; readonly expectedVersion: number };
   readonly planningSetup?: {

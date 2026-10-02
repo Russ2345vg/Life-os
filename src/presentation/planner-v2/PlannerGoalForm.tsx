@@ -5,6 +5,7 @@ import { GOAL_HORIZON, type Goal, type GoalHorizon } from '../../domain';
 import { VoiceField } from '../voice-input/VoiceField';
 import { VoiceTextInput } from '../voice-input/VoiceTextInput';
 import { VoiceTextArea } from '../voice-input/VoiceTextArea';
+import { NeedPicker } from './NeedPicker';
 import type { PlannerOption } from './PlannerActionForm';
 import { emptyGoalDraft, type PlannerGoalDraft } from './plannerFormSubmission';
 import type { PeriodKind } from '../../domain/planner/PlanningPeriod';
@@ -93,20 +94,12 @@ export function PlannerGoalForm({
             placeholder="Назовите цель"
           />
         </VoiceField>
-        <VoiceField>
-          <span>Потребность</span>
-          <VoiceTextInput
-            id="planner-goal-need"
-            value={draft.need}
-            onValueChange={(value) => change('need', value)}
-            maxLength={500}
-            aria-describedby="planner-goal-need-help"
-            placeholder="Ради чего вам нужна эта цель?"
-          />
-          <small id="planner-goal-need-help" className="planner-muted">
-            Необязательно. Пустое поле использует потребность направления.
-          </small>
-        </VoiceField>
+        <NeedPicker
+          id="planner-goal-need"
+          value={draft.need}
+          onValueChange={(value) => change('need', value)}
+          help="Необязательно. Пустой выбор использует потребность направления."
+        />
         <VoiceField>
           <span>Желаемый результат</span>
           <VoiceTextArea

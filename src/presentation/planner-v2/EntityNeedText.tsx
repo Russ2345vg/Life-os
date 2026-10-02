@@ -15,7 +15,10 @@ export function EntityNeedText({
   return (
     <p className={className}>
       <span className="planner-entity-need-content">
-        Потребность: {prominent ? <strong>{need.text}</strong> : need.text}
+        Потребность:{' '}
+        <a href={`#/v2/needs/${encodeURIComponent(need.text)}`}>
+          {prominent ? <strong>{need.text}</strong> : need.text}
+        </a>
       </span>
       {need.source !== 'own' && (
         <span className="planner-entity-need-source">

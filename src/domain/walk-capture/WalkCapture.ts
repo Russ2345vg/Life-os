@@ -14,6 +14,7 @@ export interface WalkCaptureCreationData {
 }
 
 export interface WalkCaptureData extends WalkCaptureCreationData {
+  readonly resultActionId?: EntityId | null;
   readonly type: 'text';
   readonly status: WalkCaptureStatus;
   readonly createdAt: Date;
@@ -22,6 +23,7 @@ export interface WalkCaptureData extends WalkCaptureCreationData {
 }
 
 export class WalkCapture extends Entity {
+  public readonly resultActionId: EntityId | null;
   public readonly walkId: EntityId;
   public readonly type = 'text' as const;
   public readonly content: string;
@@ -34,6 +36,8 @@ export class WalkCapture extends Entity {
 
   private constructor(data: WalkCaptureData) {
     super(data.id);
+    this.resultActionId = data.resultActionId ?? null;
+    if (this.resultActionId !== null && data.status !== 'processed') throw invalidData();
     if (normalizeContent(data.content) !== data.content) throw invalidData();
     for (const date of [data.capturedAt, data.createdAt, data.updatedAt]) {
       if (!(date instanceof Date) || !Number.isFinite(date.getTime())) throw invalidData();
@@ -106,6 +110,21 @@ export class WalkCapture extends Entity {
     });
   }
 
+  public processAsAction(actionId: EntityId, updatedAt: Date): WalkCapture {
+    if (this.resultActionId !== null) {
+      if (!this.resultActionId.equals(actionId)) throw invalidData();
+      return this;
+    }
+    this.assertUpdateTime(updatedAt);
+    return new WalkCapture({
+      ...this.data(),
+      resultActionId: actionId,
+      status: 'processed',
+      updatedAt,
+      version: this.version + 1,
+    });
+  }
+
   private assertUpdateTime(updatedAt: Date): void {
     if (
       !(updatedAt instanceof Date) ||
@@ -118,6 +137,7 @@ export class WalkCapture extends Entity {
 
   private data(): WalkCaptureData {
     return {
+      resultActionId: this.resultActionId,
       id: this.id,
       walkId: this.walkId,
       type: this.type,

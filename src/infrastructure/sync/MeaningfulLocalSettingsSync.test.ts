@@ -9,6 +9,119 @@ import { BrowserLocalSettingsStore } from '../../app/settings/BrowserLocalSettin
 import { IndexedDbPilotSyncStore } from './pilot/IndexedDbPilotSyncStore';
 
 describe('MeaningfulLocalSettingsSync', () => {
+  it('does not publish an unset goal when a newly paired device first joins format 2', async () => {
+    const indexedDb = new LifeOsIndexedDb(new IDBFactory());
+    const database = await indexedDb.open();
+    await put(database, LIFE_OS_SYNC_STORE.settings, activeSettings());
+    await put(database, LIFE_OS_SYNC_STORE.settings, {
+      id: 'walk-data-format:v2',
+      spaceId: 'space',
+      deviceId: 'device',
+      minimumDataFormat: 2,
+    });
+    const bridge = {
+      readEveningRitualForSync: () => DEFAULT_EVENING_RITUAL_SETTINGS,
+      applyEveningRitualFromSync: () => true,
+    };
+    let sequence = 0;
+    const sync = new MeaningfulLocalSettingsSync(
+      indexedDb,
+      new IndexedDbPilotMutationRecorder({ createId: () => `settings-${++sequence}` }),
+      bridge,
+    );
+    expect(await sync.reconcile()).toBe(true);
+    const first = (
+      await all<{ serializedPayload: string }>(database, LIFE_OS_SYNC_STORE.outbox)
+    )[0];
+    expect(first?.serializedPayload).not.toContain('walkPreferences');
+  });
+  it('sends the weekly walk goal only after the same device has a confirmed space floor', async () => {
+    const indexedDb = new LifeOsIndexedDb(new IDBFactory());
+    const database = await indexedDb.open();
+    await put(database, LIFE_OS_SYNC_STORE.settings, activeSettings());
+    await put(database, LIFE_OS_SYNC_STORE.settings, {
+      id: 'walk-preferences:v1',
+      weeklyCount: 4,
+      weeklyMinutes: 120,
+    });
+    const bridge = {
+      readEveningRitualForSync: () => DEFAULT_EVENING_RITUAL_SETTINGS,
+      applyEveningRitualFromSync: () => true,
+    };
+    let sequence = 0;
+    const sync = new MeaningfulLocalSettingsSync(
+      indexedDb,
+      new IndexedDbPilotMutationRecorder({ createId: () => `settings-${++sequence}` }),
+      bridge,
+    );
+
+    expect(await sync.reconcile()).toBe(true);
+    expect(
+      (await all<{ serializedPayload: string }>(database, LIFE_OS_SYNC_STORE.outbox))[0]
+        ?.serializedPayload,
+    ).not.toContain('walkPreferences');
+    await put(database, LIFE_OS_SYNC_STORE.settings, {
+      id: 'walk-data-format:v2',
+      spaceId: 'space',
+      deviceId: 'device',
+      minimumDataFormat: 2,
+    });
+    expect(await sync.reconcile()).toBe(true);
+    expect(
+      (await all<{ serializedPayload: string }>(database, LIFE_OS_SYNC_STORE.outbox)).some((item) =>
+        item.serializedPayload.includes('"weeklyCount":4'),
+      ),
+    ).toBe(true);
+    await put(database, LIFE_OS_SYNC_STORE.settings, {
+      id: 'walk-preferences:v1',
+      weeklyCount: null,
+      weeklyMinutes: null,
+    });
+    expect(await sync.reconcile()).toBe(true);
+    expect(
+      (await all<{ serializedPayload: string }>(database, LIFE_OS_SYNC_STORE.outbox)).some((item) =>
+        item.serializedPayload.includes('"weeklyCount":null'),
+      ),
+    ).toBe(true);
+  });
+
+  it('applies a remote weekly goal and preserves it when an older settings record omits it', async () => {
+    const indexedDb = new LifeOsIndexedDb(new IDBFactory());
+    const database = await indexedDb.open();
+    await put(database, LIFE_OS_SYNC_STORE.settings, activeSettings());
+    const bridge = {
+      readEveningRitualForSync: () => DEFAULT_EVENING_RITUAL_SETTINGS,
+      applyEveningRitualFromSync: () => true,
+    };
+    const sync = new MeaningfulLocalSettingsSync(
+      indexedDb,
+      new IndexedDbPilotMutationRecorder(),
+      bridge,
+    );
+    const apply = async (record: Record<string, unknown>) => {
+      const tx = database.transaction(LIFE_OS_SYNC_STORE.settings, 'readwrite');
+      expect(sync.stageRemote(tx, record)).toBe(true);
+      tx.objectStore(LIFE_OS_SYNC_STORE.settings).put(record);
+      await done(tx);
+      await sync.materializeRemote();
+    };
+    await apply({
+      id: 'lifeos-user-settings',
+      schemaVersion: 1,
+      eveningRitual: DEFAULT_EVENING_RITUAL_SETTINGS,
+      walkPreferences: { weeklyCount: 3, weeklyMinutes: 90 },
+    });
+    await apply({
+      id: 'lifeos-user-settings',
+      schemaVersion: 1,
+      eveningRitual: DEFAULT_EVENING_RITUAL_SETTINGS,
+    });
+    expect(
+      (await all<{ id: string; weeklyCount?: number }>(database, LIFE_OS_SYNC_STORE.settings)).find(
+        (item) => item.id === 'walk-preferences:v1',
+      )?.weeklyCount,
+    ).toBe(3);
+  });
   it('does not republish an old preference when a remote commit races reconciliation', async () => {
     const indexedDb = new LifeOsIndexedDb(new IDBFactory());
     const database = await indexedDb.open();

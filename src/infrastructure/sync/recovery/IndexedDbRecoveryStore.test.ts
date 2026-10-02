@@ -272,7 +272,7 @@ describe('IndexedDB recovery transactions', () => {
       f.db.close();
     }
   });
-  it('rejects restoring a second active walk without changing state', async () => {
+  it('preserves both independently active walks on restore for explicit conflict resolution', async () => {
     const f = await fixture();
     const walk = {
       ...WalkRecordMapper.toRecord(
@@ -296,8 +296,11 @@ describe('IndexedDB recovery transactions', () => {
         JSON.stringify(current),
         false,
       ),
-    ).rejects.toThrow('активной прогулки');
-    expect(await f.store.readState()).toEqual(current);
+    ).resolves.toBeUndefined();
+    expect(
+      (await f.store.readState()).items.filter((item) => item.entityType === 'walk'),
+    ).toHaveLength(2);
+    f.db.close();
   });
   it('restores retained deletion through a new HLC revision and rejects a stale event', async () => {
     const f = await fixture();

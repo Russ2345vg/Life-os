@@ -1,4 +1,6 @@
 import type { BalanceServices } from '../balance/BalanceServices';
+import type { GetAnalyticsOverview } from '../analytics/GetAnalyticsOverview';
+import type { WalkServices } from '../walk/WalkServices';
 import type { CreateGoal } from '../commands/CreateGoal';
 import type { CreateLifeActionDraft } from '../commands/CreateLifeActionDraft';
 import type { CompleteLifeAction } from '../commands/CompleteLifeAction';
@@ -23,6 +25,8 @@ export type ScenarioService = Pick<
 >;
 
 export interface PlannerServices extends PlannerLibraryServices {
+  readonly analytics?: GetAnalyticsOverview;
+  readonly walks?: WalkServices;
   readonly memory?: MemoryServices;
   readonly diary: DiaryService;
   readonly coldShower?: ColdShowerService;

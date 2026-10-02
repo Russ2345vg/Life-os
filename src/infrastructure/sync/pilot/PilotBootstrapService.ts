@@ -13,6 +13,7 @@ import {
   PILOT_MUTATION_STORES,
 } from './IndexedDbPilotMutationRecorder';
 import { PILOT_RUNTIME_REGISTRY, shouldSyncPilotRecord } from './PilotSyncRegistryAdapters';
+import { DomainError } from '../../../shared/errors/DomainError';
 
 const LEGACY_PILOT_TYPES: readonly PilotEntityType[] = ['direction', 'project', 'goal'];
 
@@ -24,6 +25,18 @@ export interface PilotBootstrapResult {
 interface MeaningfulSettingsBootstrap {
   reconcile(): Promise<boolean>;
 }
+
+interface IncompatibleBootstrapRecord {
+  readonly id: string;
+  readonly entityType: PilotEntityType;
+  readonly objectId: string;
+  readonly snapshotId: string;
+  readonly errorCode: 'sync.client_update_required';
+  readonly updatedAt: string;
+}
+
+const incompatibleKey = (entityType: PilotEntityType, objectId: string) =>
+  `structured-bootstrap-incompatible:${entityType}:${objectId}`;
 
 export class PilotBootstrapService {
   public constructor(
@@ -66,8 +79,9 @@ export class PilotBootstrapService {
       )
     ).every(Boolean);
     if (stage?.status === 'complete' && expansionReady) {
+      const retried = await this.retryIncompatible(database);
       const settingsQueued = (await this.settingsSync?.reconcile()) === true ? 1 : 0;
-      return { snapshotId: stage.snapshotId, queued: settingsQueued };
+      return { snapshotId: stage.snapshotId, queued: retried + settingsQueued };
     }
     if (stage === null || (stage.status === 'complete' && !expansionReady)) {
       const snapshot = await this.snapshots.createPreSyncSnapshot();
@@ -133,6 +147,17 @@ export class PilotBootstrapService {
                 /* Already aborted. */
               }
               await completion.catch(() => undefined);
+              if (error instanceof DomainError && error.code === 'sync.client_update_required') {
+                await putSetting(database, {
+                  id: incompatibleKey(registration.entityType, objectId),
+                  entityType: registration.entityType,
+                  objectId,
+                  snapshotId: stage.snapshotId,
+                  errorCode: 'sync.client_update_required',
+                  updatedAt: new Date().toISOString(),
+                } satisfies IncompatibleBootstrapRecord);
+                continue;
+              }
               throw error;
             }
             this.recorder.notifyCommitted(recorded);
@@ -158,6 +183,74 @@ export class PilotBootstrapService {
     });
     return { snapshotId: stage.snapshotId, queued };
   }
+
+  private async retryIncompatible(database: IDBDatabase): Promise<number> {
+    let queued = 0;
+    for (const marker of await readIncompatible(database)) {
+      const registration = PILOT_RUNTIME_REGISTRY.find(
+        (entry) => entry.registration.entityType === marker.entityType,
+      )?.registration;
+      if (!registration || registration.storageKind !== 'indexed_db') continue;
+      const transaction = database.transaction(
+        [registration.storeName, ...PILOT_MUTATION_STORES],
+        'readwrite',
+      );
+      const completion = done(transaction);
+      void completion.catch(() => undefined);
+      try {
+        const [current, meta] = await Promise.all([
+          request<object | undefined>(
+            transaction.objectStore(registration.storeName).get(marker.objectId),
+          ),
+          request<IDBValidKey | undefined>(
+            transaction.objectStore(LIFE_OS_SYNC_STORE.objectMeta).getKey(marker.objectId),
+          ),
+        ]);
+        if (
+          current === undefined ||
+          meta !== undefined ||
+          !shouldSyncPilotRecord(marker.entityType, current)
+        ) {
+          transaction.objectStore(LIFE_OS_SYNC_STORE.settings).delete(marker.id);
+          await completion;
+          continue;
+        }
+        const recorded = await this.recorder.recordUpsert(transaction, marker.entityType, current);
+        transaction.objectStore(LIFE_OS_SYNC_STORE.settings).delete(marker.id);
+        await completion;
+        this.recorder.notifyCommitted(recorded);
+        if (recorded) queued++;
+      } catch (error: unknown) {
+        try {
+          transaction.abort();
+        } catch {
+          /* Already settled. */
+        }
+        await completion.catch(() => undefined);
+        if (error instanceof DomainError && error.code === 'sync.client_update_required') continue;
+        throw error;
+      }
+    }
+    return queued;
+  }
+}
+
+async function readIncompatible(
+  database: IDBDatabase,
+): Promise<readonly IncompatibleBootstrapRecord[]> {
+  const transaction = database.transaction(LIFE_OS_SYNC_STORE.settings, 'readonly');
+  const records = await request<unknown[]>(
+    transaction.objectStore(LIFE_OS_SYNC_STORE.settings).getAll(),
+  );
+  await done(transaction);
+  return records.filter(
+    (value): value is IncompatibleBootstrapRecord =>
+      typeof value === 'object' &&
+      value !== null &&
+      'id' in value &&
+      typeof value.id === 'string' &&
+      value.id.startsWith('structured-bootstrap-incompatible:'),
+  );
 }
 
 async function readInstallation(database: IDBDatabase): Promise<SyncSettingsRecord | null> {

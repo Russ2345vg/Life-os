@@ -1,0 +1,99 @@
+.planner-v2 .planner-needs {
+  max-width: 960px;
+  padding: var(--space-6);
+}
+.planner-v2 .planner-needs__header {
+  margin-bottom: var(--space-6);
+}
+.planner-v2 .planner-needs__header h1 {
+  margin: var(--space-2) 0;
+}
+.planner-v2 .planner-needs__list,
+.planner-v2 .planner-needs__groups ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.planner-v2 .planner-needs__list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+.planner-v2 .planner-needs__list a,
+.planner-v2 .planner-needs__groups li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 48px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+}
+.planner-v2 .planner-needs__list a {
+  color: var(--text-primary);
+  text-decoration: none;
+}
+.planner-v2 .planner-needs__list a span,
+.planner-v2 .planner-needs__groups li span {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+.planner-v2 .planner-needs__groups {
+  display: grid;
+  gap: var(--space-6);
+}
+.planner-v2 .planner-needs__groups h2 {
+  font-size: 1.1rem;
+}
+.planner-v2 .planner-needs__groups ul {
+  display: grid;
+  gap: var(--space-2);
+}
+.planner-v2 .planner-needs__groups a {
+  color: var(--text-primary);
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+.planner-v2 .planner-entity-need-content a {
+  color: inherit;
+  text-decoration-color: var(--border-strong);
+}
+.planner-v2 .planner-entity-need-content a:focus-visible {
+  outline: 2px solid var(--section-accent, var(--gold-main));
+  outline-offset: 2px;
+}
+.planner-v2 .planner-needs__list strong,
+.planner-v2 .planner-needs__groups a {
+  overflow-wrap: anywhere;
+}
+.planner-v2 .planner-needs a:focus-visible {
+  outline: 2px solid var(--section-accent, var(--gold-main));
+  outline-offset: 2px;
+}
+.planner-v2 .planner-need-picker {
+  display: grid;
+  gap: var(--space-2);
+}
+.planner-v2 .planner-need-picker > label {
+  display: block;
+}
+.planner-v2 .planner-need-picker select {
+  width: 100%;
+  min-height: var(--control-md);
+}
+@media (max-width: 700px) {
+  .planner-v2 .planner-needs {
+    padding: var(--space-4);
+  }
+  .planner-v2 .planner-needs__list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .planner-v2 .planner-needs__list a,
+  .planner-v2 .planner-needs__groups li {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

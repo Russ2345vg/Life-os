@@ -1,4 +1,6 @@
 import { BalanceIndicators } from '../../application/balance/BalanceIndicators';
+import { GetAnalyticsOverview } from '../../application/analytics/GetAnalyticsOverview';
+import { IndexedDbAnalyticsSnapshotReader } from '../../infrastructure/persistence/IndexedDbAnalyticsSnapshotReader';
 import { GetLifeBalance } from '../../application/balance/GetLifeBalance';
 import { ArchiveGoal } from '../../application/commands/ArchiveGoal';
 import { ArchiveLifeAction } from '../../application/commands/ArchiveLifeAction';
@@ -83,6 +85,16 @@ import type { LifeOsApplication } from './LifeOsApplication';
 import { PlanImport } from '../../application/plan-import/PlanImport';
 import { LifeOsApplicationInitializationError } from './LifeOsApplicationInitializationError';
 import { createLifeOsSyncApplication } from './createLifeOsSyncApplication';
+import { IndexedDbWalkRepository } from '../../infrastructure/persistence/IndexedDbWalkRepository';
+import { WalkCommands } from '../../application/walk/WalkCommands';
+import { WalkCaptureCommands } from '../../application/walk/WalkCaptureCommands';
+import { WalkCaptureProcessing } from '../../application/walk/WalkCaptureProcessing';
+import { WalkAnalytics } from '../../application/walk/WalkAnalytics';
+import { WalkMemoryExport } from '../../application/walk/WalkMemoryExport';
+import { WalkPlanning } from '../../application/walk/WalkPlanning';
+import { WalkContextResolver } from '../../application/walk/WalkContextResolver';
+import { WalkPreferences } from '../../application/walk/WalkPreferences';
+import { IndexedDbWalkPreferencesStore } from '../../infrastructure/persistence/IndexedDbWalkPreferencesStore';
 import { createMemoryModule } from './modules/createMemoryModule';
 import { PlannerLibraryReadModels } from '../../application/planner/PlannerLibraryReadModels';
 import { IndexedDbPlannerChangeSource } from '../../infrastructure/persistence/IndexedDbPlannerChangeSource';
@@ -271,7 +283,40 @@ export async function createLifeOsApplication(
       new IndexedDbPlannerChangeSource(database),
     );
 
+    const walkRepository = new IndexedDbWalkRepository(database);
+    const walkCommands = new WalkCommands(walkRepository, clock, currentDateProvider, idGenerator);
     const application: LifeOsApplication = {
+      analytics: new GetAnalyticsOverview(new IndexedDbAnalyticsSnapshotReader(database), () =>
+        clock.now(),
+      ),
+      walks: {
+        preferences: new WalkPreferences(
+          new IndexedDbWalkPreferencesStore(database, () => {
+            void meaningfulSettingsSync?.reconcile().catch(() => undefined);
+          }),
+        ),
+        context: new WalkContextResolver(lifeActionRepository, goalRepository),
+        planning: new WalkPlanning(
+          createLifeActionDraft,
+          journalUnitOfWork,
+          lifeActionRepository,
+          walkRepository,
+          walkCommands,
+        ),
+        memoryExport: new WalkMemoryExport(walkRepository, walkRepository, memory),
+        analytics: new WalkAnalytics(walkRepository),
+        processing: new WalkCaptureProcessing(
+          walkRepository,
+          createLifeActionDraft,
+          journalUnitOfWork,
+          clock,
+        ),
+        photoReader: new BrowserMemoryPhotoReader(),
+        commands: walkCommands,
+        captures: new WalkCaptureCommands(walkRepository, clock, idGenerator),
+        queries: walkRepository,
+        changes: walkRepository,
+      },
       planImport: new PlanImport({
         spheres: sphereRepository,
         directions: directionRepository,

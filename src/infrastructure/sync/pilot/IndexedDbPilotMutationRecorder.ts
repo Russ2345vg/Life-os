@@ -25,6 +25,8 @@ import {
   registerLocalAttachment,
   tombstoneParentAttachments,
 } from '../attachments/AttachmentRegistration';
+import { assertWalkPayloadCompatible } from '../../../application/walk/WalkSyncCompatibility';
+import { confirmedWalkDataFormat } from '../WalkDataFormat';
 
 export const PILOT_MUTATION_STORES = Object.freeze([
   ...SINGLETON_SYNC_STORES,
@@ -91,6 +93,12 @@ export class IndexedDbPilotMutationRecorder {
       transaction.objectStore(LIFE_OS_SYNC_STORE.settings).get('sync'),
     );
     if (!isActiveInstallation(settings)) return false;
+    if (operation === 'upsert')
+      assertWalkPayloadCompatible(
+        entityType,
+        sourceRecord as Readonly<Record<string, unknown>>,
+        await confirmedWalkDataFormat(transaction, settings),
+      );
 
     const objectId = 'id' in sourceRecord ? sourceRecord.id : undefined;
     if (typeof objectId !== 'string' || objectId.length === 0) {

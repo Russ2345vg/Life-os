@@ -46,6 +46,10 @@ export class RecurringActions {
         throw new DomainError('goal.not_found', 'Цель не найдена.');
       const rule = validateRule({
         ...input,
+        walkPlan:
+          input.walkPlan === undefined
+            ? (previous?.walkPlan ?? (actionId ? requireAction(s, actionId).walkPlan : null))
+            : input.walkPlan,
         need:
           input.need === undefined
             ? (previous?.need ?? (actionId ? requireAction(s, actionId).need : null))
@@ -174,6 +178,7 @@ export class RecurringActions {
                 'Идентификатор повторения уже занят.',
               );
             const action = LifeAction.createDraft({
+              walkPlan: rule.walkPlan ?? null,
               id: EntityId.create(slot.id),
               title: LifeActionTitle.create(rule.title),
               need: rule.need ?? null,
@@ -487,6 +492,7 @@ export class RecurringActions {
               (previousNeed === undefined || action.need === previousNeed)
               ? (rule.need ?? null)
               : action.need,
+            rule.walkPlan ?? null,
           );
       }
       if (valid && action.status !== 'cancelled') {

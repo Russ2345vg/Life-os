@@ -14,6 +14,38 @@ import { DomainError } from '../../../shared/errors/DomainError';
 export class SupabaseSyncTrustTransport implements SyncTrustTransport {
   public constructor(private readonly client: SupabaseClient) {}
 
+  /** Returns the server floor. A pre-migration server continues to use format 1. */
+  public async negotiateDataFormat(deviceId: string): Promise<1 | 2> {
+    if (!(await this.advertiseDataFormat(deviceId))) return 1;
+    let row = firstRow(await this.rpc('lifeos_sync_read_data_format', {}));
+    if (readInteger(row, 'supported_data_format') !== 2) throw invalidResponse();
+    if (readInteger(row, 'minimum_data_format') === 1 && row.active_devices_ready === true) {
+      // An activation may win the race after read; the server rechecks under the space lock.
+      await this.rpc('lifeos_sync_raise_data_format', {}).catch(() => undefined);
+      row = firstRow(await this.rpc('lifeos_sync_read_data_format', {}));
+    }
+    const floor = readInteger(row, 'minimum_data_format');
+    if (floor !== 1 && floor !== 2) throw invalidResponse();
+    return floor;
+  }
+
+  private async advertiseDataFormat(deviceId: string): Promise<boolean> {
+    const response = await this.client.rpc('lifeos_sync_advertise_data_format', {
+      p_device_id: deviceId,
+      p_supported_data_format: 2,
+    });
+    if (response.error === null) {
+      const row = firstRow(response.data as unknown);
+      if (readInteger(row, 'supported_data_format') !== 2) throw invalidResponse();
+      return true;
+    }
+    if (response.error.code === 'PGRST202' || response.error.code === '42883') return false;
+    throw new DomainError(
+      'sync.remote_operation_failed',
+      'Формат устройства не подтверждён сервером.',
+    );
+  }
+
   public async adoptCurrentSpace(deviceId: string) {
     const row = firstRow(
       await this.rpc('lifeos_sync_adopt_current_space', { p_device_id: deviceId }),
@@ -114,6 +146,7 @@ export class SupabaseSyncTrustTransport implements SyncTrustTransport {
   }
 
   public async acknowledgePairing(input: Parameters<SyncTrustTransport['acknowledgePairing']>[0]) {
+    await this.advertiseDataFormat(input.deviceId);
     await this.rpc('lifeos_sync_acknowledge_pairing', {
       p_device_id: input.deviceId,
       p_envelope_sha256_hex: input.envelopeSha256Hex,
@@ -152,6 +185,7 @@ export class SupabaseSyncTrustTransport implements SyncTrustTransport {
   }
 
   public async completeRecovery(input: Parameters<SyncTrustTransport['completeRecovery']>[0]) {
+    await this.advertiseDataFormat(input.deviceId);
     await this.rpc('lifeos_sync_complete_recovery', {
       p_device_id: input.deviceId,
       p_auth_proof_hex: base64UrlToHex(input.authProof),

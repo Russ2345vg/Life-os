@@ -1,6 +1,7 @@
 import type { WalkCaptureStatus } from '../../../domain';
 
 export interface WalkCaptureRecord {
+  readonly resultActionId?: string | null;
   readonly schemaVersion: 1;
   readonly id: string;
   readonly walkId: string;

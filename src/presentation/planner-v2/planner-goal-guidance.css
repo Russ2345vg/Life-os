@@ -61,6 +61,10 @@
   min-height: 44px;
 }
 
+.planner-v2 .planner-today-guidance-label--short {
+  display: none;
+}
+
 @media (min-width: 360px) and (max-width: 760px) {
   .planner-v2 .planner-today .planner-page-heading {
     display: grid;
@@ -97,7 +101,31 @@
 }
 
 @media (max-width: 480px) {
+  .planner-v2 .planner-today .planner-today-heading-links {
+    gap: var(--space-2);
+  }
+
+  .planner-v2 .planner-today .planner-today-heading-links .planner-text-link {
+    padding-inline: var(--space-1);
+  }
+
   .planner-v2 .planner-goal-guidance__choice {
     padding: var(--space-4);
+  }
+}
+
+@media (max-width: 380px) {
+  .planner-v2 .planner-today .planner-today-heading-links .planner-text-link {
+    padding-inline: 0;
+  }
+}
+
+@media (max-width: 340px) {
+  .planner-v2 .planner-today-guidance-label {
+    display: none;
+  }
+
+  .planner-v2 .planner-today-guidance-label--short {
+    display: inline;
   }
 }

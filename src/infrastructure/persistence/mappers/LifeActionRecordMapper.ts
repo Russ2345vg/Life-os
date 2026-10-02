@@ -29,6 +29,7 @@ import {
 export class LifeActionRecordMapper {
   public static toRecord(entity: LifeAction): LifeActionRecord {
     return {
+      ...(entity.walkPlan === null ? {} : { walkPlan: entity.walkPlan }),
       estimateMinutes: entity.estimateMinutes,
       scheduledStartMinute: entity.scheduledStartMinute,
       scheduledDurationMinutes: entity.scheduledDurationMinutes,
@@ -70,6 +71,7 @@ export class LifeActionRecordMapper {
   public static fromRecord(record: LifeActionRecord): LifeAction {
     assertRecordAndSchemaVersion(record);
     return LifeAction.rehydrate({
+      walkPlan: record.walkPlan ?? null,
       estimateMinutes: record.estimateMinutes ?? null,
       scheduledStartMinute: record.scheduledStartMinute ?? null,
       scheduledDurationMinutes: record.scheduledDurationMinutes ?? null,

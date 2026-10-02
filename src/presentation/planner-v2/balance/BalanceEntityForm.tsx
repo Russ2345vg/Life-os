@@ -7,6 +7,7 @@ import type { DirectionStatus } from '../../../domain/direction/DirectionStatus'
 import { VoiceField } from '../../voice-input/VoiceField';
 import { VoiceTextInput } from '../../voice-input/VoiceTextInput';
 import { VoiceTextArea } from '../../voice-input/VoiceTextArea';
+import { NeedPicker } from '../NeedPicker';
 import { scoreLabel } from './BalanceLabels';
 import { BalanceForm, ImportanceField, ScoreField } from './BalanceFormParts';
 
@@ -151,16 +152,13 @@ export function BalanceEntityForm({
         <div className="balance-fields">
           {kind === 'direction' && (
             <>
-              <VoiceField>
-                <span>Потребность</span>
-                <VoiceTextInput
-                  id="balance-direction-need"
-                  value={need}
-                  onValueChange={setNeed}
-                  maxLength={500}
-                  placeholder="Какую потребность поддерживает направление"
-                />
-              </VoiceField>
+              <NeedPicker
+                id="balance-direction-need"
+                value={need}
+                onValueChange={setNeed}
+                emptyLabel="Не выбирать"
+                help="Выберите потребность направления или добавьте свою."
+              />
               <VoiceField>
                 <span>Текущее состояние</span>
                 <VoiceTextArea

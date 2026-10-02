@@ -8,8 +8,75 @@ import {
 import type { SyncSettingsRecord } from '../../persistence/records/SyncStoreRecords';
 import { IndexedDbPilotMutationRecorder } from './IndexedDbPilotMutationRecorder';
 import { PilotBootstrapService } from './PilotBootstrapService';
+import { DayDate, EntityId, Walk } from '../../../domain';
+import { WalkRecordMapper } from '../../persistence/mappers/WalkRecordMapper';
 
 describe('PilotBootstrapService', () => {
+  it('keeps an incompatible local walk pending while bootstrapping other sections', async () => {
+    const indexedDb = new LifeOsIndexedDb(new IDBFactory());
+    const db = await indexedDb.open();
+    const now = new Date('2026-10-01T10:00:00Z');
+    const walk = Walk.create({
+      id: EntityId.create('unsynced-walk'),
+      date: DayDate.create('2026-10-01'),
+      type: 'restorative',
+      now,
+    }).start({ mode: 'stopwatch', startedAt: now });
+    const seed = db.transaction(
+      [LIFE_OS_STORE.walks, LIFE_OS_STORE.decisions, LIFE_OS_SYNC_STORE.settings],
+      'readwrite',
+    );
+    seed.objectStore(LIFE_OS_STORE.walks).put(WalkRecordMapper.toRecord(walk));
+    seed.objectStore(LIFE_OS_STORE.decisions).put(decision('compatible-decision'));
+    seed.objectStore(LIFE_OS_SYNC_STORE.settings).put(settings());
+    await done(seed);
+    const snapshots = {
+      createPreSyncSnapshot: vi.fn(async () => ({ snapshotId: 'snapshot' })),
+      verifySnapshot: vi.fn(async () => ({ valid: true })),
+    };
+    const service = new PilotBootstrapService(
+      indexedDb,
+      snapshots as never,
+      new IndexedDbPilotMutationRecorder(),
+    );
+    expect((await service.run()).queued).toBe(1);
+    expect(
+      await request(
+        db
+          .transaction(LIFE_OS_SYNC_STORE.settings)
+          .objectStore(LIFE_OS_SYNC_STORE.settings)
+          .get('structured-bootstrap-incompatible:walk:unsynced-walk'),
+      ),
+    ).toMatchObject({ objectId: 'unsynced-walk' });
+    expect((await service.run()).queued).toBe(0);
+    expect(snapshots.createPreSyncSnapshot).toHaveBeenCalledOnce();
+    expect(
+      await request(
+        db.transaction(LIFE_OS_SYNC_STORE.outbox).objectStore(LIFE_OS_SYNC_STORE.outbox).count(),
+      ),
+    ).toBe(1);
+    const repair = db.transaction(LIFE_OS_STORE.walks, 'readwrite');
+    repair.objectStore(LIFE_OS_STORE.walks).put({
+      ...WalkRecordMapper.toRecord(walk),
+      reflectionQuestion: 'Вопрос для старого клиента',
+    });
+    await done(repair);
+    expect((await service.run()).queued).toBe(1);
+    expect(
+      await request(
+        db
+          .transaction(LIFE_OS_SYNC_STORE.settings)
+          .objectStore(LIFE_OS_SYNC_STORE.settings)
+          .get('structured-bootstrap-incompatible:walk:unsynced-walk'),
+      ),
+    ).toBeUndefined();
+    expect(
+      await request(
+        db.transaction(LIFE_OS_SYNC_STORE.outbox).objectStore(LIFE_OS_SYNC_STORE.outbox).count(),
+      ),
+    ).toBe(2);
+    indexedDb.close();
+  });
   it('expands a completed old bootstrap once, preserving the existing checkpoints', async () => {
     const indexedDb = new LifeOsIndexedDb(new IDBFactory()),
       db = await indexedDb.open(),

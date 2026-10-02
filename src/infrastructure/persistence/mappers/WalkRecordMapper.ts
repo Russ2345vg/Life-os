@@ -51,6 +51,7 @@ import type {
 export class WalkRecordMapper {
   public static toRecord(walk: Walk): WalkRecord {
     return {
+      deletedAt: walk.deletedAt?.toISOString() ?? null,
       goalLinksVersion: 1,
       schemaVersion: 1,
       id: walk.id.toString(),
@@ -133,6 +134,9 @@ export class WalkRecordMapper {
     }
 
     return Walk.rehydrate({
+      deletedAt: Object.hasOwn(record, 'deletedAt')
+        ? readNullableIsoDate(record, 'deletedAt')
+        : null,
       id: readEntityId(record, 'id'),
       date: readDayDate(record, 'date'),
       type,

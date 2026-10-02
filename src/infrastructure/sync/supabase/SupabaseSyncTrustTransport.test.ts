@@ -3,6 +3,41 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { SupabaseSyncTrustTransport } from './SupabaseSyncTrustTransport';
 
 describe('SupabaseSyncTrustTransport', () => {
+  it('promotes only when all active devices advertise support', async () => {
+    const calls: string[] = [];
+    const rpc = vi.fn(async (name: string) => {
+      calls.push(name);
+      if (name === 'lifeos_sync_advertise_data_format')
+        return { data: [{ minimum_data_format: 1, supported_data_format: 2 }], error: null };
+      if (name === 'lifeos_sync_read_data_format')
+        return {
+          data: [
+            {
+              minimum_data_format: calls.includes('lifeos_sync_raise_data_format') ? 2 : 1,
+              supported_data_format: 2,
+              active_devices_ready: true,
+            },
+          ],
+          error: null,
+        };
+      return { data: [{ minimum_data_format: 2 }], error: null };
+    });
+    const transport = new SupabaseSyncTrustTransport({ rpc } as unknown as SupabaseClient);
+    await expect(transport.negotiateDataFormat('device')).resolves.toBe(2);
+    expect(calls).toEqual([
+      'lifeos_sync_advertise_data_format',
+      'lifeos_sync_read_data_format',
+      'lifeos_sync_raise_data_format',
+      'lifeos_sync_read_data_format',
+    ]);
+  });
+
+  it('keeps format 1 on a pre-migration server', async () => {
+    const rpc = vi.fn(async () => ({ data: null, error: { code: 'PGRST202' } }));
+    const transport = new SupabaseSyncTrustTransport({ rpc } as unknown as SupabaseClient);
+    await expect(transport.negotiateDataFormat('device')).resolves.toBe(1);
+    expect(rpc).toHaveBeenCalledTimes(1);
+  });
   it('adopts the current space with only the device id from the client', async () => {
     const rpc = vi.fn(async () => ({
       data: [

@@ -150,7 +150,7 @@ test('MASTER hierarchy creates and edits linked records through contextual panel
   await expect(panel).toHaveCount(0);
   await page.getByRole('link', { name: '+ Добавить цель', exact: true }).click();
   panel = page.getByRole('dialog');
-  await expect(panel.getByRole('combobox').first()).not.toHaveValue('');
+  await expect(panel.getByRole('combobox', { name: /^Направление/ })).not.toHaveValue('');
   await panel.getByLabel('Название', { exact: true }).fill('Снять квартиру MASTER');
   await panel.getByLabel('Желаемый результат').fill('Подписан договор, получены ключи');
   await panel.getByRole('combobox', { name: 'Период', exact: true }).selectOption('quarter');

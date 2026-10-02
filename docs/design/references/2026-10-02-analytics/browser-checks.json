@@ -1,0 +1,120 @@
+{
+  "date": "2026-10-02",
+  "scope": "Review-only fixture; no product analytics validation",
+  "geometry": [
+    {
+      "viewport": "desktop",
+      "state": "empty",
+      "heading": "Аналитика",
+      "height": 900,
+      "scrollWidth": 1600,
+      "smallControls": [],
+      "width": 1600
+    },
+    {
+      "viewport": "desktop",
+      "state": "partial",
+      "heading": "Аналитика",
+      "height": 900,
+      "scrollWidth": 1585,
+      "smallControls": [],
+      "width": 1600
+    },
+    {
+      "viewport": "desktop",
+      "state": "error",
+      "heading": "Аналитика",
+      "height": 900,
+      "scrollWidth": 1600,
+      "smallControls": [],
+      "width": 1600
+    },
+    {
+      "viewport": "desktop",
+      "state": "loading",
+      "heading": "Аналитика",
+      "height": 900,
+      "scrollWidth": 1585,
+      "smallControls": [],
+      "width": 1600
+    },
+    {
+      "viewport": "desktop",
+      "state": "ready",
+      "heading": "Аналитика",
+      "height": 900,
+      "scrollWidth": 1585,
+      "smallControls": [],
+      "width": 1600
+    },
+    {
+      "viewport": "mobile",
+      "state": "empty",
+      "heading": "Аналитика",
+      "height": 844,
+      "scrollWidth": 375,
+      "smallControls": [],
+      "width": 390
+    },
+    {
+      "viewport": "mobile",
+      "state": "partial",
+      "heading": "Аналитика",
+      "height": 844,
+      "scrollWidth": 375,
+      "smallControls": [],
+      "width": 390
+    },
+    {
+      "viewport": "mobile",
+      "state": "error",
+      "heading": "Аналитика",
+      "height": 844,
+      "scrollWidth": 375,
+      "smallControls": [],
+      "width": 390
+    },
+    {
+      "viewport": "mobile",
+      "state": "loading",
+      "heading": "Аналитика",
+      "height": 844,
+      "scrollWidth": 375,
+      "smallControls": [],
+      "width": 390
+    },
+    {
+      "viewport": "mobile",
+      "state": "ready",
+      "heading": "Аналитика",
+      "height": 844,
+      "scrollWidth": 375,
+      "smallControls": [],
+      "width": 390
+    },
+    {
+      "state": "ready",
+      "height": 800,
+      "scrollWidth": 345,
+      "width": 360
+    },
+    {
+      "state": "ready",
+      "height": 720,
+      "scrollWidth": 1265,
+      "width": 1280
+    }
+  ],
+  "flows": {
+    "dayDrilldown": "Чт, 24 сентября: 4 ч 30 мин; возврат к обзору доступен",
+    "retry": true,
+    "month": true,
+    "previous": true,
+    "mobileMore": true,
+    "keyboardFocus": {
+      "focused": "Месяц",
+      "outline": "rgb(129, 207, 171) solid 1.6px"
+    }
+  },
+  "console": []
+}

@@ -10,12 +10,15 @@ import { usePlanning } from './PlanningContext';
 import { defaultRecurrence, RecurrenceFields } from './RecurrenceFields';
 import { AppIcon } from '../components/AppIcon';
 import { PlannerDisclosureCard } from './PlannerDisclosureCard';
+import { NeedPicker } from './NeedPicker';
 export function PlanningActionDetails({
   action,
   today,
+  onStartWalk,
 }: {
   readonly action: LifeAction;
   readonly today: string;
+  readonly onStartWalk?: ((actionId: string, requestId: string) => Promise<void>) | undefined;
 }) {
   const c = usePlanning();
   const [open, setOpen] = useState(false),
@@ -26,6 +29,7 @@ export function PlanningActionDetails({
     [amount, setAmount] = useState('1'),
     [pauseUntil, setPauseUntil] = useState('');
   const working = useRef(false);
+  const walkRequestId = useRef<string | null>(null);
   const storedAction = c?.state?.actions.find((item) => item.id.equals(action.id)) ?? action;
   const storedRule = c?.state?.rules.find((r) => r.id === storedAction.occurrence?.ruleId);
   const rule = storedRule?.removedAt == null ? storedRule : undefined;
@@ -82,6 +86,18 @@ export function PlanningActionDetails({
   return (
     <>
       <CompletionResult action={action} />
+      {action.walkPlan && onStartWalk && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            if (!walkRequestId.current) walkRequestId.current = crypto.randomUUID();
+            void run(() => onStartWalk(action.id.toString(), walkRequestId.current!));
+          }}
+        >
+          Начать прогулку по плану
+        </button>
+      )}
       {storedRule && (
         <section className="planner-recurrence-summary" aria-label="Повторение">
           <p>
@@ -151,23 +167,19 @@ export function PlanningActionDetails({
                 </summary>
                 <div className="planner-disclosure-card__nested-body">
                   <RecurrenceFields value={draft} onChange={setDraft} />
-                  <label>
-                    <span>Потребность повторений</span>
-                    <input
-                      maxLength={500}
-                      value={
-                        draft.need === undefined
-                          ? rule
-                            ? (rule.need ?? '')
-                            : (action.need ?? '')
-                          : (draft.need ?? '')
-                      }
-                      onChange={(event) =>
-                        setDraft((current) => ({ ...current, need: event.target.value }))
-                      }
-                      placeholder="Пустое поле использует потребность родителя"
-                    />
-                  </label>
+                  <NeedPicker
+                    id={`planner-recurrence-need-${action.id.toString()}`}
+                    label="Потребность повторений"
+                    value={
+                      draft.need === undefined
+                        ? rule
+                          ? (rule.need ?? '')
+                          : (action.need ?? '')
+                        : (draft.need ?? '')
+                    }
+                    onValueChange={(value) => setDraft((current) => ({ ...current, need: value }))}
+                    help="Пустой выбор использует потребность родителя."
+                  />
                   <button
                     onClick={() => {
                       void run(async () => {

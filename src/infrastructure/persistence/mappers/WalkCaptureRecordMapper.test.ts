@@ -16,6 +16,7 @@ describe('WalkCaptureRecordMapper', () => {
     const thought = capture();
     const record = WalkCaptureRecordMapper.toRecord(thought);
     expect(record).toEqual({
+      resultActionId: null,
       schemaVersion: 1,
       id: 'c1',
       walkId: 'w1',

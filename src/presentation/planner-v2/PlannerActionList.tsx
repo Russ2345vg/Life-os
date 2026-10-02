@@ -1,8 +1,10 @@
 import { resolveActionNeed } from '../../domain/planner/resolveEntityNeed';
 import { EntityNeedText } from './EntityNeedText';
+import { NeedPicker } from './NeedPicker';
 import { plannerDisplayDate } from './plannerDisplayDate';
 import { QuickAccessGuardScope, useQuickAccessGuard } from './QuickAccessContext';
 import { RecurrenceBadge } from './RecurrenceBadge';
+import { ActionGoalProgress } from './ActionGoalProgress';
 import { PlanningActionDetails } from './PlanningActionDetails';
 import { editPlannerField, plannerFieldState, type PlannerFieldDraft } from './plannerActionDraft';
 import { useRef, useState, type ReactNode } from 'react';
@@ -37,6 +39,7 @@ export function PlannerActionList({
   initialView = 'open',
   onSetTime,
   presentation = 'page',
+  onStartWalk,
   ...operations
 }: PlannerActionOperations & {
   readonly actions: readonly LifeAction[];
@@ -50,6 +53,7 @@ export function PlannerActionList({
   readonly initialView?: ActionView;
   readonly onSetTime?: SetActionTime | undefined;
   readonly presentation?: 'page' | 'panel';
+  readonly onStartWalk?: ((actionId: string, requestId: string) => Promise<void>) | undefined;
 }) {
   const [view, setView] = useState<ActionView>(initialView);
   const [search, setSearch] = useState('');
@@ -229,7 +233,7 @@ export function PlannerActionList({
                   onSave={operations.onEdit}
                 />
               )}
-            <PlanningActionDetails action={selected} today={today} />
+            <PlanningActionDetails action={selected} today={today} onStartWalk={onStartWalk} />
             <section className="planner-subactions" aria-label="Время действия">
               <h2>Время</h2>
               <a
@@ -626,18 +630,15 @@ function PlannerActionEdit({
   const [error, setError] = useState<string | null>(null);
   const secondaryFields = (
     <>
-      <label>
-        <span>Потребность</span>
-        <input
-          value={need}
-          maxLength={500}
-          disabled={busy}
-          placeholder="Пустое поле использует потребность родителя"
-          onChange={(event) =>
-            setNeedDraft((current) => editPlannerField(current, savedNeed, event.target.value))
-          }
-        />
-      </label>
+      <NeedPicker
+        id={`planner-action-edit-need-${action.id.toString()}`}
+        value={need}
+        disabled={busy}
+        help="Пустой выбор использует потребность родителя."
+        onValueChange={(value) =>
+          setNeedDraft((current) => editPlannerField(current, savedNeed, value))
+        }
+      />
       <label>
         <span>Описание</span>
         <textarea
@@ -860,6 +861,7 @@ export function PlannerActionRow({
                 </span>
                 {action.priority && <span>{priorityLabel(action.priority)}</span>}
                 <RecurrenceBadge action={action} label={recurrenceLabel} />
+                <ActionGoalProgress action={action} />
                 {(goalNext || action.isNext) && <span>{goalNext ? 'Следующее' : 'Главное'}</span>}
                 {action.status === 'completed' && <span>Выполнено</span>}
                 {action.status === 'cancelled' && <span>Отменено</span>}
@@ -886,6 +888,7 @@ export function PlannerActionRow({
                   {action.status === 'cancelled' ? ' · Отменено' : ''}
                 </span>
                 <RecurrenceBadge action={action} label={recurrenceLabel} />
+                <ActionGoalProgress action={action} />
               </>
             )}
           </div>

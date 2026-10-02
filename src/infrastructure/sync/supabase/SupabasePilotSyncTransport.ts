@@ -8,28 +8,36 @@ import type { PilotCryptoMetadata } from '../../../application/sync/ports/SyncCr
 import { DomainError } from '../../../shared/errors/DomainError';
 
 export class SupabasePilotSyncTransport implements PilotSyncTransport {
+  #dataFormat: 1 | 2 = 1;
   #hintTopic: string | null = null;
   #hintChannel: ReturnType<SupabaseClient['channel']> | null = null;
 
   public constructor(private readonly client: SupabaseClient) {}
 
+  public setDataFormat(format: 1 | 2): void {
+    this.#dataFormat = format;
+  }
+
   public async push(
     envelope: Parameters<PilotSyncTransport['push']>[0],
   ): Promise<PilotPushAcknowledgement> {
     const row = firstRow(
-      await this.rpc('lifeos_sync_push_pilot_event', {
-        p_event_id: envelope.metadata.eventId,
-        p_object_id: envelope.metadata.objectId,
-        p_origin_device_id: envelope.metadata.originDeviceId,
-        p_base_revision: envelope.metadata.baseRevision,
-        p_revision: envelope.metadata.revision,
-        p_key_epoch: envelope.metadata.keyEpoch,
-        p_operation: envelope.metadata.operation,
-        p_hlc_wall_time: envelope.metadata.hlcWallTime,
-        p_hlc_logical: envelope.metadata.hlcLogical,
-        p_ciphertext_hex: base64UrlToHex(envelope.ciphertext),
-        p_nonce_hex: base64UrlToHex(envelope.nonce),
-      }),
+      await this.rpc(
+        this.#dataFormat === 2 ? 'lifeos_sync_push_pilot_event_v2' : 'lifeos_sync_push_pilot_event',
+        {
+          p_event_id: envelope.metadata.eventId,
+          p_object_id: envelope.metadata.objectId,
+          p_origin_device_id: envelope.metadata.originDeviceId,
+          p_base_revision: envelope.metadata.baseRevision,
+          p_revision: envelope.metadata.revision,
+          p_key_epoch: envelope.metadata.keyEpoch,
+          p_operation: envelope.metadata.operation,
+          p_hlc_wall_time: envelope.metadata.hlcWallTime,
+          p_hlc_logical: envelope.metadata.hlcLogical,
+          p_ciphertext_hex: base64UrlToHex(envelope.ciphertext),
+          p_nonce_hex: base64UrlToHex(envelope.nonce),
+        },
+      ),
     );
     return {
       sequence: readNonNegativeInteger(row, 'sequence'),
@@ -39,10 +47,15 @@ export class SupabasePilotSyncTransport implements PilotSyncTransport {
 
   public async pull(afterSequence: number, limit: number): Promise<readonly PilotRemoteEvent[]> {
     return rows(
-      await this.rpc('lifeos_sync_pull_pilot_events', {
-        p_after_sequence: afterSequence,
-        p_limit: limit,
-      }),
+      await this.rpc(
+        this.#dataFormat === 2
+          ? 'lifeos_sync_pull_pilot_events_v2'
+          : 'lifeos_sync_pull_pilot_events',
+        {
+          p_after_sequence: afterSequence,
+          p_limit: limit,
+        },
+      ),
     ).map((row) => ({
       sequence: readNonNegativeInteger(row, 'sequence'),
       metadata: metadataFromRow(row),

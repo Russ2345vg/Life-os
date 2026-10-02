@@ -1044,6 +1044,91 @@ describe('Walk', () => {
   });
 });
 
+describe('simple walks', () => {
+  it.each([WALK_INTENT.free, WALK_INTENT.recovery, WALK_INTENT.reflection])(
+    'starts %s without a question or ratings',
+    (intent) => {
+      const walk = Walk.create({
+        id: EntityId.create('simple'),
+        date: DATE,
+        type: WALK_TYPE.restorative,
+        intent,
+        now: NOW,
+      });
+      const started = walk.start({ mode: WALK_MODE.stopwatch, startedAt: NOW });
+      expect(started.reflectionQuestion).toBeNull();
+      expect(started.complete({ endedAt: new Date(NOW.getTime() + 60_000) }).impact).toBeNull();
+    },
+  );
+
+  it('normalizes an optional question and limits supplied text', () => {
+    const walk = reflectionWalk('optional', WALK_REFLECTION_TEMPLATE.freeThought);
+    expect(
+      walk.start({ mode: WALK_MODE.stopwatch, startedAt: NOW, reflectionQuestion: '   ' })
+        .reflectionQuestion,
+    ).toBeNull();
+    expect(
+      walk.start({ mode: WALK_MODE.stopwatch, startedAt: NOW, reflectionQuestion: '  Почему?  ' })
+        .reflectionQuestion,
+    ).toBe('Почему?');
+    expect(() =>
+      walk.start({
+        mode: WALK_MODE.stopwatch,
+        startedAt: NOW,
+        reflectionQuestion: 'я'.repeat(501),
+      }),
+    ).toThrowError(expect.objectContaining({ code: 'walk.invalid_reflection_question' }));
+  });
+
+  it('edits reflection independently, preserves completion and counts a version once', () => {
+    const done = runningWalk('optional-result', NOW).complete({ endedAt: ENDED_AT });
+    const edited = done.reviseReflection({
+      result: '  Отдохнул  ',
+      afterState: { energy: 0, tension: 0, clarity: 0 },
+      impact: null,
+      updatedAt: OUTCOME_AT,
+    });
+    expect(edited.result).toBe('Отдохнул');
+    expect(edited.afterState).toEqual({ energy: 0, tension: 0, clarity: 0 });
+    expect(edited.reentry).toBeNull();
+    expect(edited.endedAt).toEqual(done.endedAt);
+    expect(edited.version).toBe(done.version + 1);
+    expect(
+      edited.reviseReflection({
+        result: null,
+        afterState: null,
+        impact: null,
+        updatedAt: OUTCOME_AT,
+      }).result,
+    ).toBeNull();
+    expect(() =>
+      done.reviseReflection({ result: null, afterState: null, impact: null, updatedAt: NOW }),
+    ).toThrow();
+    expect(() =>
+      runningWalk('active-result', NOW).reviseReflection({
+        result: null,
+        afterState: null,
+        impact: null,
+        updatedAt: OUTCOME_AT,
+      }),
+    ).toThrow();
+  });
+
+  it('preserves legacy reentry and rejects clearing its required impact', () => {
+    const legacy = recordedWalk('legacy-edit');
+    const data = {
+      result: 'Новый итог',
+      afterState: null,
+      impact: legacy.impact,
+      updatedAt: OUTCOME_AT,
+    };
+    expect(legacy.reviseReflection(data).reentry).toEqual(legacy.reentry);
+    expect(() => legacy.reviseReflection({ ...data, impact: null })).toThrowError(
+      expect.objectContaining({ code: 'walk.invalid_reentry' }),
+    );
+  });
+});
+
 function reflectionWalk(id: string, reflectionTemplate: WalkReflectionTemplate): Walk {
   return Walk.create({
     id: EntityId.create(`walk-${id}`),

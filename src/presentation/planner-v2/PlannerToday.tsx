@@ -1,4 +1,5 @@
 import { RecurrenceBadge } from './RecurrenceBadge';
+import { ActionGoalProgress } from './ActionGoalProgress';
 import { useQuickAccessGuard } from './QuickAccessContext';
 import { AppIcon } from '../components/AppIcon';
 import { PlannerScenariosPanel, type ScenarioService } from './PlannerScenariosPanel';
@@ -165,6 +166,7 @@ export function PlannerToday({
                 <span>
                   {action.title.toString()} <RecurrenceBadge action={action} />
                 </span>
+                <ActionGoalProgress action={action} />
                 {goal ? <span className="planner-muted">{goal.title}</span> : null}
                 {hasContext ? (
                   <span className="planner-action-context" id={contextId}>
@@ -242,9 +244,22 @@ export function PlannerToday({
               <a className="planner-text-link" href="#/v2/actions?view=time">
                 Рабочее время
               </a>
+              {day === 'today' && (
+                <a className="planner-text-link" href="#/v2/walks?origin=today">
+                  Прогулка
+                </a>
+              )}
               {day === 'today' && onOpenGoalGuidance ? (
-                <button className="planner-text-link" type="button" onClick={onOpenGoalGuidance}>
-                  Выбрать шаг к цели
+                <button
+                  aria-label="Выбрать шаг к цели"
+                  className="planner-text-link"
+                  type="button"
+                  onClick={onOpenGoalGuidance}
+                >
+                  <span className="planner-today-guidance-label">Выбрать шаг к цели</span>
+                  <span className="planner-today-guidance-label--short" aria-hidden="true">
+                    Шаг к цели
+                  </span>
                 </button>
               ) : null}
             </div>

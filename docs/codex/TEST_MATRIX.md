@@ -98,6 +98,13 @@ npm run test:e2e -- tests/e2e/current.daily-workflow.spec.ts
 ```
 
 Выбирай файл по изменённому поведению; пример не является обязательным smoke-набором.
+Для раздела прогулок scoped-файлы `current.walks-lifecycle.spec.ts`,
+`current.walks-history.spec.ts`, `current.walks-journal.spec.ts`,
+`current.walks-planning.spec.ts`, `current.walks-context.spec.ts`,
+`current.walks-analytics.spec.ts`, `current.walks-concurrency.spec.ts` и
+`current.walks-history-race.spec.ts` проверяют соответствующие пользовательские сценарии
+на desktop и mobile. Persistence и mixed-version sync проверяются ближайшими
+`Walk*.integration.test.ts` и `PilotBootstrapService.test.ts`.
 При необходимости сузь выбор через `--grep "часть названия теста"` и `--project <имя>` из
 `playwright.config.ts`. При общем desktop/mobile поведении проверь оба затронутых проекта.
 Селекторы передаются Playwright через тот же wrapper и сохраняют deadline, heartbeat и cleanup.

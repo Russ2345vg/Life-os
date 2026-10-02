@@ -25,6 +25,7 @@ import {
 import { isWalkStatus, WALK_STATUS, type WalkStatus } from './WalkStatus';
 import { isWalkType, type WalkType } from './WalkType';
 import { isWalkStateSnapshot, type WalkStateSnapshot } from './WalkStateSnapshot';
+import type { WalkReflectionData } from './WalkReflection';
 import {
   getWalkReflectionStages,
   isWalkReflectionStage,
@@ -50,6 +51,7 @@ export interface WalkCreationData {
 }
 
 export interface WalkRehydrationData {
+  readonly deletedAt?: Date | null;
   readonly id: EntityId;
   readonly date: DayDate;
   readonly type: WalkType;
@@ -82,7 +84,7 @@ export interface WalkStartData {
   readonly mode: WalkMode;
   readonly startedAt: Date;
   readonly timerTargetMinutes?: number;
-  readonly reflectionQuestion: string;
+  readonly reflectionQuestion?: string | null;
 }
 
 export interface WalkCompletionData {
@@ -105,6 +107,7 @@ export interface WalkPhotoUpdateData {
 }
 
 export class Walk extends Entity {
+  public readonly deletedAt: Date | null;
   public readonly date: DayDate;
   public readonly type: WalkType;
   public readonly sphereId: EntityId | null;
@@ -134,6 +137,7 @@ export class Walk extends Entity {
   private constructor(data: WalkRehydrationData) {
     super(data.id);
     assertWalkInvariants(data);
+    this.deletedAt = copyOptionalDate(data.deletedAt ?? null);
     this.date = data.date;
     this.type = data.type;
     this.sphereId = data.sphereId ?? null;
@@ -204,6 +208,37 @@ export class Walk extends Entity {
     return new Walk(data);
   }
 
+  public remove(at: Date): Walk {
+    if (this.deletedAt !== null) return this;
+    if (this.status !== WALK_STATUS.completed && this.status !== WALK_STATUS.abandoned)
+      throw new DomainError(
+        'walk.delete_requires_finished',
+        'Сначала завершите или прервите прогулку.',
+      );
+    assertValidDate(at, 'walk.invalid_updated_at');
+    if (at < this.updatedAt)
+      throw new DomainError('walk.update_before_end', 'Проверьте время устройства.');
+    return new Walk({
+      ...this.toRehydrationData(),
+      deletedAt: at,
+      updatedAt: at,
+      version: this.version + 1,
+    });
+  }
+
+  public restore(at: Date): Walk {
+    if (this.deletedAt === null) return this;
+    assertValidDate(at, 'walk.invalid_updated_at');
+    if (at < this.updatedAt)
+      throw new DomainError('walk.update_before_end', 'Проверьте время устройства.');
+    return new Walk({
+      ...this.toRehydrationData(),
+      deletedAt: null,
+      updatedAt: at,
+      version: this.version + 1,
+    });
+  }
+
   public start(data: WalkStartData): Walk {
     if (this.status === WALK_STATUS.running) return this;
     if (this.status !== WALK_STATUS.planned) {
@@ -222,7 +257,7 @@ export class Walk extends Entity {
       mode: data.mode,
       startedAt: data.startedAt,
       timerTargetMinutes: data.timerTargetMinutes ?? null,
-      reflectionQuestion: data.reflectionQuestion,
+      reflectionQuestion: data.reflectionQuestion?.trim() || null,
       reflectionStage,
       updatedAt: data.startedAt,
       version: this.version + 1,
@@ -317,6 +352,30 @@ export class Walk extends Entity {
       ...this.toRehydrationData(),
       reflectionStage: null,
       updatedAt,
+      version: this.version + 1,
+    });
+  }
+
+  public reviseReflection(data: WalkReflectionData): Walk {
+    if (this.status !== WALK_STATUS.completed) {
+      throw new DomainError(
+        'walk.outcome_requires_completed',
+        'Итог можно сохранить только после завершения прогулки.',
+      );
+    }
+    assertValidDate(data.updatedAt, 'walk.invalid_updated_at');
+    if (data.updatedAt.getTime() < this.updatedAt.getTime()) {
+      throw new DomainError(
+        'walk.outcome_before_end',
+        'Время изменения итога не может предшествовать последнему сохранению.',
+      );
+    }
+    return new Walk({
+      ...this.toRehydrationData(),
+      result: normalizeResult(data.result),
+      afterState: data.afterState,
+      impact: data.impact,
+      updatedAt: data.updatedAt,
       version: this.version + 1,
     });
   }
@@ -504,6 +563,7 @@ export class Walk extends Entity {
 
   private toRehydrationData(): WalkRehydrationData {
     return {
+      deletedAt: this.deletedAt,
       id: this.id,
       date: this.date,
       type: this.type,
@@ -535,6 +595,19 @@ export class Walk extends Entity {
 }
 
 function assertWalkInvariants(data: WalkRehydrationData): void {
+  if (data.deletedAt != null) {
+    assertValidDate(data.deletedAt, 'walk.invalid_deleted_at');
+    if (
+      (data.status !== WALK_STATUS.completed && data.status !== WALK_STATUS.abandoned) ||
+      data.endedAt === null ||
+      data.deletedAt < data.endedAt ||
+      data.deletedAt > data.updatedAt
+    )
+      throw new DomainError(
+        'walk.invalid_deleted_at',
+        'Удалённая прогулка должна сохранять корректное время завершения.',
+      );
+  }
   const pausedAt = data.pausedAt ?? null;
   const pauseIntervals = data.pauseIntervals ?? [];
   if (data.intent !== undefined && data.intent !== null && !isWalkIntent(data.intent)) {
@@ -640,7 +713,7 @@ function assertWalkInvariants(data: WalkRehydrationData): void {
   }
   assertPauseIntervals(pauseIntervals, data.startedAt);
   const question = data.reflectionQuestion?.trim() ?? '';
-  if (question.length === 0 || question.length > 500) {
+  if (question.length > 500) {
     throw new DomainError(
       'walk.invalid_reflection_question',
       'Вопрос для прогулки указан неверно.',

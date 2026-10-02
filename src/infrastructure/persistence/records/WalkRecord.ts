@@ -1,4 +1,5 @@
 export interface WalkRecord {
+  readonly deletedAt?: string | null;
   readonly goalLinksVersion?: 1;
   readonly schemaVersion: 1;
   readonly id: string;

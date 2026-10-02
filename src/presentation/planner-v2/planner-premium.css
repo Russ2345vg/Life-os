@@ -78,6 +78,17 @@
 .planner-v2 .planner-action-meta .planner-recurrence-badge::before {
   content: none;
 }
+.planner-v2 .planner-action-goal-progress {
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: var(--planner-font-meta);
+  line-height: 1.4;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.planner-v2 .planner-today .planner-action-goal-progress {
+  display: block;
+}
 .planner-v2 :is(input, textarea)::placeholder {
   color: var(--text-muted);
   opacity: 1;

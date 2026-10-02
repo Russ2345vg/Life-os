@@ -585,7 +585,16 @@ function normalizeUserSettings(value: unknown): Readonly<Record<string, unknown>
   }
   const parsed = parseEveningRitualSettings(value.eveningRitual);
   if (parsed.recoveredFromInvalidValue) throw new Error('Evening ritual settings are invalid.');
-  return { id: 'lifeos-user-settings', schemaVersion: 1, eveningRitual: parsed.settings };
+  const base = { id: 'lifeos-user-settings', schemaVersion: 1, eveningRitual: parsed.settings };
+  if (!Object.prototype.hasOwnProperty.call(value, 'walkPreferences')) return base;
+  if (!isRecord(value.walkPreferences)) throw new Error('Walk preferences are invalid.');
+  const { weeklyCount, weeklyMinutes } = value.walkPreferences;
+  const valid = (item: unknown, maximum: number) =>
+    item === null ||
+    (typeof item === 'number' && Number.isInteger(item) && item >= 1 && item <= maximum);
+  if (!valid(weeklyCount, 7) || !valid(weeklyMinutes, 10080))
+    throw new Error('Walk preferences are invalid.');
+  return { ...base, walkPreferences: { weeklyCount, weeklyMinutes } };
 }
 
 function journalReferences(record: Readonly<Record<string, unknown>>): SyncRelationshipReference[] {

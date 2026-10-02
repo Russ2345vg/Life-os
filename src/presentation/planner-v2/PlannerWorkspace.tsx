@@ -37,11 +37,15 @@ import { addDays } from '../../domain/planner/PlanningPeriod';
 import { AppIcon, type AppIconName } from '../components/AppIcon';
 import { PlannerActionForm, type PlannerOption } from './PlannerActionForm';
 import { PlannerGoalForm } from './PlannerGoalForm';
+import { NeedChoicesProvider } from './NeedPicker';
+import { PlannerNeeds } from './PlannerNeeds';
+import { buildNeedCatalog } from './needCatalogModel';
 import { PlannerToday } from './PlannerToday';
 import { buildPlannerRoute, type PlannerRoute } from './PlannerNavigation';
 import {
   emptyActionDraft,
   submitPlannerAction,
+  submitPlannerActionWithScenario,
   submitPlannerGoalWithPeriod,
 } from './plannerFormSubmission';
 import { planPlannerAction } from './plannerTodayCommands';
@@ -71,6 +75,9 @@ import { PlannerDiary } from './diary/PlannerDiary';
 import type { MonthlyDirectionFocusView } from './MonthlyDirectionFocusCard';
 import { PlannerMemory } from './memory/PlannerMemory';
 import './memory/memory.css';
+import { PlannerWalks } from './walks/PlannerWalks';
+import { PlannerAnalytics } from './analytics/PlannerAnalytics';
+import './walks/walks.css';
 import type { PlannerServices } from '../../application/planner/PlannerServices';
 import {
   buildTodayGoalGuidance,
@@ -276,6 +283,11 @@ function PlannerWorkspaceContent({
       ? guidanceSession
       : null;
   const libraryRoute = [
+    'needs',
+    'spheres',
+    'sphere',
+    'directions',
+    'direction',
     'planning',
     'goal',
     'goals',
@@ -301,6 +313,11 @@ function PlannerWorkspaceContent({
     scope: libraryScope,
     enabled: libraryEnabled,
   });
+  const needCatalog = useMemo(
+    () =>
+      buildNeedCatalog(libraryReads.snapshot.data ?? { directions: [], goals: [], actions: [] }),
+    [libraryReads.snapshot.data],
+  );
   const refreshScope = useMemo(
     () => ({ services, selectedDateKey, routeKey, session: new LatestPlannerRefresh() }),
     [services, selectedDateKey, routeKey],
@@ -882,731 +899,824 @@ function PlannerWorkspaceContent({
   };
   return (
     <PlanningProvider value={planningContext}>
-      <div className={`planner-v2${route.view === 'sleep' ? ' planner-v2--sleep' : ''}`}>
-        <a
-          className="planner-skip"
-          href="#planner-main-content"
-          onClick={(event) => {
-            event.preventDefault();
-            mainContent.current?.focus();
-          }}
-        >
-          К содержимому
-        </a>
-        <aside className="planner-sidebar">
+      <NeedChoicesProvider catalog={needCatalog}>
+        <div className={`planner-v2${route.view === 'sleep' ? ' planner-v2--sleep' : ''}`}>
           <a
-            className="planner-brand"
-            href="#/v2/today"
+            className="planner-skip"
+            href="#planner-main-content"
             onClick={(event) => {
               event.preventDefault();
-              today();
+              mainContent.current?.focus();
             }}
           >
-            LifeOS
+            К содержимому
           </a>
-          <QuickAccessTrigger />
-          <PlannerWorkspaceNavLink
-            className="planner-data-status-link"
-            route={route}
-            target={{ view: 'account' }}
-            label="Состояние данных"
-            icon="account"
-            onNavigate={() => void openDataStatus()}
-          />
-          <nav aria-label="Рабочий интерфейс">
-            {navLink({ view: 'today' }, 'Сегодня', 'today')}
-            <span className="planner-nav-secondary">
-              {navLink({ view: 'spheres' }, 'Сферы', 'goals')}
-            </span>
-            <span className="planner-nav-secondary">
-              {navLink({ view: 'directions' }, 'Направления', 'goals')}
-            </span>
-            {navLink({ view: 'goals' }, 'Цели', 'goals')}
-            {navLink({ view: 'actions' }, 'Действия', 'actions')}
-            <span className="planner-nav-secondary">
-              {navLink({ view: 'inbox' }, 'Входящие', 'history')}
-            </span>
-            {navLink(
-              {
-                view: 'diary',
-                period: 'day',
-                date: currentDate.toString(),
-              },
-              'Дневник',
-              'history',
-            )}
-            {services.memory && (
-              <span className="planner-nav-secondary">
-                {navLink({ view: 'memory' }, 'Память жизни', 'history')}
-              </span>
-            )}
-            <button
-              ref={moreButton}
-              className="planner-nav-more"
-              type="button"
-              aria-current={
-                [
-                  'account',
-                  'inbox',
-                  'spheres',
-                  'sphere',
-                  'directions',
-                  'direction',
-                  'sleep',
-                  'memory',
-                ].includes(route.view)
-                  ? 'page'
-                  : undefined
-              }
-              aria-expanded={moreOpen}
-              aria-controls="planner-more-menu"
-              onClick={() => setMoreOpen((value) => !value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Escape') setMoreOpen(false);
+          <aside className="planner-sidebar">
+            <a
+              className="planner-brand"
+              href="#/v2/today"
+              onClick={(event) => {
+                event.preventDefault();
+                today();
               }}
             >
-              <AppIcon name="history" />
-              <span>Ещё</span>
-            </button>
-          </nav>
-          <div
-            id="planner-more-menu"
-            className="planner-more-menu"
-            hidden={!moreOpen}
-            onKeyDown={(event) => {
-              if (event.key !== 'Escape') return;
-              event.preventDefault();
-              setMoreOpen(false);
-              moreButton.current?.focus();
-            }}
-          >
+              LifeOS
+            </a>
+            <QuickAccessTrigger />
             <PlannerWorkspaceNavLink
-              className="planner-data-status-menu-link"
+              className="planner-data-status-link"
               route={route}
               target={{ view: 'account' }}
               label="Состояние данных"
               icon="account"
               onNavigate={() => void openDataStatus()}
             />
-            {services.memory && navLink({ view: 'memory' }, 'Память жизни', 'history')}
-            {navLink({ view: 'spheres' }, 'Сферы', 'goals')}
-            {navLink({ view: 'directions' }, 'Направления', 'goals')}
-            {navLink({ view: 'inbox' }, 'Входящие', 'history')}
-            {navLink({ view: 'sleep' }, 'Подготовка ко сну', 'today')}
-          </div>
-        </aside>
-        <main
-          ref={mainContent}
-          id="planner-main-content"
-          className={`planner-content${'section' in route ? ' planner-content--views' : ''}${route.view === 'sleep' ? ' planner-content--sleep' : ''}`}
-          tabIndex={-1}
-        >
-          {systemNotice}
-          {dateUndo && (
-            <div className="planner-date-undo" role="status">
-              <span>Дата изменена · {dateUndo.title}</span>
+            <nav aria-label="Рабочий интерфейс">
+              {navLink({ view: 'today' }, 'Сегодня', 'today')}
+              <span className="planner-nav-secondary">
+                {navLink({ view: 'spheres' }, 'Сферы', 'goals')}
+              </span>
+              <span className="planner-nav-secondary">
+                {navLink({ view: 'directions' }, 'Направления', 'goals')}
+              </span>
+              <span className="planner-nav-secondary">
+                {navLink({ view: 'needs' }, 'Потребности', 'goals')}
+              </span>
+              {navLink({ view: 'goals' }, 'Цели', 'goals')}
+              {navLink({ view: 'actions' }, 'Действия', 'actions')}
+              <span className="planner-nav-secondary">
+                {navLink({ view: 'inbox' }, 'Входящие', 'history')}
+              </span>
+              {navLink(
+                {
+                  view: 'diary',
+                  period: 'day',
+                  date: currentDate.toString(),
+                },
+                'Дневник',
+                'history',
+              )}
+              {services.memory && (
+                <span className="planner-nav-secondary">
+                  {navLink({ view: 'memory' }, 'Память жизни', 'history')}
+                </span>
+              )}
+              {services.walks && (
+                <span className="planner-nav-secondary">
+                  {navLink({ view: 'walks', page: 'overview' }, 'Прогулки', 'walks')}
+                </span>
+              )}
+              <span className="planner-nav-secondary">
+                {navLink({ view: 'analytics' }, 'Аналитика', 'history')}
+              </span>
               <button
-                className="planner-primary"
+                ref={moreButton}
+                className="planner-nav-more"
                 type="button"
-                disabled={busy}
-                aria-label="Отменить изменение даты"
-                onClick={() =>
-                  void run(async () => {
-                    const result = await services.setLifeActionPlan.undoDate(dateUndo.receipt);
-                    if (!result.ok)
-                      throw new DomainError(
-                        'life_action.undo_failed',
-                        'Не удалось отменить перенос: действие уже изменилось или прежнее главное дело дня занято. Обновите список.',
-                      );
-                    setDateUndo(null);
-                    document.getElementById('planner-main-content')?.focus();
-                  }, 'Прежняя дата восстановлена')
+                aria-current={
+                  [
+                    'account',
+                    'inbox',
+                    'spheres',
+                    'sphere',
+                    'directions',
+                    'direction',
+                    'needs',
+                    'sleep',
+                    'memory',
+                    'walks',
+                    'analytics',
+                  ].includes(route.view)
+                    ? 'page'
+                    : undefined
                 }
-              >
-                Отменить
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                aria-label="Закрыть уведомление об изменении даты"
-                onClick={() => setDateUndo(null)}
-              >
-                Закрыть
-              </button>
-            </div>
-          )}
-          {route.view === 'today' && guidanceRefreshError ? (
-            <div className="planner-error" role="alert">
-              <p>Дата сохранена. Не удалось обновить план: {guidanceRefreshError}</p>
-              <button type="button" onClick={() => void retryGuidanceRefresh()} disabled={busy}>
-                Повторить загрузку
-              </button>
-            </div>
-          ) : null}
-          {notice ? (
-            <p className="planner-notice" role="status">
-              {notice}
-            </p>
-          ) : null}
-          {visibleError ? (
-            <div className="planner-error" role="alert">
-              <p>{visibleError}</p>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => {
-                  if (
-                    completion.snapshot.phase === 'saved' &&
-                    completion.snapshot.refresh === 'failed'
-                  )
-                    void completion.retry();
-                  else {
-                    completion.dismiss();
-                    void load().catch(report);
-                  }
+                aria-expanded={moreOpen}
+                aria-controls="planner-more-menu"
+                onClick={() => setMoreOpen((value) => !value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') setMoreOpen(false);
                 }}
               >
-                Повторить загрузку
+                <AppIcon name="history" />
+                <span>Ещё</span>
               </button>
+            </nav>
+            <div
+              id="planner-more-menu"
+              className="planner-more-menu"
+              hidden={!moreOpen}
+              onKeyDown={(event) => {
+                if (event.key !== 'Escape') return;
+                event.preventDefault();
+                setMoreOpen(false);
+                moreButton.current?.focus();
+              }}
+            >
+              <PlannerWorkspaceNavLink
+                className="planner-data-status-menu-link"
+                route={route}
+                target={{ view: 'account' }}
+                label="Состояние данных"
+                icon="account"
+                onNavigate={() => void openDataStatus()}
+              />
+              {services.memory && navLink({ view: 'memory' }, 'Память жизни', 'history')}
+              {services.walks && navLink({ view: 'walks', page: 'overview' }, 'Прогулки', 'walks')}
+              {navLink({ view: 'analytics' }, 'Аналитика', 'history')}
+              {navLink({ view: 'spheres' }, 'Сферы', 'goals')}
+              {navLink({ view: 'directions' }, 'Направления', 'goals')}
+              {navLink({ view: 'needs' }, 'Потребности', 'goals')}
+              {navLink({ view: 'inbox' }, 'Входящие', 'history')}
+              {navLink({ view: 'sleep' }, 'Подготовка ко сну', 'today')}
             </div>
-          ) : null}
-          {route.view === 'diary' ? (
-            <PlannerDiary
-              service={services.diary}
-              route={route}
-              currentDate={currentDate}
-              onNavigate={navigate}
-              memory={
-                services.memory
-                  ? {
-                      services: services.memory,
-                      catalog: {
-                        spheres: data?.spheres ?? [],
-                        directions: data?.directions ?? [],
-                        goals: data?.goals ?? [],
-                      },
+          </aside>
+          <main
+            ref={mainContent}
+            id="planner-main-content"
+            className={`planner-content${'section' in route ? ' planner-content--views' : ''}${route.view === 'sleep' ? ' planner-content--sleep' : ''}`}
+            tabIndex={-1}
+          >
+            {systemNotice}
+            {dateUndo && (
+              <div className="planner-date-undo" role="status">
+                <span>Дата изменена · {dateUndo.title}</span>
+                <button
+                  className="planner-primary"
+                  type="button"
+                  disabled={busy}
+                  aria-label="Отменить изменение даты"
+                  onClick={() =>
+                    void run(async () => {
+                      const result = await services.setLifeActionPlan.undoDate(dateUndo.receipt);
+                      if (!result.ok)
+                        throw new DomainError(
+                          'life_action.undo_failed',
+                          'Не удалось отменить перенос: действие уже изменилось или прежнее главное дело дня занято. Обновите список.',
+                        );
+                      setDateUndo(null);
+                      document.getElementById('planner-main-content')?.focus();
+                    }, 'Прежняя дата восстановлена')
+                  }
+                >
+                  Отменить
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  aria-label="Закрыть уведомление об изменении даты"
+                  onClick={() => setDateUndo(null)}
+                >
+                  Закрыть
+                </button>
+              </div>
+            )}
+            {route.view === 'today' && guidanceRefreshError ? (
+              <div className="planner-error" role="alert">
+                <p>Дата сохранена. Не удалось обновить план: {guidanceRefreshError}</p>
+                <button type="button" onClick={() => void retryGuidanceRefresh()} disabled={busy}>
+                  Повторить загрузку
+                </button>
+              </div>
+            ) : null}
+            {notice ? (
+              <p className="planner-notice" role="status">
+                {notice}
+              </p>
+            ) : null}
+            {visibleError ? (
+              <div className="planner-error" role="alert">
+                <p>{visibleError}</p>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    if (
+                      completion.snapshot.phase === 'saved' &&
+                      completion.snapshot.refresh === 'failed'
+                    )
+                      void completion.retry();
+                    else {
+                      completion.dismiss();
+                      void load().catch(report);
+                    }
+                  }}
+                >
+                  Повторить загрузку
+                </button>
+              </div>
+            ) : null}
+            {route.view === 'analytics' ? (
+              <PlannerAnalytics
+                service={services.analytics}
+                route={route}
+                onNavigate={navigate}
+                onOpenAction={openActionFromSource}
+              />
+            ) : route.view === 'walks' ? (
+              services.walks ? (
+                <PlannerWalks
+                  spheres={data?.spheres ?? []}
+                  diary={services.diary}
+                  memory={services.memory}
+                  services={services.walks}
+                  route={route}
+                  onNavigate={navigate}
+                  today={currentDate.toString()}
+                />
+              ) : (
+                <p role="alert">Прогулки недоступны в этой сборке.</p>
+              )
+            ) : route.view === 'diary' ? (
+              <PlannerDiary
+                walks={services.walks}
+                service={services.diary}
+                route={route}
+                currentDate={currentDate}
+                onNavigate={navigate}
+                memory={
+                  services.memory
+                    ? {
+                        services: services.memory,
+                        catalog: {
+                          spheres: data?.spheres ?? [],
+                          directions: data?.directions ?? [],
+                          goals: data?.goals ?? [],
+                        },
+                      }
+                    : undefined
+                }
+              />
+            ) : route.view === 'memory' ? (
+              services.memory ? (
+                <PlannerMemory
+                  services={services.memory}
+                  route={route}
+                  currentDate={currentDate}
+                  catalog={{
+                    spheres: data?.spheres ?? [],
+                    directions: data?.directions ?? [],
+                    goals: data?.goals ?? [],
+                  }}
+                  onNavigate={navigate}
+                />
+              ) : (
+                <p role="alert">Память жизни недоступна в этой сборке.</p>
+              )
+            ) : route.view === 'account' ? (
+              <QuickAccessGuardScope scope="account">
+                <AccountSyncPage
+                  service={services.accountSync}
+                  backLabel={accountReturnRoute ? 'Вернуться в предыдущий раздел' : 'К плану дня'}
+                  onBack={() => void returnFromDataStatus()}
+                />
+              </QuickAccessGuardScope>
+            ) : route.view === 'needs' ? (
+              <PlannerNeeds
+                route={route}
+                catalog={needCatalog}
+                snapshot={libraryReads.snapshot}
+                onNavigate={navigate}
+                onRetry={() => void libraryReads.refresh()}
+              />
+            ) : ['spheres', 'sphere', 'directions', 'direction'].includes(route.view) ? (
+              services.balance ? (
+                <BalanceWorkspace
+                  services={services.balance}
+                  route={route}
+                  today={currentDate.toString()}
+                  onNavigate={navigate}
+                />
+              ) : (
+                <p role="alert">Сферы недоступны в этой сборке.</p>
+              )
+            ) : route.view === 'sleep' ? (
+              <SleepPreparationPage
+                service={services.sleepSchedule}
+                plannerServices={services}
+                calendarDate={currentDate.toString()}
+                onBack={() => navigate({ view: 'today' })}
+              />
+            ) : route.view === 'planning' ? (
+              <PlannerLibraryWorkspace
+                reads={libraryReads}
+                completion={completion}
+                onOpenAction={openActionFromSource}
+                onChangeDate={changeDate}
+                services={services}
+                route={{
+                  view: 'goals',
+                  ...(route.sphereId ? { sphereId: route.sphereId } : {}),
+                  period: 'week',
+                }}
+                today={currentDate.toString()}
+                onNavigate={navigate}
+              />
+            ) : [
+                'goal',
+                'goals',
+                'focus',
+                'review',
+                'actions',
+                'action',
+                'inbox',
+                'kanban',
+                'calendar',
+                'time',
+                'tree',
+              ].includes(route.view) ? (
+              <PlannerLibraryWorkspace
+                reads={libraryReads}
+                completion={completion}
+                onOpenAction={openActionFromSource}
+                onChangeDate={changeDate}
+                key={buildPlannerRoute(route)}
+                services={services}
+                route={route}
+                workTime={workTime}
+                onStartWalk={
+                  services.walks
+                    ? async (actionId, requestId) => {
+                        const walk = await services.walks!.planning.startPlanned({
+                          actionId,
+                          requestId,
+                        });
+                        await navigate({ view: 'walks', id: walk.id.toString() });
+                      }
+                    : undefined
+                }
+                today={currentDate.toString()}
+                onNavigate={navigate}
+              />
+            ) : data === null ? (
+              !error && (
+                <div className="planner-loading" role="status" aria-label="Загружаем">
+                  <span />
+                  <span />
+                  <span />
+                  Загружаем…
+                </div>
+              )
+            ) : route.view === 'today' ? (
+              <PlannerToday
+                date={selectedDate}
+                day={route.day === 'tomorrow' ? 'tomorrow' : 'today'}
+                overview={data.overview}
+                scenarios={services.plannerScenarios}
+                goals={data.goals}
+                directions={data.directions}
+                spheres={data.spheres}
+                availableActions={data.actions}
+                capacityMinutes={
+                  data.timeCapacity[
+                    (new Date(`${selectedDate.toString()}T12:00:00Z`).getUTCDay() + 6) % 7
+                  ] ?? null
+                }
+                monthlyDirectionFocus={data.monthlyDirectionFocus}
+                busy={busy}
+                menuForAction={menuForAction}
+                onSelectDay={(day) =>
+                  navigate(day === 'tomorrow' ? { view: 'today', day } : { view: 'today' })
+                }
+                onOpenAction={openActionFromSource}
+                onMonthlyDirectionChange={(id) => {
+                  void run(
+                    () =>
+                      services.monthlyDirectionFocus.set(
+                        currentDate,
+                        id ? EntityId.create(id) : null,
+                      ),
+                    'Главное направление месяца сохранено',
+                  );
+                }}
+                onNewAction={() =>
+                  onNavigate({
+                    view: 'new-action',
+                    goalId: null,
+                    title: null,
+                    date: selectedDate.toString(),
+                  })
+                }
+                onOpenSleep={() => navigate({ view: 'sleep' })}
+                onOpenGoalGuidance={() => void openGuidance()}
+                sleepEntry={data.sleepEntry}
+                onComplete={(id) => {
+                  if (working.current) return;
+                  const action = data.actions.find((candidate) => candidate.id.toString() === id);
+                  if (!action) {
+                    report(new Error('Действие изменилось. Обновите список перед выполнением.'));
+                    return;
+                  }
+                  setError(null);
+                  void completion.complete({ actionId: id, completionKey: action.completionKey });
+                }}
+                onSelectAction={(selection) => {
+                  void run(async () => {
+                    if (selection.kind === 'action')
+                      return planPlannerAction(
+                        services.setLifeActionPlan,
+                        selection.actionId,
+                        selectedDate.toString(),
+                      );
+                    const action = await services.planning?.recurrence.selectForDate(
+                      selection.ruleId,
+                      selectedDate.toString(),
+                    );
+                    if (!action)
+                      throw new Error(
+                        'На эту дату повторение не запланировано. Измените расписание серии.',
+                      );
+                    if (action.plannedDate?.toString() !== selectedDate.toString())
+                      return planPlannerAction(
+                        services.setLifeActionPlan,
+                        action.id.toString(),
+                        selectedDate.toString(),
+                      );
+                    return action;
+                  }, 'Действие выбрано');
+                }}
+                onPlan={(id, main) => {
+                  void run(
+                    () =>
+                      planPlannerAction(
+                        services.setLifeActionPlan,
+                        id,
+                        selectedDate.toString(),
+                        main,
+                      ),
+                    main ? 'Главное действие выбрано' : 'План сохранён',
+                  );
+                }}
+                onReschedule={(id, date) => run(() => changeDate(id, date), null, true)}
+                onQuickAdd={async (title) => {
+                  setBusy(true);
+                  try {
+                    await submitPlannerAction(services.createLifeActionDraft, {
+                      ...emptyActionDraft(),
+                      title,
+                      date: selectedDate.toString(),
+                    });
+                    setNotice(
+                      route.day === 'tomorrow'
+                        ? 'Действие добавлено на завтра'
+                        : 'Действие добавлено на сегодня',
+                    );
+                    await load().catch(report);
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              />
+            ) : route.view === 'new-action' ? (
+              <>
+                <PlannerLibraryWorkspace
+                  reads={libraryReads}
+                  completion={completion}
+                  onOpenAction={openActionFromSource}
+                  onChangeDate={changeDate}
+                  services={services}
+                  route={{ view: 'actions' }}
+                  today={currentDate.toString()}
+                  onNavigate={navigate}
+                />
+                <PlannerSheet title="Новое действие" onClose={closeForm}>
+                  <PlannerActionForm
+                    key={buildPlannerRoute(route)}
+                    goals={
+                      route.directionId
+                        ? data.goals.filter((g) => g.directionId === route.directionId)
+                        : data.goals
+                    }
+                    initialGoalId={route.goalId}
+                    initialDirectionId={route.directionId ?? null}
+                    contextLabel={
+                      data.directions.find((d) => d.id === route.directionId)?.title ?? null
+                    }
+                    lockGoal={route.returnToGoal === true || route.returnToGoals === true}
+                    initialTitle={route.title}
+                    initialDate={route.date ?? null}
+                    initialParentActionId={route.parentActionId ?? null}
+                    currentDate={currentDate.toString()}
+                    scenarios={services.plannerScenarios}
+                    onCancel={closeForm}
+                    onSubmit={async (draft) => {
+                      const generation = routeGeneration.current;
+                      await finishPlannerSubmission(
+                        () =>
+                          submitPlannerActionWithScenario(
+                            services.createLifeActionDraft,
+                            draft,
+                            services.plannerScenarios,
+                          ),
+                        () => generation === routeGeneration.current,
+                        (saved) => {
+                          if (saved.warning) {
+                            void navigate({ view: 'action', id: saved.action.id.toString() }).then(
+                              (accepted) => {
+                                if (accepted) setNotice(saved.warning);
+                              },
+                            );
+                            return;
+                          }
+                          setNotice(
+                            draft.scenarioId
+                              ? 'Действие добавлено в сценарий'
+                              : draft.date === currentDate.toString()
+                                ? 'Действие добавлено на сегодня'
+                                : draft.date
+                                  ? `Действие сохранено на ${draft.date}`
+                                  : 'Действие сохранено в блоке «Без даты»',
+                          );
+                          if (route.returnToGoals) {
+                            onNavigate({ view: 'goals' });
+                          } else if (route.parentActionId) {
+                            onNavigate({ view: 'action', id: route.parentActionId });
+                          } else if (
+                            route.returnToGoal &&
+                            route.goalId &&
+                            route.goalId === draft.goalId
+                          ) {
+                            onNavigate({ view: 'goal', id: route.goalId });
+                          } else if (route.directionId) {
+                            onNavigate({ view: 'direction', id: route.directionId });
+                          } else if (route.date === addDays(currentDate.toString(), 1)) {
+                            onNavigate({ view: 'today', day: 'tomorrow' });
+                          } else {
+                            today();
+                          }
+                        },
+                      );
+                    }}
+                  />
+                </PlannerSheet>
+              </>
+            ) : createdGoal ? (
+              <section className="planner-goal-success">
+                <p className="planner-eyebrow" role="status">
+                  Цель создана
+                </p>
+                <h1>{createdGoal.title}</h1>
+                {createdGoalWarning && (
+                  <p role="alert" className="planner-error">
+                    {createdGoalWarning}
+                  </p>
+                )}
+                {createdGoal.achievementCriteria ? <p>{createdGoal.achievementCriteria}</p> : null}
+                <p className="planner-muted">
+                  {createdGoal.directionId === null
+                    ? 'Направление можно выбрать позже.'
+                    : 'Направление сохранено.'}
+                </p>
+                {createdGoal.nextProgress ? <p>Первый шаг: {createdGoal.nextProgress}</p> : null}
+                <div className="planner-form-actions">
+                  <button
+                    className="planner-primary"
+                    type="button"
+                    onClick={() =>
+                      onNavigate({
+                        view: 'new-action',
+                        goalId: createdGoal.id.toString(),
+                        title: createdGoal.nextProgress,
+                      })
+                    }
+                  >
+                    Добавить действие
+                  </button>
+                  <a href={`#/v2/goals/${encodeURIComponent(createdGoal.id.toString())}`}>
+                    Открыть цель
+                  </a>
+                </div>
+              </section>
+            ) : (
+              <>
+                <PlannerLibraryWorkspace
+                  reads={libraryReads}
+                  completion={completion}
+                  onOpenAction={openActionFromSource}
+                  onChangeDate={changeDate}
+                  services={services}
+                  route={{ view: 'goals' }}
+                  today={currentDate.toString()}
+                  onNavigate={navigate}
+                />
+                <PlannerSheet title="Новая цель" onClose={closeForm}>
+                  <PlannerGoalForm
+                    directions={data.directions}
+                    allowPeriod={Boolean(services.planning)}
+                    initialDirectionId={route.view === 'new-goal' ? (route.directionId ?? '') : ''}
+                    onCancel={closeForm}
+                    onSubmit={async (draft) => {
+                      const generation = routeGeneration.current;
+                      await finishPlannerSubmission(
+                        () =>
+                          submitPlannerGoalWithPeriod(
+                            services.createGoal,
+                            draft,
+                            services.planning?.periods,
+                            currentDate.toString(),
+                          ),
+                        () => generation === routeGeneration.current,
+                        ({ goal, warning }) => {
+                          if (route.view === 'new-goal' && route.directionId && !warning) {
+                            onNavigate({ view: 'direction', id: route.directionId });
+                            return;
+                          }
+                          setCreatedGoal(goal);
+                          setCreatedGoalWarning(warning);
+                          setNotice(null);
+                        },
+                      );
+                    }}
+                  />
+                </PlannerSheet>
+              </>
+            )}
+            {guidanceOpen && route.view === 'today' && (
+              <PlannerSheet title="Шаг к цели" onClose={() => closeGuidance()} lockScroll>
+                <PlannerGoalGuidance
+                  guidance={guidance}
+                  loading={planningContext?.refreshing ?? true}
+                  error={guidanceOpen.readError ?? planningContext?.error ?? null}
+                  writeError={guidanceOpen.writeError}
+                  busy={busy}
+                  needsConfirmation={guidanceNeedsConfirmation}
+                  onSelectGoal={(goalId) =>
+                    setGuidanceSession((previous) =>
+                      previous?.id === guidanceOpen.id
+                        ? {
+                            ...previous,
+                            selection: {
+                              goal: goalId ? { id: goalId, origin: 'user' } : null,
+                            },
+                            writeError: null,
+                            confirmedSourceKey: null,
+                            mustConfirm: false,
+                          }
+                        : previous,
+                    )
+                  }
+                  onSelectAction={(actionId) =>
+                    setGuidanceSession((previous) =>
+                      previous?.id === guidanceOpen.id
+                        ? {
+                            ...previous,
+                            selection: {
+                              ...previous.selection,
+                              action: actionId ? { id: actionId, origin: 'user' } : null,
+                            },
+                            writeError: null,
+                            confirmedSourceKey: null,
+                            mustConfirm: false,
+                          }
+                        : previous,
+                    )
+                  }
+                  onConfirm={() =>
+                    setGuidanceSession((previous) =>
+                      previous?.id === guidanceOpen.id
+                        ? {
+                            ...previous,
+                            confirmedSourceKey:
+                              guidance?.status === 'ready' ? guidance.sourceKey : null,
+                            mustConfirm: false,
+                            writeError: null,
+                          }
+                        : previous,
+                    )
+                  }
+                  onPlan={() => void submitGuidance()}
+                  onOpenAction={(id) => {
+                    closeGuidance();
+                    requestAnimationFrame(() => void openActionFromSource(id));
+                  }}
+                  onOpenGoal={(id) => {
+                    closeGuidance();
+                    void navigate({ view: 'goal', id });
+                  }}
+                  onCreateAction={(goalId, title) => {
+                    closeGuidance();
+                    void navigate({ view: 'new-action', goalId, title, date: selectedDateKey });
+                  }}
+                  onCreateGoal={() => {
+                    closeGuidance();
+                    void navigate({ view: 'new-goal' });
+                  }}
+                  onRetry={() => void retryGuidance()}
+                  onClose={() => closeGuidance()}
+                />
+              </PlannerSheet>
+            )}
+          </main>
+          {confirmAccountLeave && (
+            <dialog
+              ref={accountLeaveDialog}
+              className="planner-account-leave-dialog"
+              aria-label="Подтверждение ухода"
+              onKeyDown={(event) => {
+                if (event.key !== 'Tab') return;
+                const controls = accountLeaveDialog.current?.querySelectorAll('button');
+                const first = controls?.[0];
+                const last = controls?.[controls.length - 1];
+                if (!first || !last) return;
+                if (event.shiftKey && document.activeElement === first) {
+                  event.preventDefault();
+                  last.focus();
+                } else if (!event.shiftKey && document.activeElement === last) {
+                  event.preventDefault();
+                  first.focus();
+                }
+              }}
+              onCancel={(event) => {
+                event.preventDefault();
+                answerAccountLeave(false);
+              }}
+            >
+              <PlannerUnsavedChangesConfirmation
+                onContinue={() => answerAccountLeave(false)}
+                onDiscard={() => answerAccountLeave(true)}
+                continueLabel="Остаться"
+                discardLabel="Перейти без сохранения"
+              />
+            </dialog>
+          )}
+          {completionSummary && (
+            <QuickAccessGuardScope
+              scope={
+                completionSummary.origin === 'source' ? 'completion-summary' : 'action-summary'
+              }
+            >
+              <CompletionResultPrompt
+                guardScope={
+                  completionSummary.origin === 'source' ? 'completion-summary' : 'action-summary'
+                }
+                key={completionSummary.target.completionKey}
+                target={completionSummary.target}
+                onClose={() =>
+                  setCompletionSummary((current) =>
+                    current?.target.completionKey === completionSummary.target.completionKey
+                      ? null
+                      : current,
+                  )
+                }
+              />
+            </QuickAccessGuardScope>
+          )}
+          {actionPanelId && onCloseAction && registerPanelGuard && (
+            <PlannerActionPanel
+              actionId={actionPanelId}
+              today={selectedDateKey}
+              reads={libraryReads}
+              operations={panelOperations}
+              onSetTime={panelOperations.onSetTime}
+              onClose={() => void onCloseAction()}
+              onRetry={libraryReads.refresh}
+              onReturnFocus={() =>
+                actionOpener.current?.isConnected ? actionOpener.current : mainContent.current
+              }
+              registerGuard={registerPanelGuard}
+              feedback={completion.error}
+              onRetryCompletion={() => {
+                if (
+                  completion.snapshot.phase === 'saved' &&
+                  completion.snapshot.refresh === 'failed'
+                )
+                  void completion.retry();
+                else {
+                  completion.dismiss();
+                  void load().catch(report);
+                }
+              }}
+              commandError={error}
+              onDismissCommandError={() => setError(null)}
+              onStartWalk={
+                services.walks
+                  ? async (actionId, requestId) => {
+                      const walk = await services.walks!.planning.startPlanned({
+                        actionId,
+                        requestId,
+                      });
+                      await onCloseAction();
+                      await navigate({ view: 'walks', id: walk.id.toString() });
                     }
                   : undefined
               }
             />
-          ) : route.view === 'memory' ? (
-            services.memory ? (
-              <PlannerMemory
-                services={services.memory}
-                route={route}
-                currentDate={currentDate}
-                catalog={{
-                  spheres: data?.spheres ?? [],
-                  directions: data?.directions ?? [],
-                  goals: data?.goals ?? [],
-                }}
-                onNavigate={navigate}
-              />
-            ) : (
-              <p role="alert">Память жизни недоступна в этой сборке.</p>
-            )
-          ) : route.view === 'account' ? (
-            <QuickAccessGuardScope scope="account">
-              <AccountSyncPage
-                service={services.accountSync}
-                backLabel={accountReturnRoute ? 'Вернуться в предыдущий раздел' : 'К плану дня'}
-                onBack={() => void returnFromDataStatus()}
-              />
-            </QuickAccessGuardScope>
-          ) : ['spheres', 'sphere', 'directions', 'direction'].includes(route.view) ? (
-            services.balance ? (
-              <BalanceWorkspace
-                services={services.balance}
-                route={route}
-                today={currentDate.toString()}
-                onNavigate={navigate}
-              />
-            ) : (
-              <p role="alert">Сферы недоступны в этой сборке.</p>
-            )
-          ) : route.view === 'sleep' ? (
-            <SleepPreparationPage
-              service={services.sleepSchedule}
-              plannerServices={services}
-              calendarDate={currentDate.toString()}
-              onBack={() => navigate({ view: 'today' })}
-            />
-          ) : route.view === 'planning' ? (
-            <PlannerLibraryWorkspace
-              reads={libraryReads}
-              completion={completion}
-              onOpenAction={openActionFromSource}
-              onChangeDate={changeDate}
-              services={services}
-              route={{
-                view: 'goals',
-                ...(route.sphereId ? { sphereId: route.sphereId } : {}),
-                period: 'week',
-              }}
-              today={currentDate.toString()}
-              onNavigate={navigate}
-            />
-          ) : [
-              'goal',
-              'goals',
-              'focus',
-              'review',
-              'actions',
-              'action',
-              'inbox',
-              'kanban',
-              'calendar',
-              'time',
-              'tree',
-            ].includes(route.view) ? (
-            <PlannerLibraryWorkspace
-              reads={libraryReads}
-              completion={completion}
-              onOpenAction={openActionFromSource}
-              onChangeDate={changeDate}
-              key={buildPlannerRoute(route)}
-              services={services}
-              route={route}
-              workTime={workTime}
-              today={currentDate.toString()}
-              onNavigate={navigate}
-            />
-          ) : data === null ? (
-            !error && (
-              <div className="planner-loading" role="status" aria-label="Загружаем">
-                <span />
-                <span />
-                <span />
-                Загружаем…
-              </div>
-            )
-          ) : route.view === 'today' ? (
-            <PlannerToday
-              date={selectedDate}
-              day={route.day === 'tomorrow' ? 'tomorrow' : 'today'}
-              overview={data.overview}
-              scenarios={services.plannerScenarios}
-              goals={data.goals}
-              directions={data.directions}
-              spheres={data.spheres}
-              availableActions={data.actions}
-              capacityMinutes={
-                data.timeCapacity[
-                  (new Date(`${selectedDate.toString()}T12:00:00Z`).getUTCDay() + 6) % 7
-                ] ?? null
-              }
-              monthlyDirectionFocus={data.monthlyDirectionFocus}
-              busy={busy}
-              menuForAction={menuForAction}
-              onSelectDay={(day) =>
-                navigate(day === 'tomorrow' ? { view: 'today', day } : { view: 'today' })
-              }
-              onOpenAction={openActionFromSource}
-              onMonthlyDirectionChange={(id) => {
-                void run(
-                  () =>
-                    services.monthlyDirectionFocus.set(
-                      currentDate,
-                      id ? EntityId.create(id) : null,
-                    ),
-                  'Главное направление месяца сохранено',
-                );
-              }}
-              onNewAction={() =>
-                onNavigate({
-                  view: 'new-action',
-                  goalId: null,
-                  title: null,
-                  date: selectedDate.toString(),
-                })
-              }
-              onOpenSleep={() => navigate({ view: 'sleep' })}
-              onOpenGoalGuidance={() => void openGuidance()}
-              sleepEntry={data.sleepEntry}
-              onComplete={(id) => {
-                if (working.current) return;
-                const action = data.actions.find((candidate) => candidate.id.toString() === id);
-                if (!action) {
-                  report(new Error('Действие изменилось. Обновите список перед выполнением.'));
-                  return;
-                }
-                setError(null);
-                void completion.complete({ actionId: id, completionKey: action.completionKey });
-              }}
-              onSelectAction={(selection) => {
-                void run(async () => {
-                  if (selection.kind === 'action')
-                    return planPlannerAction(
-                      services.setLifeActionPlan,
-                      selection.actionId,
-                      selectedDate.toString(),
-                    );
-                  const action = await services.planning?.recurrence.selectForDate(
-                    selection.ruleId,
-                    selectedDate.toString(),
-                  );
-                  if (!action)
-                    throw new Error(
-                      'На эту дату повторение не запланировано. Измените расписание серии.',
-                    );
-                  if (action.plannedDate?.toString() !== selectedDate.toString())
-                    return planPlannerAction(
-                      services.setLifeActionPlan,
-                      action.id.toString(),
-                      selectedDate.toString(),
-                    );
-                  return action;
-                }, 'Действие выбрано');
-              }}
-              onPlan={(id, main) => {
-                void run(
-                  () =>
-                    planPlannerAction(
-                      services.setLifeActionPlan,
-                      id,
-                      selectedDate.toString(),
-                      main,
-                    ),
-                  main ? 'Главное действие выбрано' : 'План сохранён',
-                );
-              }}
-              onReschedule={(id, date) => run(() => changeDate(id, date), null, true)}
-              onQuickAdd={async (title) => {
-                setBusy(true);
-                try {
-                  await submitPlannerAction(services.createLifeActionDraft, {
-                    ...emptyActionDraft(),
-                    title,
-                    date: selectedDate.toString(),
-                  });
-                  setNotice(
-                    route.day === 'tomorrow'
-                      ? 'Действие добавлено на завтра'
-                      : 'Действие добавлено на сегодня',
-                  );
-                  await load().catch(report);
-                } finally {
-                  setBusy(false);
-                }
-              }}
-            />
-          ) : route.view === 'new-action' ? (
-            <>
-              <PlannerLibraryWorkspace
-                reads={libraryReads}
-                completion={completion}
-                onOpenAction={openActionFromSource}
-                onChangeDate={changeDate}
-                services={services}
-                route={{ view: 'actions' }}
-                today={currentDate.toString()}
-                onNavigate={navigate}
-              />
-              <PlannerSheet title="Новое действие" onClose={closeForm}>
-                <PlannerActionForm
-                  key={buildPlannerRoute(route)}
-                  goals={
-                    route.directionId
-                      ? data.goals.filter((g) => g.directionId === route.directionId)
-                      : data.goals
-                  }
-                  initialGoalId={route.goalId}
-                  initialDirectionId={route.directionId ?? null}
-                  contextLabel={
-                    data.directions.find((d) => d.id === route.directionId)?.title ?? null
-                  }
-                  lockGoal={route.returnToGoal === true || route.returnToGoals === true}
-                  initialTitle={route.title}
-                  initialDate={route.date ?? null}
-                  initialParentActionId={route.parentActionId ?? null}
-                  currentDate={currentDate.toString()}
-                  onCancel={closeForm}
-                  onSubmit={async (draft) => {
-                    const generation = routeGeneration.current;
-                    await finishPlannerSubmission(
-                      () => submitPlannerAction(services.createLifeActionDraft, draft),
-                      () => generation === routeGeneration.current,
-                      () => {
-                        setNotice(
-                          draft.date === currentDate.toString()
-                            ? 'Действие добавлено на сегодня'
-                            : draft.date
-                              ? `Действие сохранено на ${draft.date}`
-                              : 'Действие сохранено в блоке «Без даты»',
-                        );
-                        if (route.returnToGoals) {
-                          onNavigate({ view: 'goals' });
-                        } else if (route.parentActionId) {
-                          onNavigate({ view: 'action', id: route.parentActionId });
-                        } else if (
-                          route.returnToGoal &&
-                          route.goalId &&
-                          route.goalId === draft.goalId
-                        ) {
-                          onNavigate({ view: 'goal', id: route.goalId });
-                        } else if (route.directionId) {
-                          onNavigate({ view: 'direction', id: route.directionId });
-                        } else if (route.date === addDays(currentDate.toString(), 1)) {
-                          onNavigate({ view: 'today', day: 'tomorrow' });
-                        } else {
-                          today();
-                        }
-                      },
-                    );
-                  }}
-                />
-              </PlannerSheet>
-            </>
-          ) : createdGoal ? (
-            <section className="planner-goal-success">
-              <p className="planner-eyebrow" role="status">
-                Цель создана
-              </p>
-              <h1>{createdGoal.title}</h1>
-              {createdGoalWarning && (
-                <p role="alert" className="planner-error">
-                  {createdGoalWarning}
-                </p>
-              )}
-              {createdGoal.achievementCriteria ? <p>{createdGoal.achievementCriteria}</p> : null}
-              <p className="planner-muted">
-                {createdGoal.directionId === null
-                  ? 'Направление можно выбрать позже.'
-                  : 'Направление сохранено.'}
-              </p>
-              {createdGoal.nextProgress ? <p>Первый шаг: {createdGoal.nextProgress}</p> : null}
-              <div className="planner-form-actions">
-                <button
-                  className="planner-primary"
-                  type="button"
-                  onClick={() =>
-                    onNavigate({
-                      view: 'new-action',
-                      goalId: createdGoal.id.toString(),
-                      title: createdGoal.nextProgress,
-                    })
-                  }
-                >
-                  Добавить действие
-                </button>
-                <a href={`#/v2/goals/${encodeURIComponent(createdGoal.id.toString())}`}>
-                  Открыть цель
-                </a>
-              </div>
-            </section>
-          ) : (
-            <>
-              <PlannerLibraryWorkspace
-                reads={libraryReads}
-                completion={completion}
-                onOpenAction={openActionFromSource}
-                onChangeDate={changeDate}
-                services={services}
-                route={{ view: 'goals' }}
-                today={currentDate.toString()}
-                onNavigate={navigate}
-              />
-              <PlannerSheet title="Новая цель" onClose={closeForm}>
-                <PlannerGoalForm
-                  directions={data.directions}
-                  allowPeriod={Boolean(services.planning)}
-                  initialDirectionId={route.view === 'new-goal' ? (route.directionId ?? '') : ''}
-                  onCancel={closeForm}
-                  onSubmit={async (draft) => {
-                    const generation = routeGeneration.current;
-                    await finishPlannerSubmission(
-                      () =>
-                        submitPlannerGoalWithPeriod(
-                          services.createGoal,
-                          draft,
-                          services.planning?.periods,
-                          currentDate.toString(),
-                        ),
-                      () => generation === routeGeneration.current,
-                      ({ goal, warning }) => {
-                        if (route.view === 'new-goal' && route.directionId && !warning) {
-                          onNavigate({ view: 'direction', id: route.directionId });
-                          return;
-                        }
-                        setCreatedGoal(goal);
-                        setCreatedGoalWarning(warning);
-                        setNotice(null);
-                      },
-                    );
-                  }}
-                />
-              </PlannerSheet>
-            </>
           )}
-          {guidanceOpen && route.view === 'today' && (
-            <PlannerSheet title="Шаг к цели" onClose={() => closeGuidance()} lockScroll>
-              <PlannerGoalGuidance
-                guidance={guidance}
-                loading={planningContext?.refreshing ?? true}
-                error={guidanceOpen.readError ?? planningContext?.error ?? null}
-                writeError={guidanceOpen.writeError}
-                busy={busy}
-                needsConfirmation={guidanceNeedsConfirmation}
-                onSelectGoal={(goalId) =>
-                  setGuidanceSession((previous) =>
-                    previous?.id === guidanceOpen.id
-                      ? {
-                          ...previous,
-                          selection: {
-                            goal: goalId ? { id: goalId, origin: 'user' } : null,
-                          },
-                          writeError: null,
-                          confirmedSourceKey: null,
-                          mustConfirm: false,
-                        }
-                      : previous,
-                  )
+          <QuickAccessPanel
+            services={services}
+            today={currentDate.toString()}
+            onNavigate={navigate}
+            {...(onOpenAction
+              ? {
+                  onOpenAction: async (id: string) => {
+                    if (!actionPanelId) setReturnToQuickAccess({ source: routeKey, resultId: id });
+                    return onOpenAction(id);
+                  },
                 }
-                onSelectAction={(actionId) =>
-                  setGuidanceSession((previous) =>
-                    previous?.id === guidanceOpen.id
-                      ? {
-                          ...previous,
-                          selection: {
-                            ...previous.selection,
-                            action: actionId ? { id: actionId, origin: 'user' } : null,
-                          },
-                          writeError: null,
-                          confirmedSourceKey: null,
-                          mustConfirm: false,
-                        }
-                      : previous,
-                  )
-                }
-                onConfirm={() =>
-                  setGuidanceSession((previous) =>
-                    previous?.id === guidanceOpen.id
-                      ? {
-                          ...previous,
-                          confirmedSourceKey:
-                            guidance?.status === 'ready' ? guidance.sourceKey : null,
-                          mustConfirm: false,
-                          writeError: null,
-                        }
-                      : previous,
-                  )
-                }
-                onPlan={() => void submitGuidance()}
-                onOpenAction={(id) => {
-                  closeGuidance();
-                  requestAnimationFrame(() => void openActionFromSource(id));
-                }}
-                onOpenGoal={(id) => {
-                  closeGuidance();
-                  void navigate({ view: 'goal', id });
-                }}
-                onCreateAction={(goalId, title) => {
-                  closeGuidance();
-                  void navigate({ view: 'new-action', goalId, title, date: selectedDateKey });
-                }}
-                onCreateGoal={() => {
-                  closeGuidance();
-                  void navigate({ view: 'new-goal' });
-                }}
-                onRetry={() => void retryGuidance()}
-                onClose={() => closeGuidance()}
-              />
-            </PlannerSheet>
-          )}
-        </main>
-        {confirmAccountLeave && (
-          <dialog
-            ref={accountLeaveDialog}
-            className="planner-account-leave-dialog"
-            aria-label="Подтверждение ухода"
-            onKeyDown={(event) => {
-              if (event.key !== 'Tab') return;
-              const controls = accountLeaveDialog.current?.querySelectorAll('button');
-              const first = controls?.[0];
-              const last = controls?.[controls.length - 1];
-              if (!first || !last) return;
-              if (event.shiftKey && document.activeElement === first) {
-                event.preventDefault();
-                last.focus();
-              } else if (!event.shiftKey && document.activeElement === last) {
-                event.preventDefault();
-                first.focus();
-              }
-            }}
-            onCancel={(event) => {
-              event.preventDefault();
-              answerAccountLeave(false);
-            }}
-          >
-            <PlannerUnsavedChangesConfirmation
-              onContinue={() => answerAccountLeave(false)}
-              onDiscard={() => answerAccountLeave(true)}
-              continueLabel="Остаться"
-              discardLabel="Перейти без сохранения"
-            />
-          </dialog>
-        )}
-        {completionSummary && (
-          <QuickAccessGuardScope
-            scope={completionSummary.origin === 'source' ? 'completion-summary' : 'action-summary'}
-          >
-            <CompletionResultPrompt
-              guardScope={
-                completionSummary.origin === 'source' ? 'completion-summary' : 'action-summary'
-              }
-              key={completionSummary.target.completionKey}
-              target={completionSummary.target}
-              onClose={() =>
-                setCompletionSummary((current) =>
-                  current?.target.completionKey === completionSummary.target.completionKey
-                    ? null
-                    : current,
-                )
-              }
-            />
-          </QuickAccessGuardScope>
-        )}
-        {actionPanelId && onCloseAction && registerPanelGuard && (
-          <PlannerActionPanel
-            actionId={actionPanelId}
-            today={selectedDateKey}
-            reads={libraryReads}
-            operations={panelOperations}
-            onSetTime={panelOperations.onSetTime}
-            onClose={() => void onCloseAction()}
-            onRetry={libraryReads.refresh}
-            onReturnFocus={() =>
-              actionOpener.current?.isConnected ? actionOpener.current : mainContent.current
-            }
-            registerGuard={registerPanelGuard}
-            feedback={completion.error}
-            onRetryCompletion={() => {
-              if (completion.snapshot.phase === 'saved' && completion.snapshot.refresh === 'failed')
-                void completion.retry();
-              else {
-                completion.dismiss();
-                void load().catch(report);
-              }
-            }}
-            commandError={error}
-            onDismissCommandError={() => setError(null)}
+              : {})}
+            returnFocusId={validReturnTarget?.resultId ?? null}
           />
-        )}
-        <QuickAccessPanel
-          services={services}
-          today={currentDate.toString()}
-          onNavigate={navigate}
-          {...(onOpenAction
-            ? {
-                onOpenAction: async (id: string) => {
-                  if (!actionPanelId) setReturnToQuickAccess({ source: routeKey, resultId: id });
-                  return onOpenAction(id);
-                },
-              }
-            : {})}
-          returnFocusId={validReturnTarget?.resultId ?? null}
-        />
-      </div>
+        </div>
+      </NeedChoicesProvider>
     </PlanningProvider>
   );
 }

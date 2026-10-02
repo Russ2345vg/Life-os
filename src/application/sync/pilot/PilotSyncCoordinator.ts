@@ -17,6 +17,7 @@ export interface PilotSyncRunResult {
 }
 
 export interface PilotSyncCoordinatorDependencies {
+  readonly prepareDataFormat?: () => Promise<void>;
   readonly transferGate?: SyncTransferGate;
   readonly isOnline?: () => boolean;
   readonly afterStructured?: () => void;
@@ -135,6 +136,7 @@ export class PilotSyncCoordinator {
   private async executeAllowed(): Promise<PilotSyncRunResult> {
     this.update({ ...this.#status, state: 'syncing' });
     try {
+      if (this.dependencies.prepareDataFormat) await this.dependencies.prepareDataFormat();
       await this.dependencies.bootstrap.run();
       await this.dependencies.hints?.ensure(() => this.trigger());
       const push = await this.dependencies.push.run();

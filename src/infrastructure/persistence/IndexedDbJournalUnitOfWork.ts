@@ -21,6 +21,10 @@ import type { GoalRecord } from './records/GoalRecord';
 import type { DecisionRecord } from './records/DecisionRecord';
 import type { LifeActionRecord } from './records/LifeActionRecord';
 import type { ActionSessionRecord } from './records/ActionSessionRecord';
+import { WalkCaptureRecordMapper } from './mappers/WalkCaptureRecordMapper';
+import { assertWalkPayloadCompatible } from '../../application/walk/WalkSyncCompatibility';
+import { confirmedWalkDataFormat } from '../sync/WalkDataFormat';
+import type { SyncSettingsRecord } from './records/SyncStoreRecords';
 import {
   IndexedDbPilotMutationRecorder,
   PILOT_MUTATION_STORES,
@@ -55,8 +59,100 @@ export class IndexedDbJournalUnitOfWork implements JournalUnitOfWork {
       throw transactionFailed(error);
     }
     const completion = observeTransaction(transaction);
+    void completion.catch(() => undefined);
 
     try {
+      if (
+        input.walkCaptureAction ||
+        input.lifeActions?.some((change) => change.lifeAction.walkPlan) ||
+        input.planningSetup?.rules.some((rule) => rule.walkPlan)
+      ) {
+        const settings = await observeRequest<SyncSettingsRecord | undefined>(
+          transaction.objectStore('sync_settings').get('sync'),
+        );
+        if (
+          settings &&
+          (settings.setupState === 'configured' || settings.setupState === 'rotation_pending') &&
+          settings.membershipStatus === 'active' &&
+          settings.spaceId &&
+          settings.currentKeyEpoch != null
+        ) {
+          const dataFormat = await confirmedWalkDataFormat(transaction, settings);
+          if (input.walkCaptureAction)
+            assertWalkPayloadCompatible(
+              'walk_capture',
+              {
+                ...WalkCaptureRecordMapper.toRecord(input.walkCaptureAction.capture),
+              },
+              dataFormat,
+            );
+          for (const change of input.lifeActions ?? [])
+            assertWalkPayloadCompatible(
+              'life_action',
+              {
+                ...LifeActionRecordMapper.toRecord(change.lifeAction),
+              },
+              dataFormat,
+            );
+          for (const rule of input.planningSetup?.rules ?? [])
+            assertWalkPayloadCompatible('recurrence_rule', { ...rule }, dataFormat);
+        }
+      }
+      if (input.walkCaptureAction) {
+        const change = input.walkCaptureAction;
+        const settings = transaction.objectStore('sync_settings');
+        const captures = transaction.objectStore('walkCaptures');
+        const generation =
+          (
+            await observeRequest<{ generation: number } | undefined>(
+              settings.get('walk-command-generation'),
+            )
+          )?.generation ?? 0;
+        const key = `walk-command:v1:${change.request.requestId}`;
+        const receipt = await observeRequest<
+          { inputHash: string; operation: string; generation: number } | undefined
+        >(settings.get(key));
+        if (
+          receipt &&
+          (receipt.inputHash !== change.request.inputHash ||
+            receipt.operation !== change.request.operation)
+        )
+          throw new DomainError(
+            'walk.request_reused',
+            'Команда уже использована с другими данными.',
+          );
+        if (receipt && receipt.generation !== generation)
+          throw new DomainError(
+            'walk.request_invalidated',
+            'Данные восстановлены. Обновите экран.',
+          );
+        const raw = await observeRequest<unknown>(captures.get(change.capture.id.toString()));
+        if (!raw) throw new DomainError('walk_capture.not_found', 'Мысль не найдена.');
+        const current = WalkCaptureRecordMapper.fromRecord(raw);
+        if (current.resultActionId !== null) {
+          if (!current.resultActionId.equals(change.capture.resultActionId!))
+            throw new DomainError(
+              'persistence.version_conflict',
+              'Мысль уже связана с другим действием.',
+            );
+          await completion;
+          return;
+        }
+        if (receipt || current.version !== change.expectedVersion)
+          throw new DomainError(
+            'persistence.version_conflict',
+            'Мысль изменилась. Обновите данные.',
+          );
+        captures.put(WalkCaptureRecordMapper.toRecord(change.capture));
+        settings.add({
+          id: key,
+          ...change.request,
+          generation,
+          walkId: change.capture.id.toString(),
+          version: change.capture.version,
+          updatedAt: change.capture.updatedAt.toISOString(),
+        });
+      }
       await validateExpectedState(transaction, input);
       if (input.lifeActions?.length)
         await commitCompletionContributions(
@@ -330,6 +426,10 @@ async function validateSessionAction(
 
 function collectStores(input: CommitJournalStateInput): string[] {
   const stores = new Set<string>([LIFE_OS_STORE.journal]);
+  if (input.walkCaptureAction) {
+    stores.add('walkCaptures');
+    stores.add('sync_settings');
+  }
   if (input.planningSetup) {
     stores.add(LIFE_OS_STORE.recurrenceRules);
     stores.add(LIFE_OS_STORE.contributionLinks);
@@ -389,6 +489,7 @@ function transactionFailed(error: unknown): DomainError {
       'life_action.time_conflict',
       'session.unfinished_exists',
       'session.action_unavailable',
+      'sync.client_update_required',
     ].includes(error.code)
   )
     return error;

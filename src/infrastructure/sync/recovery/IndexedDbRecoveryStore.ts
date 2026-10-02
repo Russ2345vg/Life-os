@@ -113,7 +113,7 @@ export class IndexedDbRecoveryStore implements RecoveryDataStore {
       const values =
         registration.storageKind === 'local_storage'
           ? [
-              this.settings?.readCurrentForRecovery() ??
+              (await this.settings?.readCurrentForRecovery(tx)) ??
                 (await request<Record<string, unknown> | undefined>(
                   tx.objectStore(LIFE_OS_SYNC_STORE.settings).get('lifeos-user-settings'),
                 )),
@@ -220,14 +220,20 @@ export class IndexedDbRecoveryStore implements RecoveryDataStore {
               typeof item.record.parentActionId === 'string' ? item.record.parentActionId : null,
           })),
       );
+      // Independently active walks survive restore and are resolved explicitly in Walks.
       if (
-        intended.filter(
-          (i) => i.entityType === 'walk' && ['running', 'paused'].includes(String(i.record.status)),
-        ).length > 1
-      )
-        throw new Error(
-          'Восстановление создаёт больше одной активной прогулки. Сначала завершите текущую.',
+        exact ||
+        state.items.some((item) => item.entityType === 'walk' || item.entityType === 'walk_capture')
+      ) {
+        const settings = tx.objectStore(LIFE_OS_SYNC_STORE.settings);
+        const previous = await request<{ generation: number } | undefined>(
+          settings.get('walk-command-generation'),
         );
+        settings.put({
+          id: 'walk-command-generation',
+          generation: (previous?.generation ?? 0) + 1,
+        });
+      }
       if (
         intended.filter(
           (i) => i.entityType === 'routine_occurrence_execution' && i.record.status === 'running',
@@ -311,7 +317,8 @@ export class IndexedDbRecoveryStore implements RecoveryDataStore {
           if (registration.storageKind === 'local_storage') {
             const prior = current.items.find((i) => i.entityType === 'user_settings')?.record;
             if (
-              JSON.stringify(this.settings?.readCurrentForRecovery()) !== JSON.stringify(prior) ||
+              JSON.stringify(await this.settings?.readCurrentForRecovery(tx)) !==
+                JSON.stringify(prior) ||
               !this.settings?.stageRemote(tx, prepared)
             )
               throw new Error('Settings changed during restore.');

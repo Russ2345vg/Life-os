@@ -25,6 +25,8 @@ import type { MemoryServices } from '../../../application/memory/MemoryServices'
 import type { DiaryMemoryField, MemoryDraft } from '../../../domain/memory';
 import { MemoryEditor } from '../memory/MemoryEditor';
 import { memoryError, type MemoryCatalog } from '../memory/memoryPresentation';
+import type { WalkServices } from '../../../application/walk/WalkServices';
+import { WalkDayFacts } from '../walks/WalkDayFacts';
 
 type DiaryMemoryTransfer = (field: DiaryMemoryField, getVersion: () => number | null) => void;
 
@@ -34,8 +36,10 @@ export function PlannerDiary({
   currentDate,
   onNavigate,
   memory,
+  walks,
 }: {
   readonly service: DiaryService;
+  readonly walks?: WalkServices | undefined;
   readonly route: Extract<PlannerRoute, { view: 'diary' }>;
   readonly currentDate: DayDate;
   readonly onNavigate: (route: PlannerRoute) => void;
@@ -159,6 +163,9 @@ export function PlannerDiary({
   return (
     <section className="planner-diary" aria-labelledby="planner-diary-title">
       <DiaryHeader route={resolved} currentDate={currentDate} onNavigate={onNavigate} />
+      {walks && resolved.period === 'day' && (
+        <WalkDayFacts key={`walk-facts:${resolved.date}`} services={walks} date={resolved.date} />
+      )}
       {importError?.periodKey === periodKey && (
         <p className="planner-error" role="alert">
           {importError.message}

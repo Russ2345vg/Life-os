@@ -20,6 +20,7 @@ export function actionPlanningSetup(
     ? validateRule({
         ...recurrence,
         title: action.title.toString(),
+        ...(action.walkPlan ? { walkPlan: action.walkPlan } : {}),
         need: action.need,
         goalId: action.goalId?.toString() ?? null,
         directionId: action.directionId?.toString() ?? null,

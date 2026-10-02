@@ -1,10 +1,32 @@
 import { DayDate } from '../../domain';
+import type { AnalyticsTopic } from '../../application/analytics/GetAnalyticsOverview';
 import { MEMORY_KINDS, type MemoryKind } from '../../domain/memory';
 import { addDays, automaticPeriod } from '../../domain/planner/PlanningPeriod';
 
 export type PlannerRoute =
+  | {
+      readonly view: 'analytics';
+      readonly period?: 'week' | 'month';
+      readonly date?: string;
+      readonly topic?: AnalyticsTopic;
+      readonly day?: string;
+    }
+  | {
+      readonly view: 'walks';
+      readonly page?: 'overview' | 'active' | 'history' | 'captures' | 'plan' | 'analytics';
+      readonly id?: string;
+      readonly search?: string;
+      readonly status?: string;
+      readonly from?: string;
+      readonly to?: string;
+      readonly intent?: string;
+      readonly sphereId?: string;
+      readonly origin?: 'today';
+      readonly sourceGoalId?: string;
+    }
   | { readonly view: 'spheres' }
   | { readonly view: 'directions' }
+  | { readonly view: 'needs'; readonly need?: string }
   | { readonly view: 'sphere'; readonly id: string }
   | { readonly view: 'direction'; readonly id: string }
   | { readonly view: 'goal'; readonly id: string; readonly edit?: boolean }
@@ -57,8 +79,41 @@ export function parsePlannerRoute(hash: string): PlannerRoute | null {
   const view = new URLSearchParams(query).get('view');
   const sphereId = new URLSearchParams(query).get('sphereId')?.trim();
   const filter = sphereId ? { sphereId } : {};
+  if (path === '#/v2/analytics') {
+    const params = new URLSearchParams(query);
+    const period = params.get('period');
+    const topic = params.get('topic');
+    const date = params.get('date');
+    const day = params.get('day');
+    const validTopics: readonly string[] = [
+      'overview',
+      'results',
+      'time',
+      'goals',
+      'balance',
+      'state',
+      'rest',
+      'memory',
+    ];
+    return {
+      view: 'analytics',
+      ...(period === 'week' || period === 'month' ? { period } : {}),
+      ...(date ? { date } : {}),
+      ...(topic && validTopics.includes(topic) ? { topic: topic as AnalyticsTopic } : {}),
+      ...(day ? { day } : {}),
+    };
+  }
   if (path === '#/v2/spheres') return { view: 'spheres' };
   if (path === '#/v2/directions') return { view: 'directions' };
+  if (path === '#/v2/needs') return { view: 'needs' };
+  if (path?.startsWith('#/v2/needs/')) {
+    try {
+      const need = decodeURIComponent(path.slice('#/v2/needs/'.length)).trim();
+      return need ? { view: 'needs', need } : null;
+    } catch {
+      return null;
+    }
+  }
   for (const [prefix, detail] of [
     ['#/v2/spheres/', 'sphere'],
     ['#/v2/directions/', 'direction'],
@@ -85,6 +140,34 @@ export function parsePlannerRoute(hash: string): PlannerRoute | null {
       ...(new URLSearchParams(query).get('day') === 'tomorrow' ? { day: 'tomorrow' as const } : {}),
     };
   if (path === '#/v2/sleep') return { view: 'sleep' };
+  if (path === '#/v2/walks' || path?.startsWith('#/v2/walks/')) {
+    try {
+      const part =
+        path === '#/v2/walks' ? 'overview' : decodeURIComponent(path.slice('#/v2/walks/'.length));
+      if (!part) return null;
+      const params = new URLSearchParams(query);
+      const filters = {
+        ...Object.fromEntries(
+          ['search', 'status', 'from', 'to', 'intent', 'sphereId', 'sourceGoalId'].flatMap((key) =>
+            params.get(key) ? [[key, params.get(key)!]] : [],
+          ),
+        ),
+        ...(params.get('origin') === 'today' ? { origin: 'today' as const } : {}),
+      };
+      for (const page of [
+        'overview',
+        'active',
+        'history',
+        'captures',
+        'plan',
+        'analytics',
+      ] as const)
+        if (part === page) return { view: 'walks', page, ...filters };
+      return { view: 'walks', id: part };
+    } catch {
+      return null;
+    }
+  }
   if (path === '#/v2/account') return { view: 'account' };
   if (path === '#/v2/memory' || path?.startsWith('#/v2/memory/')) {
     const params = new URLSearchParams(query);
@@ -187,8 +270,30 @@ export function parsePlannerRoute(hash: string): PlannerRoute | null {
 }
 
 export function buildPlannerRoute(route: PlannerRoute): string {
+  if (route.view === 'analytics') {
+    const params = new URLSearchParams();
+    if (route.period) params.set('period', route.period);
+    if (route.date) params.set('date', route.date);
+    if (route.topic && route.topic !== 'overview') params.set('topic', route.topic);
+    if (route.day) params.set('day', route.day);
+    return `#/v2/analytics${params.size ? `?${params}` : ''}`;
+  }
+  if (route.view === 'walks') {
+    const params = new URLSearchParams();
+    if (route.search) params.set('search', route.search);
+    if (route.status) params.set('status', route.status);
+    if (route.from) params.set('from', route.from);
+    if (route.to) params.set('to', route.to);
+    if (route.intent) params.set('intent', route.intent);
+    if (route.sphereId) params.set('sphereId', route.sphereId);
+    if (route.origin) params.set('origin', route.origin);
+    if (route.sourceGoalId) params.set('sourceGoalId', route.sourceGoalId);
+    return `#/v2/walks${route.id ? `/${encodeURIComponent(route.id)}` : route.page && route.page !== 'overview' ? `/${route.page}` : ''}${params.size ? `?${params}` : ''}`;
+  }
   if (route.view === 'spheres') return '#/v2/spheres';
   if (route.view === 'directions') return '#/v2/directions';
+  if (route.view === 'needs')
+    return `#/v2/needs${route.need ? `/${encodeURIComponent(route.need)}` : ''}`;
   if (route.view === 'sphere') return `#/v2/spheres/${encodeURIComponent(route.id)}`;
   if (route.view === 'direction') return `#/v2/directions/${encodeURIComponent(route.id)}`;
   const filter =

@@ -23,6 +23,20 @@ const envelope: PilotCryptoEnvelope = {
 };
 
 describe('SupabasePilotSyncTransport', () => {
+  it('uses the v2 routes only after confirmation', async () => {
+    const rpc = vi.fn(async (name: string) => ({
+      data: name.includes('push') ? [{ sequence: 7, is_current_winner: true }] : [],
+      error: null,
+    }));
+    const transport = new SupabasePilotSyncTransport({ rpc } as unknown as SupabaseClient);
+    transport.setDataFormat(2);
+    await transport.push(envelope);
+    await transport.pull(0, 5);
+    expect(rpc.mock.calls.map(([name]) => name)).toEqual([
+      'lifeos_sync_push_pilot_event_v2',
+      'lifeos_sync_pull_pilot_events_v2',
+    ]);
+  });
   it('pushes only opaque ordering metadata and ciphertext through a narrow RPC', async () => {
     const rpc = vi.fn(async () => ({
       data: [{ sequence: 7, is_current_winner: true }],

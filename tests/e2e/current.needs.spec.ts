@@ -1,8 +1,20 @@
 import { DirectionRecordMapper } from '../../src/infrastructure/persistence/mappers/DirectionRecordMapper';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { DayDate, Direction, EntityId, Goal, LifeAction, LifeActionTitle } from '../../src/domain';
 import { GoalRecordMapper } from '../../src/infrastructure/persistence/mappers/GoalRecordMapper';
 import { LifeActionRecordMapper } from '../../src/infrastructure/persistence/mappers/LifeActionRecordMapper';
+
+async function chooseNeed(page: Page, value: string) {
+  const select = page.getByLabel('Потребность', { exact: true });
+  if (value === '') {
+    await select.selectOption('');
+  } else if (await select.locator('option', { hasText: value }).count()) {
+    await select.selectOption({ label: value });
+  } else {
+    await select.selectOption('__custom__');
+    await page.getByLabel('Своя потребность', { exact: true }).fill(value);
+  }
+}
 
 test('goal needs stay visible during creation, on the card and in editing', async ({
   page,
@@ -17,7 +29,7 @@ test('goal needs stay visible during creation, on the card and in editing', asyn
   const need = page.getByLabel('Потребность', { exact: true });
   await expect(need).toBeVisible();
   await page.getByLabel('Название', { exact: true }).fill('Заметная потребность цели');
-  await need.fill('Свобода и уверенность в своих решениях');
+  await chooseNeed(page, 'Свобода и уверенность в своих решениях');
   await page.screenshot({ path: testInfo.outputPath('visible-need-form.png'), fullPage: true });
   await page.getByRole('button', { name: 'Создать цель', exact: true }).click();
   await page.getByRole('link', { name: 'Открыть цель', exact: true }).click();
@@ -36,7 +48,7 @@ test('goal needs stay visible during creation, on the card and in editing', asyn
   await expect(need).toBeVisible();
   await expect(need).toHaveValue('Свобода и уверенность в своих решениях');
   const longNeed = 'Возможность самостоятельно выбирать работу и сохранять спокойствие. '.repeat(7);
-  await need.fill(longNeed);
+  await chooseNeed(page, longNeed);
   await page.getByRole('button', { name: 'Сохранить цель', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Редактировать цель' })).not.toBeVisible();
   await page.reload();
@@ -213,7 +225,7 @@ test('needs inherit dynamically and allow an own goal override without crowding 
   await details.locator('summary').click();
   await details.getByRole('link', { name: 'Изменить свойства цели' }).click();
   await expect(page.getByLabel('Потребность', { exact: true })).toBeVisible();
-  await page.getByLabel('Потребность', { exact: true }).fill('Самостоятельность');
+  await chooseNeed(page, 'Самостоятельность');
   await page.getByRole('button', { name: 'Сохранить цель', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Редактировать цель' })).not.toBeVisible();
   await page.reload();
@@ -228,7 +240,7 @@ test('needs inherit dynamically and allow an own goal override without crowding 
   await expect(page.locator('.planner-row-details')).toContainText('Из цели');
   await page.locator('.planner-action-edit summary').click();
   const editor = page.locator('.planner-action-edit');
-  await editor.getByLabel('Потребность', { exact: true }).fill('Отдых');
+  await editor.getByLabel('Потребность', { exact: true }).selectOption({ label: 'Отдых' });
   await editor.getByRole('button', { name: 'Сохранить', exact: true }).click();
   await expect(page.locator('.planner-row-details .planner-entity-need')).toHaveText(
     'Потребность: Отдых',
@@ -255,7 +267,7 @@ test('needs inherit dynamically and allow an own goal override without crowding 
   await page.goto('/#/v2/goals/visibility-goal?edit=1');
   await expect(page.getByLabel('Потребность', { exact: true })).toBeVisible();
   await expect(page.getByLabel('Потребность', { exact: true })).toHaveValue('Самостоятельность');
-  await page.getByLabel('Потребность', { exact: true }).fill('');
+  await chooseNeed(page, '');
   await page.getByRole('button', { name: 'Сохранить цель', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Редактировать цель' })).not.toBeVisible();
   await expect(goalNeed).toContainText('Энергия и восстановление');
@@ -266,7 +278,7 @@ test('needs inherit dynamically and allow an own goal override without crowding 
     'Потребность: Энергия и восстановление',
   );
   await page.getByRole('button', { name: 'Описать', exact: true }).first().click();
-  await page.getByLabel('Потребность', { exact: true }).fill('Спокойствие');
+  await chooseNeed(page, 'Спокойствие');
   await page.getByRole('button', { name: 'Сохранить', exact: true }).click();
   await expect(page.getByLabel('Потребность', { exact: true })).not.toBeVisible();
   await page.goto('/#/v2/goals/visibility-goal');

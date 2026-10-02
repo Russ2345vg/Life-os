@@ -11,6 +11,7 @@ export const emptyActionDraft = (goalId: string | null = null, title: string | n
   goalId: goalId ?? '',
   directionId: '',
   parentActionId: '',
+  scenarioId: '',
   date: '',
   description: '',
   need: '',
@@ -59,6 +60,26 @@ export async function submitPlannerAction(
   });
   if (!result.ok) throw result.error;
   return result.value;
+}
+
+export async function submitPlannerActionWithScenario(
+  command: Pick<CreateLifeActionDraft, 'execute'>,
+  draft: PlannerActionDraft,
+  scenarios: { addAction(id: string, actionId: string): Promise<unknown> } | undefined,
+) {
+  const action = await submitPlannerAction(command, draft);
+  if (!draft.scenarioId) return { action, warning: null };
+  try {
+    if (!scenarios) throw new Error('Сценарии недоступны.');
+    await scenarios.addAction(draft.scenarioId, action.id.toString());
+    return { action, warning: null };
+  } catch {
+    return {
+      action,
+      warning:
+        'Действие сохранено, но в сценарий не добавлено. Откройте «Сегодня» и добавьте его в сценарий.',
+    };
+  }
 }
 
 export async function submitPlannerGoal(

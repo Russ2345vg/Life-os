@@ -2,11 +2,14 @@ import { defaultRecurrence, RecurrenceFields } from './RecurrenceFields';
 import { useQuickAccessDraft } from './QuickAccessContext';
 import { addDays } from '../../domain/planner/PlanningPeriod';
 import { usePlanning } from './PlanningContext';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { VoiceField } from '../voice-input/VoiceField';
 import { VoiceTextInput } from '../voice-input/VoiceTextInput';
 import { VoiceTextArea } from '../voice-input/VoiceTextArea';
 import { emptyActionDraft, type PlannerActionDraft } from './plannerFormSubmission';
+import { NeedPicker } from './NeedPicker';
+import type { ScenarioService } from '../../application/planner/PlannerServices';
+import type { TaskScenario } from '../../domain/planner/TaskScenario';
 
 export interface PlannerOption {
   readonly id: string;
@@ -26,6 +29,7 @@ export function PlannerActionForm({
   lockGoal = false,
   initialDirectionId = null,
   contextLabel = null,
+  scenarios,
 }: {
   readonly goals: readonly PlannerOption[];
   readonly onSubmit: (draft: PlannerActionDraft) => Promise<void>;
@@ -38,6 +42,7 @@ export function PlannerActionForm({
   readonly lockGoal?: boolean;
   readonly initialDirectionId?: string | null;
   readonly contextLabel?: string | null;
+  readonly scenarios?: Pick<ScenarioService, 'list'> | undefined;
 }) {
   const planning = usePlanning();
   const [draft, setDraft] = useState(() => ({
@@ -53,7 +58,47 @@ export function PlannerActionForm({
   const saving = useRef(false);
   useQuickAccessDraft(draft, busy);
   const [error, setError] = useState<string | null>(null);
+  const scenarioDate = draft.date || currentDate;
+  const [scenarioResult, setScenarioResult] = useState<{
+    readonly date: string;
+    readonly items: readonly TaskScenario[];
+    readonly error: string | null;
+  } | null>(null);
+  const currentScenarios = scenarioResult?.date === scenarioDate ? scenarioResult : null;
+  const scenariosLoading = Boolean(scenarios) && currentScenarios === null;
+  const scenariosError = currentScenarios?.error ?? null;
+  const availableScenarios = currentScenarios?.items ?? [];
+  useEffect(() => {
+    if (!scenarios) return;
+    let active = true;
+    void scenarios.list(scenarioDate).then(
+      (found) => {
+        if (!active) return;
+        setScenarioResult({
+          date: scenarioDate,
+          items: found.filter((item) => item.actionIds.length < 3),
+          error: null,
+        });
+      },
+      () => {
+        if (!active) return;
+        setScenarioResult({
+          date: scenarioDate,
+          items: [],
+          error: 'Не удалось загрузить сценарии. Выберите сценарий позже.',
+        });
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [scenarios, scenarioDate]);
   const goalUnavailable = draft.goalId !== '' && !goals.some((goal) => goal.id === draft.goalId);
+  const scenarioUnavailable =
+    Boolean(draft.scenarioId) &&
+    (scenariosLoading ||
+      Boolean(scenariosError) ||
+      !availableScenarios.some((item) => item.id === draft.scenarioId));
   const change = <K extends keyof PlannerActionDraft>(key: K, value: PlannerActionDraft[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
   return (
@@ -64,6 +109,12 @@ export function PlannerActionForm({
         if (saving.current) return;
         if (goalUnavailable) {
           setError('Выберите другую цель или «Без цели».');
+          return;
+        }
+        if (scenarioUnavailable) {
+          setError(
+            'Выбранный сценарий недоступен для этой даты. Выберите другой или «Без сценария».',
+          );
           return;
         }
         saving.current = true;
@@ -132,6 +183,32 @@ export function PlannerActionForm({
             Выберите другую цель или «Без цели».
           </p>
         ) : null}
+        {scenarios && (
+          <label>
+            <span>
+              Сценарий задач <small>необязательно</small>
+            </span>
+            <select
+              value={draft.scenarioId}
+              disabled={scenariosLoading || Boolean(scenariosError)}
+              onChange={(event) => change('scenarioId', event.target.value)}
+            >
+              <option value="">Без сценария</option>
+              {availableScenarios.map((scenario) => (
+                <option key={scenario.id} value={scenario.id}>
+                  {scenario.title} · {scenario.actionIds.length} из 3
+                </option>
+              ))}
+            </select>
+            {scenariosLoading && <small className="planner-muted">Загружаем сценарии…</small>}
+            {!scenariosLoading && !scenariosError && availableScenarios.length === 0 && (
+              <small className="planner-muted">
+                Сначала создайте сценарий в разделе «Сегодня».
+              </small>
+            )}
+            {scenariosError && <small className="planner-error">{scenariosError}</small>}
+          </label>
+        )}
         <label hidden={!specificDate}>
           <span>
             Дата <small>необязательно</small>
@@ -322,16 +399,12 @@ export function PlannerActionForm({
         <details className="planner-details">
           <summary>Дополнительно</summary>
           <div className="planner-details-body">
-            <VoiceField>
-              <span>Потребность</span>
-              <VoiceTextInput
-                id="planner-action-need"
-                value={draft.need}
-                onValueChange={(value) => change('need', value)}
-                maxLength={500}
-                placeholder="Необязательно · пустое поле использует потребность родителя"
-              />
-            </VoiceField>
+            <NeedPicker
+              id="planner-action-need"
+              value={draft.need}
+              onValueChange={(value) => change('need', value)}
+              help="Необязательно. Пустой выбор использует потребность родителя."
+            />
             <VoiceField>
               <span>Описание / заметки</span>
               <VoiceTextArea
