@@ -63,6 +63,7 @@ import { SleepPreparationPage } from './SleepPreparationPage';
 import { PlannerSheet } from './PlannerSheet';
 import './planner-master.css';
 import { AccountSyncPage } from './AccountSyncPage';
+import { OpenAiPanel } from './OpenAiPanel';
 import {
   selectSleepTodayEntry,
   type SleepTodayEntry,
@@ -1169,6 +1170,7 @@ function PlannerWorkspaceContent({
                   backLabel={accountReturnRoute ? 'Вернуться в предыдущий раздел' : 'К плану дня'}
                   onBack={() => void returnFromDataStatus()}
                 />
+                {services.aiAssistant ? <OpenAiPanel service={services.aiAssistant} /> : null}
               </QuickAccessGuardScope>
             ) : route.view === 'needs' ? (
               <PlannerNeeds
@@ -1650,6 +1652,11 @@ function PlannerWorkspaceContent({
                 }
                 key={completionSummary.target.completionKey}
                 target={completionSummary.target}
+                onSaved={() =>
+                  setNotice(
+                    'Итог сохранён в выполненной задаче. Найдите её в «Действия» → «Выполненные».',
+                  )
+                }
                 onClose={() =>
                   setCompletionSummary((current) =>
                     current?.target.completionKey === completionSummary.target.completionKey

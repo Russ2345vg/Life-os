@@ -71,6 +71,7 @@ describe('createLifeOsSyncApplication', () => {
 
     expect(applications.sync).toBeInstanceOf(SyncApplicationService);
     expect(applications.accountSync).toBeInstanceOf(UnavailableAccountSync);
+    expect(applications.aiAssistant.available).toBe(false);
     await applications.sync.close();
   });
 
@@ -84,11 +85,13 @@ describe('createLifeOsSyncApplication', () => {
         VITE_LIFEOS_SUPABASE_URL: 'https://example.supabase.co',
         VITE_LIFEOS_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_public-test-value',
         VITE_LIFEOS_ACCOUNT_SYNC_ENABLED: 'true',
+        VITE_LIFEOS_OPENAI_ENABLED: 'true',
       },
     });
 
     expect(applications.sync).toBeInstanceOf(SyncApplicationService);
     expect(applications.accountSync).toBeInstanceOf(AccountSyncService);
+    expect(applications.aiAssistant.available).toBe(true);
     await applications.sync.close();
   });
 });

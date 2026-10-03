@@ -1,4 +1,5 @@
 import type { BalanceServices } from '../balance/BalanceServices';
+import type { AiAssistant } from '../ai/AiAssistant';
 import type { GetAnalyticsOverview } from '../analytics/GetAnalyticsOverview';
 import type { WalkServices } from '../walk/WalkServices';
 import type { CreateGoal } from '../commands/CreateGoal';
@@ -25,6 +26,7 @@ export type ScenarioService = Pick<
 >;
 
 export interface PlannerServices extends PlannerLibraryServices {
+  readonly aiAssistant?: AiAssistant;
   readonly analytics?: GetAnalyticsOverview;
   readonly walks?: WalkServices;
   readonly memory?: MemoryServices;

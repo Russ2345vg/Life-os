@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { DomainError } from '../../shared/errors/DomainError';
 import type { SnapshotService } from './SnapshotService';
 import { SyncApplicationService, type SyncApplicationDependencies } from './SyncApplicationService';
 import type { AccountAuth } from './account/AccountAuth';
@@ -23,6 +24,178 @@ const ACCOUNT_SESSION_ID = '50000000-0000-4000-8000-000000000001';
 const TIMESTAMP = '2026-09-04T00:00:00.000Z';
 
 describe('SyncApplicationService', () => {
+  it.each(['sign_in_required', 'recovery_confirmation_pending'] as const)(
+    'loads a pending account in %s without opening its unreadable old device key',
+    async (accountSetupState) => {
+      const initial: SyncInstallation = {
+        ...pendingInstallation(),
+        accountSetupState,
+        accountUserId: ACCOUNT_USER_ID,
+        accountSessionId: ACCOUNT_SESSION_ID,
+        accountEmail: 'person@example.com',
+      };
+      const fixture = createFixture(initial);
+      vi.mocked(fixture.crypto.ensureDeviceIdentity).mockRejectedValue(
+        new Error('Old key is unreadable.'),
+      );
+
+      await expect(
+        new SyncApplicationService(fixture.dependencies).loadOverview(),
+      ).resolves.toMatchObject({ installation: initial, connection: 'local' });
+      expect(fixture.crypto.ensureDeviceIdentity).not.toHaveBeenCalled();
+    },
+  );
+
+  it('recovers an interrupted pending account under its existing server device ID', async () => {
+    const initial: SyncInstallation = {
+      ...pendingInstallation(),
+      accountSetupState: 'recovery_confirmation_pending',
+      accountUserId: ACCOUNT_USER_ID,
+      accountSessionId: ACCOUNT_SESSION_ID,
+      accountEmail: 'person@example.com',
+    };
+    const fixture = createFixture(initial);
+    fixture.crypto.promoteRecoveryIdentity = vi.fn(function (this: SyncCryptoService) {
+      expect(this).toBe(fixture.crypto);
+      return Promise.resolve({ publicKey: encoded(32, 1) });
+    });
+    vi.mocked(fixture.auth.current).mockResolvedValue(accountSession());
+    vi.mocked(fixture.crypto.ensureDeviceIdentity).mockImplementation(async (deviceId) => {
+      if (deviceId === DEVICE_ID) throw new Error('Old key is unreadable.');
+      return { publicKey: encoded(32, 1) };
+    });
+
+    const recovered = await new SyncApplicationService(fixture.dependencies).recover(
+      'LIFEOS-RECOVERY-V1:synthetic',
+    );
+
+    expect(fixture.snapshot.createPreSyncSnapshot).toHaveBeenCalledOnce();
+    expect(fixture.snapshot.verifySnapshot).toHaveBeenCalledWith('snapshot-1');
+    expect(fixture.crypto.ensureDeviceIdentity).not.toHaveBeenCalledWith(DEVICE_ID, true);
+    expect(fixture.transport.beginRecovery).toHaveBeenCalledWith(
+      expect.objectContaining({ deviceId: DEVICE_ID }),
+    );
+    expect(fixture.crypto.promoteRecoveryIdentity).toHaveBeenCalledWith(
+      DEVICE_ID,
+      SECOND_DEVICE_ID,
+    );
+    expect(recovered.installation).toMatchObject({
+      deviceId: DEVICE_ID,
+      spaceId: SPACE_ID,
+      membershipStatus: 'active',
+      setupState: 'configured',
+      accountSetupState: 'recovery_confirmation_pending',
+    });
+  });
+
+  it('does not replace the old pending-account key when server authorization fails', async () => {
+    const initial: SyncInstallation = {
+      ...pendingInstallation(),
+      accountSetupState: 'recovery_confirmation_pending',
+      accountUserId: ACCOUNT_USER_ID,
+      accountSessionId: ACCOUNT_SESSION_ID,
+      accountEmail: 'person@example.com',
+    };
+    const fixture = createFixture(initial);
+    vi.mocked(fixture.auth.current).mockResolvedValue(accountSession());
+    vi.mocked(fixture.transport.beginRecovery).mockRejectedValue(
+      new Error('Recovery authorization failed'),
+    );
+
+    await expect(
+      new SyncApplicationService(fixture.dependencies).recover('LIFEOS-RECOVERY-V1:wrong'),
+    ).rejects.toThrow('Recovery authorization failed');
+    expect(fixture.crypto.promoteRecoveryIdentity).not.toHaveBeenCalled();
+    expect(fixture.transport.completeRecovery).not.toHaveBeenCalled();
+    expect(fixture.installation.value).toMatchObject({
+      deviceId: DEVICE_ID,
+      spaceId: SPACE_ID,
+      membershipStatus: 'pending',
+    });
+  });
+
+  it('does not retry pending recovery if its saved local snapshot is invalid', async () => {
+    const initial: SyncInstallation = {
+      ...pendingInstallation(),
+      accountSetupState: 'recovery_confirmation_pending',
+      accountUserId: ACCOUNT_USER_ID,
+      accountSessionId: ACCOUNT_SESSION_ID,
+      accountEmail: 'person@example.com',
+      accountRecoveryDeviceId: SECOND_DEVICE_ID,
+      accountMigrationSnapshotId: '60000000-0000-4000-8000-000000000001',
+    };
+    const fixture = createFixture(initial);
+    vi.mocked(fixture.auth.current).mockResolvedValue(accountSession());
+    vi.mocked(fixture.snapshot.verifySnapshot).mockResolvedValue({
+      valid: false,
+      reason: 'checksum_mismatch',
+      snapshot: null,
+    });
+
+    await expect(
+      new SyncApplicationService(fixture.dependencies).recover('LIFEOS-RECOVERY-V1:synthetic'),
+    ).rejects.toThrow('Pre-sync local snapshot verification failed.');
+    expect(fixture.transport.beginRecovery).not.toHaveBeenCalled();
+    expect(fixture.crypto.promoteRecoveryIdentity).not.toHaveBeenCalled();
+    expect(fixture.installation.value).toEqual(initial);
+  });
+
+  it('uses a new server device when the pending account belongs to another session', async () => {
+    const initial: SyncInstallation = {
+      ...pendingInstallation(),
+      accountSetupState: 'recovery_confirmation_pending',
+      accountUserId: ACCOUNT_USER_ID,
+      accountSessionId: ACCOUNT_SESSION_ID,
+      accountEmail: 'person@example.com',
+    };
+    const fixture = createFixture(initial);
+    vi.mocked(fixture.auth.current).mockResolvedValue(accountSession());
+    vi.mocked(fixture.transport.beginRecovery).mockRejectedValueOnce(
+      new DomainError('sync.remote_operation_failed', 'Trust denied.'),
+    );
+
+    const recovered = await new SyncApplicationService(fixture.dependencies).recover(
+      'LIFEOS-RECOVERY-V1:synthetic',
+    );
+
+    expect(fixture.transport.beginRecovery).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ deviceId: DEVICE_ID }),
+    );
+    expect(fixture.transport.beginRecovery).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ deviceId: SECOND_DEVICE_ID }),
+    );
+    expect(fixture.crypto.promoteRecoveryIdentity).not.toHaveBeenCalled();
+    expect(recovered.installation.deviceId).toBe(SECOND_DEVICE_ID);
+  });
+
+  it.each(['sign_in_required', 'device_recovery_required'] as const)(
+    'loads %s without reading the unavailable old device identity',
+    async (accountSetupState) => {
+      const initial: SyncInstallation = {
+        ...configuredInstallation(),
+        accountSetupState,
+        accountUserId: ACCOUNT_USER_ID,
+        accountSessionId: ACCOUNT_SESSION_ID,
+        accountEmail: 'person@example.com',
+      };
+      const fixture = createFixture(initial);
+      vi.mocked(fixture.crypto.ensureDeviceIdentity).mockRejectedValue(
+        new Error('Old key is unreadable.'),
+      );
+
+      await expect(
+        new SyncApplicationService(fixture.dependencies).loadOverview(),
+      ).resolves.toMatchObject({
+        installation: initial,
+        connection: 'local',
+      });
+      expect(fixture.crypto.ensureDeviceIdentity).not.toHaveBeenCalled();
+      expect(fixture.transport.beginRecovery).not.toHaveBeenCalled();
+    },
+  );
+
   it('does not enroll an account recovery device when the email is unverified', async () => {
     const initial: SyncInstallation = {
       ...configuredInstallation(),
@@ -91,6 +264,10 @@ describe('SyncApplicationService', () => {
       accountEmail: 'person@example.com',
     };
     const fixture = createFixture(initial);
+    vi.mocked(fixture.crypto.ensureDeviceIdentity).mockImplementation(async (deviceId) => {
+      if (deviceId === DEVICE_ID) throw new Error('Old key is unreadable.');
+      return { publicKey: encoded(32, 1) };
+    });
     vi.mocked(fixture.auth.current).mockResolvedValue(accountSession());
     vi.mocked(fixture.transport.completeRecovery).mockImplementationOnce(async () => {
       expect(fixture.installation.value).toMatchObject({
@@ -115,11 +292,36 @@ describe('SyncApplicationService', () => {
       expect.objectContaining({ deviceId: SECOND_DEVICE_ID }),
     );
     expect(fixture.snapshot.createPreSyncSnapshot).toHaveBeenCalledOnce();
+    expect(fixture.crypto.ensureDeviceIdentity).not.toHaveBeenCalledWith(DEVICE_ID, false);
     expect(fixture.installation.value).toMatchObject({
       deviceId: SECOND_DEVICE_ID,
       accountRecoveryDeviceId: null,
       accountSetupState: 'recovery_confirmation_pending',
     });
+  });
+
+  it('does not replace a configured account device when its recovery snapshot fails verification', async () => {
+    const initial: SyncInstallation = {
+      ...configuredInstallation(),
+      accountSetupState: 'device_recovery_required',
+      accountUserId: ACCOUNT_USER_ID,
+      accountSessionId: ACCOUNT_SESSION_ID,
+      accountEmail: 'person@example.com',
+    };
+    const fixture = createFixture(initial);
+    vi.mocked(fixture.auth.current).mockResolvedValue(accountSession());
+    vi.mocked(fixture.snapshot.verifySnapshot).mockResolvedValue({
+      valid: false,
+      reason: 'checksum_mismatch',
+      snapshot: null,
+    });
+
+    await expect(
+      new SyncApplicationService(fixture.dependencies).recover('LIFEOS-RECOVERY-V1:synthetic'),
+    ).rejects.toThrow('Pre-sync local snapshot verification failed.');
+    expect(fixture.crypto.ensureDeviceIdentity).not.toHaveBeenCalled();
+    expect(fixture.transport.beginRecovery).not.toHaveBeenCalled();
+    expect(fixture.installation.value).toEqual(initial);
   });
   it('creates one stable local device identity without network and reuses it', async () => {
     const fixture = createFixture();
@@ -455,6 +657,7 @@ function createFixture(initial: SyncInstallation | null = null) {
   const crypto: SyncCryptoService = {
     deleteDeviceSecrets: vi.fn(async () => undefined),
     ensureDeviceIdentity: vi.fn(async () => ({ publicKey: encoded(32, 1) })),
+    promoteRecoveryIdentity: vi.fn(async () => ({ publicKey: encoded(32, 1) })),
     prepareFirstSpace: vi.fn(async () => ({
       publicKey: encoded(32, 1),
       encryptedDeviceName: encoded(32, 2),

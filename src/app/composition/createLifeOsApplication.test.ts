@@ -19,6 +19,10 @@ describe('createLifeOsApplication', () => {
     expect(application.currentDate).toEqual(TODAY);
     expect(application.sync).toBeDefined();
     expect(application.accountSync).toBeDefined();
+    expect(application.aiAssistant.available).toBe(false);
+    await expect(application.aiAssistant.ask('Привет')).rejects.toMatchObject({
+      code: 'not_configured',
+    });
     await expect(application.accountSync.load()).resolves.toMatchObject({
       state: 'local_anonymous',
       connection: 'local',

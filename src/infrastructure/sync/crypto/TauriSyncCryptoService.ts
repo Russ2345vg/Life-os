@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { DomainError } from '../../../shared/errors/DomainError';
 import type {
   SyncBinaryMetadata,
   SyncBinaryEnvelope,
@@ -34,10 +35,37 @@ export class TauriSyncCryptoService implements SyncCryptoService {
     return this.invokeCommand('sync_decrypt_binary', { envelope });
   }
 
-  public ensureDeviceIdentity(deviceId: string, allowCreate: boolean) {
-    return this.invokeCommand<{ readonly publicKey: string }>('sync_prepare_device_identity', {
+  public async ensureDeviceIdentity(deviceId: string, allowCreate: boolean) {
+    try {
+      return await this.invokeCommand<{ readonly publicKey: string }>(
+        'sync_prepare_device_identity',
+        { deviceId, allowCreate },
+      );
+    } catch (reason: unknown) {
+      if (
+        typeof reason === 'string' &&
+        [
+          'Windows secure storage decryption failed.',
+          'Secure storage metadata is unavailable.',
+          'Secure storage read failed.',
+          'Secure storage data is invalid.',
+          'Device private key is unavailable.',
+          'Invalid device private key.',
+        ].includes(reason)
+      ) {
+        throw new DomainError(
+          'sync.device_key_unavailable',
+          'Windows не может открыть прежний защищённый ключ устройства. Для восстановления используйте сохранённый ключ LifeOS.',
+        );
+      }
+      throw reason;
+    }
+  }
+
+  public promoteRecoveryIdentity(deviceId: string, candidateDeviceId: string) {
+    return this.invokeCommand<{ readonly publicKey: string }>('sync_promote_recovery_identity', {
       deviceId,
-      allowCreate,
+      candidateDeviceId,
     });
   }
 

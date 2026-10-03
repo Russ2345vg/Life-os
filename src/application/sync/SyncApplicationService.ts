@@ -1,4 +1,5 @@
 import type { SnapshotService } from './SnapshotService';
+import { DomainError } from '../../shared/errors/DomainError';
 import type { SyncStatusSource } from './SyncStatus';
 import type { AccountAuth, AccountSession } from './account/AccountAuth';
 import type { SyncRecovery } from './recovery/SyncRecovery';
@@ -22,7 +23,7 @@ import type {
   SyncInstallationRepository,
   SyncPlatform,
 } from './ports/SyncInstallationRepository';
-import type { SyncTrustTransport } from './ports/SyncTrustTransport';
+import type { RecoveryChallenge, SyncTrustTransport } from './ports/SyncTrustTransport';
 import type {
   PilotSyncCoordinator,
   PilotSyncRunResult,
@@ -105,6 +106,22 @@ export class SyncApplicationService implements SyncApplication {
   }
 
   public async loadOverview(): Promise<SyncOverview> {
+    const recovery = await this.dependencies.installationRepository.find();
+    if (
+      (canRecoverConfiguredAccount(recovery) &&
+        ['sign_in_required', 'device_recovery_required'].includes(recovery.accountSetupState)) ||
+      (canRecoverPendingAccount(recovery) &&
+        ['sign_in_required', 'device_recovery_required', 'recovery_confirmation_pending'].includes(
+          recovery.accountSetupState,
+        ))
+    ) {
+      return {
+        installation: recovery,
+        devices: await this.dependencies.deviceCacheRepository.list(recovery.spaceId),
+        connection: 'local',
+        warning: 'Для синхронизации восстановите доступ к устройству.',
+      };
+    }
     const installation = await this.ensureInstallation();
     if (['sign_in_required', 'device_recovery_required'].includes(installation.accountSetupState)) {
       const devices =
@@ -409,8 +426,12 @@ export class SyncApplicationService implements SyncApplication {
     const authorization =
       await this.dependencies.crypto.prepareRecoveryAuthorization(recoveryMaterial);
     if (
-      ['configured', 'recovery_unconfirmed'].includes(installation.setupState) &&
-      installation.accountUserId !== null
+      (['configured', 'recovery_unconfirmed'].includes(installation.setupState) &&
+        installation.accountUserId !== null) ||
+      (canRecoverPendingAccount(installation) &&
+        ['recovery_confirmation_pending', 'device_recovery_required'].includes(
+          installation.accountSetupState,
+        ))
     ) {
       return this.recoverConfiguredAccount(installation, authorization, recoveryMaterial);
     }
@@ -567,15 +588,47 @@ export class SyncApplicationService implements SyncApplication {
         updatedAt: this.now().toISOString(),
       };
       await this.dependencies.installationRepository.save(installation);
+    } else {
+      if (installation.accountMigrationSnapshotId === null)
+        throw new Error('Recovery snapshot is unavailable.');
+      const verified = await this.dependencies.snapshotService.verifySnapshot(
+        installation.accountMigrationSnapshotId,
+      );
+      if (!verified.valid) throw new Error('Pre-sync local snapshot verification failed.');
     }
     const identity = await this.dependencies.crypto.ensureDeviceIdentity(candidate, false);
-    const challenge = await this.dependencies.transport.beginRecovery({
-      spaceId: authorization.spaceId,
-      authProof: authorization.authProof,
-      deviceId: candidate,
-      publicKey: identity.publicKey,
-      platform: installation.platform,
-    });
+    const beginRecovery = (deviceId: string) =>
+      this.dependencies.transport.beginRecovery({
+        spaceId: authorization.spaceId,
+        authProof: authorization.authProof,
+        deviceId,
+        publicKey: identity.publicKey,
+        platform: installation.platform,
+      });
+    const reusePendingDevice = canRecoverPendingAccount(installation);
+    const crypto = this.dependencies.crypto;
+    if (reusePendingDevice && crypto.promoteRecoveryIdentity === undefined)
+      throw new Error('Recovery identity promotion is unavailable.');
+    let recoveredDeviceId = reusePendingDevice ? installation.deviceId : candidate;
+    let challenge: RecoveryChallenge;
+    try {
+      challenge = await beginRecovery(recoveredDeviceId);
+    } catch (error: unknown) {
+      if (
+        !reusePendingDevice ||
+        !(error instanceof DomainError && error.code === 'sync.remote_operation_failed')
+      )
+        throw error;
+      recoveredDeviceId = candidate;
+      challenge = await beginRecovery(candidate);
+    }
+    if (recoveredDeviceId !== candidate) {
+      if (crypto.promoteRecoveryIdentity === undefined)
+        throw new Error('Recovery identity promotion is unavailable.');
+      const promoted = await crypto.promoteRecoveryIdentity(recoveredDeviceId, candidate);
+      if (promoted.publicKey !== identity.publicKey)
+        throw new Error('Recovery identity does not match the server challenge.');
+    }
     // Never delete shared space keys on failure: the current installation and its outbox still use them.
     await this.dependencies.crypto.recoverAndStoreKeyRing({
       recoveryMaterial,
@@ -583,12 +636,12 @@ export class SyncApplicationService implements SyncApplication {
     });
     const encryptedName = await this.dependencies.crypto.encryptDeviceName({
       spaceId: authorization.spaceId,
-      deviceId: candidate,
+      deviceId: recoveredDeviceId,
       keyEpoch: challenge.currentKeyEpoch,
       deviceName: installation.deviceName,
     });
     await this.dependencies.transport.completeRecovery({
-      deviceId: candidate,
+      deviceId: recoveredDeviceId,
       authProof: authorization.authProof,
       recoveryEnvelopeSha256Hex: await recoveryEnvelopeDigest(
         challenge.recoveryEnvelope,
@@ -606,7 +659,7 @@ export class SyncApplicationService implements SyncApplication {
       throw new Error('Recovery context changed.');
     const updated: SyncInstallation = {
       ...current,
-      deviceId: candidate,
+      deviceId: recoveredDeviceId,
       publicKey: identity.publicKey,
       currentKeyEpoch: challenge.currentKeyEpoch,
       membershipStatus: 'active',
@@ -756,6 +809,18 @@ export class SyncApplicationService implements SyncApplication {
   private async ensureInstallationForRecovery(): Promise<SyncInstallation> {
     const current = await this.dependencies.installationRepository.find();
     if (
+      canRecoverPendingAccount(current) &&
+      ['recovery_confirmation_pending', 'device_recovery_required'].includes(
+        current.accountSetupState,
+      )
+    )
+      return current;
+    if (
+      canRecoverConfiguredAccount(current) &&
+      current.accountSetupState === 'device_recovery_required'
+    )
+      return current;
+    if (
       current === null ||
       current.accountSetupState !== 'recovery_confirmation_pending' ||
       current.membershipStatus !== 'pending'
@@ -824,6 +889,39 @@ function requireNotConfigured(installation: SyncInstallation): void {
   if (installation.spaceId !== null || installation.membershipStatus !== null) {
     throw new Error('This installation already belongs to a Sync space.');
   }
+}
+
+function canRecoverConfiguredAccount(
+  installation: SyncInstallation | null,
+): installation is SyncInstallation & { spaceId: string } {
+  return (
+    installation !== null &&
+    installation.setupState === 'configured' &&
+    installation.membershipStatus === 'active' &&
+    hasAccountRecoveryContext(installation)
+  );
+}
+
+function canRecoverPendingAccount(
+  installation: SyncInstallation | null,
+): installation is SyncInstallation & { spaceId: string } {
+  return (
+    installation !== null &&
+    installation.setupState === 'not_configured' &&
+    installation.membershipStatus === 'pending' &&
+    hasAccountRecoveryContext(installation)
+  );
+}
+
+function hasAccountRecoveryContext(
+  installation: SyncInstallation,
+): installation is SyncInstallation & { spaceId: string } {
+  return (
+    installation.spaceId !== null &&
+    installation.accountUserId !== null &&
+    installation.accountSessionId !== null &&
+    installation.accountEmail !== null
+  );
 }
 
 function defaultDeviceName(platform: SyncPlatform): string {

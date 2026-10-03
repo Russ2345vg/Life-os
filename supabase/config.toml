@@ -9,3 +9,6 @@ enable_confirmations = true
 
 [storage]
 enabled = true
+
+[functions.lifeos-openai]
+verify_jwt = true

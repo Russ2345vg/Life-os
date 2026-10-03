@@ -13,9 +13,17 @@ export class TauriSupabaseAuthStorage implements SupportedStorage {
   public constructor(private readonly invoke: TauriInvoke) {}
 
   public async getItem(key: string): Promise<string | null> {
-    return this.callNative<string | null>('sync_auth_session_read', {
-      slot: nativeSlotForSupabaseKey(key),
-    });
+    const slot = nativeSlotForSupabaseKey(key);
+    try {
+      return await this.invoke<string | null>('sync_auth_session_read', { slot });
+    } catch (reason: unknown) {
+      if (
+        reason === 'Windows secure storage decryption failed.' &&
+        (slot === AUTH_SESSION_SLOT || slot === AUTH_USER_SLOT)
+      )
+        return null;
+      throw storageFailed();
+    }
   }
 
   public async setItem(key: string, value: string): Promise<void> {
@@ -34,12 +42,16 @@ export class TauriSupabaseAuthStorage implements SupportedStorage {
     try {
       return await this.invoke<T>(command, args);
     } catch {
-      throw new DomainError(
-        'account.session_storage_failed',
-        'Не удалось открыть защищённое хранилище входа. Перезапустите приложение и повторите.',
-      );
+      throw storageFailed();
     }
   }
+}
+
+function storageFailed(): DomainError {
+  return new DomainError(
+    'account.session_storage_failed',
+    'Не удалось открыть защищённое хранилище входа. Перезапустите приложение и повторите.',
+  );
 }
 
 function nativeSlotForSupabaseKey(key: string): string {

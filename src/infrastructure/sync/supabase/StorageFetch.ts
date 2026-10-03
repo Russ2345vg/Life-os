@@ -11,7 +11,9 @@ export function withSupabaseRequestTimeout(
         ? { timeout: 30_000, maxBytes: 16 * 1024 * 1024 }
         : path.startsWith('/storage/v1/')
           ? { timeout: 60_000, maxBytes: 96 * 1024 * 1024 }
-          : null;
+          : path === '/functions/v1/lifeos-openai'
+            ? { timeout: 65_000, maxBytes: 64 * 1024 }
+            : null;
     if (policy === null) return fetcher(input, init);
     const controller = new AbortController();
     const original = init?.signal ?? (input instanceof Request ? input.signal : undefined);
@@ -32,7 +34,9 @@ export function withSupabaseRequestTimeout(
         return response;
       });
       const response = await untilAbort(fetching, controller.signal);
-      if (!response.body) return response;
+      // Chromium can expose a stream even for HTTP statuses that cannot have a body.
+      // Reconstructing these responses with an empty Blob throws after a successful RPC.
+      if (!response.body || [204, 205, 304].includes(response.status)) return response;
       // Keep the same deadline through finite JSON/blob response consumption.
       const reader = response.body.getReader();
       const cancel = () => {

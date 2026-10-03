@@ -247,6 +247,15 @@ describe('AccountSyncPage', () => {
     expect(error).not.toContain(RECOVERY);
     expect(error).toBe('Не удалось выполнить действие. Проверьте данные и повторите.');
   });
+
+  it('explains a known native storage failure without displaying arbitrary rejected text', () => {
+    expect(redactAccountError('Windows secure storage decryption failed.', [])).toContain(
+      'Windows не может открыть защищённые данные LifeOS',
+    );
+    expect(redactAccountError('private secret value', [])).toBe(
+      'Не удалось выполнить действие. Проверьте данные и повторите.',
+    );
+  });
 });
 
 function render(

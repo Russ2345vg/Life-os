@@ -75,3 +75,54 @@ it('completes standard email-link reset with the installed SDK without changing 
     await auth.close();
   }
 });
+
+it('signs in with the installed SDK when the previous protected session cannot be read', async () => {
+  const user = {
+    id: '10000000-0000-4000-8000-000000000001',
+    email: 'person@example.com',
+    email_confirmed_at: '2026-09-22T08:00:00Z',
+    is_anonymous: false,
+    aud: 'authenticated',
+  };
+  const accessToken = `e30.${btoa(
+    JSON.stringify({
+      session_id: '20000000-0000-4000-8000-000000000001',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    }),
+  )}.signature`;
+  const writes: string[] = [];
+  const storage = new TauriSupabaseAuthStorage(async <T>(command: string) => {
+    if (command === 'sync_auth_session_read') throw 'Windows secure storage decryption failed.';
+    writes.push(command);
+    return undefined as T;
+  });
+  const fetcher: typeof fetch = async (input) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    if (new URL(url).pathname !== '/auth/v1/token') throw new Error('Unexpected SDK request');
+    return Response.json({
+      access_token: accessToken,
+      refresh_token: 'synthetic-refresh',
+      expires_in: 3600,
+      token_type: 'bearer',
+      user,
+    });
+  };
+  const client = createLifeOsSupabaseClient(
+    {
+      url: 'https://reset-sdk.supabase.co',
+      publishableKey: 'sb_publishable_synthetic',
+      accountSyncEnabled: true,
+    },
+    { authStorage: storage, fetch: fetcher },
+  );
+  const auth = new SupabaseAccountAuth(client);
+  try {
+    await expect(auth.signIn(user.email, 'synthetic-password')).resolves.toMatchObject({
+      userId: user.id,
+    });
+    expect(writes).toContain('sync_auth_session_write');
+    expect(writes).not.toContain('sync_auth_session_delete');
+  } finally {
+    await auth.close();
+  }
+});

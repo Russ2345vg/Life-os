@@ -168,6 +168,21 @@ pub async fn sync_prepare_device_identity<R: tauri::Runtime>(
 }
 
 #[tauri::command]
+pub async fn sync_promote_recovery_identity<R: tauri::Runtime>(
+    app: AppHandle<R>,
+    device_id: String,
+    candidate_device_id: String,
+) -> Result<DeviceIdentityOutput, String> {
+    let target = SecretId::device_private_key(&device_id)?;
+    let candidate = SecretId::device_private_key(&candidate_device_id)?;
+    secure_key_store::promote_recovery_identity(&app, &target, &candidate).await?;
+    let key_pair = load_or_create_device(&app, &device_id, false).await?;
+    Ok(DeviceIdentityOutput {
+        public_key: key_pair.public_base64(),
+    })
+}
+
+#[tauri::command]
 pub async fn sync_delete_device_secrets<R: tauri::Runtime>(
     app: AppHandle<R>,
     device_id: String,

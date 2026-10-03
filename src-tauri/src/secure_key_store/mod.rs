@@ -121,6 +121,15 @@ pub async fn delete<R: tauri::Runtime>(
     windows::delete(app, id)
 }
 
+#[cfg(target_os = "windows")]
+pub async fn promote_recovery_identity<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    target: &SecretId,
+    candidate: &SecretId,
+) -> Result<(), String> {
+    windows::promote_recovery_identity(app, target, candidate)
+}
+
 #[cfg(target_os = "android")]
 pub async fn write<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
@@ -144,6 +153,15 @@ pub async fn delete<R: tauri::Runtime>(
     id: &SecretId,
 ) -> Result<(), String> {
     android::delete(app, id).await
+}
+
+#[cfg(target_os = "android")]
+pub async fn promote_recovery_identity<R: tauri::Runtime>(
+    _app: &tauri::AppHandle<R>,
+    _target: &SecretId,
+    _candidate: &SecretId,
+) -> Result<(), String> {
+    Err("Recovery identity promotion is unavailable on this platform.".to_owned())
 }
 
 fn require_uuid(value: &str) -> Result<(), String> {

@@ -4,6 +4,7 @@ use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::os::windows::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::Manager;
 use windows_sys::Win32::Foundation::LocalFree;
 use windows_sys::Win32::Security::Cryptography::{
@@ -32,6 +33,61 @@ pub fn load<R: tauri::Runtime>(
 ) -> Result<Option<Zeroizing<Vec<u8>>>, String> {
     let path = secure_directory(app)?.join(id.storage_name());
     load_path(&path)
+}
+
+pub fn promote_recovery_identity<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    target: &SecretId,
+    candidate: &SecretId,
+) -> Result<(), String> {
+    if target.storage_name() == candidate.storage_name() {
+        return Err("Recovery identity must use a separate candidate.".to_owned());
+    }
+    let private = load(app, candidate)?
+        .ok_or_else(|| "Recovery candidate private key is unavailable.".to_owned())?;
+    let directory = secure_directory(app)?;
+    replace_unreadable_path(&directory, &target.storage_name(), private.as_slice())
+}
+
+fn replace_unreadable_path(directory: &Path, name: &str, candidate: &[u8]) -> Result<(), String> {
+    let target = directory.join(name);
+    match load_path(&target) {
+        Ok(Some(existing)) if existing.as_slice() == candidate => return Ok(()),
+        Ok(Some(_)) => return Err("Existing device private key is still available.".to_owned()),
+        Ok(None) => {}
+        Err(reason) if reason == "Windows secure storage decryption failed." => {
+            backup_unreadable_path(&target)?;
+        }
+        Err(reason) => return Err(reason),
+    }
+    let protected = protect(candidate)?;
+    write_atomic(directory, name, &protected)
+}
+
+fn backup_unreadable_path(path: &Path) -> Result<(), String> {
+    let protected = fs::read(path).map_err(|_| "Secure storage backup read failed.".to_owned())?;
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| "Secure storage backup timestamp is unavailable.".to_owned())?
+        .as_nanos();
+    let backup_name = format!(
+        "{}.unreadable-{}-{stamp}.bak",
+        path.file_name()
+            .and_then(|name| name.to_str())
+            .ok_or_else(|| "Secure storage backup path is unavailable.".to_owned())?,
+        std::process::id()
+    );
+    let mut backup = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path.with_file_name(backup_name))
+        .map_err(|_| "Secure storage backup creation failed.".to_owned())?;
+    backup
+        .write_all(&protected)
+        .map_err(|_| "Secure storage backup write failed.".to_owned())?;
+    backup
+        .sync_all()
+        .map_err(|_| "Secure storage backup flush failed.".to_owned())
 }
 
 pub fn delete<R: tauri::Runtime>(app: &tauri::AppHandle<R>, id: &SecretId) -> Result<(), String> {
@@ -182,7 +238,9 @@ fn wide(value: &OsStr) -> Vec<u16> {
 
 #[cfg(test)]
 mod tests {
-    use super::{delete_path, load_path, protect, unprotect, write_atomic};
+    use super::{
+        delete_path, load_path, protect, replace_unreadable_path, unprotect, write_atomic,
+    };
     use std::fs;
 
     #[test]
@@ -230,6 +288,32 @@ mod tests {
                 .as_slice(),
             replacement
         );
+        let unreadable = protected.to_vec();
+        let middle = unreadable.len() / 2;
+        let mut unreadable = unreadable;
+        unreadable[middle] ^= 0x80;
+        write_atomic(&directory, "unreadable", &unreadable).expect("unreadable slot");
+        replace_unreadable_path(&directory, "unreadable", replacement)
+            .expect("promote recovery key");
+        assert_eq!(
+            load_path(&directory.join("unreadable"))
+                .expect("promoted slot")
+                .expect("present")
+                .as_slice(),
+            replacement
+        );
+        let backup = fs::read_dir(&directory)
+            .expect("backup directory")
+            .filter_map(Result::ok)
+            .find(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("unreadable.unreadable-")
+            })
+            .expect("old protected key backup");
+        assert_eq!(fs::read(backup.path()).expect("backup"), unreadable);
+        assert!(replace_unreadable_path(&directory, "slot", b"different key").is_err());
         delete_path(&directory.join("slot")).expect("delete");
         assert!(load_path(&directory.join("slot"))
             .expect("missing")

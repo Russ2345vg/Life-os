@@ -1,7 +1,14 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { DayDate, EntityId, Goal, LifeAction, LifeActionTitle } from '../../domain';
+import {
+  ActionActualResult,
+  DayDate,
+  EntityId,
+  Goal,
+  LifeAction,
+  LifeActionTitle,
+} from '../../domain';
 import { PlannerActionList } from './PlannerActionList';
 
 const now = new Date('2026-09-13T10:00:00Z');
@@ -100,6 +107,49 @@ describe('PlannerActionList', () => {
     expect(html).toContain('Активное действие');
     expect(html).not.toContain('Готово');
     expect(html).not.toContain('planner-action-group--completed');
+  });
+
+  it('exposes completed actions without opening filters and shows their saved result', () => {
+    const completed = action('completed-with-result', 'Проверить настройки', '2026-09-13');
+    completed.complete(
+      ActionActualResult.create('Настройки проверены и сохранены.'),
+      now,
+      EntityId.create('completed-with-result-complete'),
+    );
+    const props = {
+      actions: [completed],
+      goals: [goal],
+      today: '2026-09-13',
+      onNew: () => {},
+      selectedId: null,
+      ...operations,
+    };
+    const openHtml = renderToStaticMarkup(createElement(PlannerActionList, props));
+    expect(openHtml).toContain('Выполненные · 1');
+    expect(openHtml).not.toContain('Настройки проверены и сохранены.');
+
+    const completedHtml = renderToStaticMarkup(
+      createElement(PlannerActionList, { ...props, initialView: 'completed' }),
+    );
+    expect(completedHtml).toContain('aria-pressed="true">Выполненные · 1');
+    expect(completedHtml).toContain('Итог: Настройки проверены и сохранены.');
+  });
+
+  it('explains an empty completed history without calling it a filter', () => {
+    const html = renderToStaticMarkup(
+      createElement(PlannerActionList, {
+        actions: [],
+        goals: [],
+        today: '2026-09-13',
+        onNew: () => {},
+        selectedId: null,
+        initialView: 'completed',
+        ...operations,
+      }),
+    );
+    expect(html).toContain('Пока нет выполненных задач. После завершения они появятся здесь.');
+    expect(html).not.toContain('Убрать фильтр: Выполненные');
+    expect(html).not.toContain('Сбросить фильтры');
   });
 
   it('renders the selected action editor as an accessible disclosure card', () => {

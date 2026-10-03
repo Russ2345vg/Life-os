@@ -7,6 +7,7 @@ export interface SupabasePublicConfig {
 }
 
 export interface SupabasePublicEnvironment {
+  readonly VITE_LIFEOS_OPENAI_ENABLED?: string | boolean;
   readonly VITE_LIFEOS_SUPABASE_URL?: string | boolean;
   readonly VITE_LIFEOS_SUPABASE_PUBLISHABLE_KEY?: string | boolean;
   readonly VITE_LIFEOS_ACCOUNT_SYNC_ENABLED?: string | boolean;

@@ -137,6 +137,85 @@ describe('AccountSyncService', () => {
     expect(fixture.installations.value?.accountUserId).toBe(USER_ID);
   });
 
+  it('offers sign-in then recovery for an interrupted pending account without replacing local data', async () => {
+    const initial: SyncInstallation = {
+      ...readyInstallation(),
+      setupState: 'not_configured',
+      membershipStatus: 'pending',
+      accountSetupState: 'recovery_confirmation_pending',
+    };
+    const fixture = createFixture(initial);
+    fixture.auth.current.mockResolvedValue(null);
+
+    await expect(fixture.service.load()).resolves.toMatchObject({
+      state: 'sign_in_required',
+      email: EMAIL,
+    });
+    expect(fixture.installations.value).toMatchObject({
+      deviceId: initial.deviceId,
+      spaceId: initial.spaceId,
+      membershipStatus: 'pending',
+      snapshotId: initial.snapshotId,
+    });
+
+    await expect(fixture.service.signIn(EMAIL, PASSWORD)).resolves.toMatchObject({
+      state: 'recovery_confirmation_pending',
+      email: EMAIL,
+    });
+    expect(fixture.installations.value).toMatchObject({
+      deviceId: initial.deviceId,
+      spaceId: initial.spaceId,
+      membershipStatus: 'pending',
+      snapshotId: initial.snapshotId,
+    });
+    expect(fixture.sync.syncPilotNow).not.toHaveBeenCalled();
+  });
+
+  it('does not conceal an unexpected auth-storage failure as a missing session', async () => {
+    const fixture = createFixture(readyInstallation());
+    fixture.auth.current.mockRejectedValue(
+      new DomainError('account.session_storage_failed', 'Protected session unavailable.'),
+    );
+
+    await expect(fixture.service.load()).rejects.toMatchObject({
+      code: 'account.session_storage_failed',
+    });
+    expect(fixture.installations.savedStates).toEqual([]);
+    expect(fixture.auth.signOutCurrent).not.toHaveBeenCalled();
+  });
+
+  it('offers device recovery only for the configured account with an unreadable device key', async () => {
+    const initial = readyInstallation();
+    const fixture = createFixture(initial);
+    fixture.sync.loadOverview.mockRejectedValueOnce(
+      new DomainError('sync.device_key_unavailable', 'Protected device key unavailable.'),
+    );
+
+    await expect(fixture.service.load()).resolves.toMatchObject({
+      state: 'device_recovery_required',
+      email: EMAIL,
+    });
+    expect(fixture.installations.value).toMatchObject({
+      deviceId: initial.deviceId,
+      spaceId: initial.spaceId,
+      accountUserId: initial.accountUserId,
+      snapshotId: initial.snapshotId,
+    });
+    expect(fixture.sync.loadOverview).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not offer cloud recovery for a local-only installation', async () => {
+    const fixture = createFixture(localInstallation());
+    fixture.sync.loadOverview.mockRejectedValueOnce(
+      new DomainError('sync.device_key_unavailable', 'Protected device key unavailable.'),
+    );
+
+    await expect(fixture.service.load()).rejects.toMatchObject({
+      code: 'sync.device_key_unavailable',
+    });
+    expect(fixture.installations.savedStates).toEqual([]);
+  });
+
   it('requires sign-in when the persisted account email is no longer verified', async () => {
     const fixture = createFixture(readyInstallation());
     fixture.auth.current.mockResolvedValue(session({ verified: false }));

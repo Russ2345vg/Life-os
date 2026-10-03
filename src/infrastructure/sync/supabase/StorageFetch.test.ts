@@ -4,6 +4,40 @@ import { withStorageTimeout } from './StorageFetch';
 import { TauriSupabaseAuthStorage } from './TauriSupabaseAuthStorage';
 import { SupabaseAccountAuth } from './SupabaseAccountAuth';
 
+it.each([204, 205, 304])('preserves a bodyless HTTP %i response from Chromium', async (status) => {
+  const response = new Response(null, { status });
+  Object.defineProperty(response, 'body', {
+    value: new ReadableStream({ start: (controller) => controller.close() }),
+  });
+  const fetching = withStorageTimeout(async () => response);
+
+  await expect(fetching('https://example.supabase.co/rest/v1/rpc/complete_recovery')).resolves.toBe(
+    response,
+  );
+});
+
+it('bounds OpenAI function response bodies', async () => {
+  vi.useFakeTimers();
+  try {
+    const cancel = vi.fn();
+    const fetching = withStorageTimeout(async () => new Response(new ReadableStream({ cancel })));
+    const pending = fetching('https://example.supabase.co/functions/v1/lifeos-openai');
+    const rejected = expect(pending).rejects.toThrow('LifeOS request timed out.');
+    await vi.advanceTimersByTimeAsync(65_001);
+    await rejected;
+    expect(cancel).toHaveBeenCalledOnce();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('rejects oversized OpenAI function bodies', async () => {
+  const fetching = withStorageTimeout(async () => new Response('x'.repeat(65_537)));
+  await expect(fetching('https://example.supabase.co/functions/v1/lifeos-openai')).rejects.toThrow(
+    'LifeOS response too large.',
+  );
+});
+
 it('keeps the deadline until a stalled response body is cancelled', async () => {
   vi.useFakeTimers();
   try {

@@ -64,6 +64,7 @@ export function PlannerActionList({
   const [sphereFilter, setSphereFilter] = useState('');
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [sort, setSort] = useState<'date' | 'title'>('date');
+  const completedCount = filterPlannerActions(actions, 'completed', '', today).length;
   const filterButton = useRef<HTMLButtonElement>(null);
   const closeFilters = () => {
     setFiltersOpen(false);
@@ -78,7 +79,7 @@ export function PlannerActionList({
     setSort('date');
   };
   const activeFilters = [
-    ...(view !== 'open'
+    ...(view !== 'open' && view !== 'completed'
       ? [{ key: 'view', label: actionViewLabels[view], clear: () => setView('open') }]
       : []),
     ...(goalFilter
@@ -355,6 +356,22 @@ export function PlannerActionList({
         </button>
       </header>
       {viewSwitcher}
+      <div
+        className="planner-segments planner-action-status-switch"
+        role="group"
+        aria-label="Статус действий"
+      >
+        <button type="button" aria-pressed={view !== 'completed'} onClick={() => setView('open')}>
+          Текущие
+        </button>
+        <button
+          type="button"
+          aria-pressed={view === 'completed'}
+          onClick={() => setView('completed')}
+        >
+          Выполненные · {completedCount}
+        </button>
+      </div>
       <div className="planner-toolbar">
         <VoiceField>
           <span>Поиск действий</span>
@@ -502,11 +519,13 @@ export function PlannerActionList({
           <p>
             {search
               ? `По запросу «${search}» ничего не найдено.`
-              : activeFilters.length
-                ? 'Нет действий с выбранными условиями.'
-                : 'В этом списке пока нет действий.'}
+              : view === 'completed' && activeFilters.length === 0
+                ? 'Пока нет выполненных задач. После завершения они появятся здесь.'
+                : activeFilters.length
+                  ? 'Нет действий с выбранными условиями.'
+                  : 'В этом списке пока нет действий.'}
           </p>
-          {(view !== 'open' ||
+          {((view !== 'open' && view !== 'completed') ||
             search ||
             goalFilter ||
             directionFilter ||
@@ -890,6 +909,11 @@ export function PlannerActionRow({
                 <RecurrenceBadge action={action} label={recurrenceLabel} />
                 <ActionGoalProgress action={action} />
               </>
+            )}
+            {catalogMode && action.status === 'completed' && action.actualResult && (
+              <p className="planner-action-note planner-action-result-preview">
+                Итог: {action.actualResult.toString()}
+              </p>
             )}
           </div>
         </div>

@@ -31,10 +31,12 @@ export function completionSummaryTarget(action: LifeAction): CompletionSummaryTa
 export function CompletionResultPrompt({
   target,
   onClose,
+  onSaved,
   guardScope = 'completion-summary',
 }: {
   readonly target: CompletionSummaryTarget;
   readonly onClose: () => void;
+  readonly onSaved?: () => void;
   readonly guardScope?: string;
 }) {
   const context = usePlanning();
@@ -67,6 +69,7 @@ export function CompletionResultPrompt({
         onSave={async (text) => {
           await context.services.progress.saveResult(target.actionId, target.completionKey, text);
           await context.refresh();
+          onSaved?.();
           onClose();
         }}
       />

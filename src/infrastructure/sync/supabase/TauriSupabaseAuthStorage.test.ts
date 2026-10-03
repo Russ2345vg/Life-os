@@ -3,6 +3,21 @@ import { TauriSupabaseAuthStorage, type TauriInvoke } from './TauriSupabaseAuthS
 import { createLifeOsSupabaseClient } from './createLifeOsSupabaseClient';
 
 describe('TauriSupabaseAuthStorage', () => {
+  it('treats an undecryptable old auth session as signed out without deleting it', async () => {
+    const commands: string[] = [];
+    const storage = new TauriSupabaseAuthStorage(async (command) => {
+      commands.push(command);
+      throw 'Windows secure storage decryption failed.';
+    });
+
+    await expect(storage.getItem('sb-project-auth-token')).resolves.toBeNull();
+    await expect(storage.getItem('sb-project-auth-token-user')).resolves.toBeNull();
+    await expect(storage.getItem('sb-project-auth-token-code-verifier')).rejects.toMatchObject({
+      code: 'account.session_storage_failed',
+    });
+    expect(commands).toEqual(Array(3).fill('sync_auth_session_read'));
+  });
+
   it('turns native key-store failures into a safe actionable error', async () => {
     const storage = new TauriSupabaseAuthStorage(async () => {
       throw new Error('native secret-path private-token');

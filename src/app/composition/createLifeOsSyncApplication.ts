@@ -1,4 +1,6 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
+import { AiAssistantService, type AiAssistant } from '../../application/ai/AiAssistant';
+import { SupabaseAiGateway } from '../../infrastructure/ai/SupabaseAiGateway';
 import { IndexedDbSyncStatusSource } from '../../infrastructure/sync/IndexedDbSyncStatusSource';
 import { AttachmentTransferService } from '../../infrastructure/sync/attachments/AttachmentTransferService';
 import { bootstrapAttachments } from '../../infrastructure/sync/attachments/AttachmentBootstrap';
@@ -60,6 +62,7 @@ interface CreateLifeOsSyncApplicationInput {
 }
 
 export interface LifeOsSyncApplications {
+  readonly aiAssistant: AiAssistant;
   readonly sync: SyncApplication;
   readonly accountSync: AccountSync;
 }
@@ -254,11 +257,16 @@ export function createLifeOsSyncApplication({
         now: () => clock.now(),
       })
     : new UnavailableAccountSync('Аккаунт и синхронизация отключены в этой сборке LifeOS.');
-  return { sync, accountSync };
+  const aiAssistant =
+    config.accountSyncEnabled && environment.VITE_LIFEOS_OPENAI_ENABLED === 'true'
+      ? new AiAssistantService(new SupabaseAiGateway(client), auth)
+      : new AiAssistantService();
+  return { sync, accountSync, aiAssistant };
 }
 
 function unavailableApplications(message: string): LifeOsSyncApplications {
   return {
+    aiAssistant: new AiAssistantService(),
     sync: new UnavailableSyncApplication(message),
     accountSync: new UnavailableAccountSync(message),
   };

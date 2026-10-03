@@ -74,6 +74,10 @@ export interface SyncCryptoService extends SnapshotPayloadCrypto {
     deviceId: string,
     allowCreate: boolean,
   ): Promise<{ readonly publicKey: string }>;
+  promoteRecoveryIdentity?(
+    deviceId: string,
+    candidateDeviceId: string,
+  ): Promise<{ readonly publicKey: string }>;
   prepareFirstSpace(input: {
     readonly deviceId: string;
     readonly spaceId: string;

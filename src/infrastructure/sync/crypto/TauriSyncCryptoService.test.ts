@@ -3,6 +3,19 @@ import type { TauriInvoke } from '../supabase/TauriSupabaseAuthStorage';
 import { TauriSyncCryptoService } from './TauriSyncCryptoService';
 
 describe('TauriSyncCryptoService', () => {
+  it('classifies an unreadable device identity without exposing the native rejection', async () => {
+    const invoke: TauriInvoke = async () => {
+      throw 'Windows secure storage decryption failed.';
+    };
+
+    await expect(
+      new TauriSyncCryptoService(invoke).ensureDeviceIdentity(
+        '10000000-0000-4000-8000-000000000001',
+        false,
+      ),
+    ).rejects.toMatchObject({ code: 'sync.device_key_unavailable' });
+  });
+
   it('passes only public workflow inputs to high-level native commands', async () => {
     const calls: Array<readonly [string, Record<string, unknown> | undefined]> = [];
     const invoke: TauriInvoke = async <T>(command: string, args?: Record<string, unknown>) => {
@@ -11,10 +24,21 @@ describe('TauriSyncCryptoService', () => {
     };
     const service = new TauriSyncCryptoService(invoke);
     await service.ensureDeviceIdentity('10000000-0000-4000-8000-000000000001', true);
+    await service.promoteRecoveryIdentity(
+      '10000000-0000-4000-8000-000000000001',
+      '10000000-0000-4000-8000-000000000002',
+    );
     expect(calls).toEqual([
       [
         'sync_prepare_device_identity',
         { deviceId: '10000000-0000-4000-8000-000000000001', allowCreate: true },
+      ],
+      [
+        'sync_promote_recovery_identity',
+        {
+          deviceId: '10000000-0000-4000-8000-000000000001',
+          candidateDeviceId: '10000000-0000-4000-8000-000000000002',
+        },
       ],
     ]);
     expect(JSON.stringify(calls)).not.toMatch(/privateKey|spaceKey|recoveryRoot/);

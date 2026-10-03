@@ -3,6 +3,17 @@
   padding: 0;
   margin: 0;
 }
+.planner-v2 .planner-action-status-switch {
+  width: fit-content;
+  margin-block: var(--space-3);
+}
+.planner-v2 .planner-action-result-preview {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
 .planner-toolbar {
   display: flex;
   align-items: end;

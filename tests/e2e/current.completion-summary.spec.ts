@@ -49,6 +49,13 @@ test('opens an optional summary after durable completion and allows later editin
   await page.screenshot({ path: info.outputPath('summary-dialog.png'), fullPage: true });
   await dialog.getByRole('button', { name: 'Сохранить итог', exact: true }).click();
   await expect(dialog).not.toBeVisible();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Итог сохранён в выполненной задаче' }),
+  ).toBeVisible();
+  await page.goto('/#/v2/actions');
+  await page.getByRole('button', { name: 'Выполненные · 1' }).click();
+  await expect(page.getByText('Итог: Проверил настройки и сохранил результат.')).toBeVisible();
+  await page.goto('/#/v2/actions/summary-action');
   await page.reload();
   await expect(
     page.locator('.planner-action-note').filter({ hasText: 'Проверил настройки' }),

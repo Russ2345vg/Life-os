@@ -1,0 +1,16 @@
+.openai-panel {
+  margin-top: var(--space-6);
+}
+.openai-panel h2 {
+  margin-top: 0;
+}
+.openai-panel__status:not(:empty) {
+  margin-block: var(--space-4);
+  color: var(--text-secondary);
+}
+.openai-panel__answer {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin-top: var(--space-4);
+  line-height: 1.6;
+}

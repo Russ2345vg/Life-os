@@ -71,7 +71,9 @@ export class AccountSyncService implements AccountSync {
     const existing = await this.dependencies.installations.find();
     if (
       existing !== null &&
-      ['configured', 'recovery_unconfirmed'].includes(existing.setupState) &&
+      (['configured', 'recovery_unconfirmed'].includes(existing.setupState) ||
+        (existing.setupState === 'not_configured' &&
+          existing.accountSetupState === 'recovery_confirmation_pending')) &&
       existing.accountUserId !== null &&
       !['email_verification_pending', 'sign_out_pending', 'account_migration_pending'].includes(
         existing.accountSetupState,
@@ -113,7 +115,31 @@ export class AccountSyncService implements AccountSync {
         }
       }
     }
-    const overview = await this.dependencies.sync.loadOverview();
+    const overview = await this.dependencies.sync.loadOverview().catch(async (error: unknown) => {
+      if (!(error instanceof DomainError && error.code === 'sync.device_key_unavailable'))
+        throw error;
+      await this.dependencies.transferGate?.pauseAndDrain();
+      try {
+        const current = await this.dependencies.installations.find();
+        if (
+          current === null ||
+          current.setupState !== 'configured' ||
+          current.membershipStatus !== 'active' ||
+          current.spaceId === null ||
+          current.accountUserId === null ||
+          !['ready', 'recovery_confirmation_pending'].includes(current.accountSetupState)
+        )
+          throw error;
+        await this.dependencies.installations.save({
+          ...current,
+          accountSetupState: 'device_recovery_required',
+          updatedAt: this.now().toISOString(),
+        });
+      } finally {
+        this.dependencies.transferGate?.resume();
+      }
+      return this.dependencies.sync.loadOverview();
+    });
     if (
       overview.installation.accountSetupState === 'recovery_confirmation_pending' &&
       overview.installation.setupState === 'recovery_unconfirmed' &&
