@@ -215,6 +215,18 @@ export {
   type MorningRepetitionPlanItem,
 } from './morning-exercise';
 export type { DomainEvent } from './shared/DomainEvent';
+export {
+  confirmSleepObservation,
+  createWakeObservationDraft,
+  isConfirmedSleepObservation,
+  reviseSleepObservation,
+  summarizeSleepObservations,
+  timeInBedMilliseconds,
+  validateSleepObservation,
+  type SleepObservation,
+  type SleepObservationSummary,
+  type WakeObservationSource,
+} from './sleep/SleepObservation';
 export { Entity } from './shared/Entity';
 export { EntityId } from './shared/EntityId';
 export {
