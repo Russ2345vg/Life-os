@@ -32,7 +32,7 @@ describe('ExerciseDefinition', () => {
     expect(() => customDefinition(name)).toThrowError('Название упражнения указано неверно.');
   });
 
-  it('содержит пять стабильных системных определений в приоритетном порядке', () => {
+  it('содержит семь стабильных системных определений в приоритетном порядке', () => {
     expect(
       SYSTEM_EXERCISE_DEFINITION_SEEDS.map(({ id, name, measurementType }) => ({
         id,
@@ -41,13 +41,18 @@ describe('ExerciseDefinition', () => {
       })),
     ).toEqual([
       {
-        id: 'morning-exercise.push-ups',
-        name: 'Отжимания',
-        measurementType: EXERCISE_MEASUREMENT_TYPE.repetitions,
+        id: 'morning-exercise.warm-up',
+        name: 'Разминка',
+        measurementType: EXERCISE_MEASUREMENT_TYPE.duration,
       },
       {
         id: 'morning-exercise.pull-ups',
         name: 'Подтягивания',
+        measurementType: EXERCISE_MEASUREMENT_TYPE.repetitions,
+      },
+      {
+        id: 'morning-exercise.push-ups',
+        name: 'Отжимания',
         measurementType: EXERCISE_MEASUREMENT_TYPE.repetitions,
       },
       {
@@ -64,6 +69,11 @@ describe('ExerciseDefinition', () => {
         id: 'morning-exercise.abs',
         name: 'Пресс',
         measurementType: EXERCISE_MEASUREMENT_TYPE.repetitions,
+      },
+      {
+        id: 'morning-exercise.stretching',
+        name: 'Растяжка',
+        measurementType: EXERCISE_MEASUREMENT_TYPE.duration,
       },
     ]);
   });

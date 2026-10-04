@@ -2,6 +2,7 @@ export {
   EXERCISE_DEFINITION_SOURCE,
   EXERCISE_MEASUREMENT_TYPE,
   ExerciseDefinition,
+  SYSTEM_EXERCISE_DEFINITION_ID,
   SYSTEM_EXERCISE_DEFINITION_SEEDS,
   isExerciseDefinitionSource,
   isExerciseMeasurementType,
@@ -37,3 +38,13 @@ export type {
   MorningPhysicalSetExecution,
   MorningPhysicalSetStatus,
 } from './MorningPhysicalExecution';
+export {
+  MORNING_PHYSICAL_RECOMMENDATION_STATUS,
+  buildMorningPhysicalRecommendation,
+  copyMorningPhysicalRecommendation,
+  createReadyMorningPhysicalPlan,
+} from './MorningPhysicalRecommendation';
+export type {
+  MorningPhysicalRecommendation,
+  MorningPhysicalRecommendationStatus,
+} from './MorningPhysicalRecommendation';

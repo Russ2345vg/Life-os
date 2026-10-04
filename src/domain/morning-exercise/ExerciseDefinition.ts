@@ -27,31 +27,51 @@ export function isExerciseDefinitionSource(value: unknown): value is ExerciseDef
   return (Object.values(EXERCISE_DEFINITION_SOURCE) as readonly unknown[]).includes(value);
 }
 
+export const SYSTEM_EXERCISE_DEFINITION_ID = {
+  warmUp: 'morning-exercise.warm-up',
+  pullUps: 'morning-exercise.pull-ups',
+  pushUps: 'morning-exercise.push-ups',
+  squats: 'morning-exercise.squats',
+  plank: 'morning-exercise.plank',
+  abs: 'morning-exercise.abs',
+  stretching: 'morning-exercise.stretching',
+} as const;
+
 export const SYSTEM_EXERCISE_DEFINITION_SEEDS = [
   {
-    id: 'morning-exercise.push-ups',
-    name: 'Отжимания',
-    measurementType: EXERCISE_MEASUREMENT_TYPE.repetitions,
+    id: SYSTEM_EXERCISE_DEFINITION_ID.warmUp,
+    name: 'Разминка',
+    measurementType: EXERCISE_MEASUREMENT_TYPE.duration,
   },
   {
-    id: 'morning-exercise.pull-ups',
+    id: SYSTEM_EXERCISE_DEFINITION_ID.pullUps,
     name: 'Подтягивания',
     measurementType: EXERCISE_MEASUREMENT_TYPE.repetitions,
   },
   {
-    id: 'morning-exercise.squats',
+    id: SYSTEM_EXERCISE_DEFINITION_ID.pushUps,
+    name: 'Отжимания',
+    measurementType: EXERCISE_MEASUREMENT_TYPE.repetitions,
+  },
+  {
+    id: SYSTEM_EXERCISE_DEFINITION_ID.squats,
     name: 'Приседания',
     measurementType: EXERCISE_MEASUREMENT_TYPE.repetitions,
   },
   {
-    id: 'morning-exercise.plank',
+    id: SYSTEM_EXERCISE_DEFINITION_ID.plank,
     name: 'Планка',
     measurementType: EXERCISE_MEASUREMENT_TYPE.duration,
   },
   {
-    id: 'morning-exercise.abs',
+    id: SYSTEM_EXERCISE_DEFINITION_ID.abs,
     name: 'Пресс',
     measurementType: EXERCISE_MEASUREMENT_TYPE.repetitions,
+  },
+  {
+    id: SYSTEM_EXERCISE_DEFINITION_ID.stretching,
+    name: 'Растяжка',
+    measurementType: EXERCISE_MEASUREMENT_TYPE.duration,
   },
 ] as const;
 

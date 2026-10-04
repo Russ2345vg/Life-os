@@ -2,13 +2,16 @@ import { DomainError } from '../../shared/errors/DomainError';
 import type { DayDate } from '../day/DayDate';
 import {
   EXERCISE_MEASUREMENT_TYPE,
+  MORNING_PHYSICAL_RECOMMENDATION_STATUS,
   MorningPhysicalExecution,
   adjustMorningPhysicalPlanItem,
+  copyMorningPhysicalRecommendation,
   copyMorningPhysicalPlanItems,
   createDefaultMorningPhysicalPlanItem,
   type ExerciseMeasurementType,
   type MorningPhysicalPlanAdjustment,
   type MorningPhysicalPlanItem,
+  type MorningPhysicalRecommendation,
   type MorningPhysicalSetActual,
 } from '../morning-exercise';
 import { Entity } from '../shared/Entity';
@@ -72,6 +75,7 @@ export interface MorningCycleRehydrationData {
   readonly physicalUpdatedAt: Date | null;
   readonly physicalPlanItems?: ReadonlyArray<MorningPhysicalPlanItem>;
   readonly physicalExecution?: MorningPhysicalExecution | null;
+  readonly physicalRecommendation?: MorningPhysicalRecommendation | null;
   readonly updatedAt: Date;
   readonly version: number;
 }
@@ -92,6 +96,7 @@ export class MorningCycle extends Entity {
   #physicalUpdatedAt: Date | null;
   #physicalPlanItems: ReadonlyArray<MorningPhysicalPlanItem>;
   #physicalExecution: MorningPhysicalExecution | null;
+  #physicalRecommendation: MorningPhysicalRecommendation | null;
   #updatedAt: Date;
   #version: number;
 
@@ -126,6 +131,10 @@ export class MorningCycle extends Entity {
     this.#physicalUpdatedAt = copyOptionalDate(data.physicalUpdatedAt);
     this.#physicalPlanItems = copyMorningPhysicalPlanItems(data.physicalPlanItems ?? []);
     this.#physicalExecution = data.physicalExecution?.copy() ?? null;
+    this.#physicalRecommendation =
+      data.physicalRecommendation === undefined || data.physicalRecommendation === null
+        ? null
+        : copyMorningPhysicalRecommendation(data.physicalRecommendation);
     this.#updatedAt = copyDate(data.updatedAt);
     this.#version = data.version;
   }
@@ -150,6 +159,7 @@ export class MorningCycle extends Entity {
       physicalUpdatedAt: null,
       physicalPlanItems: [],
       physicalExecution: null,
+      physicalRecommendation: null,
       updatedAt: data.occurredAt,
       version: 1,
     });
@@ -251,6 +261,22 @@ export class MorningCycle extends Entity {
       data.physicalUpdatedAt,
       data.updatedAt,
     );
+    if (data.physicalRecommendation !== undefined && data.physicalRecommendation !== null) {
+      const recommendation = copyMorningPhysicalRecommendation(data.physicalRecommendation);
+      if (
+        data.physicalStatus !== MORNING_PHYSICAL_STATUS.done ||
+        physicalExecution?.completedAt === null ||
+        recommendation.createdAt.getTime() < (physicalExecution?.completedAt.getTime() ?? 0) ||
+        recommendation.createdAt.getTime() > data.updatedAt.getTime() ||
+        (recommendation.decidedAt !== null &&
+          recommendation.decidedAt.getTime() > data.updatedAt.getTime())
+      ) {
+        throw new DomainError(
+          'morning_physical_recommendation.invalid_data',
+          'Предложение нагрузки указано неверно.',
+        );
+      }
+    }
     assertMirrorStageState(
       data.stageStates,
       data.waterCompletedAt,
@@ -328,6 +354,12 @@ export class MorningCycle extends Entity {
 
   public get physicalExecution(): MorningPhysicalExecution | null {
     return this.#physicalExecution?.copy() ?? null;
+  }
+
+  public get physicalRecommendation(): MorningPhysicalRecommendation | null {
+    return this.#physicalRecommendation === null
+      ? null
+      : copyMorningPhysicalRecommendation(this.#physicalRecommendation);
   }
 
   public get updatedAt(): Date {
@@ -598,6 +630,45 @@ export class MorningCycle extends Entity {
     return this.changePhysical(MORNING_PHYSICAL_STATUS.done, occurredAt);
   }
 
+  public proposePhysicalRecommendation(
+    planItems: readonly MorningPhysicalPlanItem[],
+    occurredAt: Date,
+  ): boolean {
+    if (
+      this.#physicalStatus !== MORNING_PHYSICAL_STATUS.done ||
+      this.#physicalExecution?.completedAt === null
+    ) {
+      throw new DomainError(
+        'morning_physical_recommendation.execution_incomplete',
+        'Сначала завершите зарядку.',
+      );
+    }
+    if (this.#physicalRecommendation !== null) return false;
+    const recommendation = copyMorningPhysicalRecommendation({
+      status: MORNING_PHYSICAL_RECOMMENDATION_STATUS.pending,
+      planItems,
+      createdAt: occurredAt,
+      decidedAt: null,
+    });
+    this.change(occurredAt);
+    this.#physicalRecommendation = recommendation;
+    return true;
+  }
+
+  public acceptPhysicalRecommendation(occurredAt: Date): boolean {
+    return this.resolvePhysicalRecommendation(
+      MORNING_PHYSICAL_RECOMMENDATION_STATUS.accepted,
+      occurredAt,
+    );
+  }
+
+  public dismissPhysicalRecommendation(occurredAt: Date): boolean {
+    return this.resolvePhysicalRecommendation(
+      MORNING_PHYSICAL_RECOMMENDATION_STATUS.dismissed,
+      occurredAt,
+    );
+  }
+
   public completeMirror(occurredAt: Date): boolean {
     this.assertStarted();
     this.assertActive();
@@ -720,6 +791,34 @@ export class MorningCycle extends Entity {
     if (this.#startedAt === null) {
       throw new DomainError('morning_cycle.not_started', 'Сначала начните утренний блок.');
     }
+  }
+
+  private resolvePhysicalRecommendation(
+    status:
+      | typeof MORNING_PHYSICAL_RECOMMENDATION_STATUS.accepted
+      | typeof MORNING_PHYSICAL_RECOMMENDATION_STATUS.dismissed,
+    occurredAt: Date,
+  ): boolean {
+    if (this.#physicalRecommendation === null) {
+      throw new DomainError(
+        'morning_physical_recommendation.missing',
+        'Предложение нагрузки не найдено.',
+      );
+    }
+    if (this.#physicalRecommendation.status === status) return false;
+    if (this.#physicalRecommendation.status !== MORNING_PHYSICAL_RECOMMENDATION_STATUS.pending) {
+      throw new DomainError(
+        'morning_physical_recommendation.locked',
+        'Решение по нагрузке уже сохранено.',
+      );
+    }
+    this.change(occurredAt);
+    this.#physicalRecommendation = {
+      ...this.#physicalRecommendation,
+      status,
+      decidedAt: new Date(occurredAt.getTime()),
+    };
+    return true;
   }
 
   private assertActive(): void {
