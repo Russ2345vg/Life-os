@@ -20,11 +20,19 @@ const viteCliPath = fileURLToPath(new URL('../node_modules/vite/bin/vite.js', im
 const CHECKS = Object.freeze({
   typecheck: [check('check:typecheck', typescriptCliPath, ['-b', '--pretty', 'false'], 180_000)],
   lint: [check('check:lint', eslintCliPath, ['.'], 180_000)],
-  'format-check': [check('check:format', prettierCliPath, ['--check', '.'], 180_000)],
+  'format-check': [
+    check(
+      'check:format',
+      prettierCliPath,
+      ['--check', '.', '--cache', '--cache-strategy', 'content'],
+      180_000,
+    ),
+  ],
   build: [
     check('check:build:typecheck', typescriptCliPath, ['-b'], 240_000),
     check('check:build:vite', viteCliPath, ['build'], 120_000),
   ],
+  'build-vite': [check('check:build:vite', viteCliPath, ['build'], 120_000)],
 });
 
 export function resolveCheckInvocations(mode) {

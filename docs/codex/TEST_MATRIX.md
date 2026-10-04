@@ -11,21 +11,23 @@ npm ci
 
 ## Канонические команды
 
-| Задача                            | Команда                                        | Режим                         | Process deadline |
-| --------------------------------- | ---------------------------------------------- | ----------------------------- | ---------------: |
-| Targeted unit/integration         | `npm run test:target -- src/path/File.test.ts` | one-shot, selector обязателен |            120 с |
-| Быстрые domain/application/shared | `npm run test:fast`                            | one-shot                      |            180 с |
-| Полные unit/integration           | `npm run test`                                 | one-shot                      |            300 с |
-| Self-tests инфраструктуры         | `npm run test:infra`                           | one-shot                      |            120 с |
-| Alpha gate                        | `npm run test:alpha`                           | one-shot                      |             60 с |
-| Список E2E                        | `npm run test:e2e:list`                        | managed one-shot              |            120 с |
-| Browser E2E                       | `npm run test:e2e`                             | managed one-shot              |           1800 с |
-| TypeScript                        | `npm run typecheck`                            | bounded one-shot              |            180 с |
-| ESLint                            | `npm run lint`                                 | bounded one-shot              |            180 с |
-| Production build                  | `npm run build`                                | bounded sequential one-shot   |    240 с + 120 с |
-| Prettier check                    | `npm run format:check`                         | bounded one-shot              |            180 с |
-| Gate без browser E2E              | `npm run verify`                               | sequential one-shot           | deadlines этапов |
-| Gate с полным browser E2E         | `npm run verify:full`                          | verify → E2E                  | deadlines этапов |
+| Задача                            | Команда                                        | Режим                           | Process deadline |
+| --------------------------------- | ---------------------------------------------- | ------------------------------- | ---------------: |
+| Targeted unit/integration         | `npm run test:target -- src/path/File.test.ts` | one-shot, selector обязателен   |            120 с |
+| Быстрые domain/application/shared | `npm run test:fast`                            | one-shot                        |            180 с |
+| Полные unit/integration           | `npm run test`                                 | one-shot                        |            300 с |
+| Self-tests инфраструктуры         | `npm run test:infra`                           | one-shot                        |            120 с |
+| Alpha gate                        | `npm run test:alpha`                           | one-shot                        |             60 с |
+| Список E2E                        | `npm run test:e2e:list`                        | managed one-shot                |            120 с |
+| Browser E2E                       | `npm run test:e2e`                             | managed one-shot                |           1800 с |
+| Параллельный полный E2E           | `npm run test:e2e:sharded`                     | 2 managed shards + merge        |     1920 с/shard |
+| TypeScript                        | `npm run typecheck`                            | bounded one-shot                |            180 с |
+| ESLint                            | `npm run lint`                                 | bounded one-shot                |            180 с |
+| Production build                  | `npm run build`                                | bounded sequential one-shot     |    240 с + 120 с |
+| Vite после typecheck в `verify`   | `npm run build:vite`                           | bounded one-shot                |            120 с |
+| Prettier check                    | `npm run format:check`                         | bounded one-shot, content cache |            180 с |
+| Gate без browser E2E              | `npm run verify`                               | sequential one-shot             | deadlines этапов |
+| Gate с полным browser E2E         | `npm run verify:full`                          | verify → 2 managed shards       | deadlines этапов |
 
 `test:target`, `test:fast`, `test`, `test:infra` и `test:alpha` всегда вызывают локальный Vitest с
 подкомандой `run`. Пустой targeted selector завершается как invalid config, поэтому случайный
@@ -53,7 +55,11 @@ lifecycle/heartbeat режимы.
    verify → E2E; если актуальный verify уже прошёл, повторять его не нужно.
 
 `verify` последовательно запускает typecheck → lint → full unit/integration → test-infrastructure
-→ alpha → build → format check → `git diff --check`. E2E в него не входит. Первый failure
+→ alpha → Vite build → format check → `git diff --check`. После первого успешного typecheck
+повторный typecheck не нужен; самостоятельный `npm run build` сохраняет typecheck перед Vite.
+Prettier хранит кеш в игнорируемом `node_modules/.cache/prettier/`; изменение содержимого,
+настроек или версии Prettier заставляет его проверить затронутые файлы повторно.
+E2E в `verify` не входит. Первый failure
 останавливает цепочку с ненулевым exit code. Retry отсутствуют.
 
 Источник состава команд — активный `package.json`. Сейчас `verify` представляет npm-цепочку:
@@ -131,6 +137,13 @@ npm run test:e2e -- tests/e2e/current.daily-workflow.spec.ts
 - запускают Playwright только после HTTP readiness;
 - на success, failure, timeout, SIGINT или SIGTERM завершают только дерево созданного процесса;
 - подтверждают освобождение порта ограниченным teardown.
+
+`test:e2e:sharded` запускает полный набор двумя отдельными managed-процессами на портах
+4173 и 4174. У каждой части отдельные progress-файл, `test-results` и blob-отчёт; после
+завершения оба отчёта объединяются в `playwright-report`. Команда возвращает ошибку при
+failure любой части или объединения. `--list` не поддерживается, поскольку Playwright
+показывает полный список для каждой части. Для списка используй `test:e2e:list`. Не запускай
+одновременно обычный и параллельный E2E из одного worktree.
 
 Playwright выполняется с `retries: 0`, per-test timeout 30 секунд, action timeout 10 секунд,
 navigation timeout 15 секунд, expect timeout 5 секунд и global timeout 1800 секунд. Trace

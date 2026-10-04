@@ -5,6 +5,7 @@ import type { WalkRequest } from '../ports/WalkUnitOfWork';
 import type { MemoryServices } from '../memory/MemoryServices';
 import { DomainError } from '../../shared/errors/DomainError';
 import { assertCurrent, walkRequest, type WalkCommandTarget } from './WalkCommands';
+import { formatWalkReflectionSummary } from './WalkReflectionSummary';
 export interface WalkExportReservations {
   reserveExport(request: WalkRequest, candidateId: string): Promise<string>;
 }
@@ -39,7 +40,7 @@ export class WalkMemoryExport {
         id,
         occurredOn: walk.date,
         title: 'Прогулка',
-        body: walk.result ?? '',
+        body: formatWalkReflectionSummary(walk),
         photo: walk.photo,
       },
     };

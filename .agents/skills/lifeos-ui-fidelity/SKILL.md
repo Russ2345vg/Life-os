@@ -1,6 +1,6 @@
 ---
 name: lifeos-ui-fidelity
-description: Use when implementing or reviewing a LifeOS screen against an approved visual reference or established UI language.
+description: Use when changing or auditing a LifeOS screen's visual layout, responsive behavior, or fidelity to an approved reference.
 ---
 
 # LifeOS UI fidelity
@@ -12,8 +12,13 @@ absence of a main Figma file is not itself a blocker when the task has a usable 
 
 ## Workflow
 
-1. Identify the source of truth: approved image or Figma node, required states, route, viewport, and user data. If no approved reference exists, audit consistency with `docs/codex/UI_RULES.md` and say that pixel fidelity cannot be claimed.
-2. Inspect the existing component, presentation model, application commands, and relevant tests. Preserve domain and application contracts unless the task explicitly changes them.
+1. Before design or edits, open the current route in the active worktree, capture desktop/mobile
+   baseline and inspect existing components, CSS cascade, local overrides and computed styles.
+   If the app is unavailable, inspect the code and disclose the missing browser baseline.
+2. Apply the source priority and visual approval boundaries in AGENTS.md. Identify the task's
+   approved image or Figma node, applicable states and viewport; without an approved reference,
+   audit consistency with `docs/codex/UI_RULES.md` without claiming pixel fidelity. Inspect the
+   presentation model, application commands and relevant tests; preserve their contracts.
 3. Compare structure before polish: block order, hierarchy, density, relative sizing, CTA position, and responsive reflow.
 4. Map colors, spacing, radii, typography, focus, and states to existing LifeOS tokens. Never hardcode reference sample data.
 5. Run the real application at the actual route. Check the primary scenario plus loading, empty, disabled, error, success, and long-data states that apply.

@@ -1,4 +1,5 @@
 import { WalkCapture } from '../../../domain';
+import { isWalkReflectionStage } from '../../../domain/walk/WalkReflectionTemplate';
 import type { WalkCaptureRecord } from '../records/WalkCaptureRecord';
 import {
   assertRecordAndSchemaVersion,
@@ -19,6 +20,7 @@ export class WalkCaptureRecordMapper {
       walkId: capture.walkId.toString(),
       type: capture.type,
       content: capture.content,
+      ...(capture.promptStage === null ? {} : { promptStage: capture.promptStage }),
       capturedAt: capture.capturedAt.toISOString(),
       walkElapsedMs: capture.walkElapsedMs,
       status: capture.status,
@@ -35,12 +37,16 @@ export class WalkCaptureRecordMapper {
     if (type !== 'text' || (status !== 'pending' && status !== 'processed')) {
       throw invalidRecord('Неизвестный тип или статус сохранённой мысли.');
     }
+    const promptStage = Object.hasOwn(value, 'promptStage') ? value.promptStage : null;
+    if (promptStage !== null && !isWalkReflectionStage(promptStage))
+      throw invalidRecord('Поле promptStage содержит неизвестный вопрос.');
     return WalkCapture.rehydrate({
       resultActionId: readOptionalNullableEntityId(value, 'resultActionId'),
       id: readEntityId(value, 'id'),
       walkId: readEntityId(value, 'walkId'),
       type,
       content: readString(value, 'content'),
+      promptStage,
       capturedAt: readIsoDate(value, 'capturedAt'),
       walkElapsedMs: readNumber(value, 'walkElapsedMs'),
       status,

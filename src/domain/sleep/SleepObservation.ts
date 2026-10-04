@@ -164,14 +164,14 @@ export function summarizeSleepObservations(
   observations: readonly SleepObservation[],
 ): SleepObservationSummary {
   const confirmed = observations.filter(isConfirmedSleepObservation);
-  const bedtimeMinutes = confirmed.map((item) => localMinute(item.wentToBedAt, item.timeZone, true));
+  const bedtimeMinutes = confirmed.map((item) =>
+    localMinute(item.wentToBedAt, item.timeZone, true),
+  );
   const wakeMinutes = confirmed.map((item) => localMinute(item.wokeAt, item.timeZone, false));
   return {
     confirmedCount: confirmed.length,
     incompleteCount: observations.length - confirmed.length,
-    averageTimeInBedMinutes: average(
-      confirmed.map((item) => timeInBedMilliseconds(item) / 60_000),
-    ),
+    averageTimeInBedMinutes: average(confirmed.map((item) => timeInBedMilliseconds(item) / 60_000)),
     averageBedtimeMinute: average(bedtimeMinutes),
     averageWakeMinute: average(wakeMinutes),
     bedtimeVariabilityMinutes: variability(bedtimeMinutes),

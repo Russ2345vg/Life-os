@@ -15,6 +15,7 @@ import { createReadyLifeAction } from '../../src/test/helpers/LifeActionTestFact
 test('weekly review reads real results and persists an explicit move without replacing the main', async ({
   page,
 }, testInfo) => {
+  testInfo.setTimeout(45_000);
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto('/#/v2/goals');

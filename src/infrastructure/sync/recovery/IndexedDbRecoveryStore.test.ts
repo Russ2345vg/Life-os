@@ -440,7 +440,7 @@ describe('IndexedDB recovery transactions', () => {
         );
       await completion;
       const state = await f.store.readState();
-      expect(new Set(state.items.map((item) => item.entityType)).size).toBe(36);
+      expect(new Set(state.items.map((item) => item.entityType)).size).toBe(37);
       expect(state.items.find((item) => item.entityType === 'life_action')?.record).toMatchObject(
         expectedFields,
       );

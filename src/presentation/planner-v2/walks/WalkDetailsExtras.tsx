@@ -4,6 +4,7 @@ import type { Walk } from '../../../domain/walk/Walk';
 import type { WalkCapture } from '../../../domain/walk-capture/WalkCapture';
 import { MAX_WALK_PHOTO_BYTES } from '../../../domain/walk/WalkPhoto';
 import { useWalkMutation, walkError } from './useWalkState';
+import { getWalkPrompt } from '../../../application/walk/WalkGuidance';
 export function WalkDetailsExtras({
   services,
   walk,
@@ -28,6 +29,7 @@ export function WalkDetailsExtras({
       {captures.length ? (
         captures.map((capture) => (
           <article className="walk-saved-note" key={capture.id.toString()}>
+            {capture.promptStage && <small>{getWalkPrompt(capture.promptStage)}</small>}
             <p>{capture.content}</p>
           </article>
         ))

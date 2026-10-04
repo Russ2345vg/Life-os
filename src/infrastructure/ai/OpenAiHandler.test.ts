@@ -24,6 +24,50 @@ const completed = {
 };
 
 describe('OpenAI server boundary', () => {
+  const context = {
+    version: 1,
+    section: 'goals',
+    date: '2026-10-03',
+    period: null,
+    facts: [],
+    omittedCount: 0,
+    sources: [
+      { id: 'goal-1', kind: 'goals', title: 'Изучить язык', date: null, detail: 'Описание цели' },
+    ],
+  };
+
+  it('passes validated section context as data with grounded instructions', async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(user))
+      .mockResolvedValueOnce(Response.json(completed));
+    const response = await createOpenAiHandler(
+      config,
+      fetcher,
+    )(request({ question: 'Что дальше?', context }));
+    expect(response.status).toBe(200);
+    const body = JSON.parse(String(fetcher.mock.calls[1]![1]?.body));
+    expect(JSON.parse(body.input)).toEqual({ question: 'Что дальше?', context });
+    expect(body.instructions).toMatch(/не назначай приоритеты/i);
+    expect(body.store).toBe(false);
+  });
+
+  it.each([
+    { ...context, section: 'secrets' },
+    { ...context, sources: [{ ...context.sources[0], photo: 'private' }] },
+    { ...context, sources: [{ ...context.sources[0], detail: 'x'.repeat(481) }] },
+  ])('rejects unexpected context before provider call', async (invalid) => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json(user));
+    expect(
+      (
+        await createOpenAiHandler(
+          config,
+          fetcher,
+        )(request({ question: 'Вопрос', context: invalid }))
+      ).status,
+    ).toBe(400);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
   it('sends only the explicit question, server model and instructions without storing a response', async () => {
     const fetcher = vi
       .fn<typeof fetch>()

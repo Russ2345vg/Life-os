@@ -37,6 +37,33 @@ const goal = {
 };
 
 describe('PilotSyncRegistryAdapters', () => {
+  it('round-trips one sleep observation independently from the schedule', () => {
+    const fixture = {
+      schemaVersion: 1,
+      id: 'sleep-observation:2026-10-03',
+      cycleDate: '2026-10-03',
+      nightCycleId: 'night-1',
+      wentToBedAt: '2026-10-03T14:30:00.000Z',
+      wokeAt: '2026-10-04T00:00:00.000Z',
+      wakeSource: 'ALARM_QR',
+      wakeOccurrenceId: 'wake-1',
+      timeZone: 'Asia/Chita',
+      confirmedAt: '2026-10-04T00:05:00.000Z',
+      createdAt: '2026-10-04T00:01:00.000Z',
+      updatedAt: '2026-10-04T00:05:00.000Z',
+    };
+
+    const wire = normalizePilotRecord('sleep_observation', fixture);
+
+    expect(wire).toMatchObject({
+      schemaVersion: 1,
+      id: fixture.id,
+      cycleDate: '2026-10-03',
+    });
+    expect(prepareRemotePilotRecord('sleep_observation', wire)).toEqual(fixture);
+    expect(pilotRelationshipReferences('sleep_observation', wire)).toEqual([]);
+  });
+
   it('keeps the historical session goal when an old peer does not know the field', () => {
     const existing = { ...structuredSyncFixtures().action_session, goalIdAtStart: 'goal-original' };
     const legacy = { ...existing } as Record<string, unknown>;
@@ -378,7 +405,7 @@ describe('PilotSyncRegistryAdapters', () => {
   );
 
   it('uses the complete real dependency order and excludes Goal covers', () => {
-    expect(PILOT_DEPENDENCY_ORDER).toHaveLength(38);
+    expect(PILOT_DEPENDENCY_ORDER).toHaveLength(39);
     expect(PILOT_DEPENDENCY_ORDER.indexOf('sphere')).toBeLessThan(
       PILOT_DEPENDENCY_ORDER.indexOf('direction'),
     );
@@ -408,7 +435,7 @@ describe('PilotSyncRegistryAdapters', () => {
     expect(runtime.map(({ registration }) => registration.entityType)).toEqual(
       PILOT_DEPENDENCY_ORDER,
     );
-    expect(runtime).toHaveLength(38);
+    expect(runtime).toHaveLength(39);
   });
 
   it('preserves a local Goal cover while applying structured remote data without Outbox echo', async () => {

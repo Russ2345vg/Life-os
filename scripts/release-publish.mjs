@@ -92,22 +92,26 @@ export function buildReleaseConfig({ owner, publicKey }) {
   };
 }
 
-function parseArguments(argv) {
+export function parseReleaseArguments(argv) {
   const options = {
+    action: '',
     version: '',
     owner: process.env.LIFEOS_GITHUB_OWNER ?? '',
     notes: '',
-    prepareOnly: false,
   };
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index];
     if (value === '--owner') options.owner = argv[++index] ?? '';
     else if (value === '--notes') options.notes = argv[++index] ?? '';
-    else if (value === '--prepare-only') options.prepareOnly = true;
     else if (value.startsWith('--')) throw new Error(`Unknown release option: ${value}`);
+    else if (options.action === '') options.action = value;
     else if (options.version === '') options.version = value;
     else throw new Error(`Unexpected release argument: ${value}`);
   }
+  if (!['prepare', 'publish'].includes(options.action) || options.version === '')
+    throw new Error(
+      'Usage: npm run release:publish -- <prepare|publish> X.Y.Z --owner <OWNER> [--notes "..."]',
+    );
   return options;
 }
 
@@ -186,6 +190,49 @@ function sha256(path) {
   return createHash('sha256').update(readFileSync(path)).digest('hex');
 }
 
+function releaseAssetNames(version) {
+  return [
+    `LifeOS_${version}_x64-setup.exe`,
+    `LifeOS_${version}_x64-setup.exe.sig`,
+    `LifeOS_${version}_android_release.apk`,
+    'latest.json',
+    'android-latest.json',
+    'SHA256SUMS.txt',
+  ];
+}
+
+export function writePreparedRelease({ directory, owner, version, notes, commit, assets }) {
+  const files = Object.fromEntries(assets.map((name) => [name, sha256(join(directory, name))]));
+  writeFileSync(
+    join(directory, 'prepared.json'),
+    `${JSON.stringify({ owner, version, notes, commit, files }, null, 2)}\n`,
+  );
+}
+
+export function loadPreparedRelease({ directory, owner, version, commit }) {
+  const receiptPath = join(directory, 'prepared.json');
+  if (!existsSync(receiptPath)) throw new Error('Prepared release is missing; run prepare first.');
+  const receipt = readJson(receiptPath);
+  if (receipt.owner !== owner) throw new Error('Prepared release owner mismatch.');
+  if (receipt.version !== version) throw new Error('Prepared release version mismatch.');
+  if (receipt.commit !== commit) throw new Error('Prepared release commit mismatch.');
+  const names = releaseAssetNames(version);
+  if (
+    !receipt.files ||
+    Object.keys(receipt.files).length !== names.length ||
+    names.some((name) => !Object.hasOwn(receipt.files, name))
+  )
+    throw new Error('Prepared release is incomplete.');
+  for (const name of names) {
+    const path = join(directory, name);
+    if (!existsSync(path) || sha256(path) !== receipt.files[name])
+      throw new Error(`Prepared asset changed: ${name}`);
+  }
+  if (typeof receipt.notes !== 'string' || receipt.notes.trim() === '')
+    throw new Error('Prepared release notes are missing.');
+  return { notes: receipt.notes, assets: names.map((name) => join(directory, name)) };
+}
+
 function verifySourceVersions(version) {
   const packageMetadata = readJson(join(ROOT, 'package.json'));
   const cargo = readFileSync(join(TAURI_DIR, 'Cargo.toml'), 'utf8');
@@ -208,7 +255,7 @@ function writeReleaseConfig(owner, publicKey) {
   return { configPath, endpoint };
 }
 
-function prepareArtifacts({ owner, version, notes }) {
+function prepareArtifacts({ owner, version, notes, commit }) {
   const secretPath = join(SIGNING_DIR, 'lifeos-updater.env');
   const publicKeyPath = join(SIGNING_DIR, 'lifeos-updater.key.pub');
   const androidProperties = join(TAURI_DIR, 'gen', 'android', 'keystore.properties');
@@ -311,18 +358,13 @@ function prepareArtifacts({ owner, version, notes }) {
     checksumPath,
     `${sha256(installerOutput)}  ${basename(installerOutput)}\n${apkSha256}  ${basename(apkOutput)}\n`,
   );
+  const assets = releaseAssetNames(version);
+  writePreparedRelease({ directory: outputDirectory, owner, version, notes, commit, assets });
   return {
     endpoint,
     androidEndpoint,
     outputDirectory,
-    assets: [
-      installerOutput,
-      signatureOutput,
-      apkOutput,
-      latestPath,
-      androidLatestPath,
-      checksumPath,
-    ],
+    assets: assets.map((name) => join(outputDirectory, name)),
   };
 }
 
@@ -344,30 +386,37 @@ async function verifyPublicAssets(owner, assets) {
 }
 
 async function main() {
-  const options = parseArguments(process.argv.slice(2));
-  if (options.version === '')
-    throw new Error(
-      'Usage: npm run release:publish -- X.Y.Z --owner <OWNER> [--notes "..."] [--prepare-only]',
-    );
+  const options = parseReleaseArguments(process.argv.slice(2));
   validateReleaseVersion(options.version);
   verifySourceVersions(options.version);
-  const notes =
-    options.notes.trim() || `LifeOS ${options.version}: стабильное обновление приложения.`;
+  const commit = run('git', ['rev-parse', 'HEAD'], { capture: true });
 
-  if (!options.prepareOnly) {
-    run('gh', ['--version'], { capture: true });
-    run('gh', ['auth', 'status'], { capture: true });
-    if (options.owner === '') {
-      options.owner = run('gh', ['api', 'user', '--jq', '.login'], { capture: true });
-    }
-  }
   validateOwner(options.owner);
 
-  const prepared = prepareArtifacts({ owner: options.owner, version: options.version, notes });
-  if (options.prepareOnly) {
+  const directory = join(TAURI_DIR, 'target', 'release-channel', `v${options.version}`);
+  if (options.action === 'prepare') {
+    const notes =
+      options.notes.trim() || `LifeOS ${options.version}: стабильное обновление приложения.`;
+    const prepared = prepareArtifacts({
+      owner: options.owner,
+      version: options.version,
+      notes,
+      commit,
+    });
     console.log(`Release assets prepared: ${prepared.outputDirectory}`);
     return;
   }
+  const prepared = loadPreparedRelease({
+    directory,
+    owner: options.owner,
+    version: options.version,
+    commit,
+  });
+  if (options.notes.trim() && options.notes.trim() !== prepared.notes)
+    throw new Error('Release notes differ from the prepared release.');
+  const notes = prepared.notes;
+  run('gh', ['--version'], { capture: true });
+  run('gh', ['auth', 'status'], { capture: true });
 
   const repository = `${options.owner}/${RELEASE_REPOSITORY}`;
   const view = spawnSync('gh', ['repo', 'view', repository, '--json', 'url'], {

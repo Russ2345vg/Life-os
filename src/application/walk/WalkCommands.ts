@@ -156,6 +156,7 @@ export class WalkCommands {
         afterState:
           input.reflection.afterState === undefined ? walk.afterState : input.reflection.afterState,
         impact: input.reflection.impact === undefined ? walk.impact : input.reflection.impact,
+        notes: input.reflection.notes === undefined ? walk.reflectionNotes : input.reflection.notes,
         updatedAt: this.clock.now(),
       }),
     );

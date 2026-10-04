@@ -88,6 +88,33 @@ describe('PlannerActionList', () => {
     expect(html).not.toContain('Открыть и изменить');
   });
 
+  it('makes each dated action group an initially expanded disclosure', () => {
+    const html = renderToStaticMarkup(
+      createElement(PlannerActionList, {
+        actions: [
+          action('today', 'Действие на сегодня', '2026-09-13'),
+          LifeAction.createDraft({
+            id: EntityId.create('later'),
+            title: LifeActionTitle.create('Действие на потом'),
+            plannedDate: DayDate.create('2026-10-13'),
+            createdAt: now,
+            eventId: EntityId.create('later-event'),
+          }),
+        ],
+        goals: [goal],
+        today: '2026-09-13',
+        onNew: () => {},
+        selectedId: null,
+        ...operations,
+      }),
+    );
+
+    expect(html).toMatch(/<details[^>]*open=""[^>]*><summary[^>]*>.*?Сегодня.*?<\/summary>/s);
+    expect(html).toMatch(/<details[^>]*open=""[^>]*><summary[^>]*>.*?Позже.*?<\/summary>/s);
+    expect(html).toContain('Действие на сегодня');
+    expect(html).toContain('Действие на потом');
+  });
+
   it('hides completed actions in the unassigned list', () => {
     const html = renderToStaticMarkup(
       createElement(PlannerActionList, {

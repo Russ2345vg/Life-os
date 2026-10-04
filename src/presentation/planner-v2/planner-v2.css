@@ -1154,6 +1154,40 @@
   margin: 0 0 4px;
   color: var(--planner-accent);
 }
+.planner-actions-catalog .planner-action-group > summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  list-style: none;
+  cursor: pointer;
+}
+.planner-actions-catalog .planner-action-group > summary::-webkit-details-marker {
+  display: none;
+}
+.planner-actions-catalog .planner-action-group > summary > h2 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  margin: 0;
+  color: var(--planner-accent);
+  font-size: 18px;
+}
+.planner-actions-catalog .planner-action-group > summary > h2 span {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 400;
+}
+.planner-actions-catalog .planner-action-group > summary svg {
+  transition: transform 160ms ease;
+}
+.planner-actions-catalog .planner-action-group:not([open]) > summary svg {
+  transform: rotate(-90deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .planner-actions-catalog .planner-action-group > summary svg {
+    transition: none;
+  }
+}
 .planner-actions-catalog .planner-action-group > h2 {
   font-size: 18px;
 }

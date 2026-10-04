@@ -1,0 +1,271 @@
+.planner-v2 .sleep-observation-card {
+  margin-block: var(--space-4) var(--space-6);
+  padding: clamp(20px, 3vw, 30px);
+  border: 1px solid color-mix(in srgb, var(--planner-accent) 28%, var(--border-soft));
+  border-radius: var(--radius-large);
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--planner-accent) 8%, transparent),
+      transparent 48%
+    ),
+    var(--surface-1);
+  box-shadow: var(--shadow-card);
+}
+
+.planner-v2 .sleep-observation-card__intro {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.planner-v2 .sleep-observation-card :is(h2, p) {
+  margin-block: 0;
+}
+
+.planner-v2 .sleep-observation-card h2 {
+  margin-top: var(--space-1);
+  color: var(--text-primary);
+  font-size: clamp(22px, 2.3vw, 30px);
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+}
+
+.planner-v2 .sleep-observation-card__status {
+  padding: 5px 9px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-small);
+  color: var(--text-secondary);
+  font-size: var(--planner-font-meta);
+  white-space: nowrap;
+}
+
+.planner-v2 .sleep-observation-card__lead {
+  margin-top: var(--space-2);
+  color: var(--text-secondary);
+}
+
+.planner-v2 .sleep-observation-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  margin-top: var(--space-5);
+}
+
+.planner-v2 .sleep-observation-form label {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.planner-v2 .sleep-observation-form input {
+  min-height: var(--control-lg);
+  padding-inline: var(--space-3);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-small);
+  background: var(--surface-field);
+  color: var(--text-primary);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.planner-v2 .sleep-observation-form input:focus-visible {
+  border-color: var(--planner-accent);
+  outline: 2px solid color-mix(in srgb, var(--planner-accent) 36%, transparent);
+  outline-offset: 2px;
+}
+
+.planner-v2 .sleep-observation-form small {
+  color: var(--text-secondary);
+  font-size: var(--planner-font-meta);
+  font-weight: 400;
+}
+
+.planner-v2 .sleep-observation-form__footer {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  min-height: var(--control-lg);
+}
+
+.planner-v2 .sleep-observation-form__footer > div {
+  min-width: 0;
+}
+
+.planner-v2 .sleep-observation-form__footer button {
+  min-width: 180px;
+  min-height: var(--control-lg);
+}
+
+.planner-v2 .sleep-observation-form__success {
+  color: var(--success);
+  font-weight: 600;
+}
+
+@media (max-width: 760px) {
+  .planner-v2 .sleep-observation-card {
+    margin-top: var(--space-3);
+    padding: var(--space-4);
+  }
+
+  .planner-v2 .sleep-observation-card__intro,
+  .planner-v2 .sleep-observation-form,
+  .planner-v2 .sleep-observation-form__footer {
+    grid-template-columns: 1fr;
+  }
+
+  .planner-v2 .sleep-observation-card__intro,
+  .planner-v2 .sleep-observation-form__footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .planner-v2 .sleep-observation-card__status {
+    width: fit-content;
+    white-space: normal;
+  }
+
+  .planner-v2 .sleep-observation-form__footer button {
+    width: 100%;
+  }
+}
+
+.planner-v2 .sleep-observation-chart {
+  margin-top: var(--space-6);
+  padding: clamp(20px, 3vw, 30px);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-large);
+  background: var(--surface-1);
+}
+
+.planner-v2 .sleep-observation-chart--state {
+  min-height: 148px;
+  display: grid;
+  align-content: center;
+}
+
+.planner-v2 .sleep-observation-chart--state :is(h2, p) {
+  margin-block: 0 var(--space-2);
+}
+
+.planner-v2 .sleep-observation-chart__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.planner-v2 .sleep-observation-chart__header :is(h2, p) {
+  margin-block: 0;
+}
+
+.planner-v2 .sleep-observation-chart__header h2 {
+  margin-top: var(--space-1);
+  color: var(--text-primary);
+  font-size: 24px;
+}
+
+.planner-v2 .sleep-observation-chart__header > div > p:last-child {
+  margin-top: var(--space-1);
+  color: var(--text-secondary);
+}
+
+.planner-v2 .sleep-observation-chart__desktop {
+  margin-top: var(--space-5);
+}
+
+.planner-v2 .sleep-observation-chart__axis {
+  display: flex;
+  justify-content: space-between;
+  color: var(--text-muted);
+  font-size: var(--planner-font-meta);
+  font-variant-numeric: tabular-nums;
+}
+
+.planner-v2 .sleep-observation-chart__desktop svg {
+  width: 100%;
+  min-height: 132px;
+  margin-top: var(--space-2);
+  border-block: 1px solid var(--border-soft);
+  background: repeating-linear-gradient(
+    to right,
+    transparent 0,
+    transparent calc(33.333% - 1px),
+    var(--border-soft) calc(33.333% - 1px),
+    var(--border-soft) 33.333%
+  );
+}
+
+.planner-v2 .sleep-observation-chart__plan {
+  fill: transparent;
+  stroke: var(--text-muted);
+  stroke-width: 0.55;
+}
+
+.planner-v2 .sleep-observation-chart__fact {
+  fill: var(--planner-accent);
+}
+
+.planner-v2 .sleep-observation-chart__mobile {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.planner-v2 .sleep-observation-chart__mobile li {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-soft);
+}
+
+.planner-v2 .sleep-observation-chart__mobile time {
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.planner-v2 .sleep-observation-chart__mobile div {
+  display: grid;
+  gap: 2px;
+}
+
+.planner-v2 .sleep-observation-chart__mobile strong {
+  color: var(--text-primary);
+}
+
+.planner-v2 .sleep-observation-chart__mobile :is(span, small) {
+  color: var(--text-secondary);
+}
+
+@media (min-width: 761px) {
+  .planner-v2 .sleep-observation-chart__mobile {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .planner-v2 .sleep-observation-chart__header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .planner-v2 .sleep-observation-chart__desktop {
+    display: none;
+  }
+
+  .planner-v2 .sleep-observation-chart .planner-segments {
+    width: 100%;
+  }
+
+  .planner-v2 .sleep-observation-chart .planner-segments button {
+    flex: 1;
+  }
+}

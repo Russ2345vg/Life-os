@@ -1,6 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useQuickAccessGuard, useQuickAccessUncontrolledForm } from './QuickAccessContext';
 import type { SleepScheduleService } from '../../application/sleep/SleepScheduleService';
+import type { SleepObservationService } from '../../application/sleep/SleepObservationService';
+import type { SleepAlarmObservationCoordinator } from '../../application/sleep/SleepAlarmObservationCoordinator';
+import {
+  isConfirmedSleepObservation,
+  type SleepObservation,
+} from '../../domain/sleep/SleepObservation';
 import {
   unavailableWakeAlarmStatus,
   unavailableWakeDismissalSetup,
@@ -20,15 +26,21 @@ import { summarizeEveningHistory } from './eveningHistoryModel';
 import { EveningDayClosure, type EveningPlannerServices } from './EveningDayClosure';
 import { WakeManagementPanel } from './WakeManagementPanel';
 import { isWakeScheduleAcknowledged, wakeProbeLabel } from './wakeManagementModel';
+import { SleepObservationForm } from './sleep/SleepObservationForm';
+import { SleepObservationChart } from './sleep/SleepObservationChart';
 import './evening-support.css';
 
 export function SleepPreparationPage({
   service,
+  observationService,
+  alarmObservations,
   onBack,
   plannerServices,
   calendarDate,
 }: {
   readonly service: SleepScheduleService;
+  readonly observationService: SleepObservationService;
+  readonly alarmObservations: SleepAlarmObservationCoordinator;
   readonly onBack: () => void;
   readonly plannerServices?: EveningPlannerServices;
   readonly calendarDate?: string;
@@ -36,6 +48,14 @@ export function SleepPreparationPage({
   const [state, setState] = useState<SleepScheduleState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [observation, setObservation] = useState<SleepObservation | null>(null);
+  const [observationBusy, setObservationBusy] = useState(false);
+  const [observationError, setObservationError] = useState<string | null>(null);
+  const [observationSaved, setObservationSaved] = useState(false);
+  const [observationHistory, setObservationHistory] = useState<readonly SleepObservation[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [pageOpenedAt] = useState(() => Date.now());
   useQuickAccessGuard(() => ({ dirty: false, busy }));
   const [alarmStatus, setAlarmStatus] = useState<WakeAlarmStatus>(unavailableWakeAlarmStatus());
   const [alarmSounds, setAlarmSounds] = useState<readonly AlarmSound[]>([
@@ -60,7 +80,7 @@ export function SleepPreparationPage({
         const synchronized =
           opened.settings === null
             ? { state: opened, alarm: await service.getAlarmStatus() }
-            : await service.syncAlarm();
+            : await alarmObservations.sync();
         const [sounds, loadedDismissalSetup] = await Promise.all([
           service.listAlarmSounds(),
           service.getWakeDismissalSetup(),
@@ -70,15 +90,26 @@ export function SleepPreparationPage({
         setAlarmStatus(synchronized.alarm);
         setAlarmSounds(sounds);
         setDismissalSetup(loadedDismissalSetup);
+        const [latestObservation, history] = await Promise.all([
+          observationForLatestCycle(observationService, synchronized.state),
+          observationHistoryForState(observationService, synchronized.state),
+        ]);
+        setObservation(latestObservation);
+        setObservationHistory(history);
+        setHistoryLoading(false);
         loadedRef.current = true;
       } catch (reason: unknown) {
-        if (active) setError(messageOf(reason));
+        if (active) {
+          setError(messageOf(reason));
+          setHistoryError(messageOf(reason));
+          setHistoryLoading(false);
+        }
       }
     })();
     return () => {
       active = false;
     };
-  }, [service]);
+  }, [alarmObservations, observationService, service]);
 
   useEffect(() => {
     let active = true;
@@ -98,13 +129,20 @@ export function SleepPreparationPage({
       void (async () => {
         try {
           const [synchronized, setup] = await Promise.all([
-            service.syncAlarm(),
+            alarmObservations.sync(),
             service.getWakeDismissalSetup(),
           ]);
           if (active) {
             setState(synchronized.state);
             setAlarmStatus(synchronized.alarm);
             setDismissalSetup(setup);
+            const [latestObservation, history] = await Promise.all([
+              observationForLatestCycle(observationService, synchronized.state),
+              observationHistoryForState(observationService, synchronized.state),
+            ]);
+            setObservation(latestObservation);
+            setObservationHistory(history);
+            setHistoryError(null);
           }
         } catch (reason: unknown) {
           if (active) setError(messageOf(reason));
@@ -124,7 +162,7 @@ export function SleepPreparationPage({
       window.removeEventListener('focus', refresh);
       document.removeEventListener('visibilitychange', refresh);
     };
-  }, [service]);
+  }, [alarmObservations, observationService, service]);
 
   const run = async (work: () => Promise<SleepScheduleState>) => {
     if (busyRef.current) return false;
@@ -159,6 +197,11 @@ export function SleepPreparationPage({
     );
   }
 
+  const observationCycle = latestCycle(state.nightCycles);
+  const showObservation =
+    observationCycle !== null &&
+    (observation !== null || observationCycle.plannedWakeAt.getTime() <= pageOpenedAt);
+
   return (
     <SleepPreparationView
       {...(plannerServices ? { plannerServices } : {})}
@@ -169,6 +212,57 @@ export function SleepPreparationPage({
       alarmStatus={alarmStatus}
       alarmSounds={alarmSounds}
       dismissalSetup={dismissalSetup}
+      morningObservation={
+        showObservation && observationCycle !== null ? (
+          <SleepObservationForm
+            key={`${observationCycle.cycleDate}:${observation?.updatedAt.toISOString() ?? 'new'}`}
+            cycleDate={observationCycle.cycleDate}
+            timeZone={state.settings?.timeZone ?? observation?.timeZone ?? 'UTC'}
+            plannedWentToBedAt={observationCycle.plannedSleepAt}
+            observation={observation}
+            busy={observationBusy}
+            error={observationError}
+            saved={observationSaved}
+            onSave={async (input) => {
+              if (observationBusy) return;
+              setObservationBusy(true);
+              setObservationError(null);
+              setObservationSaved(false);
+              try {
+                const saved =
+                  observation !== null && isConfirmedSleepObservation(observation)
+                    ? await observationService.revise({
+                        cycleDate: observationCycle.cycleDate,
+                        ...input,
+                      })
+                    : await observationService.confirm({
+                        cycleDate: observationCycle.cycleDate,
+                        ...input,
+                      });
+                setObservation(saved);
+                setObservationHistory((current) =>
+                  [saved, ...current.filter(({ cycleDate }) => cycleDate !== saved.cycleDate)].sort(
+                    (left, right) => right.cycleDate.localeCompare(left.cycleDate),
+                  ),
+                );
+                setObservationSaved(true);
+              } catch (reason: unknown) {
+                setObservationError(messageOf(reason));
+              } finally {
+                setObservationBusy(false);
+              }
+            }}
+          />
+        ) : null
+      }
+      historyChart={
+        <SleepObservationChart
+          observations={observationHistory}
+          plans={state.nightCycles}
+          loading={historyLoading}
+          error={historyError}
+        />
+      }
       onBack={onBack}
       onSaveSettings={(input) =>
         run(async () => {
@@ -213,7 +307,16 @@ export function SleepPreparationPage({
       onSetNearestTime={(time, id) => run(() => service.setNearestWakeTime(time, id))}
       onClearNearestTime={() => run(() => service.clearNearestWakeTime())}
       onSetEnabled={(enabled) => run(() => service.setEnabled(enabled))}
-      onSyncAlarm={() => run(async () => (await service.syncAlarm()).state)}
+      onSyncAlarm={() =>
+        run(async () => {
+          const synchronized = await alarmObservations.sync();
+          setObservation(await observationForLatestCycle(observationService, synchronized.state));
+          setObservationHistory(
+            await observationHistoryForState(observationService, synchronized.state),
+          );
+          return synchronized.state;
+        })
+      }
       onExportDismissalQr={() => {
         if (busyRef.current) return;
         busyRef.current = true;
@@ -272,6 +375,8 @@ export function SleepPreparationView({
   alarmStatus,
   alarmSounds,
   dismissalSetup,
+  morningObservation,
+  historyChart,
   onBack,
   onSaveSettings,
   onComplete,
@@ -305,6 +410,8 @@ export function SleepPreparationView({
   readonly alarmStatus: WakeAlarmStatus;
   readonly alarmSounds: readonly AlarmSound[];
   readonly dismissalSetup: WakeDismissalSetup;
+  readonly morningObservation?: ReactNode;
+  readonly historyChart?: ReactNode;
   readonly onBack: () => void;
   readonly onSaveSettings: (input: {
     bedtime: string;
@@ -411,6 +518,8 @@ export function SleepPreparationView({
           {error}
         </p>
       ) : null}
+
+      {morningObservation}
 
       <WakeManagementPanel
         state={state}
@@ -662,6 +771,7 @@ export function SleepPreparationView({
           </section>
         </aside>
       </div>
+      {historyChart}
       <div className="sleep-alarm-mobile-status">
         <div className="sleep-history-mobile">
           <SleepHistoryPanel state={state} timeZone={state.settings.timeZone} />
@@ -1356,6 +1466,31 @@ function latestCycle(cycles: readonly NightCycle[]): NightCycle | null {
     [...cycles].sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())[0] ??
     null
   );
+}
+
+async function observationForLatestCycle(
+  service: SleepObservationService,
+  state: SleepScheduleState,
+): Promise<SleepObservation | null> {
+  const cycle = latestCycle(state.nightCycles);
+  if (cycle === null) return null;
+  const history = await service.history(cycle.cycleDate, cycle.cycleDate);
+  return history[0] ?? null;
+}
+
+async function observationHistoryForState(
+  service: SleepObservationService,
+  state: SleepScheduleState,
+): Promise<readonly SleepObservation[]> {
+  const cycle = latestCycle(state.nightCycles);
+  if (cycle === null) return [];
+  return service.history(addCycleDays(cycle.cycleDate, -29), cycle.cycleDate);
+}
+
+function addCycleDays(cycleDate: string, days: number): string {
+  const value = new Date(`${cycleDate}T12:00:00.000Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
 }
 
 function groupedSnapshot(

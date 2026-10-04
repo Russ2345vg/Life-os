@@ -23,6 +23,38 @@ const action = LifeAction.createDraft({
   eventId: EntityId.create('e'),
 });
 describe('current catalogue projections', () => {
+  it.each(['active', 'achieved'] as const)(
+    'hides archived %s goals unless the archive status is explicitly selected',
+    (status) => {
+      const archived = Goal.create({
+        id: EntityId.create(`archived-${status}`),
+        title: 'Архивная цель',
+        status: 'active',
+        now,
+      })
+        .update(
+          { title: 'Архивная цель', status, stage: status === 'achieved' ? 'achieved' : 'idea' },
+          now,
+        )
+        .archive(now);
+      const paused = goal.update({ title: 'На паузе', status: 'paused' }, now);
+      const future = goal.update({ title: 'В планах', status: 'future' }, now);
+      const goals = [goal, paused, future, archived];
+
+      expect(filterPlannerGoals(goals, emptyGoalFilters(), '', [], [])).toEqual([
+        goal,
+        paused,
+        future,
+      ]);
+      expect(
+        filterPlannerGoals(goals, { ...emptyGoalFilters(), showCompleted: true }, '', [], []),
+      ).toEqual([goal, paused, future]);
+      expect(filterPlannerGoals(goals, emptyGoalFilters(), 'Архивная', [], [])).toEqual([]);
+      expect(
+        filterPlannerGoals(goals, { ...emptyGoalFilters(), status: 'archived' }, '', [], []),
+      ).toEqual([archived]);
+    },
+  );
   it('hides achieved goals by default and exposes them through completion filters', () => {
     const achieved = goal.update(
       { title: 'Уже достигнута', status: 'achieved', stage: 'achieved' },

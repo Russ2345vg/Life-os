@@ -7,6 +7,7 @@ export interface WalkCaptureRecord {
   readonly walkId: string;
   readonly type: 'text';
   readonly content: string;
+  readonly promptStage?: string | null;
   readonly capturedAt: string;
   readonly walkElapsedMs: number;
   readonly status: WalkCaptureStatus;

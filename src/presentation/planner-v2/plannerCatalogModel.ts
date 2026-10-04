@@ -79,7 +79,7 @@ export function filterPlannerGoals(
     return (
       (filter.status
         ? goal.status === filter.status
-        : filter.showCompleted || goal.status !== 'achieved') &&
+        : goal.status !== 'archived' && (filter.showCompleted || goal.status !== 'achieved')) &&
       (!filter.unassigned || goal.directionId === null) &&
       (!filter.undated || goal.dueDate === null) &&
       (!filter.sphereId ||

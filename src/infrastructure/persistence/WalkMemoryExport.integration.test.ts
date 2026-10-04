@@ -3,6 +3,45 @@ import { describe, expect, it } from 'vitest';
 import { createLifeOsApplication } from '../../app/composition/createLifeOsApplication';
 import { LifeOsIndexedDb } from './indexed-db/LifeOsIndexedDb';
 describe('walk memory export', () => {
+  it('includes saved reflection outcomes in a memory draft', async () => {
+    const app = await createLifeOsApplication({ database: new LifeOsIndexedDb(new IDBFactory()) });
+    try {
+      const service = app.walks!;
+      const running = await service.commands.start({
+        requestId: 'reflect',
+        intent: 'reflection',
+        type: 'reflection',
+        mode: 'stopwatch',
+        question: 'Что дальше?',
+        targetMinutes: null,
+        sphereId: null,
+        beforeState: null,
+      });
+      const done = await service.commands.complete({
+        walkId: running.id.toString(),
+        expectedVersion: running.version,
+        requestId: 'done',
+      });
+      const noted = await service.commands.saveReflection({
+        walkId: done.id.toString(),
+        expectedVersion: done.version,
+        requestId: 'notes',
+        reflection: { notes: { understood: 'Нужен отдых', open: null, next: 'Назначить встречу' } },
+      });
+      const result = await service.memoryExport.prepare({
+        walkId: noted.id.toString(),
+        expectedVersion: noted.version,
+        requestId: 'export-notes',
+      });
+      expect(result.kind).toBe('draft');
+      if (result.kind === 'draft') {
+        expect(result.draft.body).toContain('Что понял: Нужен отдых');
+        expect(result.draft.body).toContain('Что хочу сделать: Назначить встречу');
+      }
+    } finally {
+      app.close();
+    }
+  });
   it('only prepares a draft, keeps its identity across retries and preserves saved edits', async () => {
     const app = await createLifeOsApplication({ database: new LifeOsIndexedDb(new IDBFactory()) });
     try {

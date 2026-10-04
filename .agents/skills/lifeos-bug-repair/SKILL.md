@@ -1,6 +1,6 @@
 ---
 name: lifeos-bug-repair
-description: Use when a LifeOS defect, failing test, hang, regression, or unexpected runtime behavior needs diagnosis and repair.
+description: Use when diagnosing or repairing a concrete LifeOS defect, failing test, hang, or regression.
 ---
 
 # LifeOS bug repair
@@ -23,10 +23,8 @@ and report the cause; proceed to repair only when the user requested or already 
 2. Make the smallest change at the owning layer. Preserve architecture, persistence, date, and user-data contracts.
 3. Avoid timeout increases, retries, broad cleanup, test weakening, and error suppression unless evidence shows they are the correct behavior.
 4. Run the regression check repeatedly when the defect is timing-sensitive.
-5. Run neighboring checks for the touched invariant, then the applicable gate in `docs/codex/TEST_MATRIX.md`.
-   For code this is one `npm run verify`, with E2E only when Testing Stage Gate requires it.
-   Instruction/config defects use syntax and decision scenarios, not tests that duplicate wording.
-   Preserve successful results until a relevant change or unresolved risk justifies another run.
+5. Run neighboring checks for the touched invariant, then select the applicable gate from
+   `docs/codex/TEST_MATRIX.md`. Preserve successful evidence under AGENTS.md Testing Stage Gate.
 
 ## Required report
 

@@ -13,6 +13,10 @@ import type { AnalyticsSnapshot } from '../ports/AnalyticsSnapshotReader';
 import type { ProgressContribution } from '../../domain/planner/ProgressContribution';
 import { createReadyLifeAction } from '../../test/helpers/LifeActionTestFactory';
 import { buildAnalyticsOverview, resolveAnalyticsPeriod } from './GetAnalyticsOverview';
+import {
+  confirmSleepObservation,
+  createWakeObservationDraft,
+} from '../../domain/sleep/SleepObservation';
 
 const at = new Date(2026, 8, 29, 12);
 const empty: AnalyticsSnapshot = {
@@ -25,6 +29,7 @@ const empty: AnalyticsSnapshot = {
   walks: [],
   memory: [],
   sleep: null,
+  sleepObservations: [],
   spheres: [],
   directions: [],
 };
@@ -123,6 +128,40 @@ describe('analytics overview', () => {
     expect(overview.comparison.energyDifference).toBeNull();
     expect(overview.balance).toEqual([]);
     expect(overview.preparation.allDone).toBe(0);
+  });
+
+  it('summarizes only confirmed sleep observations in the selected period', () => {
+    const confirmed = confirmSleepObservation(null, {
+      id: 'sleep-observation:2026-09-25',
+      cycleDate: '2026-09-25',
+      nightCycleId: 'night-25',
+      wentToBedAt: new Date('2026-09-25T14:30:00.000Z'),
+      wokeAt: new Date('2026-09-26T00:00:00.000Z'),
+      timeZone: 'Asia/Chita',
+      confirmedAt: new Date('2026-09-26T00:05:00.000Z'),
+    });
+    const draft = createWakeObservationDraft({
+      id: 'sleep-observation:2026-09-26',
+      cycleDate: '2026-09-26',
+      nightCycleId: 'night-26',
+      wakeOccurrenceId: 'wake-26',
+      wakeKind: 'EMERGENCY',
+      wokeAt: new Date('2026-09-27T00:00:00.000Z'),
+      timeZone: 'Asia/Chita',
+      now: new Date('2026-09-27T00:01:00.000Z'),
+    });
+
+    const overview = buildAnalyticsOverview(
+      { ...empty, sleepObservations: [confirmed, draft] },
+      period,
+      at,
+    );
+
+    expect(overview.sleep).toMatchObject({
+      confirmedCount: 1,
+      incompleteCount: 1,
+      averageTimeInBedMinutes: 570,
+    });
   });
 
   it('shows only dated monthly balance snapshots overlapping a cross-month week', () => {

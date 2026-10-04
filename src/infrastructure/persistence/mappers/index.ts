@@ -21,3 +21,4 @@ export { RoutineOccurrenceExecutionRecordMapper } from './RoutineOccurrenceExecu
 export { WalkRecordMapper } from './WalkRecordMapper';
 export { SphereRecordMapper } from './SphereRecordMapper';
 export { MemoryEventRecordMapper } from './MemoryEventRecordMapper';
+export { SleepObservationRecordMapper } from './SleepObservationRecordMapper';

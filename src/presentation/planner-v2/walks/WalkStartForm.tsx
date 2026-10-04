@@ -112,12 +112,21 @@ export function WalkStartForm({
               }
             >
               <option value="freeThought">Свободная мысль</option>
+              <option value="ownQuestion">Свой вопрос</option>
               <option value="decision">Принять решение</option>
               <option value="problem">Разобраться с проблемой</option>
               <option value="goal">Подумать о цели</option>
               <option value="strategy">Выбрать направление</option>
+              <option value="self">Разобраться в себе</option>
+              <option value="dailyReview">Итоги дня</option>
+              <option value="priorities">Выбрать главное</option>
+              <option value="relationships">Отношения</option>
+              <option value="ideas">Найти новые идеи</option>
             </select>
           </label>
+        )}
+        {draft.intent === 'reflection' && draft.reflectionTemplate === 'ownQuestion' && (
+          <p>Запишите свой вопрос выше. Во время прогулки появятся универсальные подсказки.</p>
         )}
         <details>
           <summary>Дополнительные параметры</summary>

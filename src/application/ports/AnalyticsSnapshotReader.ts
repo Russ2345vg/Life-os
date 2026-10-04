@@ -3,6 +3,7 @@ import type { BalanceMonthlySnapshot } from '../../domain/balance/BalanceMonthly
 import type { MemoryEvent } from '../../domain/memory/MemoryEvent';
 import type { ProgressContribution } from '../../domain/planner/ProgressContribution';
 import type { SleepScheduleState } from '../../domain/sleep/SleepSchedule';
+import type { SleepObservation } from '../../domain/sleep/SleepObservation';
 import type { Walk } from '../../domain/walk/Walk';
 
 export interface AnalyticsSnapshot {
@@ -15,6 +16,7 @@ export interface AnalyticsSnapshot {
   readonly walks: readonly Walk[];
   readonly memory: readonly MemoryEvent[];
   readonly sleep: SleepScheduleState | null;
+  readonly sleepObservations: readonly SleepObservation[];
   readonly spheres: readonly Sphere[];
   readonly directions: readonly Direction[];
 }

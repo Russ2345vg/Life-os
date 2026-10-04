@@ -1,13 +1,17 @@
+import type { AiContext } from './AiContext';
+
 export interface AiGateway {
-  ask(question: string, signal: AbortSignal): Promise<string>;
+  ask(question: string, signal: AbortSignal, context?: AiContext): Promise<string>;
 }
 export interface AiAssistant {
   readonly available: boolean;
   ask(question: string, signal?: AbortSignal): Promise<string>;
+  askWithContext(question: string, context: AiContext, signal?: AbortSignal): Promise<string>;
 }
 const messages = {
   not_configured: 'Подключение OpenAI ещё не настроено для этой сборки.',
   invalid_question: 'Введите вопрос длиной до 4000 символов.',
+  invalid_context: 'Данных слишком много для одного запроса. Сузьте раздел или период.',
   sign_in_required: 'Войдите в LifeOS с подтверждённым аккаунтом.',
   access_denied: 'Для этого аккаунта доступ к OpenAI не включён.',
   rate_limited: 'Лимит OpenAI исчерпан. Попробуйте позже.',
@@ -38,8 +42,26 @@ export class AiAssistantService implements AiAssistant {
   }
 
   async ask(question: string, signal?: AbortSignal): Promise<string> {
+    return this.request(question, undefined, signal);
+  }
+
+  async askWithContext(
+    question: string,
+    context: AiContext,
+    signal?: AbortSignal,
+  ): Promise<string> {
+    return this.request(question, context, signal);
+  }
+
+  private async request(
+    question: string,
+    context?: AiContext,
+    signal?: AbortSignal,
+  ): Promise<string> {
     if (!this.gateway || !this.account) throw new AiError('not_configured');
     if (!question.trim() || question.length > 4000) throw new AiError('invalid_question');
+    if (context && new TextEncoder().encode(JSON.stringify(context)).byteLength > 20_000)
+      throw new AiError('invalid_context');
     const controller = new AbortController();
     const abort = () => controller.abort(new AiError('cancelled'));
     signal?.addEventListener('abort', abort, { once: true });
@@ -57,7 +79,9 @@ export class AiAssistantService implements AiAssistant {
         controller.signal.throwIfAborted();
         if (!identity || identity.isAnonymous || !identity.emailVerified)
           throw new AiError('sign_in_required');
-        const answer = await this.gateway!.ask(question.trim(), controller.signal);
+        const answer = context
+          ? await this.gateway!.ask(question.trim(), controller.signal, context)
+          : await this.gateway!.ask(question.trim(), controller.signal);
         controller.signal.throwIfAborted();
         return answer;
       };

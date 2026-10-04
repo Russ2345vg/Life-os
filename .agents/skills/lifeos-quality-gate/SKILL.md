@@ -1,20 +1,24 @@
 ---
 name: lifeos-quality-gate
-description: Use when deciding whether a LifeOS change is complete, safe to commit, ready for review, or ready to hand off.
+description: Use when finishing a LifeOS patch or explicitly assessing its readiness from verification evidence.
 ---
 
 # LifeOS quality gate
 
-Completion is an evidence claim about the current working tree, not a statement of confidence.
-Apply the scope and Testing Stage Gate in `AGENTS.md`; command details live in `TEST_MATRIX.md`.
+Assess this task's patch from evidence, separately from pre-existing dirty changes.
+Apply `AGENTS.md` Testing Stage Gate and `docs/codex/TEST_MATRIX.md`; this skill does not add
+another test pass or permission checkpoint.
 
 ## Gate sequence
 
 1. Read the acceptance criteria and inspect `git status --short`, `git diff --stat`, and `git diff --name-status`.
 2. Separate the pre-existing dirty baseline from this task's edits. Confirm the task's edits are in scope; preserve unrelated changes. Flag unexpected generated output, secrets, diagnostics, caches and lockfile changes introduced by this task.
-3. Select the smallest meaningful checks for the changed behavior. Documentation, skills and agent config use syntax, links, scoped formatting and realistic decision scenarios; no product suite is required for that scope.
-4. For code changes, run targeted checks then one `npm run verify`; it excludes E2E. For local browser risks, select scoped E2E files/scenarios and affected projects using `TEST_MATRIX.md`. Full E2E is off by default; use it only for an explicit full-run request, release/R12, or the concrete shared risks in AGENTS.md. R9/R10 labels alone do not require it. Explain why scoped checks are insufficient before a full run and report the reason for running or omitting it. Do not separately duplicate verify stages without a diagnostic reason. Record command, exit code and concise evidence.
-5. For UI implementation or audit, inspect the real scenario at required desktop/mobile viewports, console/page errors and the approved image or Figma reference using `lifeos-ui-fidelity`. An audit does not authorize edits or full E2E.
+3. Map acceptance criteria to existing fresh evidence and identify only the missing checks.
+4. Run those checks according to the matrix; record command, exit code and checked scope.
+   Documentation/agent-config changes use syntax, links, formatting and decision scenarios.
+   Build/test scripts, runtime config, dependencies and CI do not qualify for that exception.
+5. For visual changes or UI audits, use rendered desktop/mobile and console evidence from
+   `lifeos-ui-fidelity`. An audit does not authorize edits or full E2E.
 6. Run `git diff --check` and re-read the final diff for architecture, user-data, persistence, accessibility, and scope regressions.
 7. Map each acceptance criterion to direct evidence.
 

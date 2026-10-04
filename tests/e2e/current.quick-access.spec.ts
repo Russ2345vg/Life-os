@@ -221,9 +221,10 @@ test('quick access reports reader failures and retry, retains create draft acros
   await seed(page);
   await page.evaluate(() => {
     const original = IDBObjectStore.prototype.getAll;
+    const fixture = window as Window & { quickAccessOriginalGetAll?: typeof original };
+    fixture.quickAccessOriginalGetAll = original;
     IDBObjectStore.prototype.getAll = function (...args) {
       if (this.name === 'goals') {
-        IDBObjectStore.prototype.getAll = original;
         throw new Error('QA reader unavailable');
       }
       return original.apply(this, args);
@@ -231,6 +232,15 @@ test('quick access reports reader failures and retry, retains create draft acros
   });
   await page.getByRole('button', { name: 'Поиск и добавление', exact: true }).click();
   await expect(panel(page).getByRole('alert')).toContainText('Не удалось загрузить записи');
+  await page.evaluate(() => {
+    const fixture = window as Window & {
+      quickAccessOriginalGetAll?: typeof IDBObjectStore.prototype.getAll;
+    };
+    if (!fixture.quickAccessOriginalGetAll)
+      throw new Error('Quick access fixture was not installed');
+    IDBObjectStore.prototype.getAll = fixture.quickAccessOriginalGetAll;
+    delete fixture.quickAccessOriginalGetAll;
+  });
   await expect(panel(page).getByRole('listitem')).toHaveCount(0);
   await panel(page).getByRole('button', { name: 'Повторить загрузку' }).click();
   await expect(

@@ -4,6 +4,12 @@ export const WALK_REFLECTION_TEMPLATE = {
   goal: 'goal',
   strategy: 'strategy',
   freeThought: 'freeThought',
+  ownQuestion: 'ownQuestion',
+  self: 'self',
+  dailyReview: 'dailyReview',
+  priorities: 'priorities',
+  relationships: 'relationships',
+  ideas: 'ideas',
 } as const;
 
 export type WalkReflectionTemplate =
@@ -30,6 +36,27 @@ export const WALK_REFLECTION_STAGE = {
   priority: 'priority',
   sacrifice: 'sacrifice',
   mainResult: 'mainResult',
+  whyImportant: 'whyImportant',
+  whatKnown: 'whatKnown',
+  doubts: 'doubts',
+  overlookedOptions: 'overlookedOptions',
+  whatCleared: 'whatCleared',
+  onMyMind: 'onMyMind',
+  whatMissing: 'whatMissing',
+  wantChange: 'wantChange',
+  memorable: 'memorable',
+  gaveEnergy: 'gaveEnergy',
+  carryTomorrow: 'carryTomorrow',
+  canWait: 'canWait',
+  giveAttention: 'giveAttention',
+  myView: 'myView',
+  otherView: 'otherView',
+  discussDirectly: 'discussDirectly',
+  simplify: 'simplify',
+  tryDifferently: 'tryDifferently',
+  smallestExperiment: 'smallestExperiment',
+  desiredOutcome: 'desiredOutcome',
+  previousAttempts: 'previousAttempts',
 } as const;
 
 export type WalkReflectionStage =
@@ -48,7 +75,9 @@ const WALK_REFLECTION_STAGES: Readonly<
   [WALK_REFLECTION_TEMPLATE.problem]: [
     WALK_REFLECTION_STAGE.situation,
     WALK_REFLECTION_STAGE.rootCause,
+    WALK_REFLECTION_STAGE.desiredOutcome,
     WALK_REFLECTION_STAGE.constraints,
+    WALK_REFLECTION_STAGE.previousAttempts,
     WALK_REFLECTION_STAGE.changeOptions,
     WALK_REFLECTION_STAGE.nextExperiment,
   ],
@@ -67,6 +96,38 @@ const WALK_REFLECTION_STAGES: Readonly<
     WALK_REFLECTION_STAGE.mainResult,
   ],
   [WALK_REFLECTION_TEMPLATE.freeThought]: [],
+  [WALK_REFLECTION_TEMPLATE.ownQuestion]: [
+    WALK_REFLECTION_STAGE.whyImportant,
+    WALK_REFLECTION_STAGE.whatKnown,
+    WALK_REFLECTION_STAGE.doubts,
+    WALK_REFLECTION_STAGE.overlookedOptions,
+    WALK_REFLECTION_STAGE.whatCleared,
+  ],
+  [WALK_REFLECTION_TEMPLATE.self]: [
+    WALK_REFLECTION_STAGE.onMyMind,
+    WALK_REFLECTION_STAGE.whatMissing,
+    WALK_REFLECTION_STAGE.wantChange,
+  ],
+  [WALK_REFLECTION_TEMPLATE.dailyReview]: [
+    WALK_REFLECTION_STAGE.memorable,
+    WALK_REFLECTION_STAGE.gaveEnergy,
+    WALK_REFLECTION_STAGE.carryTomorrow,
+  ],
+  [WALK_REFLECTION_TEMPLATE.priorities]: [
+    WALK_REFLECTION_STAGE.priority,
+    WALK_REFLECTION_STAGE.canWait,
+    WALK_REFLECTION_STAGE.giveAttention,
+  ],
+  [WALK_REFLECTION_TEMPLATE.relationships]: [
+    WALK_REFLECTION_STAGE.myView,
+    WALK_REFLECTION_STAGE.otherView,
+    WALK_REFLECTION_STAGE.discussDirectly,
+  ],
+  [WALK_REFLECTION_TEMPLATE.ideas]: [
+    WALK_REFLECTION_STAGE.simplify,
+    WALK_REFLECTION_STAGE.tryDifferently,
+    WALK_REFLECTION_STAGE.smallestExperiment,
+  ],
 };
 
 export function isWalkReflectionTemplate(value: unknown): value is WalkReflectionTemplate {

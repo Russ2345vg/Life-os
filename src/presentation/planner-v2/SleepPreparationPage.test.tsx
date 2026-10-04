@@ -148,6 +148,8 @@ describe('SleepPreparationView', () => {
     expect(html).toContain('нет данных');
     expect(html).not.toContain('качество сна');
     expect(html).not.toContain('часов сна');
+    expect(html).not.toContain('Сохранить ночь');
+    expect(html).not.toContain('начало часа без экранов');
   });
 });
 

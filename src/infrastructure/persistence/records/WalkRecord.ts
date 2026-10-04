@@ -23,6 +23,11 @@ export interface WalkRecord {
   readonly endedAt: string | null;
   readonly timerTargetMinutes: number | null;
   readonly reflectionQuestion: string | null;
+  readonly reflectionNotes?: {
+    readonly understood: string | null;
+    readonly open: string | null;
+    readonly next: string | null;
+  } | null;
   readonly result: string | null;
   readonly photo: {
     readonly dataUrl: string;

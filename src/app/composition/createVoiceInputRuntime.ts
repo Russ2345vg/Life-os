@@ -3,8 +3,7 @@ import { BrowserSpeechRecognitionProvider } from '../../infrastructure/voice-inp
 import { TauriSpeechRecognitionProvider } from '../../infrastructure/voice-input/TauriSpeechRecognitionProvider';
 
 export function createVoiceInputRuntime(): VoiceInputCoordinator {
+  const native = new TauriSpeechRecognitionProvider();
   const browser = new BrowserSpeechRecognitionProvider();
-  return new VoiceInputCoordinator(
-    browser.isSupported() ? browser : new TauriSpeechRecognitionProvider(),
-  );
+  return new VoiceInputCoordinator(native.isSupported() ? native : browser);
 }

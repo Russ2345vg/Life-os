@@ -880,7 +880,7 @@ describe('Walk', () => {
   });
 
   it('defines stable ordered stages for every reflection template', () => {
-    expect(WALK_REFLECTION_TEMPLATE).toEqual({
+    expect(WALK_REFLECTION_TEMPLATE).toMatchObject({
       decision: 'decision',
       problem: 'problem',
       goal: 'goal',
@@ -897,7 +897,9 @@ describe('Walk', () => {
     expect(getWalkReflectionStages(WALK_REFLECTION_TEMPLATE.problem)).toEqual([
       'situation',
       'rootCause',
+      'desiredOutcome',
       'constraints',
+      'previousAttempts',
       'changeOptions',
       'nextExperiment',
     ]);

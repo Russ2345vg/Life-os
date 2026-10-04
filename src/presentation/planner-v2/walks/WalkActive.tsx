@@ -6,6 +6,11 @@ import { AppIcon } from '../../components/AppIcon';
 import { WalkCaptureComposer } from './WalkCaptureComposer';
 import { useWalkMutation, walkDuration, walkError, walkIntentLabel } from './useWalkState';
 import { getWalkPrompt } from '../../../application/walk/WalkGuidance';
+import {
+  getWalkReflectionStages,
+  type WalkReflectionStage,
+} from '../../../domain/walk/WalkReflectionTemplate';
+import { VoiceTextArea } from '../../voice-input/VoiceTextArea';
 
 export function WalkActive({
   walk,
@@ -20,6 +25,11 @@ export function WalkActive({
 }) {
   const [now, setNow] = useState(() => new Date());
   const mutation = useWalkMutation();
+  const [viewedStage, setViewedStage] = useState<WalkReflectionStage | null>(null);
+  const stages = walk.reflectionTemplate ? getWalkReflectionStages(walk.reflectionTemplate) : [];
+  const stage = viewedStage ?? walk.reflectionStage;
+  const stageIndex = stage ? stages.indexOf(stage) : -1;
+  const currentIndex = walk.reflectionStage ? stages.indexOf(walk.reflectionStage) : -1;
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 1000);
     return () => window.clearInterval(timer);
@@ -48,7 +58,9 @@ export function WalkActive({
     );
   return (
     <div className="walk-grid">
-      <section className={`walk-panel walk-session ${walk.status === 'paused' ? 'is-paused' : ''}`}>
+      <section
+        className={`walk-panel walk-session ${walk.status === 'paused' ? 'is-paused' : ''} ${stage ? 'is-reflection' : ''}`}
+      >
         <div className="walk-session-top">
           <span className="walk-label">
             <AppIcon name="walks" />
@@ -87,23 +99,72 @@ export function WalkActive({
           </button>
         </div>
         <p className="walk-session-hint">Можно убрать телефон и просто идти.</p>
-        {walk.reflectionQuestion && (
+        {walk.reflectionQuestion && !stage && (
           <details className="walk-guidance">
             <summary>Вопрос для размышления</summary>
             <p>{walk.reflectionQuestion}</p>
           </details>
         )}
-        {walk.reflectionStage && (
-          <section className="walk-guidance">
-            <p>{getWalkPrompt(walk.reflectionStage)}</p>
-            <button disabled={mutation.busy} onClick={() => command('advance')}>
-              Дальше
-            </button>
-            <button disabled={mutation.busy} onClick={() => command('disable')}>
-              Без подсказок
-            </button>
+        {stage && (
+          <section className="walk-guidance walk-reflection-guide">
+            {walk.reflectionQuestion && (
+              <p className="walk-reflection-topic">{walk.reflectionQuestion}</p>
+            )}
+            <span className="walk-muted">
+              Вопрос {stageIndex + 1} из {stages.length}
+            </span>
+            <h3>{getWalkPrompt(stage)}</h3>
+            <WalkReflectionAnswer
+              key={stage}
+              walkId={walk.id.toString()}
+              stage={stage}
+              services={services}
+              answer={captures.find((capture) => capture.promptStage === stage) ?? null}
+            />
+            <div className="walk-guidance-actions">
+              {stageIndex > 0 && (
+                <button onClick={() => setViewedStage(stages[stageIndex - 1]!)}>
+                  К предыдущему вопросу
+                </button>
+              )}
+              {currentIndex === -1 ? (
+                <button onClick={() => setViewedStage(null)}>Закрыть ответы</button>
+              ) : stageIndex < currentIndex ? (
+                <button onClick={() => setViewedStage(stages[stageIndex + 1]!)}>
+                  К следующему вопросу
+                </button>
+              ) : (
+                <button
+                  disabled={mutation.busy}
+                  onClick={() => {
+                    setViewedStage(null);
+                    command('advance');
+                  }}
+                >
+                  Дальше
+                </button>
+              )}
+              {currentIndex !== -1 && (
+                <button
+                  disabled={mutation.busy}
+                  onClick={() => {
+                    setViewedStage(null);
+                    command('disable');
+                  }}
+                >
+                  Без подсказок
+                </button>
+              )}
+            </div>
           </section>
         )}
+        {!stage &&
+          stages.length > 0 &&
+          captures.some((capture) => capture.promptStage !== null) && (
+            <button onClick={() => setViewedStage(stages[stages.length - 1]!)}>
+              Посмотреть ответы
+            </button>
+          )}
         <details className="walk-guidance">
           <summary>Другие действия</summary>
           <p>Прерывание сохранит время и мысли, но не засчитает прогулку завершённой.</p>
@@ -119,5 +180,61 @@ export function WalkActive({
         captures={captures}
       />
     </div>
+  );
+}
+
+function WalkReflectionAnswer({
+  walkId,
+  stage,
+  services,
+  answer,
+}: {
+  walkId: string;
+  stage: WalkReflectionStage;
+  services: WalkServices;
+  answer: WalkCapture | null;
+}) {
+  const [text, setText] = useState(answer?.content ?? '');
+  const [saved, setSaved] = useState(false);
+  const mutation = useWalkMutation();
+  return (
+    <form
+      className="walk-form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!text.trim()) return;
+        void mutation.perform(
+          `answer:${walkId}:${stage}:${answer?.id ?? 'new'}:${text}`,
+          (requestId) =>
+            answer
+              ? services.captures.update({
+                  captureId: answer.id.toString(),
+                  expectedVersion: answer.version,
+                  requestId,
+                  content: text,
+                })
+              : services.captures.capture({ walkId, requestId, content: text, promptStage: stage }),
+          () => setSaved(true),
+        );
+      }}
+    >
+      <label htmlFor={`walk-answer-${stage}`}>Ответ на вопрос — необязательно</label>
+      <VoiceTextArea
+        id={`walk-answer-${stage}`}
+        rows={3}
+        maxLength={500}
+        value={text}
+        onValueChange={(value) => {
+          setText(value);
+          setSaved(false);
+        }}
+        placeholder="Можно записать мысль или просто идти дальше"
+      />
+      <button disabled={mutation.busy || !text.trim() || text.trim() === answer?.content}>
+        Сохранить ответ
+      </button>
+      {mutation.error && <p role="alert">{mutation.error}</p>}
+      {saved && <p role="status">Ответ сохранён</p>}
+    </form>
   );
 }

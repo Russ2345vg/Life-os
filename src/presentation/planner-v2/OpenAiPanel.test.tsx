@@ -7,7 +7,7 @@ describe('OpenAI panel', () => {
   it('explains the data boundary and provides a labelled bounded input', () => {
     const html = renderToStaticMarkup(
       createElement(OpenAiPanel, {
-        service: { available: true, ask: vi.fn() },
+        service: { available: true, ask: vi.fn(), askWithContext: vi.fn() },
       }),
     );
     expect(html).toContain('Только текст этого вопроса');
@@ -18,7 +18,7 @@ describe('OpenAI panel', () => {
   it('shows unavailable state without a submit button', () => {
     const html = renderToStaticMarkup(
       createElement(OpenAiPanel, {
-        service: { available: false, ask: vi.fn() },
+        service: { available: false, ask: vi.fn(), askWithContext: vi.fn() },
       }),
     );
     expect(html).toContain('ещё не настроено');

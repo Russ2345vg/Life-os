@@ -6,6 +6,7 @@ import type {
   SyncApplication,
 } from '../../application';
 import type { AiAssistant } from '../../application/ai/AiAssistant';
+import type { ReadAiContext } from '../../application/ai/AiContext';
 import type { BalanceServices } from '../../application/balance/BalanceServices';
 import type { GetAnalyticsOverview } from '../../application/analytics/GetAnalyticsOverview';
 import type { SetLifeActionTime } from '../../application/commands/SetLifeActionTime';
@@ -20,6 +21,7 @@ import type { DayDate } from '../../domain';
 /** The application surface consumed by the current LifeOS workspace. */
 export interface LifeOsApplication extends PlannerServices {
   readonly aiAssistant: AiAssistant;
+  readonly aiContext: ReadAiContext;
   readonly analytics: GetAnalyticsOverview;
   readonly workSessions: WorkSessions;
   readonly timeCapacity: TimeCapacityService;

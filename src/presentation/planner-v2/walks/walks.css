@@ -314,6 +314,28 @@
   font-size: var(--planner-type-meta);
   margin: var(--space-3) 0 0;
 }
+.walk-session.is-reflection .walk-clock {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+  text-align: left;
+  padding: var(--space-4) 0;
+}
+.walk-session.is-reflection .walk-clock > div {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  font-size: clamp(2.5rem, 4vw, 3.5rem);
+  margin: 0;
+}
+.walk-session.is-reflection .walk-clock p {
+  grid-column: 1;
+  grid-row: 2;
+  margin: 0;
+}
+.walk-session.is-reflection .walk-session-hint {
+  margin-bottom: var(--space-2);
+}
 .walk-session-actions {
   display: grid;
   grid-template-columns: 1fr 1.6fr;
@@ -330,6 +352,42 @@
 .walk-guidance {
   border-top: 1px solid var(--border-soft);
   padding-top: var(--space-3);
+}
+.walk-reflection-guide {
+  display: grid;
+  gap: var(--space-4);
+  padding-top: var(--space-6);
+}
+.walk-reflection-guide h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--planner-type-item);
+  line-height: 1.4;
+}
+.walk-reflection-guide .walk-reflection-topic {
+  margin: 0;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.walk-reflection-guide .walk-form label {
+  display: block;
+  margin-bottom: var(--space-2);
+}
+.walk-guidance-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.walk-reflection-summary {
+  padding-block: var(--space-3);
+  border-block: 1px solid var(--border-soft);
+}
+.walk-reflection-summary p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.walk-reflection-summary strong {
+  color: var(--text-primary);
 }
 .walk-guidance summary,
 .walk-rating summary {
@@ -574,6 +632,10 @@
   }
 }
 @media (max-width: 760px) {
+  .walk-guidance-actions button,
+  .walk-reflection-guide .walk-form button {
+    width: 100%;
+  }
   .planner-walks .planner-page-heading {
     align-items: start;
     margin-bottom: var(--space-4);

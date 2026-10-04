@@ -64,6 +64,8 @@ import { PlannerSheet } from './PlannerSheet';
 import './planner-master.css';
 import { AccountSyncPage } from './AccountSyncPage';
 import { OpenAiPanel } from './OpenAiPanel';
+import { ContextualAiAssistant } from './ContextualAiAssistant';
+import { aiScopeForRoute } from './aiScopeForRoute';
 import {
   selectSleepTodayEntry,
   type SleepTodayEntry,
@@ -246,6 +248,10 @@ function PlannerWorkspaceContent({
   const routeGeneration = useRef(0);
   const mainContent = useRef<HTMLElement>(null);
   const routeKey = buildPlannerRoute(route);
+  const aiScope = useMemo(
+    () => aiScopeForRoute(route, currentDate.toString()),
+    [route, currentDate],
+  );
   const validReturnTarget = returnToQuickAccess?.source === routeKey ? returnToQuickAccess : null;
   if (returnToQuickAccess && !validReturnTarget) setReturnToQuickAccess(null);
   const previousPanelId = useRef(actionPanelId);
@@ -1194,6 +1200,8 @@ function PlannerWorkspaceContent({
             ) : route.view === 'sleep' ? (
               <SleepPreparationPage
                 service={services.sleepSchedule}
+                observationService={services.sleepObservations}
+                alarmObservations={services.sleepAlarmObservations}
                 plannerServices={services}
                 calendarDate={currentDate.toString()}
                 onBack={() => navigate({ view: 'today' })}
@@ -1531,6 +1539,20 @@ function PlannerWorkspaceContent({
                   />
                 </PlannerSheet>
               </>
+            )}
+            {route.view !== 'account' && services.aiAssistant && services.aiContext && (
+              <ContextualAiAssistant
+                scopeKey={routeKey}
+                service={services.aiAssistant}
+                reader={services.aiContext}
+                scope={aiScope}
+                onNavigate={navigate}
+                onCapture={async (title, note) => {
+                  await services.plannerInbox.capture({ title, note });
+                  await load();
+                  quickAccess?.changed();
+                }}
+              />
             )}
             {guidanceOpen && route.view === 'today' && (
               <PlannerSheet title="Шаг к цели" onClose={() => closeGuidance()} lockScroll>

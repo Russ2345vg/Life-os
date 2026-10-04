@@ -46,7 +46,7 @@ interface MutationCaptureConfiguration {
 }
 
 export const LIFE_OS_DATABASE_NAME = 'lifeos';
-export const LIFE_OS_DATABASE_VERSION = 31;
+export const LIFE_OS_DATABASE_VERSION = 32;
 
 export const LIFE_OS_DOMAIN_STORE = {
   directionIndicators: 'directionIndicators',
@@ -85,6 +85,7 @@ export const LIFE_OS_DOMAIN_STORE = {
   focusPeriods: 'focusPeriods',
   taskScenarios: 'taskScenarios',
   sleepSchedules: 'sleepSchedules',
+  sleepObservations: 'sleepObservations',
   timeCapacity: 'timeCapacity',
 } as const;
 
@@ -307,6 +308,7 @@ export class LifeOsIndexedDb {
           if (oldVersion < 29) createVersionTwentyNineSchema(request.result);
           if (oldVersion < 30) createVersionThirtySchema(request.result);
           if (oldVersion < 31) createVersionThirtyOneSchema(request.result);
+          if (oldVersion < 32) createVersionThirtyTwoSchema(request.result);
           if (oldVersion < 22 && request.transaction)
             upgradeLegacyProjects(request.result, request.transaction);
         } catch (error: unknown) {
@@ -609,6 +611,13 @@ function createVersionThirtyOneSchema(database: IDBDatabase): void {
   if (database.objectStoreNames.contains(LIFE_OS_STORE.memoryEvents)) return;
   const store = database.createObjectStore(LIFE_OS_STORE.memoryEvents, { keyPath: 'id' });
   store.createIndex('byOccurrence', ['occurredOn', 'createdAt', 'id'], { unique: true });
+}
+
+function createVersionThirtyTwoSchema(database: IDBDatabase): void {
+  if (database.objectStoreNames.contains(LIFE_OS_STORE.sleepObservations)) return;
+  const store = database.createObjectStore(LIFE_OS_STORE.sleepObservations, { keyPath: 'id' });
+  store.createIndex('byCycleDate', 'cycleDate', { unique: true });
+  store.createIndex('byUpdatedAt', 'updatedAt', { unique: false });
 }
 
 function createVersionTwentyOneSchema(transaction: IDBTransaction | null): void {

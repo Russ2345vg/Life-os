@@ -11,6 +11,7 @@ import {
   GoalRecordMapper,
   LifeActionRecordMapper,
   MemoryEventRecordMapper,
+  SleepObservationRecordMapper,
   SphereRecordMapper,
   WalkRecordMapper,
 } from './mappers';
@@ -30,6 +31,7 @@ const stores = [
   LIFE_OS_STORE.walks,
   LIFE_OS_STORE.memoryEvents,
   LIFE_OS_STORE.sleepSchedules,
+  LIFE_OS_STORE.sleepObservations,
   LIFE_OS_STORE.spheres,
   LIFE_OS_STORE.directions,
 ] as const;
@@ -64,6 +66,7 @@ export class IndexedDbAnalyticsSnapshotReader implements AnalyticsSnapshotReader
       walks,
       memory,
       sleep,
+      sleepObservations,
       spheres,
       directions,
     ] = records;
@@ -81,6 +84,7 @@ export class IndexedDbAnalyticsSnapshotReader implements AnalyticsSnapshotReader
       walks: walks!.map(WalkRecordMapper.fromRecord),
       memory: memory!.map(MemoryEventRecordMapper.fromRecord),
       sleep: sleep!.length ? SleepScheduleRecordMapper.fromRecord(sleep![0]) : null,
+      sleepObservations: sleepObservations!.map(SleepObservationRecordMapper.fromRecord),
       spheres: spheres!.map(SphereRecordMapper.fromRecord),
       directions: directions!.map(DirectionRecordMapper.fromRecord),
     };

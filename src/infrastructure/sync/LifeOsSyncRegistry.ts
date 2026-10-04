@@ -182,6 +182,12 @@ export const LIFE_OS_SYNC_REGISTRY = Object.freeze([
   registration('sleep_schedule', LIFE_OS_STORE.sleepSchedules, 'IndexedDbSleepScheduleRepository', {
     idSource: 'fixed_or_crypto_uuid',
   }),
+  registration(
+    'sleep_observation',
+    LIFE_OS_STORE.sleepObservations,
+    'IndexedDbSleepObservationRepository',
+    { idSource: 'deterministic_period_id' },
+  ),
   registration('goal', LIFE_OS_STORE.goals, 'IndexedDbGoalRepository', {
     deletionMode: 'archive',
     dependencies: ['direction', 'sphere'],

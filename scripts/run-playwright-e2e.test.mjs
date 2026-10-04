@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { get } from 'node:http';
 import { rmSync } from 'node:fs';
 import { createConnection, createServer as createTcpServer } from 'node:net';
+import { join } from 'node:path';
 import process from 'node:process';
 import { clearTimeout, setTimeout } from 'node:timers';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -13,6 +14,39 @@ import {
   runManagedE2e,
   validatePlaywrightArguments,
 } from './test-infrastructure/e2e-lifecycle.mjs';
+import { buildShardPlans, planE2eRun } from './test-infrastructure/e2e-shards.mjs';
+
+describe('E2E shard isolation', () => {
+  test('assigns separate ports and progress files to two shards', () => {
+    expect(planE2eRun([])).toEqual({ port: 4173, shardIndex: null });
+    expect(planE2eRun(['--shard=1/2'])).toEqual({ port: 4173, shardIndex: 1 });
+    expect(planE2eRun(['--shard=2/2'])).toEqual({ port: 4174, shardIndex: 2 });
+  });
+
+  test.each(['--shard=0/2', '--shard=1/3', '--shard=3/2', '--shard=bad'])(
+    'rejects unsupported shard %s before starting Vite',
+    (argument) => expect(() => planE2eRun([argument])).toThrow(/two shards/u),
+  );
+
+  test('plans both complete shards with distinct artifact paths', () => {
+    expect(buildShardPlans('D:/run', ['tests/e2e/workflow.spec.ts'])).toEqual([
+      {
+        index: 1,
+        port: 4173,
+        args: ['--shard=1/2', 'tests/e2e/workflow.spec.ts'],
+        blobOutputFile: join('D:/run', 'shard-1.zip'),
+      },
+      {
+        index: 2,
+        port: 4174,
+        args: ['--shard=2/2', 'tests/e2e/workflow.spec.ts'],
+        blobOutputFile: join('D:/run', 'shard-2.zip'),
+      },
+    ]);
+    expect(() => buildShardPlans('D:/run', ['--shard=1/2'])).toThrow(/shard option/u);
+    expect(() => buildShardPlans('D:/run', ['--list'])).toThrow(/test:e2e:list/u);
+  });
+});
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const exitFixturePath = fileURLToPath(

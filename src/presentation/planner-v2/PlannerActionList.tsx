@@ -25,6 +25,7 @@ import { addDays } from '../../domain/planner/PlanningPeriod';
 import { PlannerActionTimeSheet, type SetActionTime } from './PlannerActionTimeSheet';
 import { clockTime, durationLabel } from './timePresentation';
 import { PlannerDisclosureCard } from './PlannerDisclosureCard';
+import { AppIcon } from '../components/AppIcon';
 
 export type { PlannerActionOperations } from './plannerActionOperations';
 export function PlannerActionList({
@@ -548,14 +549,18 @@ export function PlannerActionList({
         {activeGroups.map(
           (group) =>
             group.actions.length > 0 && (
-              <section
+              <details
                 className="planner-action-group"
                 key={group.key}
                 aria-labelledby={`planner-action-group-${group.key}`}
+                open
               >
-                <h2 id={`planner-action-group-${group.key}`}>
-                  {group.label} <span>{group.actions.length}</span>
-                </h2>
+                <summary>
+                  <h2 id={`planner-action-group-${group.key}`}>
+                    <AppIcon name="chevron-down" />
+                    {group.label} <span>{group.actions.length}</span>
+                  </h2>
+                </summary>
                 <ul className="planner-list">
                   {group.actions.map((action) => (
                     <li key={action.id.toString()}>
@@ -571,7 +576,7 @@ export function PlannerActionList({
                     </li>
                   ))}
                 </ul>
-              </section>
+              </details>
             ),
         )}
         {completedActions.length > 0 && (

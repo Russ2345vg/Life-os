@@ -396,6 +396,20 @@ export function structuredSyncFixtures(): Readonly<
         ),
       ),
     },
+    sleep_observation: {
+      schemaVersion: 1,
+      id: 'sleep-observation:2026-09-07',
+      cycleDate: '2026-09-07',
+      nightCycleId: 'sync04-evening_cycle',
+      wentToBedAt: '2026-09-07T14:00:00.000Z',
+      wokeAt: '2026-09-07T23:00:00.000Z',
+      wakeSource: 'MANUAL',
+      wakeOccurrenceId: null,
+      timeZone: 'Asia/Chita',
+      confirmedAt: '2026-09-07T23:05:00.000Z',
+      createdAt: '2026-09-07T23:05:00.000Z',
+      updatedAt: '2026-09-07T23:05:00.000Z',
+    },
     exercise_definition: {
       ...mappers.ExerciseDefinitionRecordMapper.toRecord(
         ExerciseDefinition.create({

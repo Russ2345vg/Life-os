@@ -32,6 +32,7 @@ export type SyncEntityType =
   | 'morning_cycle'
   | 'monthly_direction_focus'
   | 'sleep_schedule'
+  | 'sleep_observation'
   | 'goal'
   | 'inbox_idea'
   | 'focus_period'
@@ -72,6 +73,7 @@ export const SYNC_ENTITY_TYPES: readonly SyncEntityType[] = Object.freeze([
   'morning_cycle',
   'monthly_direction_focus',
   'sleep_schedule',
+  'sleep_observation',
   'goal',
   'inbox_idea',
   'focus_period',

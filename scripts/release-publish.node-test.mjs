@@ -13,7 +13,84 @@ import {
   selectAndroidApk,
   validateReleaseVersion,
   selectWindowsInstaller,
+  parseReleaseArguments,
+  writePreparedRelease,
+  loadPreparedRelease,
 } from './release-publish.mjs';
+
+test('requires an explicit release action so publish cannot start a build', () => {
+  assert.deepEqual(parseReleaseArguments(['publish', '1.0.30', '--owner', 'lifeos-owner']), {
+    action: 'publish',
+    version: '1.0.30',
+    owner: 'lifeos-owner',
+    notes: '',
+  });
+  assert.throws(
+    () => parseReleaseArguments(['1.0.30', '--owner', 'lifeos-owner']),
+    /prepare\|publish/,
+  );
+  assert.throws(() => parseReleaseArguments(['prepare', '1.0.30', '--prepare-only']), /Unknown/);
+});
+
+test('publishes only complete prepared assets from the matching source commit', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'lifeos-prepared-release-'));
+  const version = '1.0.30';
+  const assets = [
+    `LifeOS_${version}_x64-setup.exe`,
+    `LifeOS_${version}_x64-setup.exe.sig`,
+    `LifeOS_${version}_android_release.apk`,
+    'latest.json',
+    'android-latest.json',
+    'SHA256SUMS.txt',
+  ];
+  try {
+    for (const name of assets) writeFileSync(join(directory, name), `content:${name}`);
+    writePreparedRelease({
+      directory,
+      owner: 'lifeos-owner',
+      version,
+      notes: 'Release notes',
+      commit: 'abc123',
+      assets,
+    });
+    const prepared = loadPreparedRelease({
+      directory,
+      owner: 'lifeos-owner',
+      version,
+      commit: 'abc123',
+    });
+    assert.deepEqual(
+      prepared.assets.map((path) => path.slice(directory.length + 1)),
+      assets,
+    );
+    assert.equal(prepared.notes, 'Release notes');
+    assert.throws(
+      () => loadPreparedRelease({ directory, owner: 'other-owner', version, commit: 'abc123' }),
+      /owner mismatch/,
+    );
+    assert.throws(
+      () =>
+        loadPreparedRelease({
+          directory,
+          owner: 'lifeos-owner',
+          version: '1.0.31',
+          commit: 'abc123',
+        }),
+      /version mismatch/,
+    );
+    assert.throws(
+      () => loadPreparedRelease({ directory, owner: 'lifeos-owner', version, commit: 'different' }),
+      /commit mismatch/,
+    );
+    writeFileSync(join(directory, assets[0]), 'tampered');
+    assert.throws(
+      () => loadPreparedRelease({ directory, owner: 'lifeos-owner', version, commit: 'abc123' }),
+      /changed/,
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
 
 test('preserves the mixed-case Windows Path value', () => {
   assert.equal(

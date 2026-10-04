@@ -5,6 +5,10 @@ import type { Clock } from '../ports/Clock';
 import type { IdGenerator } from '../ports/IdGenerator';
 import { DomainError } from '../../shared/errors/DomainError';
 import { assertCurrent, walkRequest } from './WalkCommands';
+import {
+  isWalkReflectionStageForTemplate,
+  type WalkReflectionStage,
+} from '../../domain/walk/WalkReflectionTemplate';
 
 export class WalkCaptureCommands {
   public constructor(
@@ -16,6 +20,7 @@ export class WalkCaptureCommands {
     walkId: string;
     requestId: string;
     content: string;
+    promptStage?: WalkReflectionStage | null;
   }): Promise<WalkCapture> {
     return this.repository.runCapture(walkRequest('capture', input), async (tx) => {
       const walk = await tx.getWalk(input.walkId);
@@ -25,12 +30,22 @@ export class WalkCaptureCommands {
           'Новую мысль можно сохранить во время активной прогулки.',
         );
       const now = this.clock.now();
+      if (
+        input.promptStage &&
+        (walk.reflectionTemplate === null ||
+          !isWalkReflectionStageForTemplate(walk.reflectionTemplate, input.promptStage))
+      )
+        throw new DomainError(
+          'walk_capture.invalid_prompt',
+          'Вопрос не относится к этой прогулке.',
+        );
       const capture = WalkCapture.create({
         id: this.ids.generate(),
         walkId: EntityId.create(input.walkId),
         content: input.content,
         capturedAt: now,
         walkElapsedMs: walk.elapsedDurationMilliseconds(now)!,
+        promptStage: input.promptStage ?? null,
       });
       await tx.saveCapture(capture, null);
       return capture;

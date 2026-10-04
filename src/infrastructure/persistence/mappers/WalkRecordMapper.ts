@@ -78,6 +78,7 @@ export class WalkRecordMapper {
       endedAt: walk.endedAt?.toISOString() ?? null,
       timerTargetMinutes: walk.timerTargetMinutes,
       reflectionQuestion: walk.reflectionQuestion,
+      ...(walk.reflectionNotes === null ? {} : { reflectionNotes: walk.reflectionNotes }),
       result: walk.result,
       photo: walk.photo,
       createdAt: walk.createdAt.toISOString(),
@@ -174,6 +175,9 @@ export class WalkRecordMapper {
       reflectionQuestion: Object.hasOwn(record, 'reflectionQuestion')
         ? readNullableString(record, 'reflectionQuestion')
         : null,
+      reflectionNotes: Object.hasOwn(record, 'reflectionNotes')
+        ? readReflectionNotes(record.reflectionNotes)
+        : null,
       result: Object.hasOwn(record, 'result') ? readNullableString(record, 'result') : null,
       photo: Object.hasOwn(record, 'photo') ? readPhoto(record.photo) : null,
       createdAt: readIsoDate(record, 'createdAt'),
@@ -181,6 +185,18 @@ export class WalkRecordMapper {
       version: readNumber(record, 'version'),
     });
   }
+}
+
+function readReflectionNotes(value: unknown) {
+  if (value === null) return null;
+  if (typeof value !== 'object' || Array.isArray(value))
+    throw invalidRecord('Поле reflectionNotes должно содержать итог размышления или null.');
+  const notes = value as UnknownRecord;
+  return {
+    understood: readNullableString(notes, 'understood'),
+    open: readNullableString(notes, 'open'),
+    next: readNullableString(notes, 'next'),
+  };
 }
 
 function toLinkedEntityRecord(entity: WalkLinkedEntity | null) {

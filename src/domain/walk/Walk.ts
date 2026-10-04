@@ -25,7 +25,7 @@ import {
 import { isWalkStatus, WALK_STATUS, type WalkStatus } from './WalkStatus';
 import { isWalkType, type WalkType } from './WalkType';
 import { isWalkStateSnapshot, type WalkStateSnapshot } from './WalkStateSnapshot';
-import type { WalkReflectionData } from './WalkReflection';
+import type { WalkReflectionData, WalkReflectionNotes } from './WalkReflection';
 import {
   getWalkReflectionStages,
   isWalkReflectionStage,
@@ -73,6 +73,7 @@ export interface WalkRehydrationData {
   readonly endedAt: Date | null;
   readonly timerTargetMinutes: number | null;
   readonly reflectionQuestion: string | null;
+  readonly reflectionNotes?: WalkReflectionNotes | null;
   readonly result: string | null;
   readonly photo: WalkPhoto | null;
   readonly createdAt: Date;
@@ -128,6 +129,7 @@ export class Walk extends Entity {
   public readonly endedAt: Date | null;
   public readonly timerTargetMinutes: number | null;
   public readonly reflectionQuestion: string | null;
+  public readonly reflectionNotes: WalkReflectionNotes | null;
   public readonly result: string | null;
   public readonly photo: WalkPhoto | null;
   public readonly createdAt: Date;
@@ -158,6 +160,7 @@ export class Walk extends Entity {
     this.endedAt = copyOptionalDate(data.endedAt);
     this.timerTargetMinutes = data.timerTargetMinutes;
     this.reflectionQuestion = data.reflectionQuestion;
+    this.reflectionNotes = data.reflectionNotes ? { ...data.reflectionNotes } : null;
     this.result = data.result;
     this.photo = copyOptionalPhoto(data.photo);
     this.createdAt = new Date(data.createdAt.getTime());
@@ -190,6 +193,7 @@ export class Walk extends Entity {
       endedAt: null,
       timerTargetMinutes: null,
       reflectionQuestion: null,
+      reflectionNotes: null,
       result: null,
       photo: null,
       createdAt: data.now,
@@ -373,6 +377,8 @@ export class Walk extends Entity {
     return new Walk({
       ...this.toRehydrationData(),
       result: normalizeResult(data.result),
+      reflectionNotes:
+        data.notes === undefined ? this.reflectionNotes : normalizeReflectionNotes(data.notes),
       afterState: data.afterState,
       impact: data.impact,
       updatedAt: data.updatedAt,
@@ -585,6 +591,7 @@ export class Walk extends Entity {
       endedAt: this.endedAt,
       timerTargetMinutes: this.timerTargetMinutes,
       reflectionQuestion: this.reflectionQuestion,
+      reflectionNotes: this.reflectionNotes,
       result: this.result,
       photo: this.photo,
       createdAt: this.createdAt,
@@ -595,6 +602,22 @@ export class Walk extends Entity {
 }
 
 function assertWalkInvariants(data: WalkRehydrationData): void {
+  if (data.reflectionNotes != null && data.intent !== WALK_INTENT.reflection)
+    throw new DomainError(
+      'walk.invalid_reflection_notes',
+      'Итог размышления доступен только для прогулки с размышлением.',
+    );
+  if (data.reflectionNotes !== undefined && data.reflectionNotes !== null) {
+    const normalized = normalizeReflectionNotes(data.reflectionNotes);
+    if (
+      normalized === null ||
+      Object.keys(data.reflectionNotes).length !== 3 ||
+      (['understood', 'open', 'next'] as const).some(
+        (key) => normalized[key] !== data.reflectionNotes![key],
+      )
+    )
+      throw new DomainError('walk.invalid_reflection_notes', 'Итог размышления указан неверно.');
+  }
   if (data.deletedAt != null) {
     assertValidDate(data.deletedAt, 'walk.invalid_deleted_at');
     if (
@@ -693,6 +716,7 @@ function assertWalkInvariants(data: WalkRehydrationData): void {
       data.endedAt !== null ||
       data.timerTargetMinutes !== null ||
       data.reflectionQuestion !== null ||
+      data.reflectionNotes != null ||
       data.result !== null ||
       data.photo !== null
     ) {
@@ -736,7 +760,13 @@ function assertWalkInvariants(data: WalkRehydrationData): void {
   }
 
   if (data.status === WALK_STATUS.running) {
-    if (pausedAt !== null || data.endedAt !== null || data.result !== null || data.photo !== null) {
+    if (
+      pausedAt !== null ||
+      data.endedAt !== null ||
+      data.result !== null ||
+      data.photo !== null ||
+      data.reflectionNotes != null
+    ) {
       throw new DomainError(
         'walk.invalid_running_result',
         'Идущая прогулка не должна содержать итог завершения.',
@@ -746,7 +776,13 @@ function assertWalkInvariants(data: WalkRehydrationData): void {
   }
 
   if (data.status === WALK_STATUS.paused) {
-    if (pausedAt === null || data.endedAt !== null || data.result !== null || data.photo !== null) {
+    if (
+      pausedAt === null ||
+      data.endedAt !== null ||
+      data.result !== null ||
+      data.photo !== null ||
+      data.reflectionNotes != null
+    ) {
       throw new DomainError(
         'walk.invalid_paused_state',
         'Пауза прогулки должна содержать время паузы без данных завершения.',
@@ -787,7 +823,10 @@ function assertWalkInvariants(data: WalkRehydrationData): void {
       'Интервал паузы не может завершиться после прогулки.',
     );
   }
-  if (data.status === WALK_STATUS.abandoned && (data.result !== null || data.photo !== null)) {
+  if (
+    data.status === WALK_STATUS.abandoned &&
+    (data.result !== null || data.photo !== null || data.reflectionNotes != null)
+  ) {
     throw new DomainError(
       'walk.abandoned_has_result',
       'Прерванная прогулка не должна содержать итог.',
@@ -821,6 +860,24 @@ function normalizeResult(value: string | undefined | null): string | null {
     );
   }
   return normalized;
+}
+
+function normalizeReflectionNotes(value: WalkReflectionNotes | null): WalkReflectionNotes | null {
+  if (value === null) return null;
+  const normalized = (['understood', 'open', 'next'] as const).map((key) => {
+    const field = value[key];
+    if (field !== null && typeof field !== 'string')
+      throw new DomainError('walk.invalid_reflection_notes', 'Итог размышления указан неверно.');
+    const text = field?.trim() ?? null;
+    if (text !== null && text.length > 500)
+      throw new DomainError(
+        'walk.invalid_reflection_notes',
+        'Каждый ответ должен быть не длиннее 500 символов.',
+      );
+    return text || null;
+  });
+  if (normalized.every((field) => field === null)) return null;
+  return { understood: normalized[0]!, open: normalized[1]!, next: normalized[2]! };
 }
 
 function assertOptionalPhoto(photo: WalkPhoto | null): void {

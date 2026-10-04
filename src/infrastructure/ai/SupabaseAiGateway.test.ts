@@ -19,6 +19,25 @@ describe('Supabase AI gateway', () => {
     await expect(gateway.ask('Вопрос', signal)).resolves.toBe('Ответ');
     expect(invoke).toHaveBeenCalledWith('lifeos-openai', { body: { question: 'Вопрос' }, signal });
   });
+  it('sends contextual data separately from the question', async () => {
+    const { invoke, gateway } = setup();
+    invoke.mockResolvedValue({ data: { answer: 'Ответ' }, error: null });
+    const signal = new AbortController().signal;
+    const context = {
+      version: 1 as const,
+      section: 'goals' as const,
+      date: '2026-10-03',
+      period: null,
+      facts: [],
+      sources: [],
+      omittedCount: 0,
+    };
+    await gateway.ask('Вопрос', signal, context);
+    expect(invoke).toHaveBeenCalledWith('lifeos-openai', {
+      body: { question: 'Вопрос', context },
+      signal,
+    });
+  });
   it.each([null, { answer: '' }, { answer: 1 }, { answer: 'x'.repeat(12001) }])(
     'rejects bad output',
     async (data) => {

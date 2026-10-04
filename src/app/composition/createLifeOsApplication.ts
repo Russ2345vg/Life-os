@@ -1,5 +1,6 @@
 import { BalanceIndicators } from '../../application/balance/BalanceIndicators';
 import { GetAnalyticsOverview } from '../../application/analytics/GetAnalyticsOverview';
+import { ReadAiContext } from '../../application/ai/AiContext';
 import { IndexedDbAnalyticsSnapshotReader } from '../../infrastructure/persistence/IndexedDbAnalyticsSnapshotReader';
 import { GetLifeBalance } from '../../application/balance/GetLifeBalance';
 import { ArchiveGoal } from '../../application/commands/ArchiveGoal';
@@ -48,6 +49,8 @@ import { GetGoals } from '../../application/queries/GetGoals';
 import { GetPlannerToday } from '../../application/queries/GetPlannerToday';
 import { GetSpheres } from '../../application/queries/GetSpheres';
 import { SleepScheduleService } from '../../application/sleep/SleepScheduleService';
+import { SleepObservationService } from '../../application/sleep/SleepObservationService';
+import { SleepAlarmObservationCoordinator } from '../../application/sleep/SleepAlarmObservationCoordinator';
 import { ColdShowerService } from '../../application/sleep/ColdShowerService';
 import { DeletePilotDirection } from '../../application/sync/pilot/DeletePilotDirection';
 import { DeletePilotGoal } from '../../application/sync/pilot/DeletePilotGoal';
@@ -72,6 +75,7 @@ import { IndexedDbPlannerRepository } from '../../infrastructure/persistence/Ind
 import { IndexedDbPlanningRepository } from '../../infrastructure/persistence/IndexedDbPlanningRepository';
 import { IndexedDbProjectRepository } from '../../infrastructure/persistence/IndexedDbProjectRepository';
 import { IndexedDbSleepScheduleRepository } from '../../infrastructure/persistence/IndexedDbSleepScheduleRepository';
+import { IndexedDbSleepObservationRepository } from '../../infrastructure/persistence/IndexedDbSleepObservationRepository';
 import { IndexedDbSphereRepository } from '../../infrastructure/persistence/IndexedDbSphereRepository';
 import { LifeOsIndexedDb } from '../../infrastructure/persistence/indexed-db/LifeOsIndexedDb';
 import { MeaningfulLocalSettingsSync } from '../../infrastructure/sync/MeaningfulLocalSettingsSync';
@@ -141,6 +145,7 @@ export async function createLifeOsApplication(
     const projectRepository = new IndexedDbProjectRepository(database, mutationRecorder);
     const goalRepository = new IndexedDbGoalRepository(database, mutationRecorder);
     const sleepScheduleRepository = new IndexedDbSleepScheduleRepository(database);
+    const sleepObservationRepository = new IndexedDbSleepObservationRepository(database);
 
     let meaningfulSettingsSync: MeaningfulLocalSettingsSync | null = null;
     const localSettings = new BrowserLocalSettingsStore(undefined, () => {
@@ -265,7 +270,16 @@ export async function createLifeOsApplication(
       idGenerator,
       new TauriAndroidWakeAlarmGateway(),
     );
-    void sleepSchedule.syncAlarm().catch(() => undefined);
+    const sleepObservations = new SleepObservationService(
+      sleepObservationRepository,
+      sleepScheduleRepository,
+      clock,
+    );
+    const sleepAlarmObservations = new SleepAlarmObservationCoordinator(
+      sleepSchedule,
+      sleepObservations,
+    );
+    void sleepAlarmObservations.sync().catch(() => undefined);
 
     const getGoals = new GetGoals(goalRepository);
     const getDirections = new GetDirections(directionRepository);
@@ -285,10 +299,11 @@ export async function createLifeOsApplication(
 
     const walkRepository = new IndexedDbWalkRepository(database);
     const walkCommands = new WalkCommands(walkRepository, clock, currentDateProvider, idGenerator);
+    const analyticsReader = new IndexedDbAnalyticsSnapshotReader(database);
+    const analytics = new GetAnalyticsOverview(analyticsReader, () => clock.now());
     const application: LifeOsApplication = {
-      analytics: new GetAnalyticsOverview(new IndexedDbAnalyticsSnapshotReader(database), () =>
-        clock.now(),
-      ),
+      analytics,
+      aiContext: new ReadAiContext(analyticsReader, plannerInbox, analytics),
       walks: {
         preferences: new WalkPreferences(
           new IndexedDbWalkPreferencesStore(database, () => {
@@ -372,6 +387,8 @@ export async function createLifeOsApplication(
         clock,
       ),
       sleepSchedule,
+      sleepObservations,
+      sleepAlarmObservations,
       coldShower: new ColdShowerService(sleepScheduleRepository, clock, currentDateProvider),
       createGoal: new CreateGoal(goalRepository, directionRepository, clock, idGenerator),
       updateGoal: new UpdateGoal(goalRepository, directionRepository, clock, decisionRepository),

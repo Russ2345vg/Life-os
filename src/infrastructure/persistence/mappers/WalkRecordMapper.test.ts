@@ -130,6 +130,36 @@ describe('WalkRecordMapper', () => {
     });
   });
 
+  it('preserves three optional reflection outcomes without requiring a general result', () => {
+    const walk = Walk.create({
+      id: EntityId.create('walk-notes'),
+      date: DayDate.create('2026-10-03'),
+      type: WALK_TYPE.reflection,
+      intent: WALK_INTENT.reflection,
+      now: new Date('2026-10-03T08:00:00Z'),
+    })
+      .start({ mode: WALK_MODE.stopwatch, startedAt: new Date('2026-10-03T08:00:00Z') })
+      .complete({ endedAt: new Date('2026-10-03T08:20:00Z') })
+      .reviseReflection({
+        result: null,
+        afterState: null,
+        impact: null,
+        notes: { understood: 'Нужен первый шаг', open: 'Сроки', next: 'Написать план' },
+        updatedAt: new Date('2026-10-03T08:21:00Z'),
+      });
+    const record = WalkRecordMapper.toRecord(walk);
+    expect(record.reflectionNotes).toEqual({
+      understood: 'Нужен первый шаг',
+      open: 'Сроки',
+      next: 'Написать план',
+    });
+    expect(WalkRecordMapper.fromRecord(record).reflectionNotes).toEqual(walk.reflectionNotes);
+    expect(() =>
+      WalkRecordMapper.fromRecord({ ...record, reflectionNotes: { understood: 1 } }),
+    ).toThrow();
+    expect(() => WalkRecordMapper.fromRecord({ ...record, intent: 'free' })).toThrow();
+  });
+
   it('reads legacy reflection records without template fields as null', () => {
     const restored = WalkRecordMapper.fromRecord({
       schemaVersion: 1,

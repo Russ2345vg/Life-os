@@ -1,9 +1,21 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const baseURL = 'http://127.0.0.1:4173';
+declare const process: {
+  readonly env: {
+    readonly LIFEOS_E2E_PORT?: string;
+    readonly LIFEOS_E2E_SHARD_INDEX?: string;
+    readonly LIFEOS_E2E_BLOB_OUTPUT_FILE?: string;
+  };
+};
+
+const port = process.env.LIFEOS_E2E_PORT ?? '4173';
+const baseURL = `http://127.0.0.1:${port}`;
+const shardIndex = process.env.LIFEOS_E2E_SHARD_INDEX;
+const blobOutputFile = process.env.LIFEOS_E2E_BLOB_OUTPUT_FILE;
 
 export default defineConfig({
   testDir: './tests/e2e',
+  outputDir: shardIndex ? `test-results/shard-${shardIndex}` : 'test-results',
   fullyParallel: false,
   forbidOnly: true,
   retries: 0,
@@ -15,7 +27,17 @@ export default defineConfig({
   },
   reporter: [
     ['./scripts/test-infrastructure/progress-reporter.mjs', { heartbeatMs: 10_000 }],
-    ['html', { open: 'never', outputFolder: 'playwright-report' }],
+    blobOutputFile
+      ? ['blob', { outputFile: blobOutputFile }]
+      : [
+          'html',
+          {
+            open: 'never',
+            outputFolder: shardIndex
+              ? `playwright-report/shard-${shardIndex}`
+              : 'playwright-report',
+          },
+        ],
   ],
   use: {
     baseURL,
@@ -44,7 +66,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run dev -- --host 127.0.0.1 --port 4173 --strictPort',
+    command: `npm run dev -- --host 127.0.0.1 --port ${port} --strictPort`,
     url: baseURL,
     reuseExistingServer: false,
     timeout: 60_000,

@@ -34,6 +34,8 @@ describe('createLifeOsApplication', () => {
     expect(application.plannerFocus).toBeDefined();
     expect(application.plannerCatalog).toBeDefined();
     expect(application.sleepSchedule).toBeDefined();
+    expect(application.sleepObservations).toBeDefined();
+    expect(application.sleepAlarmObservations).toBeDefined();
     expect(application.createGoal).toBeDefined();
     expect(application.createLifeActionDraft).toBeDefined();
     expect(application.completeLifeAction).toBeDefined();

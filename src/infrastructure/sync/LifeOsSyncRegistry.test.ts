@@ -35,6 +35,7 @@ const EXPECTED_ENTITY_TYPES = [
   'routine_occurrence_execution',
   'routine_occurrence_override',
   'sleep_schedule',
+  'sleep_observation',
   'sphere',
   'tomorrow_plan',
   'user_settings',
@@ -76,6 +77,7 @@ const EXPECTED_ENTITY_STORES = {
   routine_occurrence_execution: 'routineOccurrenceExecutions',
   routine_occurrence_override: 'routineOccurrenceOverrides',
   sleep_schedule: 'sleepSchedules',
+  sleep_observation: 'sleepObservations',
   sphere: 'spheres',
   tomorrow_plan: 'tomorrowPlans',
   walk: 'walks',
@@ -110,7 +112,7 @@ describe('LIFE_OS_SYNC_REGISTRY', () => {
       LIFE_OS_SYNC_REGISTRY.filter(({ storageKind }) => storageKind === 'indexed_db').map(
         ({ storeName }) => storeName,
       ),
-    ).toHaveLength(37);
+    ).toHaveLength(38);
     expect(LIFE_OS_SYNC_REGISTRY.every(({ readiness }) => readiness === 'sync_ready')).toBe(true);
   });
 

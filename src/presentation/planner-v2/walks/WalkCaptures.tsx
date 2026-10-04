@@ -4,6 +4,7 @@ import type { WalkServices } from '../../../application/walk/WalkServices';
 import type { PlannerRoute } from '../PlannerNavigation';
 import { VoiceTextArea } from '../../voice-input/VoiceTextArea';
 import { useWalkMutation } from './useWalkState';
+import { getWalkPrompt } from '../../../application/walk/WalkGuidance';
 export function WalkCaptures({
   captures,
   services,
@@ -77,6 +78,7 @@ function Capture({
   }, [capture.walkId, services]);
   return (
     <article className="walk-saved-note">
+      {capture.promptStage && <small>Ответ на вопрос: {getWalkPrompt(capture.promptStage)}</small>}
       <p>{capture.content}</p>
       <small>
         {capture.capturedAt.toLocaleString('ru-RU')} ·{' '}
@@ -95,7 +97,7 @@ function Capture({
             setEditing(!editing);
           }}
         >
-          Изменить мысль
+          {capture.promptStage ? 'Изменить ответ' : 'Изменить мысль'}
         </button>
         {capture.resultActionId && (
           <button

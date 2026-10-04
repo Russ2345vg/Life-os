@@ -47,6 +47,7 @@ import {
 } from '../../persistence/mappers';
 import { WalkCaptureRecordMapper } from '../../persistence/mappers/WalkCaptureRecordMapper';
 import { SleepScheduleRecordMapper } from '../../persistence/mappers/SleepScheduleRecordMapper';
+import { SleepObservationRecordMapper } from '../../persistence/mappers/SleepObservationRecordMapper';
 import { MemoryEventRecordMapper } from '../../persistence/mappers/MemoryEventRecordMapper';
 import { LIFE_OS_SYNC_REGISTRY } from '../LifeOsSyncRegistry';
 import { attachmentReference } from '../../../application/sync/attachments/AttachmentContracts';
@@ -123,6 +124,18 @@ function mapped<TDomain, TRecord extends object>(
         version: receiverVersion(existing),
       }),
     references,
+  };
+}
+
+function versionlessMapped<TDomain, TRecord extends object>(
+  mapper: Mapper<TDomain, TRecord>,
+): PilotAdapterBinding {
+  const roundTrip = (value: unknown): Readonly<Record<string, unknown>> =>
+    asRecord(mapper.toRecord(mapper.fromRecord(value as TRecord)));
+  return {
+    normalize: (value) => withoutFields(roundTrip(withValidationVersion(value)), ['version']),
+    prepare: (value) => roundTrip(value),
+    references: noReferences,
   };
 }
 
@@ -388,6 +401,7 @@ const PILOT_BINDINGS: Readonly<Record<PilotEntityType, PilotAdapterBinding>> = O
     optional(record, 'directionId', 'direction'),
   ),
   sleep_schedule: mapped(SleepScheduleRecordMapper),
+  sleep_observation: versionlessMapped(SleepObservationRecordMapper),
   inbox_idea: mapped(InboxIdeaRecordMapper, (record) =>
     record.targetType === 'goal'
       ? optional(record, 'targetId', 'goal')

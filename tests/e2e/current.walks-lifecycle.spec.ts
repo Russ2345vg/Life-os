@@ -48,3 +48,60 @@ test('completion without ratings and abandoned walk both remain in history', asy
   await page.getByRole('button', { name: 'Прервать прогулку', exact: true }).click();
   await expect(page.getByText('Прогулка прервана', { exact: true })).toBeVisible();
 });
+
+test('reflection walk keeps an answer with its question and can continue the theme', async ({
+  page,
+}) => {
+  await page.goto('/#/v2/walks');
+  await page.getByRole('button', { name: 'Настроить' }).click();
+  await page.getByLabel('Намерение').selectOption('reflection');
+  await page
+    .getByRole('textbox', { name: 'Вопрос — необязательно' })
+    .fill('Почему я откладываю проект?');
+  await page.getByLabel('Подсказки').selectOption('ownQuestion');
+  await page
+    .getByLabel('Настроить прогулку')
+    .getByRole('button', { name: 'Начать прогулку' })
+    .click();
+  await expect(page.getByText('Почему этот вопрос важен для вас сейчас?')).toBeVisible();
+  await page.getByRole('textbox', { name: 'Ответ на вопрос' }).fill('Неясен первый шаг');
+  await page.getByRole('button', { name: 'Сохранить ответ' }).click();
+  await expect(page.getByText('Ответ сохранён')).toBeVisible();
+  await page.getByRole('button', { name: 'Дальше' }).click();
+  await expect(page.getByText('Что вы уже знаете, а что пока только предполагаете?')).toBeVisible();
+  await page.reload();
+  await page.getByRole('button', { name: 'К предыдущему вопросу' }).click();
+  await expect(page.getByText('Неясен первый шаг')).toBeVisible();
+  await page.getByRole('button', { name: 'Завершить прогулку' }).click();
+  await page.getByText('Добавить итог и оценку', { exact: true }).click();
+  await page.getByRole('textbox', { name: 'Что понял' }).fill('Нужен первый шаг');
+  await page.getByRole('textbox', { name: 'Что осталось открытым' }).fill('Сроки');
+  await page.getByRole('textbox', { name: 'Что хочу сделать' }).fill('Написать план');
+  await page.getByRole('button', { name: 'Сохранить итог' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Итог сохранён' })).toBeVisible();
+  await page.reload();
+  await expect(page.locator('.walk-reflection-summary').getByText('Написать план')).toBeVisible();
+  await page.getByRole('button', { name: 'Продолжить тему' }).click();
+  await expect(page.getByText('Почему я откладываю проект?')).toBeVisible();
+});
+
+test('reflection setup offers problem analysis and ready themes', async ({ page }) => {
+  await page.goto('/#/v2/walks');
+  await page.getByRole('button', { name: 'Настроить' }).click();
+  await page.getByLabel('Намерение').selectOption('reflection');
+  await expect(
+    page.getByLabel('Подсказки').getByRole('option', { name: 'Разобраться с проблемой' }),
+  ).toBeAttached();
+  await expect(
+    page.getByLabel('Подсказки').getByRole('option', { name: 'Итоги дня' }),
+  ).toBeAttached();
+  await expect(
+    page.getByLabel('Подсказки').getByRole('option', { name: 'Отношения' }),
+  ).toBeAttached();
+  await page.getByLabel('Подсказки').selectOption('problem');
+  await page
+    .getByLabel('Настроить прогулку')
+    .getByRole('button', { name: 'Начать прогулку' })
+    .click();
+  await expect(page.getByText('Что именно происходит?')).toBeVisible();
+});

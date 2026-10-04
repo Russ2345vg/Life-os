@@ -52,13 +52,15 @@ export function WalkCaptureComposer({
         {saved && <p role="status">Мысль сохранена</p>}
       </form>
       <div className="walk-notes">
-        {captures.length ? (
-          captures.map((capture) => (
-            <article key={capture.id.toString()}>
-              <small>{Math.floor(capture.walkElapsedMs / 60000)} мин от начала</small>
-              <p>{capture.content}</p>
-            </article>
-          ))
+        {captures.some((capture) => capture.promptStage === null) ? (
+          captures
+            .filter((capture) => capture.promptStage === null)
+            .map((capture) => (
+              <article key={capture.id.toString()}>
+                <small>{Math.floor(capture.walkElapsedMs / 60000)} мин от начала</small>
+                <p>{capture.content}</p>
+              </article>
+            ))
         ) : (
           <p>Здесь появятся ваши мысли. Можно ничего не записывать.</p>
         )}

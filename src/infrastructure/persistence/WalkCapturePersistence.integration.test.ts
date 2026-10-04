@@ -8,6 +8,50 @@ import { LifeOsIndexedDb } from './indexed-db/LifeOsIndexedDb';
 const databases: LifeOsIndexedDb[] = [];
 afterEach(() => databases.splice(0).forEach((db) => db.close()));
 describe('walk thoughts', () => {
+  it('keeps an answer tied to its reflection question after reopening storage', async () => {
+    const database = new LifeOsIndexedDb(new IDBFactory());
+    databases.push(database);
+    const repository = new IndexedDbWalkRepository(database);
+    const now = new Date('2026-10-01T10:00:00Z');
+    let seq = 0;
+    const ids = { generate: () => EntityId.create(`answer-${++seq}`) };
+    const walks = new WalkCommands(
+      repository,
+      { now: () => now },
+      { getCurrentDate: () => DayDate.create('2026-10-01') },
+      ids,
+    );
+    const captures = new WalkCaptureCommands(repository, { now: () => now }, ids);
+    const walk = await walks.start({
+      requestId: 'start-reflection',
+      intent: 'reflection',
+      type: 'reflection',
+      mode: 'stopwatch',
+      question: 'Почему я откладываю проект?',
+      targetMinutes: null,
+      sphereId: null,
+      beforeState: null,
+      reflectionTemplate: 'ownQuestion',
+    });
+    const answer = await captures.capture({
+      walkId: walk.id.toString(),
+      requestId: 'answer-one',
+      content: 'Мне не хватает ясности',
+      promptStage: 'whyImportant',
+    });
+    database.close();
+    const persisted = (await repository.listCaptures()).find((item) => item.id.equals(answer.id));
+    expect(persisted?.promptStage).toBe('whyImportant');
+    expect(persisted?.content).toBe('Мне не хватает ясности');
+    await expect(
+      captures.capture({
+        walkId: walk.id.toString(),
+        requestId: 'wrong-stage',
+        content: 'Другой вопрос',
+        promptStage: 'rootCause',
+      }),
+    ).rejects.toMatchObject({ code: 'walk_capture.invalid_prompt' });
+  });
   it('persists one thought per request with pause-aware elapsed time and permits later editing', async () => {
     const database = new LifeOsIndexedDb(new IDBFactory());
     databases.push(database);

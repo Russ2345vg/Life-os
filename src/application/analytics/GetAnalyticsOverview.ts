@@ -10,6 +10,7 @@ import type { WorkTimeReport, WorkTimeRow } from '../queries/GetWorkTimeReport';
 import type { AnalyticsSnapshot, AnalyticsSnapshotReader } from '../ports/AnalyticsSnapshotReader';
 import { createGoalProgressReader } from '../planner/GoalContributions';
 import { localDate } from '../planner/planningSupport';
+import { summarizeSleepObservations } from '../../domain/sleep/SleepObservation';
 
 export type AnalyticsPeriodKind = 'week' | 'month';
 export type AnalyticsTopic =
@@ -76,6 +77,11 @@ export interface AnalyticsOverview {
   readonly balance: AnalyticsSnapshot['balance'];
   readonly walks: ReturnType<typeof analyzeWalks>;
   readonly preparation: { readonly allDone: number; readonly withSkips: number };
+  readonly sleep: ReturnType<typeof summarizeSleepObservations> & {
+    readonly missingCount: number;
+    readonly averageBedtimePlanDeviationMinutes: number | null;
+    readonly averageWakePlanDeviationMinutes: number | null;
+  };
   readonly memory: AnalyticsSnapshot['memory'];
   readonly sources: AnalyticsSnapshot;
 }
@@ -298,6 +304,29 @@ export function buildAnalyticsOverview(
     snapshot.sleep?.nightCycles.filter(
       (cycle) => cycle.cycleDate >= period.start && cycle.cycleDate <= through,
     ) ?? [];
+  const sleepObservations = snapshot.sleepObservations.filter(
+    ({ cycleDate }) => cycleDate >= period.start && cycleDate <= through,
+  );
+  const sleepSummary = summarizeSleepObservations(sleepObservations);
+  const confirmedSleep = sleepObservations.filter(
+    (observation) =>
+      observation.confirmedAt !== null &&
+      observation.wentToBedAt !== null &&
+      observation.wokeAt !== null,
+  );
+  const planByCycle = new Map(nightCycles.map((cycle) => [cycle.cycleDate, cycle]));
+  const bedtimeDeviations = confirmedSleep.flatMap((observation) => {
+    const plan = planByCycle.get(observation.cycleDate);
+    return plan && observation.wentToBedAt
+      ? [Math.abs(observation.wentToBedAt.getTime() - plan.plannedSleepAt.getTime()) / 60_000]
+      : [];
+  });
+  const wakeDeviations = confirmedSleep.flatMap((observation) => {
+    const plan = planByCycle.get(observation.cycleDate);
+    return plan && observation.wokeAt
+      ? [Math.abs(observation.wokeAt.getTime() - plan.plannedWakeAt.getTime()) / 60_000]
+      : [];
+  });
   const comparableCurrent = days.filter(
     (day) => period.comparisonCurrentEnd && day.date <= period.comparisonCurrentEnd,
   );
@@ -375,9 +404,24 @@ export function buildAnalyticsOverview(
       withSkips: nightCycles.filter((cycle) => cycle.preparationCompletionKind === 'WITH_SKIPS')
         .length,
     },
+    sleep: {
+      ...sleepSummary,
+      missingCount: Math.max(
+        0,
+        inclusiveDays(period.start, through) -
+          new Set(sleepObservations.map(({ cycleDate }) => cycleDate)).size,
+      ),
+      averageBedtimePlanDeviationMinutes: averageMinutes(bedtimeDeviations),
+      averageWakePlanDeviationMinutes: averageMinutes(wakeDeviations),
+    },
     memory,
     sources: snapshot,
   };
+}
+
+function averageMinutes(values: readonly number[]): number | null {
+  if (values.length === 0) return null;
+  return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
 }
 
 export class GetAnalyticsOverview {

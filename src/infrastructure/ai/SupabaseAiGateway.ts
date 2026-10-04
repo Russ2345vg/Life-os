@@ -1,11 +1,12 @@
 import { FunctionsHttpError, type SupabaseClient } from '@supabase/supabase-js';
 import { AiError, type AiGateway } from '../../application/ai/AiAssistant';
+import type { AiContext } from '../../application/ai/AiContext';
 
 export class SupabaseAiGateway implements AiGateway {
   constructor(private readonly client: SupabaseClient) {}
-  async ask(question: string, signal: AbortSignal): Promise<string> {
+  async ask(question: string, signal: AbortSignal, context?: AiContext): Promise<string> {
     const result = await this.client.functions.invoke<unknown>('lifeos-openai', {
-      body: { question },
+      body: context ? { question, context } : { question },
       signal,
     });
     if (result.error) {
@@ -27,7 +28,9 @@ export class SupabaseAiGateway implements AiGateway {
                   ? 'not_configured'
                   : status === 504
                     ? 'timeout'
-                    : 'provider_error',
+                    : status === 400 && context
+                      ? 'invalid_context'
+                      : 'provider_error',
       );
     }
     const data = result.data;

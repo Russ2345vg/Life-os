@@ -152,6 +152,21 @@ export function PlannerWalks({
                 walk={selected}
                 services={services}
                 onDone={() => go('overview')}
+                onContinue={
+                  selected.status === 'completed' &&
+                  selected.intent === 'reflection' &&
+                  !selected.deletedAt
+                    ? () =>
+                        start({
+                          ...DEFAULT_WALK,
+                          intent: 'reflection',
+                          type: 'reflection',
+                          question: selected.reflectionQuestion,
+                          reflectionTemplate: selected.reflectionTemplate,
+                          sphereId: selected.sphereId?.toString() ?? null,
+                        })
+                    : undefined
+                }
               />
               {selected.status === 'completed' && (
                 <WalkDiaryTransfer walk={selected} diary={diary} onNavigate={onNavigate} />
@@ -307,6 +322,9 @@ export function WalkRows({
             <strong>{walkIntentLabel(walk)}</strong>
             <p>
               {walk.result ??
+                walk.reflectionNotes?.understood ??
+                walk.reflectionNotes?.open ??
+                walk.reflectionNotes?.next ??
                 (walk.status === 'abandoned'
                   ? 'Прервана'
                   : walk.status === 'completed'

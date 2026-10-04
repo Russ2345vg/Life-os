@@ -1,5 +1,6 @@
 import type { BalanceServices } from '../balance/BalanceServices';
 import type { AiAssistant } from '../ai/AiAssistant';
+import type { ReadAiContext } from '../ai/AiContext';
 import type { GetAnalyticsOverview } from '../analytics/GetAnalyticsOverview';
 import type { WalkServices } from '../walk/WalkServices';
 import type { CreateGoal } from '../commands/CreateGoal';
@@ -13,6 +14,8 @@ import type { GetGoals } from '../queries/GetGoals';
 import type { GetDirections } from '../queries/GetDirections';
 import type { ColdShowerService } from '../sleep/ColdShowerService';
 import type { SleepScheduleService } from '../sleep/SleepScheduleService';
+import type { SleepObservationService } from '../sleep/SleepObservationService';
+import type { SleepAlarmObservationCoordinator } from '../sleep/SleepAlarmObservationCoordinator';
 import type { AccountSync } from '../sync/account/AccountSyncService';
 import type { DailyDirection } from './DailyDirection';
 import type { MonthlyDirectionFocusService } from './MonthlyDirectionFocusService';
@@ -27,6 +30,7 @@ export type ScenarioService = Pick<
 
 export interface PlannerServices extends PlannerLibraryServices {
   readonly aiAssistant?: AiAssistant;
+  readonly aiContext?: ReadAiContext;
   readonly analytics?: GetAnalyticsOverview;
   readonly walks?: WalkServices;
   readonly memory?: MemoryServices;
@@ -45,5 +49,7 @@ export interface PlannerServices extends PlannerLibraryServices {
   readonly dailyDirection: Pick<DailyDirection, 'get' | 'set'>;
   readonly monthlyDirectionFocus: Pick<MonthlyDirectionFocusService, 'get' | 'set'>;
   readonly sleepSchedule: SleepScheduleService;
+  readonly sleepObservations: SleepObservationService;
+  readonly sleepAlarmObservations: SleepAlarmObservationCoordinator;
   readonly accountSync: AccountSync;
 }

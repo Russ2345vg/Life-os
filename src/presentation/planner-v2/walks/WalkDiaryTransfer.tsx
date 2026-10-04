@@ -4,6 +4,7 @@ import { createDiaryDraft, diaryPeriod, DayDate, type DiaryDayPayload } from '..
 import type { Walk } from '../../../domain/walk/Walk';
 import type { PlannerRoute } from '../PlannerNavigation';
 import { walkError } from './useWalkState';
+import { formatWalkReflectionSummary } from '../../../application/walk/WalkReflectionSummary';
 
 export function WalkDiaryTransfer({
   walk,
@@ -19,11 +20,12 @@ export function WalkDiaryTransfer({
     version: number | null;
     completed: boolean;
   } | null>(null);
-  const [text, setText] = useState(walk.result ?? '');
+  const summary = formatWalkReflectionSummary(walk);
+  const [text, setText] = useState(summary);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
-  if (!walk.result?.trim() || walk.deletedAt) return null;
+  if (!summary || walk.deletedAt) return null;
   const date = DayDate.create(walk.date.toString());
   const open = async () => {
     setBusy(true);
@@ -37,7 +39,7 @@ export function WalkDiaryTransfer({
         version: entry?.version ?? null,
         completed: entry?.status === 'completed',
       });
-      setText(walk.result ?? '');
+      setText(summary);
     } catch (failure: unknown) {
       setError(walkError(failure));
     } finally {

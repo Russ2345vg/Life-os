@@ -74,6 +74,48 @@ test('completed goals disappear from the list and can be shown, filtered and reo
   expect(errors).toEqual([]);
 });
 
+test('archived completed goals stay hidden until the archive status is selected', async ({
+  page,
+}, info) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message.text());
+  });
+  await seed(page);
+  const goal = page.getByRole('link', { name: 'Завершить учебный курс', exact: true });
+  await goal.click();
+  await page.getByRole('button', { name: 'Завершить цель', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Завершить цель', exact: true })).toBeHidden();
+  await page.getByRole('button', { name: 'Действия: Завершить учебный курс', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Архивировать', exact: true }).click();
+  await expect(page.locator('.planner-goal-context')).toContainText('В архиве');
+  await page.getByRole('link', { name: '← Все цели', exact: true }).click();
+  await expect(goal).toBeHidden();
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Цели', exact: true })).toBeVisible();
+  await expect(goal).toBeHidden();
+
+  const toggle = page.getByRole('button', { name: /^Фильтры(?: · \d+)?$/ });
+  await toggle.click();
+  const panel = page.getByRole('region', { name: 'Фильтры целей', exact: true });
+  const completed = panel.getByLabel('Показать выполненные', { exact: true });
+  await expect(completed).not.toBeChecked();
+  await completed.check();
+  await expect(goal).toBeHidden();
+  await completed.uncheck();
+  await panel.getByRole('combobox', { name: 'Состояние', exact: true }).selectOption('archived');
+  await expect(goal).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(toggle).toBeFocused();
+  await page.screenshot({ path: info.outputPath('archived-goal-filter.png'), fullPage: true });
+  await page.getByRole('button', { name: 'Убрать фильтр: В архиве', exact: true }).click();
+  await expect(goal).toBeHidden();
+  await expect(toggle).toBeFocused();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(errors).toEqual([]);
+});
+
 test('completed standalone actions disappear immediately and remain available in the completed filter', async ({
   page,
 }, info) => {

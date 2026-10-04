@@ -1,0 +1,123 @@
+.planner-v2 .contextual-ai {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-6, 24px);
+}
+.planner-v2 .contextual-ai__trigger,
+.planner-v2 .contextual-ai__example {
+  min-height: 44px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  color: var(--text-primary);
+  padding: var(--space-2) var(--space-4);
+  cursor: pointer;
+}
+.planner-v2 .contextual-ai__trigger:hover,
+.planner-v2 .contextual-ai__example:hover {
+  border-color: var(--border-strong);
+}
+.planner-v2 .contextual-ai__sheet {
+  padding: var(--space-5);
+  display: grid;
+  gap: var(--space-4);
+}
+.planner-v2 .contextual-ai__sheet h2 {
+  margin: 0;
+}
+.planner-v2 .contextual-ai__sheet p {
+  margin: 0;
+}
+.planner-v2 .contextual-ai__preview,
+.planner-v2 .contextual-ai__answer {
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  overflow-wrap: anywhere;
+}
+.planner-v2 .contextual-ai__preview ol,
+.planner-v2 .contextual-ai__answer ol {
+  padding-left: var(--space-5);
+}
+.planner-v2 .contextual-ai__preview li {
+  margin-top: var(--space-2);
+}
+.planner-v2 .contextual-ai__sheet form {
+  display: grid;
+  gap: var(--space-3);
+}
+.planner-v2 .contextual-ai__sheet textarea {
+  width: 100%;
+  min-height: 116px;
+}
+.planner-v2 .contextual-ai__example {
+  justify-self: start;
+  text-align: left;
+}
+.planner-v2 .contextual-ai__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.planner-v2 .contextual-ai__actions button {
+  min-height: 44px;
+}
+.planner-v2 .contextual-ai__answer p {
+  white-space: pre-wrap;
+}
+.planner-v2 .contextual-ai__answer button {
+  color: var(--text-primary);
+  background: none;
+  border: 0;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.planner-v2 .contextual-ai__error {
+  color: var(--danger);
+}
+.planner-v2 .what-if__fields {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+}
+.planner-v2 .what-if__fields legend {
+  padding: 0 var(--space-2);
+}
+.planner-v2 .what-if__fields input {
+  width: 100%;
+  min-width: 0;
+}
+.planner-v2 .what-if__results {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.planner-v2 .what-if__options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+.planner-v2 .what-if__options h3 {
+  margin: 0 0 var(--space-2);
+  overflow-wrap: anywhere;
+}
+.planner-v2 .what-if__options p + p {
+  margin-top: var(--space-2);
+}
+@media (max-width: 760px) {
+  .planner-v2 .contextual-ai__trigger {
+    width: 100%;
+  }
+  .planner-v2 .contextual-ai__sheet {
+    padding: var(--space-4);
+  }
+  .planner-v2 .what-if__options {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

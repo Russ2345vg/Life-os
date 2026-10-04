@@ -1,6 +1,7 @@
 import { DomainError } from '../../shared/errors/DomainError';
 import { Entity } from '../shared/Entity';
 import type { EntityId } from '../shared/EntityId';
+import { isWalkReflectionStage, type WalkReflectionStage } from '../walk/WalkReflectionTemplate';
 
 export const MAX_WALK_CAPTURE_LENGTH = 500;
 export type WalkCaptureStatus = 'pending' | 'processed';
@@ -11,6 +12,7 @@ export interface WalkCaptureCreationData {
   readonly content: string;
   readonly capturedAt: Date;
   readonly walkElapsedMs: number;
+  readonly promptStage?: WalkReflectionStage | null;
 }
 
 export interface WalkCaptureData extends WalkCaptureCreationData {
@@ -29,6 +31,7 @@ export class WalkCapture extends Entity {
   public readonly content: string;
   readonly #capturedAt: Date;
   public readonly walkElapsedMs: number;
+  public readonly promptStage: WalkReflectionStage | null;
   public readonly status: WalkCaptureStatus;
   readonly #createdAt: Date;
   readonly #updatedAt: Date;
@@ -39,6 +42,7 @@ export class WalkCapture extends Entity {
     this.resultActionId = data.resultActionId ?? null;
     if (this.resultActionId !== null && data.status !== 'processed') throw invalidData();
     if (normalizeContent(data.content) !== data.content) throw invalidData();
+    if (data.promptStage != null && !isWalkReflectionStage(data.promptStage)) throw invalidData();
     for (const date of [data.capturedAt, data.createdAt, data.updatedAt]) {
       if (!(date instanceof Date) || !Number.isFinite(date.getTime())) throw invalidData();
     }
@@ -57,6 +61,7 @@ export class WalkCapture extends Entity {
     this.content = data.content;
     this.#capturedAt = new Date(data.capturedAt.getTime());
     this.walkElapsedMs = data.walkElapsedMs;
+    this.promptStage = data.promptStage ?? null;
     this.status = data.status;
     this.#createdAt = new Date(data.createdAt.getTime());
     this.#updatedAt = new Date(data.updatedAt.getTime());
@@ -144,6 +149,7 @@ export class WalkCapture extends Entity {
       content: this.content,
       capturedAt: this.capturedAt,
       walkElapsedMs: this.walkElapsedMs,
+      promptStage: this.promptStage,
       status: this.status,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
