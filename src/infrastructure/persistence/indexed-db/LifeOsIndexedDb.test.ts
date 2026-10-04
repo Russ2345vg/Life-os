@@ -419,6 +419,51 @@ describe('LifeOsIndexedDb', () => {
     adapter.close();
   });
 
+  it('сохраняет пользовательское упражнение при конфликте имени с новым системным', async () => {
+    const factory = new IDBFactory();
+    const legacy = await openLiteralVersion32ExerciseDatabase(factory);
+    const existing = {
+      schemaVersion: 1,
+      id: 'custom-warm-up',
+      name: 'Разминка',
+      normalizedName: 'разминка',
+      measurementType: 'DURATION',
+      source: 'CUSTOM',
+      createdAt: '2026-10-01T00:00:00.000Z',
+      updatedAt: '2026-10-01T00:00:00.000Z',
+      archivedAt: null,
+      version: 1,
+    };
+    const write = legacy.transaction(LIFE_OS_STORE.exerciseDefinitions, 'readwrite');
+    write.objectStore(LIFE_OS_STORE.exerciseDefinitions).put(existing);
+    await transactionDone(write);
+    legacy.close();
+
+    const adapter = new LifeOsIndexedDb(factory);
+    const upgraded = await adapter.open();
+    const records = await executeIndexedDbRequest<Array<{ id: string }>>(
+      upgraded,
+      LIFE_OS_STORE.exerciseDefinitions,
+      'readonly',
+      (store) => store.getAll(),
+    );
+
+    expect(upgraded.version).toBe(LIFE_OS_DATABASE_VERSION);
+    expect(records).toEqual(expect.arrayContaining([existing]));
+    expect(records).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'morning-exercise.warm-up',
+          name: 'Разминка · LifeOS',
+          normalizedName: 'разминка · lifeos',
+          source: 'SYSTEM',
+        }),
+      ]),
+    );
+    expect(records.map(({ id }) => id)).toContain('morning-exercise.stretching');
+    adapter.close();
+  });
+
   it('создаёт минимальные индексы с заданной уникальностью', async () => {
     const indexedDb = new LifeOsIndexedDb(new IDBFactory());
     const database = await indexedDb.open();

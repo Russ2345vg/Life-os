@@ -114,6 +114,21 @@ describe('MorningWorkoutService', () => {
       focusUnlocked: true,
     });
   });
+
+  it('показывает и переносит принятую нагрузку через пропущенное утро', async () => {
+    const first = createContext('2026-10-04');
+    await first.service.start();
+    await completeWorkout(first.service, first.clock);
+    first.clock.advanceMinute();
+    await first.service.acceptRecommendation();
+
+    const skipped = createContext('2026-10-05', first);
+    expect((await skipped.service.get()).items.find(isPullUps)).toMatchObject({ target: 5 });
+    await skipped.service.skip();
+
+    const third = createContext('2026-10-06', first);
+    expect((await third.service.start()).items.find(isPullUps)).toMatchObject({ target: 5 });
+  });
 });
 
 async function completeWorkout(service: MorningWorkoutService, clock: MutableClock): Promise<void> {

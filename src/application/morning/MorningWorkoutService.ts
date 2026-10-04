@@ -134,6 +134,9 @@ export class MorningWorkoutService {
       const now = this.#clock.now();
       const cycle = await this.ensureCycle(now);
       if (cycle.startedAt === null) cycle.start(now);
+      if (cycle.physicalPlanItems.length === 0) {
+        cycle.configurePhysicalPlan(await this.planForToday(), now);
+      }
       cycle.skipPhysical(now);
       await this.#cycles.save(cycle);
       return this.snapshot(cycle);
@@ -237,7 +240,7 @@ export class MorningWorkoutService {
   private async snapshot(cycle: MorningCycle | null): Promise<MorningWorkoutSnapshot> {
     const plan = cycle?.physicalPlanItems.length
       ? cycle.physicalPlanItems
-      : createReadyMorningPhysicalPlan();
+      : await this.planForToday();
     const definitions = await this.#exercises.list();
     const names = new Map(
       definitions.map((definition) => [definition.id.toString(), definition.name]),

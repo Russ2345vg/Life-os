@@ -717,19 +717,60 @@ function createVersionThirtyThreeSchema(transaction: IDBTransaction | null): voi
   for (const seed of SYSTEM_EXERCISE_DEFINITION_SEEDS.filter(
     ({ id }) => id === 'morning-exercise.warm-up' || id === 'morning-exercise.stretching',
   )) {
-    definitions.add({
-      schemaVersion: 1,
-      id: seed.id,
-      name: seed.name,
-      normalizedName: normalizeExerciseDefinitionName(seed.name),
-      measurementType: seed.measurementType,
-      source: EXERCISE_DEFINITION_SOURCE.system,
-      createdAt: seedTime,
-      updatedAt: seedTime,
-      archivedAt: null,
-      version: 1,
+    const existingById = definitions.get(seed.id);
+    existingById.addEventListener('success', () => {
+      if (existingById.result !== undefined) return;
+      addVersionThirtyThreeExerciseSeed(definitions, seed, seedTime);
     });
   }
+}
+
+function addVersionThirtyThreeExerciseSeed(
+  definitions: IDBObjectStore,
+  seed: (typeof SYSTEM_EXERCISE_DEFINITION_SEEDS)[number],
+  seedTime: string,
+  attempt = 0,
+): void {
+  const name =
+    attempt === 0
+      ? seed.name
+      : attempt === 1
+        ? `${seed.name} · LifeOS`
+        : `${seed.name} · LifeOS ${attempt}`;
+  const normalizedName = normalizeExerciseDefinitionName(name);
+  if (!definitions.indexNames.contains('byNormalizedName')) {
+    insertVersionThirtyThreeExerciseSeed(definitions, seed, seedTime, name, normalizedName);
+    return;
+  }
+  const existingByName = definitions.index('byNormalizedName').get(normalizedName);
+  existingByName.addEventListener('success', () => {
+    if (existingByName.result !== undefined) {
+      addVersionThirtyThreeExerciseSeed(definitions, seed, seedTime, attempt + 1);
+      return;
+    }
+    insertVersionThirtyThreeExerciseSeed(definitions, seed, seedTime, name, normalizedName);
+  });
+}
+
+function insertVersionThirtyThreeExerciseSeed(
+  definitions: IDBObjectStore,
+  seed: (typeof SYSTEM_EXERCISE_DEFINITION_SEEDS)[number],
+  seedTime: string,
+  name: string,
+  normalizedName: string,
+): void {
+  definitions.add({
+    schemaVersion: 1,
+    id: seed.id,
+    name,
+    normalizedName,
+    measurementType: seed.measurementType,
+    source: EXERCISE_DEFINITION_SOURCE.system,
+    createdAt: seedTime,
+    updatedAt: seedTime,
+    archivedAt: null,
+    version: 1,
+  });
 }
 
 function createVersionEighteenSchema(database: IDBDatabase): void {
