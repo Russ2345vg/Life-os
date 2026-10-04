@@ -11,7 +11,7 @@ import {
   copyFileSync,
 } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL, URL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import process from 'node:process';
 
@@ -20,6 +20,12 @@ const TAURI_DIR = join(ROOT, 'src-tauri');
 const SIGNING_DIR = 'D:\\Android\\LifeOS\\signing';
 const RELEASE_REPOSITORY = 'LifeOS-Releases';
 const PACKAGE_ID = 'com.lifeos.desktop';
+const RELEASE_PUBLIC_ENV_KEYS = [
+  'VITE_LIFEOS_SUPABASE_URL',
+  'VITE_LIFEOS_SUPABASE_PUBLISHABLE_KEY',
+  'VITE_LIFEOS_ACCOUNT_SYNC_ENABLED',
+  'VITE_LIFEOS_OPENAI_ENABLED',
+];
 
 export function buildReleasePath(environment) {
   const inheritedPath =
@@ -125,7 +131,7 @@ function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'));
 }
 
-function readSecretEnvironment(path) {
+function readEnvironmentFile(path) {
   if (!existsSync(path)) throw new Error(`Local signing configuration is missing: ${path}`);
   const values = {};
   for (const rawLine of readFileSync(path, 'utf8').split(/\r?\n/)) {
@@ -136,6 +142,48 @@ function readSecretEnvironment(path) {
     values[line.slice(0, separator)] = line.slice(separator + 1);
   }
   return values;
+}
+
+export function loadReleasePublicEnvironment(environment, directory = ROOT) {
+  const fileValues = {};
+  for (const name of ['.env', '.env.local', '.env.production', '.env.production.local']) {
+    const path = join(directory, name);
+    if (!existsSync(path)) continue;
+    const parsed = readEnvironmentFile(path);
+    for (const key of RELEASE_PUBLIC_ENV_KEYS) {
+      if (typeof parsed[key] === 'string') fileValues[key] = parsed[key];
+    }
+  }
+
+  const publicEnvironment = {};
+  for (const key of RELEASE_PUBLIC_ENV_KEYS) {
+    const inherited = environment[key];
+    const value =
+      typeof inherited === 'string' && inherited.trim() !== '' ? inherited : fileValues[key];
+    if (typeof value === 'string' && value.trim() !== '') publicEnvironment[key] = value.trim();
+  }
+
+  if (
+    !publicEnvironment.VITE_LIFEOS_SUPABASE_URL ||
+    !publicEnvironment.VITE_LIFEOS_SUPABASE_PUBLISHABLE_KEY ||
+    publicEnvironment.VITE_LIFEOS_ACCOUNT_SYNC_ENABLED !== 'true'
+  ) {
+    throw new Error(
+      'Release account sync configuration is missing or disabled. Set LIFEOS_RELEASE_ENV_DIRECTORY to the directory containing the production .env files.',
+    );
+  }
+
+  let supabaseUrl;
+  try {
+    supabaseUrl = new URL(publicEnvironment.VITE_LIFEOS_SUPABASE_URL);
+  } catch {
+    throw new Error('Release Supabase URL is invalid.');
+  }
+  if (supabaseUrl.protocol !== 'https:' || !supabaseUrl.hostname.endsWith('.supabase.co')) {
+    throw new Error('Release Supabase URL must use a managed HTTPS Supabase endpoint.');
+  }
+
+  return publicEnvironment;
 }
 
 function run(command, args, options = {}) {
@@ -263,7 +311,7 @@ function prepareArtifacts({ owner, version, notes, commit }) {
     throw new Error(`Tauri updater public key is missing: ${publicKeyPath}`);
   if (!existsSync(androidProperties))
     throw new Error(`Android signing configuration is missing: ${androidProperties}`);
-  const signingEnvironment = readSecretEnvironment(secretPath);
+  const signingEnvironment = readEnvironmentFile(secretPath);
   const privateKeyPath = signingEnvironment.TAURI_SIGNING_PRIVATE_KEY_PATH;
   if (!privateKeyPath || !existsSync(privateKeyPath))
     throw new Error('Tauri updater private key is missing.');
@@ -273,9 +321,14 @@ function prepareArtifacts({ owner, version, notes, commit }) {
   const publicKey = readFileSync(publicKeyPath, 'utf8');
   const { configPath, endpoint } = writeReleaseConfig(owner, publicKey);
   const androidEndpoint = `https://github.com/${owner}/${RELEASE_REPOSITORY}/releases/latest/download/android-latest.json`;
+  const releasePublicEnvironment = loadReleasePublicEnvironment(
+    process.env,
+    process.env.LIFEOS_RELEASE_ENV_DIRECTORY ?? ROOT,
+  );
   const buildEnvironment = {
     ...process.env,
     ...signingEnvironment,
+    ...releasePublicEnvironment,
     CARGO_HOME: process.env.CARGO_HOME ?? 'D:\\Android\\CargoHome',
     RUSTUP_HOME: process.env.RUSTUP_HOME ?? 'D:\\Android\\RustupHome',
     VITE_LIFEOS_ANDROID_UPDATE_ENDPOINT: androidEndpoint,

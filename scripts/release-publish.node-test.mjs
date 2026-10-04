@@ -16,6 +16,7 @@ import {
   parseReleaseArguments,
   writePreparedRelease,
   loadPreparedRelease,
+  loadReleasePublicEnvironment,
 } from './release-publish.mjs';
 
 test('requires an explicit release action so publish cannot start a build', () => {
@@ -97,6 +98,40 @@ test('preserves the mixed-case Windows Path value', () => {
     buildReleasePath({ Path: 'C:\\Program Files\\nodejs;C:\\Windows\\System32' }),
     'D:\\Android\\CargoHome\\bin;D:\\Android\\RustupHome\\toolchains\\stable-x86_64-pc-windows-msvc\\bin;C:\\Program Files\\nodejs;C:\\Windows\\System32',
   );
+});
+
+test('loads only public production settings and refuses a release without account sync', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'lifeos-release-env-'));
+  try {
+    writeFileSync(
+      join(directory, '.env'),
+      [
+        'VITE_LIFEOS_SUPABASE_URL=https://project.supabase.co',
+        `VITE_LIFEOS_SUPABASE_PUBLISHABLE_KEY=sb_publishable_${'a'.repeat(24)}`,
+        'VITE_LIFEOS_ACCOUNT_SYNC_ENABLED=true',
+      ].join('\n'),
+    );
+    writeFileSync(
+      join(directory, '.env.local'),
+      ['OPENAI_API_KEY=must-not-enter-release-environment', 'VITE_LIFEOS_OPENAI_ENABLED=true'].join(
+        '\n',
+      ),
+    );
+
+    assert.deepEqual(loadReleasePublicEnvironment({}, directory), {
+      VITE_LIFEOS_SUPABASE_URL: 'https://project.supabase.co',
+      VITE_LIFEOS_SUPABASE_PUBLISHABLE_KEY: `sb_publishable_${'a'.repeat(24)}`,
+      VITE_LIFEOS_ACCOUNT_SYNC_ENABLED: 'true',
+      VITE_LIFEOS_OPENAI_ENABLED: 'true',
+    });
+    assert.throws(
+      () => loadReleasePublicEnvironment({ VITE_LIFEOS_ACCOUNT_SYNC_ENABLED: 'false' }, directory),
+      /missing or disabled/,
+    );
+    assert.throws(() => loadReleasePublicEnvironment({}, join(directory, 'missing')), /missing/);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test('ships the Tauri activity source required by a clean Android checkout', () => {
