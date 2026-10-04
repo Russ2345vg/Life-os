@@ -462,6 +462,20 @@ describe('LifeAction', () => {
   });
 
   describe('поздняя связь с целью', () => {
+    it('сохраняет направление без цели и заменяет его связью с целью одним изменением', () => {
+      const action = createDraft();
+      const initialVersion = action.version;
+      expect(action.setContext(null, id('direction-1'), id('sphere-1'))).toBe(true);
+      expect(action.directionId?.toString()).toBe('direction-1');
+      expect(action.goalId).toBeNull();
+      expect(action.sphereId?.toString()).toBe('sphere-1');
+      expect(action.version).toBe(initialVersion + 1);
+      expect(action.setContext(null, id('direction-1'), id('sphere-1'))).toBe(false);
+      expect(action.setContext(id('goal-1'), null, id('sphere-1'))).toBe(true);
+      expect(action.goalId?.toString()).toBe('goal-1');
+      expect(action.directionId).toBeNull();
+    });
+
     it('меняет goalId того же completed-действия без изменения факта выполнения', () => {
       const action = createCompleted();
       const before = {

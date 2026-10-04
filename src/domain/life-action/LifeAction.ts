@@ -112,7 +112,7 @@ export class LifeAction extends Entity {
   readonly #decisionId: EntityId | null;
   #sphereId: EntityId | null;
   #goalId: EntityId | null;
-  readonly #directionId: EntityId | null;
+  #directionId: EntityId | null;
   #parentActionId: EntityId | null;
   #isNext: boolean;
   readonly #createdAt: Date;
@@ -578,6 +578,27 @@ export class LifeAction extends Entity {
     this.assertNotArchived();
     if (sameOptionalEntityId(this.#goalId, goalId)) return false;
     this.#goalId = goalId;
+    this.#version += 1;
+    return true;
+  }
+
+  public setContext(
+    goalId: EntityId | null,
+    directionId: EntityId | null,
+    sphereId: EntityId | null,
+  ): boolean {
+    this.assertNotArchived();
+    if (goalId && directionId)
+      throw new DomainError('life_action.context_conflict', 'Выберите цель или направление.');
+    if (
+      sameOptionalEntityId(this.#goalId, goalId) &&
+      sameOptionalEntityId(this.#directionId, directionId) &&
+      sameOptionalEntityId(this.#sphereId, sphereId)
+    )
+      return false;
+    this.#goalId = goalId;
+    this.#directionId = directionId;
+    this.#sphereId = sphereId;
     this.#version += 1;
     return true;
   }

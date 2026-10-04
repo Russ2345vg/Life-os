@@ -1,6 +1,6 @@
 # Фокус по действию: помодоро
 
-**Статус:** проект на визуальное согласование, 04.10.2026.
+**Статус:** визуальные макеты утверждены пользователем 04.10.2026.
 
 ## Цель и контракт
 
@@ -8,7 +8,7 @@
 
 `FEATURE → USER GOAL → EXISTING LOGIC → PAGE/COMPONENT ARCHETYPE → SECTION COLOR → MAIN VISUAL CENTER → COMPONENTS TO REUSE → MOBILE BEHAVIOR → APPROVED REFERENCE → TEST SCOPE`
 
-`Помодоро действия → работать короткими фокусными отрезками → WorkSessions и EntityContextMenu → PlannerSheet из списка/Сегодня → общий jade-акцент → крупный отсчёт → PlannerSheet, EntityContextMenu, WorkSessions → панель на всю ширину с кнопками ≥44 px → NO, макеты ниже ожидают approval → расчёт фаз, переходы, браузерный сценарий desktop/mobile`
+`Помодоро действия → работать короткими фокусными отрезками → WorkSessions и EntityContextMenu → PlannerSheet из списка/Сегодня → общий jade-акцент → крупный отсчёт → PlannerSheet, EntityContextMenu, WorkSessions → панель на всю ширину с кнопками ≥44 px → YES, макеты ниже утверждены → расчёт фаз, переходы, браузерный сценарий desktop/mobile`
 
 ## Поведение
 
@@ -23,7 +23,7 @@
 
 Текущий экран `#/v2/actions` активного worktree проверен на desktop 1280×800 и mobile 320/390 px. Используются графитовые поверхности, системный шрифт, jade для основного действия и кольца отсчёта, текущие токены и каскад `tokens.css → planner-v2.css → planner-master.css → planner-premium.css`. Главный центр панели — оставшееся время. Состояния: до старта, фокус, пауза, перерыв, готовность к следующему фокусу, ошибка.
 
-Макеты для утверждения:
+Утверждённые макеты:
 
 - [Desktop](../references/2026-10-04-action-focus/desktop.svg)
 - [Mobile](../references/2026-10-04-action-focus/mobile.svg)

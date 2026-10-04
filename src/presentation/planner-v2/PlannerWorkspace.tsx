@@ -57,6 +57,7 @@ import { PlannerActionPanel } from './PlannerActionPanel';
 import { PlannerUnsavedChangesConfirmation } from './PlannerUnsavedChangesConfirmation';
 import { createPlannerActionOperations } from './plannerActionOperations';
 import { usePlannerWorkTime } from './usePlannerWorkTime';
+import { ActionPomodoro, type PomodoroSelection } from './ActionPomodoro';
 import type { EntityMenuAction } from './EntityContextMenu';
 import { DomainError } from '../../shared/errors/DomainError';
 import { SleepPreparationPage } from './SleepPreparationPage';
@@ -144,6 +145,9 @@ function PlannerWorkspaceContent({
     return onOpenAction?.(id) ?? onNavigate({ view: 'action', id });
   };
   const workTime = usePlannerWorkTime(services.workSessions);
+  const [pomodoroSelection, setPomodoroSelection] = useState<PomodoroSelection | null>(null);
+  const startFocusForAction = (action: LifeAction) =>
+    setPomodoroSelection({ actionId: action.id.toString(), title: action.title.toString() });
   const [completionSummary, setCompletionSummary] = useState<{
     readonly target: CompletionSummaryTarget;
     readonly origin: 'source' | { readonly panelId: string };
@@ -518,6 +522,10 @@ function PlannerWorkspaceContent({
   const menuForAction = (action: LifeAction): EntityMenuAction[] => [
     ...(action.status === 'draft' || action.status === 'ready'
       ? [
+          {
+            label: 'Начать фокус',
+            run: () => startFocusForAction(action),
+          },
           {
             label: 'Редактировать',
             run: () => {
@@ -1243,6 +1251,7 @@ function PlannerWorkspaceContent({
                 services={services}
                 route={route}
                 workTime={workTime}
+                onStartFocus={startFocusForAction}
                 onStartWalk={
                   services.walks
                     ? async (actionId, requestId) => {
@@ -1391,6 +1400,7 @@ function PlannerWorkspaceContent({
                 <PlannerSheet title="Новое действие" onClose={closeForm}>
                   <PlannerActionForm
                     key={buildPlannerRoute(route)}
+                    directions={data.directions}
                     goals={
                       route.directionId
                         ? data.goals.filter((g) => g.directionId === route.directionId)
@@ -1743,6 +1753,13 @@ function PlannerWorkspaceContent({
                 }
               : {})}
             returnFocusId={validReturnTarget?.resultId ?? null}
+          />
+          <ActionPomodoro
+            selection={pomodoroSelection}
+            onCloseSelection={() => setPomodoroSelection(null)}
+            workTime={workTime}
+            service={services.workSessions}
+            onOpenWorkTime={() => void navigate({ view: 'time' })}
           />
         </div>
       </NeedChoicesProvider>

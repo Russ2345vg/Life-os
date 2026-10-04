@@ -237,6 +237,7 @@ export async function createLifeOsApplication(
       lifeActionRepository,
       goalRepository,
       journalUnitOfWork,
+      directionRepository,
     );
 
     const pilotDeleteRepository = new IndexedDbPilotDeleteRepository(database, mutationRecorder);

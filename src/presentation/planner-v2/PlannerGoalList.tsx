@@ -12,6 +12,7 @@ import { EntityContextMenu, type EntityMenuAction } from './EntityContextMenu';
 import type { Direction, Goal, LifeAction, Sphere } from '../../domain';
 import { VoiceField } from '../voice-input/VoiceField';
 import { VoiceTextInput } from '../voice-input/VoiceTextInput';
+import { actionResultsForGoal } from './actionResultsModel';
 import {
   emptyGoalFilters,
   filterPlannerGoals,
@@ -384,6 +385,7 @@ export function PlannerGoalList({
             <ul className="planner-list">
               {group.goals.map((goal) => {
                 const { next, open, completed } = selectGoalCardActions(goal, actions);
+                const latestResult = actionResultsForGoal(actions, goal.id.toString())[0];
                 const detailHref = `#/v2/goals/${encodeURIComponent(goal.id.toString())}`;
                 const periods = planning?.state?.periods.filter(
                   (period) =>
@@ -421,6 +423,12 @@ export function PlannerGoalList({
                             Действия · {open.length}
                             {completed.length > 0 && ` · выполнено ${completed.length}`}
                           </a>
+                        )}
+                        {latestResult && (
+                          <p className="planner-goal-latest-result">
+                            <strong>Последний итог · {latestResult.title.toString()}</strong>
+                            <span>{latestResult.actualResult?.toString()}</span>
+                          </p>
                         )}
                         {next || goal.nextProgress ? (
                           <p className="planner-goal-next-link">

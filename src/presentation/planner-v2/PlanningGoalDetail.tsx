@@ -4,6 +4,8 @@ import type { Direction, Goal, LifeAction, Sphere } from '../../domain';
 import type { ProgressContribution } from '../../domain/planner/ProgressContribution';
 import type { RecurrenceRule } from '../../domain/planner/RecurrenceRule';
 import { usePlanning } from './PlanningContext';
+import { ActionResults } from './ActionResults';
+import { actionResultsForGoal } from './actionResultsModel';
 import { PlanningProgress } from './PlanningProgress';
 import { PlannerActionRow } from './PlannerActionList';
 import { PlannerGoalContext, PlannerGoalProgress } from './PlannerGoalList';
@@ -211,6 +213,7 @@ export function GoalDetailContent({
             ))}
         </ul>
       </section>
+      <ActionResults actions={actionResultsForGoal(actions, id)} />
       <details className="planner-goal-completed">
         <summary>Выполненные · {completed.length}</summary>
         <ul className="planner-list">

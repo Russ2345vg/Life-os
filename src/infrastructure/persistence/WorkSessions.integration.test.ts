@@ -49,6 +49,23 @@ describe('WorkSessions', () => {
     expect((await sessions.findById(started.id))?.goalIdAtStart?.toString()).toBe('goal-original');
   });
 
+  it('records focus time only up to its deadline after the app wakes late', async () => {
+    const action = createLifeActionDraft('deadline-work');
+    await actions.save(action);
+    const started = await service.start(action.id.toString());
+    clock.setTime(new Date('2026-09-28T08:40:00Z'));
+    const paused = await service.pauseAtDeadline(
+      started.id.toString(),
+      started.version,
+      new Date('2026-09-28T08:25:00Z'),
+    );
+    expect(paused.isPaused()).toBe(true);
+    expect(paused.workedDurationAt(clock.now())).toBe(25 * 60_000);
+    expect((await sessions.findById(started.id))?.pausedAt).toEqual(
+      new Date('2026-09-28T08:25:00Z'),
+    );
+  });
+
   it('serializes concurrent starts and rejects starting another session while paused', async () => {
     const first = createLifeActionDraft('first-work');
     const second = createLifeActionDraft('second-work');

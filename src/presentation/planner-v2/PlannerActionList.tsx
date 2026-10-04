@@ -791,16 +791,22 @@ export function PlannerActionRow({
   const [detailsOpen, setDetailsOpen] = useState(expanded);
   const [dateDraft, setDateDraft] = useState<PlannerFieldDraft | null>(null);
   const [goalDraft, setGoalDraft] = useState<PlannerFieldDraft | null>(null);
+  const [directionDraft, setDirectionDraft] = useState<PlannerFieldDraft | null>(null);
   const savedDate = action.plannedDate?.toString() ?? '';
   const savedGoal = action.goalId?.toString() ?? '';
+  const savedDirection = action.goalId
+    ? (goals.find((item) => item.id.equals(action.goalId!))?.directionId?.toString() ?? '')
+    : (action.directionId?.toString() ?? '');
   const dateState = plannerFieldState(dateDraft, savedDate);
   const goalState = plannerFieldState(goalDraft, savedGoal);
+  const directionState = plannerFieldState(directionDraft, savedDirection);
   const date = dateState.value;
   const goalId = goalState.value;
-  const conflict = dateState.conflict || goalState.conflict;
+  const directionId = directionState.value;
+  const conflict = dateState.conflict || goalState.conflict || directionState.conflict;
   const [pending, setPending] = useState(false);
   useQuickAccessGuard(() => ({
-    dirty: date !== savedDate || goalId !== savedGoal || conflict,
+    dirty: date !== savedDate || goalId !== savedGoal || directionId !== savedDirection || conflict,
     busy: busy || pending,
   }));
   const [error, setError] = useState<string | null>(null);
@@ -942,6 +948,7 @@ export function PlannerActionRow({
                       onClick={() => {
                         setDateDraft(null);
                         setGoalDraft(null);
+                        setDirectionDraft(null);
                         setError(null);
                       }}
                     >
@@ -1029,8 +1036,11 @@ export function PlannerActionRow({
                     onSubmit={(e) => {
                       e.preventDefault();
                       void run(
-                        () => onLink(action.id.toString(), goalId),
-                        () => setGoalDraft(null),
+                        () => onLink(action.id.toString(), goalId, directionId),
+                        () => {
+                          setGoalDraft(null);
+                          setDirectionDraft(null);
+                        },
                       );
                     }}
                   >
@@ -1039,9 +1049,18 @@ export function PlannerActionRow({
                       <select
                         aria-label={`Цель действия: ${action.title.toString()}`}
                         value={goalId}
-                        onChange={(e) =>
-                          setGoalDraft((d) => editPlannerField(d, savedGoal, e.target.value))
-                        }
+                        onChange={(e) => {
+                          setGoalDraft((d) => editPlannerField(d, savedGoal, e.target.value));
+                          if (e.target.value) {
+                            const nextDirection =
+                              goals
+                                .find((item) => item.id.toString() === e.target.value)
+                                ?.directionId?.toString() ?? '';
+                            setDirectionDraft((d) =>
+                              editPlannerField(d, savedDirection, nextDirection),
+                            );
+                          }
+                        }}
                         disabled={busy || pending || conflict}
                       >
                         <option value="">Без цели</option>
@@ -1053,6 +1072,33 @@ export function PlannerActionRow({
                             {g.title}
                           </option>
                         ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span>Направление</span>
+                      <select
+                        aria-label={`Направление действия: ${action.title.toString()}`}
+                        value={directionId}
+                        disabled={busy || pending || conflict || Boolean(goalId)}
+                        onChange={(e) =>
+                          setDirectionDraft((d) =>
+                            editPlannerField(d, savedDirection, e.target.value),
+                          )
+                        }
+                      >
+                        <option value="">Без направления</option>
+                        {directionId &&
+                          !directions.some(
+                            (item) =>
+                              item.id.toString() === directionId && item.status !== 'archived',
+                          ) && <option value={directionId}>Направление недоступно</option>}
+                        {directions
+                          .filter((item) => item.status !== 'archived')
+                          .map((item) => (
+                            <option key={item.id.toString()} value={item.id.toString()}>
+                              {item.name}
+                            </option>
+                          ))}
                       </select>
                     </label>
                     <button disabled={busy || pending || conflict} type="submit">
