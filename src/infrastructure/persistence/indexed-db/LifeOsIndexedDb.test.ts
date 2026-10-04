@@ -158,7 +158,7 @@ describe('LifeOsIndexedDb', () => {
       expect(
         await executeIndexedDbRequest(upgraded, storeName, 'readonly', (store) => store.getAll()),
       ).toEqual(
-        storeName === 'goals'
+        storeName === 'goals' || storeName === 'exerciseDefinitions'
           ? expect.arrayContaining(expectedByStore[storeName]!)
           : expectedByStore[storeName],
       );
@@ -367,9 +367,54 @@ describe('LifeOsIndexedDb', () => {
     ).toEqual({
       byNormalizedName: true,
     });
-    expect(definitions).toHaveLength(5);
+    expect(definitions).toHaveLength(7);
     expect(definitions.map(({ name }) => name)).toEqual(
-      expect.arrayContaining(['Отжимания', 'Подтягивания', 'Приседания', 'Планка', 'Пресс']),
+      expect.arrayContaining([
+        'Разминка',
+        'Отжимания',
+        'Подтягивания',
+        'Приседания',
+        'Планка',
+        'Пресс',
+        'Растяжка',
+      ]),
+    );
+    adapter.close();
+  });
+
+  it('добавляет разминку и растяжку в literal v32 без изменения существующих упражнений', async () => {
+    const factory = new IDBFactory();
+    const legacy = await openLiteralVersion32ExerciseDatabase(factory);
+    const existing = {
+      schemaVersion: 1,
+      id: 'custom-existing',
+      name: 'Моё упражнение',
+      normalizedName: 'моё упражнение',
+      measurementType: 'REPETITIONS',
+      source: 'CUSTOM',
+      createdAt: '2026-10-01T00:00:00.000Z',
+      updatedAt: '2026-10-01T00:00:00.000Z',
+      archivedAt: null,
+      version: 1,
+    };
+    const write = legacy.transaction(LIFE_OS_STORE.exerciseDefinitions, 'readwrite');
+    write.objectStore(LIFE_OS_STORE.exerciseDefinitions).put(existing);
+    await transactionDone(write);
+    legacy.close();
+
+    const adapter = new LifeOsIndexedDb(factory);
+    const upgraded = await adapter.open();
+    const records = await executeIndexedDbRequest<Array<{ id: string }>>(
+      upgraded,
+      LIFE_OS_STORE.exerciseDefinitions,
+      'readonly',
+      (store) => store.getAll(),
+    );
+
+    expect(upgraded.version).toBe(LIFE_OS_DATABASE_VERSION);
+    expect(records).toEqual(expect.arrayContaining([existing]));
+    expect(records.map(({ id }) => id)).toEqual(
+      expect.arrayContaining(['morning-exercise.warm-up', 'morning-exercise.stretching']),
     );
     adapter.close();
   });
@@ -898,6 +943,20 @@ function openDatabaseVersion16(factory: IDBFactory): Promise<IDBDatabase> {
           store.createIndex('byStatus', 'status', { unique: false });
         }
       }
+    });
+    request.addEventListener('success', () => resolve(request.result));
+    request.addEventListener('error', () => reject(request.error));
+  });
+}
+
+function openLiteralVersion32ExerciseDatabase(factory: IDBFactory): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = factory.open(LIFE_OS_DATABASE_NAME, 32);
+    request.addEventListener('upgradeneeded', () => {
+      const definitions = request.result.createObjectStore(LIFE_OS_STORE.exerciseDefinitions, {
+        keyPath: 'id',
+      });
+      definitions.createIndex('byNormalizedName', 'normalizedName', { unique: true });
     });
     request.addEventListener('success', () => resolve(request.result));
     request.addEventListener('error', () => reject(request.error));

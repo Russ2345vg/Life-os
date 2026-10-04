@@ -17,8 +17,16 @@ export interface MorningCycleRecord {
   readonly physicalUpdatedAt: string | null;
   readonly physicalPlanItems?: ReadonlyArray<MorningPhysicalPlanItemRecord> | null;
   readonly physicalExecution?: MorningPhysicalExecutionRecord | null;
+  readonly physicalRecommendation?: MorningPhysicalRecommendationRecord | null;
   readonly updatedAt: string;
   readonly version: number;
+}
+
+export interface MorningPhysicalRecommendationRecord {
+  readonly status: 'PENDING' | 'ACCEPTED' | 'DISMISSED';
+  readonly planItems: ReadonlyArray<MorningPhysicalPlanItemRecord>;
+  readonly createdAt: string;
+  readonly decidedAt: string | null;
 }
 
 export interface MorningPhysicalExecutionRecord {

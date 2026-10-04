@@ -1,6 +1,7 @@
 import {
   EXERCISE_MEASUREMENT_TYPE,
   MORNING_CYCLE_STATE,
+  MORNING_PHYSICAL_RECOMMENDATION_STATUS,
   MORNING_PHYSICAL_SET_STATUS,
   MORNING_SHORTENED_ACTION,
   MorningCycle,
@@ -13,6 +14,7 @@ import {
   type MorningCycleState,
   type MorningPhysicalSetExecution,
   type MorningPhysicalPlanItem,
+  type MorningPhysicalRecommendation,
   type MorningStageState,
   type MorningShortenedConfiguration,
   type MorningShortenedModeState,
@@ -20,6 +22,7 @@ import {
 import type {
   MorningCycleRecord,
   MorningPhysicalExecutionRecord,
+  MorningPhysicalPlanItemRecord,
   MorningPhysicalSetExecutionRecord,
 } from '../records/MorningCycleRecord';
 import {
@@ -40,6 +43,7 @@ import {
 export class MorningCycleRecordMapper {
   public static toRecord(cycle: MorningCycle): MorningCycleRecord {
     const physicalExecution = cycle.physicalExecution;
+    const physicalRecommendation = cycle.physicalRecommendation;
     return {
       schemaVersion: 1,
       id: cycle.id.toString(),
@@ -69,23 +73,18 @@ export class MorningCycleRecordMapper {
       waterAmountMl: cycle.waterAmountMl,
       physicalStatus: cycle.physicalStatus,
       physicalUpdatedAt: cycle.physicalUpdatedAt?.toISOString() ?? null,
-      physicalPlanItems: cycle.physicalPlanItems.map((item) =>
-        item.measurementType === EXERCISE_MEASUREMENT_TYPE.repetitions
-          ? {
-              exerciseDefinitionId: item.exerciseDefinitionId.toString(),
-              measurementType: item.measurementType,
-              sets: item.sets,
-              targetReps: item.targetReps,
-            }
-          : {
-              exerciseDefinitionId: item.exerciseDefinitionId.toString(),
-              measurementType: item.measurementType,
-              sets: item.sets,
-              targetDurationSeconds: item.targetDurationSeconds,
-            },
-      ),
+      physicalPlanItems: cycle.physicalPlanItems.map(toPhysicalPlanItemRecord),
       physicalExecution:
         physicalExecution === null ? null : toPhysicalExecutionRecord(physicalExecution),
+      physicalRecommendation:
+        physicalRecommendation === null
+          ? null
+          : {
+              status: physicalRecommendation.status,
+              planItems: physicalRecommendation.planItems.map(toPhysicalPlanItemRecord),
+              createdAt: physicalRecommendation.createdAt.toISOString(),
+              decidedAt: physicalRecommendation.decidedAt?.toISOString() ?? null,
+            },
       updatedAt: cycle.updatedAt.toISOString(),
       version: cycle.version,
     };
@@ -100,6 +99,7 @@ export class MorningCycleRecordMapper {
     }
     const startedAt = readNullableIsoDate(record, 'startedAt');
     const physicalExecution = readOptionalPhysicalExecution(record);
+    const physicalRecommendation = readOptionalPhysicalRecommendation(record);
     const shortenedModeState = readOptionalShortenedModeState(record);
     const shortenedConfiguration = readOptionalShortenedConfiguration(record);
     const startState = readOptionalStartState(record);
@@ -122,16 +122,33 @@ export class MorningCycleRecordMapper {
         physicalUpdatedAt: readNullableIsoDate(record, 'physicalUpdatedAt'),
         physicalPlanItems: readOptionalPhysicalPlanItems(record),
         physicalExecution,
+        physicalRecommendation,
         updatedAt: readIsoDate(record, 'updatedAt'),
         version: readNumber(record, 'version'),
       });
     } catch (error: unknown) {
-      if (physicalExecution !== null) {
+      if (physicalExecution !== null || physicalRecommendation !== null) {
         throw invalidRecord('Поле physicalExecution содержит несогласованные данные.', error);
       }
       throw error;
     }
   }
+}
+
+function toPhysicalPlanItemRecord(item: MorningPhysicalPlanItem): MorningPhysicalPlanItemRecord {
+  return item.measurementType === EXERCISE_MEASUREMENT_TYPE.repetitions
+    ? {
+        exerciseDefinitionId: item.exerciseDefinitionId.toString(),
+        measurementType: item.measurementType,
+        sets: item.sets,
+        targetReps: item.targetReps,
+      }
+    : {
+        exerciseDefinitionId: item.exerciseDefinitionId.toString(),
+        measurementType: item.measurementType,
+        sets: item.sets,
+        targetDurationSeconds: item.targetDurationSeconds,
+      };
 }
 
 function toPhysicalExecutionRecord(
@@ -298,15 +315,18 @@ function readNull(record: UnknownRecord, field: string): null {
   return null;
 }
 
-function readOptionalPhysicalPlanItems(record: UnknownRecord): readonly MorningPhysicalPlanItem[] {
-  if (!Object.hasOwn(record, 'physicalPlanItems') || record.physicalPlanItems === null) return [];
-  if (!Array.isArray(record.physicalPlanItems)) {
-    throw invalidRecord('Поле physicalPlanItems должно быть массивом объектов.');
+function readOptionalPhysicalPlanItems(
+  record: UnknownRecord,
+  field = 'physicalPlanItems',
+): readonly MorningPhysicalPlanItem[] {
+  if (!Object.hasOwn(record, field) || record[field] === null) return [];
+  if (!Array.isArray(record[field])) {
+    throw invalidRecord(`Поле ${field} должно быть массивом объектов.`);
   }
 
-  return record.physicalPlanItems.map((value) => {
+  return record[field].map((value) => {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-      throw invalidRecord('Поле physicalPlanItems должно быть массивом объектов.');
+      throw invalidRecord(`Поле ${field} должно быть массивом объектов.`);
     }
     const item = value as UnknownRecord;
     const measurementType = readString(item, 'measurementType');
@@ -333,6 +353,39 @@ function readOptionalPhysicalPlanItems(record: UnknownRecord): readonly MorningP
       targetDurationSeconds: readNumber(item, 'targetDurationSeconds'),
     };
   });
+}
+
+function readOptionalPhysicalRecommendation(
+  record: UnknownRecord,
+): MorningPhysicalRecommendation | null {
+  if (!Object.hasOwn(record, 'physicalRecommendation') || record.physicalRecommendation === null) {
+    return null;
+  }
+  if (
+    typeof record.physicalRecommendation !== 'object' ||
+    Array.isArray(record.physicalRecommendation)
+  ) {
+    throw invalidRecord('Поле physicalRecommendation должно быть объектом или null.');
+  }
+  const recommendation = record.physicalRecommendation as UnknownRecord;
+  const status = readString(recommendation, 'status');
+  if (
+    status !== MORNING_PHYSICAL_RECOMMENDATION_STATUS.pending &&
+    status !== MORNING_PHYSICAL_RECOMMENDATION_STATUS.accepted &&
+    status !== MORNING_PHYSICAL_RECOMMENDATION_STATUS.dismissed
+  ) {
+    throw invalidRecord('Поле physicalRecommendation содержит неизвестное состояние.');
+  }
+  try {
+    return {
+      status,
+      planItems: readOptionalPhysicalPlanItems(recommendation, 'planItems'),
+      createdAt: readIsoDate(recommendation, 'createdAt'),
+      decidedAt: readNullableIsoDate(recommendation, 'decidedAt'),
+    };
+  } catch (error: unknown) {
+    throw invalidRecord('Поле physicalRecommendation содержит некорректные данные.', error);
+  }
 }
 
 function readOptionalStartState(record: UnknownRecord) {

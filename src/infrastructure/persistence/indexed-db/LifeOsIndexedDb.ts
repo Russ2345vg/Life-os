@@ -46,7 +46,7 @@ interface MutationCaptureConfiguration {
 }
 
 export const LIFE_OS_DATABASE_NAME = 'lifeos';
-export const LIFE_OS_DATABASE_VERSION = 32;
+export const LIFE_OS_DATABASE_VERSION = 33;
 
 export const LIFE_OS_DOMAIN_STORE = {
   directionIndicators: 'directionIndicators',
@@ -309,6 +309,7 @@ export class LifeOsIndexedDb {
           if (oldVersion < 30) createVersionThirtySchema(request.result);
           if (oldVersion < 31) createVersionThirtyOneSchema(request.result);
           if (oldVersion < 32) createVersionThirtyTwoSchema(request.result);
+          if (oldVersion >= 19 && oldVersion < 33) createVersionThirtyThreeSchema(request.transaction);
           if (oldVersion < 22 && request.transaction)
             upgradeLegacyProjects(request.result, request.transaction);
         } catch (error: unknown) {
@@ -692,6 +693,29 @@ function createVersionNineteenSchema(database: IDBDatabase): void {
   definitions.createIndex('byNormalizedName', 'normalizedName', { unique: true });
   const seedTime = new Date(0).toISOString();
   for (const seed of SYSTEM_EXERCISE_DEFINITION_SEEDS) {
+    definitions.add({
+      schemaVersion: 1,
+      id: seed.id,
+      name: seed.name,
+      normalizedName: normalizeExerciseDefinitionName(seed.name),
+      measurementType: seed.measurementType,
+      source: EXERCISE_DEFINITION_SOURCE.system,
+      createdAt: seedTime,
+      updatedAt: seedTime,
+      archivedAt: null,
+      version: 1,
+    });
+  }
+}
+
+function createVersionThirtyThreeSchema(transaction: IDBTransaction | null): void {
+  if (transaction === null) throw new Error('Транзакция обновления IndexedDB недоступна.');
+  if (!transaction.objectStoreNames.contains(LIFE_OS_STORE.exerciseDefinitions)) return;
+  const definitions = transaction.objectStore(LIFE_OS_STORE.exerciseDefinitions);
+  const seedTime = new Date(0).toISOString();
+  for (const seed of SYSTEM_EXERCISE_DEFINITION_SEEDS.filter(
+    ({ id }) => id === 'morning-exercise.warm-up' || id === 'morning-exercise.stretching',
+  )) {
     definitions.add({
       schemaVersion: 1,
       id: seed.id,
