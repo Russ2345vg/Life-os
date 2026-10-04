@@ -33,7 +33,7 @@ async function seedTodayAction(page: Page) {
   ).toBeVisible();
 }
 
-test('Today shows the first action before secondary context without horizontal overflow', async ({
+test('Today keeps the morning ritual before the plan and secondary context without horizontal overflow', async ({
   page,
 }) => {
   await seedTodayAction(page);
@@ -42,10 +42,20 @@ test('Today shows the first action before secondary context without horizontal o
     const focus = document.querySelector<HTMLElement>('.planner-month-focus');
     const plan = document.querySelector<HTMLElement>('.planner-day-workspace');
     const sidebar = document.querySelector<HTMLElement>('.planner-today-sidebar');
-    if (!action || !focus || !plan || !sidebar) throw new Error('Today layout is incomplete');
+    const workout = document.querySelector<HTMLElement>('.morning-workout');
+    const morningFocus = document.querySelector<HTMLElement>('.morning-focus');
+    if (!action || !focus || !plan || !sidebar || !workout || !morningFocus) {
+      throw new Error('Today layout is incomplete');
+    }
     return {
-      actionTop: action.getBoundingClientRect().top,
       actionFontSize: getComputedStyle(action).fontSize,
+      workoutBeforeFocus: Boolean(
+        workout.compareDocumentPosition(morningFocus) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ),
+      focusBeforePlan: Boolean(
+        morningFocus.compareDocumentPosition(plan) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ),
+      actionInPlan: plan.contains(action),
       focusAfterPlan: Boolean(
         plan.compareDocumentPosition(focus) & Node.DOCUMENT_POSITION_FOLLOWING,
       ),
@@ -53,8 +63,10 @@ test('Today shows the first action before secondary context without horizontal o
       overflow: document.documentElement.scrollWidth - window.innerWidth,
     };
   });
-  expect(layout.actionTop).toBeLessThanOrEqual(page.viewportSize()!.width <= 640 ? 650 : 500);
   expect(layout.actionFontSize).toBe('16px');
+  expect(layout.workoutBeforeFocus).toBe(true);
+  expect(layout.focusBeforePlan).toBe(true);
+  expect(layout.actionInPlan).toBe(true);
   expect(layout.focusAfterPlan).toBe(true);
   expect(layout.focusInSidebar).toBe(true);
   expect(layout.overflow).toBeLessThanOrEqual(1);

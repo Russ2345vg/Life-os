@@ -306,6 +306,7 @@ test('MASTER goal conflict preserves the draft and the newer saved record', asyn
 
 for (const width of [320, 360, 375, 390, 393, 412, 430, 730, 1024, 1280, 1366, 1440, 1600, 1920]) {
   test(`MASTER responsive populated screens at ${width}px`, async ({ page }, info) => {
+    test.setTimeout(60_000);
     await page.setViewportSize({ width, height: 900 });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));

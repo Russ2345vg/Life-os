@@ -38,9 +38,24 @@ export function MorningWorkoutCard({
     }
   }, [publish, service]);
   useEffect(() => {
-    void load();
-    return service.subscribe(() => void load());
-  }, [load, service]);
+    let active = true;
+    void service
+      .get()
+      .then((next) => {
+        if (active) publish(next);
+      })
+      .catch((reason: unknown) => {
+        if (active) setError(messageOf(reason));
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    const unsubscribe = service.subscribe(() => void load());
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [load, publish, service]);
 
   const run = (command: () => Promise<MorningWorkoutSnapshot>) => {
     if (commandRunning.current) return;
@@ -130,7 +145,9 @@ export function MorningWorkoutCardView({
         <p className="planner-error" role="alert">
           {error ?? 'Не удалось загрузить зарядку.'}
         </p>
-        <button type="button" onClick={onRetry}>Повторить</button>
+        <button type="button" onClick={onRetry}>
+          Повторить
+        </button>
       </section>
     );
   }
@@ -146,7 +163,9 @@ export function MorningWorkoutCardView({
         <div>
           <p className="planner-eyebrow">Утренний ритуал · Шаг 1</p>
           <h2 id="morning-workout-title">Утренняя зарядка</h2>
-          <p className="planner-muted">≈ {snapshot.estimatedMinutes} минут · турник и коврик · без таймера</p>
+          <p className="planner-muted">
+            ≈ {snapshot.estimatedMinutes} минут · турник и коврик · без таймера
+          </p>
         </div>
         <strong className="morning-workout__progress">
           {snapshot.completedSets} из {snapshot.totalSets} подходов
@@ -154,19 +173,27 @@ export function MorningWorkoutCardView({
       </header>
 
       {snapshot.status === 'COMPLETED' ? (
-        <p className="morning-workout__status morning-workout__status--success">Зарядка выполнена</p>
+        <p className="morning-workout__status morning-workout__status--success">
+          Зарядка выполнена
+        </p>
       ) : null}
       {snapshot.status === 'SKIPPED' ? (
         <p className="morning-workout__status">Зарядка пропущена сегодня</p>
       ) : null}
-      {error ? <p className="planner-error" role="alert">{error}</p> : null}
+      {error ? (
+        <p className="planner-error" role="alert">
+          {error}
+        </p>
+      ) : null}
 
       {snapshot.status === 'NOT_STARTED' ? (
         <div className="morning-workout__actions">
           <button className="planner-primary" type="button" disabled={busy} onClick={onStart}>
             Начать зарядку
           </button>
-          <button type="button" disabled={busy} onClick={onSkipWorkout}>Пропустить сегодня</button>
+          <button type="button" disabled={busy} onClick={onSkipWorkout}>
+            Пропустить сегодня
+          </button>
         </div>
       ) : null}
 
@@ -196,7 +223,10 @@ export function MorningWorkoutCardView({
       ) : null}
 
       {snapshot.recommendation ? (
-        <section className="morning-workout__recommendation" aria-labelledby="morning-workout-recommendation-title">
+        <section
+          className="morning-workout__recommendation"
+          aria-labelledby="morning-workout-recommendation-title"
+        >
           <h3 id="morning-workout-recommendation-title">Нагрузка на следующее утро</h3>
           {snapshot.recommendation.changes.length ? (
             <ul>
@@ -212,10 +242,17 @@ export function MorningWorkoutCardView({
           ) : null}
           {snapshot.recommendation.status === 'PENDING' ? (
             <div className="morning-workout__actions">
-              <button className="planner-primary" type="button" disabled={busy} onClick={onAcceptRecommendation}>
+              <button
+                className="planner-primary"
+                type="button"
+                disabled={busy}
+                onClick={onAcceptRecommendation}
+              >
                 Принять на завтра
               </button>
-              <button type="button" disabled={busy} onClick={onDismissRecommendation}>Оставить текущую</button>
+              <button type="button" disabled={busy} onClick={onDismissRecommendation}>
+                Оставить текущую
+              </button>
             </div>
           ) : (
             <p className="planner-muted">
@@ -245,13 +282,25 @@ function WorkoutSetRow({
 }) {
   const unit = set.measurementType === EXERCISE_MEASUREMENT_TYPE.repetitions ? 'повт.' : 'сек.';
   if (set.status === 'COMPLETED') {
-    return <li className="morning-workout__set morning-workout__set--done">{set.setNumber}. {set.actual} {unit} выполнено</li>;
+    return (
+      <li className="morning-workout__set morning-workout__set--done">
+        {set.setNumber}. {set.actual} {unit} выполнено
+      </li>
+    );
   }
   if (set.status === 'SKIPPED') {
-    return <li className="morning-workout__set morning-workout__set--skipped">{set.setNumber}. Пропущено</li>;
+    return (
+      <li className="morning-workout__set morning-workout__set--skipped">
+        {set.setNumber}. Пропущено
+      </li>
+    );
   }
   if (!set.current || !inProgress) {
-    return <li className="morning-workout__set">{set.setNumber}. Цель {set.target} {unit}</li>;
+    return (
+      <li className="morning-workout__set">
+        {set.setNumber}. Цель {set.target} {unit}
+      </li>
+    );
   }
   const inputLabel = `${
     set.measurementType === EXERCISE_MEASUREMENT_TYPE.repetitions
@@ -267,7 +316,9 @@ function WorkoutSetRow({
           onComplete(set, Number(form.get('actual')));
         }}
       >
-        <span>{set.setNumber}. Цель {set.target} {unit}</span>
+        <span>
+          {set.setNumber}. Цель {set.target} {unit}
+        </span>
         <input
           aria-label={inputLabel}
           name="actual"
@@ -279,8 +330,12 @@ function WorkoutSetRow({
           disabled={busy}
           required
         />
-        <button className="planner-primary" type="submit" disabled={busy}>Готово</button>
-        <button type="button" disabled={busy} onClick={() => onSkip(set)}>Пропустить подход</button>
+        <button className="planner-primary" type="submit" disabled={busy}>
+          Готово
+        </button>
+        <button type="button" disabled={busy} onClick={() => onSkip(set)}>
+          Пропустить подход
+        </button>
       </form>
     </li>
   );

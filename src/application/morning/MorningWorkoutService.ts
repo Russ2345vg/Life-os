@@ -239,7 +239,9 @@ export class MorningWorkoutService {
       ? cycle.physicalPlanItems
       : createReadyMorningPhysicalPlan();
     const definitions = await this.#exercises.list();
-    const names = new Map(definitions.map((definition) => [definition.id.toString(), definition.name]));
+    const names = new Map(
+      definitions.map((definition) => [definition.id.toString(), definition.name]),
+    );
     for (const seed of SYSTEM_EXERCISE_DEFINITION_SEEDS) names.set(seed.id, seed.name);
     const execution = cycle?.physicalExecution ?? null;
     const executionSets = execution?.sets ?? [];
@@ -263,7 +265,13 @@ export class MorningWorkoutService {
         flattenedIndex += 1;
         return snapshot;
       });
-      return { exerciseDefinitionId: definitionId, exerciseName, measurementType: item.measurementType, target, sets };
+      return {
+        exerciseDefinitionId: definitionId,
+        exerciseName,
+        measurementType: item.measurementType,
+        target,
+        sets,
+      };
     });
     const sets = items.flatMap((item) => item.sets);
     const status = workoutStatus(cycle);
@@ -275,7 +283,8 @@ export class MorningWorkoutService {
       completedSets: sets.filter(({ status: setStatus }) => setStatus !== 'PENDING').length,
       focusUnlocked: status === 'COMPLETED' || status === 'SKIPPED',
       items,
-      currentSet: sets.find(({ current, status: setStatus }) => current && setStatus === 'PENDING') ?? null,
+      currentSet:
+        sets.find(({ current, status: setStatus }) => current && setStatus === 'PENDING') ?? null,
       recommendation:
         recommendation === null
           ? null
@@ -285,15 +294,18 @@ export class MorningWorkoutService {
                 const currentItem = plan.find(({ exerciseDefinitionId }) =>
                   exerciseDefinitionId.equals(nextItem.exerciseDefinitionId),
                 );
-                if (currentItem === undefined || targetOf(currentItem) === targetOf(nextItem)) return [];
+                if (currentItem === undefined || targetOf(currentItem) === targetOf(nextItem))
+                  return [];
                 const id = nextItem.exerciseDefinitionId.toString();
-                return [{
-                  exerciseDefinitionId: id,
-                  exerciseName: names.get(id) ?? id,
-                  measurementType: nextItem.measurementType,
-                  from: targetOf(currentItem),
-                  to: targetOf(nextItem),
-                }];
+                return [
+                  {
+                    exerciseDefinitionId: id,
+                    exerciseName: names.get(id) ?? id,
+                    measurementType: nextItem.measurementType,
+                    from: targetOf(currentItem),
+                    to: targetOf(nextItem),
+                  },
+                ];
               }),
             },
     };

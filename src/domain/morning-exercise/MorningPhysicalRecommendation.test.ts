@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EntityId } from '../shared/EntityId';
-import {
-  EXERCISE_MEASUREMENT_TYPE,
-  SYSTEM_EXERCISE_DEFINITION_ID,
-} from './ExerciseDefinition';
+import { EXERCISE_MEASUREMENT_TYPE, SYSTEM_EXERCISE_DEFINITION_ID } from './ExerciseDefinition';
 import { MorningPhysicalExecution } from './MorningPhysicalExecution';
 import {
   buildMorningPhysicalRecommendation,

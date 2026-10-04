@@ -33,6 +33,7 @@
 ### Task 1: Workout domain and adaptive recommendation
 
 **Files:**
+
 - Create: `src/domain/morning-exercise/MorningPhysicalRecommendation.ts`
 - Modify: `src/domain/morning-exercise/ExerciseDefinition.ts`
 - Modify: `src/domain/morning-exercise/index.ts`
@@ -41,6 +42,7 @@
 - Test: `src/domain/morning-exercise/MorningPhysicalRecommendation.test.ts`
 
 **Interfaces:**
+
 - Consumes: `MorningPhysicalPlanItem`, `MorningPhysicalExecution`, existing plan adjustment invariants.
 - Produces: `buildMorningPhysicalRecommendation(plan, execution): MorningPhysicalPlanItem[] | null`, persisted recommendation state and `MorningCycle.acceptPhysicalRecommendation()` / `dismissPhysicalRecommendation()`.
 
@@ -53,6 +55,7 @@
 ### Task 2: IndexedDB repositories and migration
 
 **Files:**
+
 - Create: `src/application/morning/MorningCycleRepository.ts`
 - Create: `src/application/morning/ExerciseDefinitionRepository.ts`
 - Create: `src/infrastructure/persistence/IndexedDbMorningCycleRepository.ts`
@@ -65,6 +68,7 @@
 - Test: `src/infrastructure/persistence/indexed-db/LifeOsIndexedDb.test.ts`
 
 **Interfaces:**
+
 - Consumes: recommendation state from Task 1.
 - Produces: `MorningCycleRepository.findByDate`, `latestBefore`, `save`, `subscribe`; `ExerciseDefinitionRepository.list`; IndexedDB schema version 33.
 
@@ -77,6 +81,7 @@
 ### Task 3: Morning workout application service
 
 **Files:**
+
 - Create: `src/application/morning/MorningWorkoutService.ts`
 - Create: `src/application/morning/MorningWorkoutService.test.ts`
 - Modify: `src/application/index.ts`
@@ -85,6 +90,7 @@
 - Test: `src/app/composition/createLifeOsApplication.test.ts`
 
 **Interfaces:**
+
 - Consumes: repositories from Task 2, current day id/date, `Clock` and `IdGenerator`.
 - Produces: `MorningWorkoutService.get(date)`, `start(date)`, `completeCurrentSet(date, actual)`, `skipCurrentSet(date)`, `skip(date)`, `acceptRecommendation(date)`, `dismissRecommendation(date)`, `subscribe(listener)` and `MorningWorkoutSnapshot`.
 
@@ -97,6 +103,7 @@
 ### Task 4: Planner V2 workout card and focus gate
 
 **Files:**
+
 - Create: `src/presentation/planner-v2/MorningWorkoutCard.tsx`
 - Create: `src/presentation/planner-v2/morning-workout.css`
 - Create: `src/presentation/planner-v2/MorningWorkoutCard.test.tsx`
@@ -109,6 +116,7 @@
 - Modify: `tests/e2e/current.morning-focus.spec.ts`
 
 **Interfaces:**
+
 - Consumes: `MorningWorkoutService` and snapshot from Task 3.
 - Produces: list-first accessible workout card, persisted commands and `workoutResolved` focus gate.
 
@@ -121,6 +129,7 @@
 ### Task 5: Release 1.0.32
 
 **Files:**
+
 - Modify: `package.json`
 - Modify: `package-lock.json`
 - Modify: `src-tauri/Cargo.toml`
@@ -128,6 +137,7 @@
 - Modify: release notes generated under `src-tauri/target/release-channel/v1.0.32/` (not committed unless already tracked by policy).
 
 **Interfaces:**
+
 - Consumes: completed Tasks 1–4 and all authorized pre-existing work in the branch.
 - Produces: committed/pushed `codex/morning-workout-release-1.0.32`, tag/release assets for LifeOS 1.0.32 and verified public download URLs.
 

@@ -1,9 +1,6 @@
 import { DomainError } from '../../shared/errors/DomainError';
 import { EntityId } from '../shared/EntityId';
-import {
-  EXERCISE_MEASUREMENT_TYPE,
-  SYSTEM_EXERCISE_DEFINITION_ID,
-} from './ExerciseDefinition';
+import { EXERCISE_MEASUREMENT_TYPE, SYSTEM_EXERCISE_DEFINITION_ID } from './ExerciseDefinition';
 import {
   MORNING_PHYSICAL_SET_STATUS,
   type MorningPhysicalExecution,
@@ -113,8 +110,7 @@ export function copyMorningPhysicalRecommendation(
       (!(value.decidedAt instanceof Date) ||
         Number.isNaN(value.decidedAt.getTime()) ||
         value.decidedAt.getTime() < value.createdAt.getTime())) ||
-    ((value.status === MORNING_PHYSICAL_RECOMMENDATION_STATUS.pending) !==
-      (value.decidedAt === null))
+    (value.status === MORNING_PHYSICAL_RECOMMENDATION_STATUS.pending) !== (value.decidedAt === null)
   ) {
     throw invalidRecommendation();
   }

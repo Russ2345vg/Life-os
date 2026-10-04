@@ -309,7 +309,8 @@ export class LifeOsIndexedDb {
           if (oldVersion < 30) createVersionThirtySchema(request.result);
           if (oldVersion < 31) createVersionThirtyOneSchema(request.result);
           if (oldVersion < 32) createVersionThirtyTwoSchema(request.result);
-          if (oldVersion >= 19 && oldVersion < 33) createVersionThirtyThreeSchema(request.transaction);
+          if (oldVersion >= 19 && oldVersion < 33)
+            createVersionThirtyThreeSchema(request.transaction);
           if (oldVersion < 22 && request.transaction)
             upgradeLegacyProjects(request.result, request.transaction);
         } catch (error: unknown) {

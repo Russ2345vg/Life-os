@@ -34,7 +34,9 @@ for (const viewport of [
     await expect(card.getByRole('button', { name: 'Принять на завтра' })).toBeVisible();
     await card.getByRole('button', { name: 'Принять на завтра' }).click();
     await expect(card).toContainText('Новая нагрузка принята');
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
     expect(errors).toEqual([]);
   });
 }

@@ -33,7 +33,7 @@ test('opens every primary current route directly and survives reload', async ({ 
     const routePage = await context.newPage();
     observeRuntimeIssues(routePage, issues);
     try {
-      await routePage.goto(`/#/v2/${path}`);
+      await routePage.goto(`/#/v2/${path}`, { waitUntil: 'domcontentloaded' });
       await expect(
         routePage.locator('#planner-main-content').getByRole('heading').first(),
       ).toBeVisible();

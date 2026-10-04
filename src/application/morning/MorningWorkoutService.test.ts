@@ -83,8 +83,7 @@ describe('MorningWorkoutService', () => {
     });
     expect(
       completed.recommendation?.changes.find(
-        ({ exerciseDefinitionId }) =>
-          exerciseDefinitionId === 'morning-exercise.pull-ups',
+        ({ exerciseDefinitionId }) => exerciseDefinitionId === 'morning-exercise.pull-ups',
       ),
     ).toMatchObject({ from: 4, to: 5 });
 
@@ -94,8 +93,7 @@ describe('MorningWorkoutService', () => {
     const nextStarted = await next.service.start();
     expect(
       nextStarted.items.find(
-        ({ exerciseDefinitionId }) =>
-          exerciseDefinitionId === 'morning-exercise.pull-ups',
+        ({ exerciseDefinitionId }) => exerciseDefinitionId === 'morning-exercise.pull-ups',
       ),
     ).toMatchObject({ target: 5 });
   });
@@ -131,10 +129,7 @@ async function completeWorkout(service: MorningWorkoutService, clock: MutableClo
   }
 }
 
-function createContext(
-  date: string,
-  reuse?: MorningWorkoutTestContext,
-): MorningWorkoutTestContext {
+function createContext(date: string, reuse?: MorningWorkoutTestContext): MorningWorkoutTestContext {
   const cycles = reuse?.cycles ?? new MemoryCycles();
   const exercises = reuse?.exercises ?? new MemoryExercises();
   const clock = reuse?.clock ?? new MutableClock();
@@ -174,8 +169,9 @@ class MemoryCycles implements MorningCycleRepository {
     return (
       [...this.values.values()]
         .filter((cycle) => cycle.dateKey.toString() < date.toString())
-        .sort((left, right) => right.dateKey.toString().localeCompare(left.dateKey.toString()))[0] ??
-      null
+        .sort((left, right) =>
+          right.dateKey.toString().localeCompare(left.dateKey.toString()),
+        )[0] ?? null
     );
   }
 
