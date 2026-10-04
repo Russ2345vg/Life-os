@@ -47,6 +47,7 @@ export function PlannerLibraryWorkspace({
   onOpenAction,
   onChangeDate,
   workTime,
+  onStartFocus,
   onStartWalk,
 }: {
   readonly services: PlannerLibraryServices & { readonly plannerScenarios?: ScenarioService };
@@ -58,6 +59,7 @@ export function PlannerLibraryWorkspace({
   readonly onOpenAction?: (id: string) => Promise<boolean> | void;
   readonly onChangeDate: (id: string, date: string) => Promise<LifeAction>;
   readonly workTime?: PlannerWorkTimeController;
+  readonly onStartFocus?: (action: LifeAction) => void;
   readonly onStartWalk?: ((actionId: string, requestId: string) => Promise<void>) | undefined;
 }) {
   const planningContext = usePlanning();
@@ -186,6 +188,7 @@ export function PlannerLibraryWorkspace({
   const menuForAction = (action: LifeAction): EntityMenuAction[] => [
     ...(action.status === 'draft' || action.status === 'ready'
       ? [
+          ...(onStartFocus ? [{ label: 'Начать фокус', run: () => onStartFocus(action) }] : []),
           {
             label: 'Редактировать',
             run: () => onNavigate({ view: 'action', id: action.id.toString() }),
@@ -334,9 +337,16 @@ export function PlannerLibraryWorkspace({
           }}
         >
           <PlannerActionForm
+            directions={(data?.directions ?? [])
+              .filter((direction) => direction.status !== 'archived')
+              .map((direction) => ({ id: direction.id.toString(), title: direction.name }))}
             goals={(planningContext?.state?.goals ?? [])
               .filter((goal) => goal.status === 'active' && !goal.isDeleted())
-              .map((goal) => ({ id: goal.id.toString(), title: goal.title }))}
+              .map((goal) => ({
+                id: goal.id.toString(),
+                title: goal.title,
+                directionId: goal.directionId?.toString() ?? null,
+              }))}
             initialGoalId={creatingStepFor}
             lockGoal
             scenarios={services.plannerScenarios}
@@ -580,14 +590,15 @@ export function PlannerLibraryWorkspace({
           onPlan={async (id, date) => {
             await run(() => changeLibraryDate(id, date), null);
           }}
-          onLink={async (id, goalId) => {
+          onLink={async (id, goalId, directionId) => {
             await run(async () => {
               const result = await services.setLifeActionGoal.execute({
                 lifeActionId: EntityId.create(id),
                 goalId: goalId ? EntityId.create(goalId) : null,
+                directionId: directionId ? EntityId.create(directionId) : null,
               });
               if (!result.ok) throw result.error;
-            }, 'Связь с целью сохранена');
+            }, 'Связь действия сохранена');
           }}
           menuForAction={menuForAction}
           onEdit={operations.onEdit}

@@ -7,6 +7,32 @@ import { LifeOsIndexedDb } from '../../infrastructure/persistence/indexed-db/Lif
 import { IndexedDbGoalRepository } from '../../infrastructure/persistence/IndexedDbGoalRepository';
 
 describe('V2 inbox and period focus', () => {
+  it('links an action directly to a direction without a goal and persists the context', async () => {
+    const database = new LifeOsIndexedDb(new IDBFactory());
+    const app = await createLifeOsApplication({ database });
+    try {
+      const direction = await app.balance.createDirection.execute({ name: 'Дом' });
+      if (!direction.ok) throw direction.error;
+      const created = await app.createLifeActionDraft.execute({
+        title: LifeActionTitle.create('Убрать шерсть'),
+      });
+      if (!created.ok) throw created.error;
+      const linked = await app.setLifeActionGoal.execute({
+        lifeActionId: created.value.id,
+        goalId: null,
+        directionId: direction.value.id,
+      });
+      if (!linked.ok) throw linked.error;
+      const stored = (await app.plannerCatalog.actions()).find((action) =>
+        action.id.equals(created.value.id),
+      );
+      expect(stored?.directionId?.toString()).toBe(direction.value.id.toString());
+      expect(stored?.goalId).toBeNull();
+    } finally {
+      database.close();
+    }
+  });
+
   it('preserves main selection on date edits and explicitly clears it when removing the date', async () => {
     const database = new LifeOsIndexedDb(new IDBFactory());
     const app = await createLifeOsApplication({ database });

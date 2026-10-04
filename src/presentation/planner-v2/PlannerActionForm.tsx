@@ -19,6 +19,7 @@ export interface PlannerOption {
 }
 export function PlannerActionForm({
   goals,
+  directions = [],
   onSubmit,
   onCancel,
   currentDate,
@@ -32,6 +33,7 @@ export function PlannerActionForm({
   scenarios,
 }: {
   readonly goals: readonly PlannerOption[];
+  readonly directions?: readonly PlannerOption[];
   readonly onSubmit: (draft: PlannerActionDraft) => Promise<void>;
   readonly onCancel: () => void;
   readonly currentDate: string;
@@ -48,7 +50,8 @@ export function PlannerActionForm({
   const [draft, setDraft] = useState(() => ({
     ...emptyActionDraft(initialGoalId, initialTitle),
     date: initialDate ?? '',
-    directionId: initialDirectionId ?? '',
+    directionId:
+      initialDirectionId ?? goals.find((goal) => goal.id === initialGoalId)?.directionId ?? '',
     parentActionId: initialParentActionId ?? '',
   }));
   const [busy, setBusy] = useState(false);
@@ -94,6 +97,8 @@ export function PlannerActionForm({
     };
   }, [scenarios, scenarioDate]);
   const goalUnavailable = draft.goalId !== '' && !goals.some((goal) => goal.id === draft.goalId);
+  const directionUnavailable =
+    draft.directionId !== '' && !directions.some((direction) => direction.id === draft.directionId);
   const scenarioUnavailable =
     Boolean(draft.scenarioId) &&
     (scenariosLoading ||
@@ -109,6 +114,10 @@ export function PlannerActionForm({
         if (saving.current) return;
         if (goalUnavailable) {
           setError('Выберите другую цель или «Без цели».');
+          return;
+        }
+        if (directionUnavailable && !draft.goalId) {
+          setError('Выберите другое направление или «Без направления».');
           return;
         }
         if (scenarioUnavailable) {
@@ -152,6 +161,40 @@ export function PlannerActionForm({
             placeholder="Что хотите сделать?"
           />
         </VoiceField>
+        <label>
+          <span>
+            Направление <small>необязательно</small>
+          </span>
+          <select
+            name="directionId"
+            value={draft.directionId}
+            disabled={Boolean(draft.goalId)}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                directionId: event.target.value,
+                goalId:
+                  current.goalId &&
+                  goals.find((goal) => goal.id === current.goalId)?.directionId !==
+                    event.target.value
+                    ? ''
+                    : current.goalId,
+              }))
+            }
+          >
+            <option value="">Без направления</option>
+            {directionUnavailable && (
+              <option value={draft.directionId} disabled>
+                Направление недоступно
+              </option>
+            )}
+            {directions.map((direction) => (
+              <option key={direction.id} value={direction.id}>
+                {direction.title}
+              </option>
+            ))}
+          </select>
+        </label>
         {lockGoal && !goalUnavailable ? (
           <input type="hidden" name="goalId" value={draft.goalId} />
         ) : (
@@ -162,7 +205,15 @@ export function PlannerActionForm({
             <select
               name="goalId"
               value={draft.goalId}
-              onChange={(event) => change('goalId', event.target.value)}
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  goalId: event.target.value,
+                  directionId: event.target.value
+                    ? (goals.find((goal) => goal.id === event.target.value)?.directionId ?? '')
+                    : current.directionId,
+                }))
+              }
             >
               <option value="">Без цели</option>
               {goalUnavailable ? (

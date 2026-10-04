@@ -53,6 +53,17 @@ export class WorkSessions {
     );
   }
 
+  /** Persist the scheduled end of a focus interval even if the tab wakes later. */
+  public pauseAtDeadline(
+    id: string,
+    expectedVersion: number,
+    deadline: Date,
+  ): Promise<ActionSession> {
+    const now = this.clock.now();
+    const at = new Date(Math.min(deadline.getTime(), now.getTime()));
+    return this.update(id, expectedVersion, (session) => session.pause(at, this.ids.generate()));
+  }
+
   public resume(id: string, expectedVersion: number): Promise<ActionSession> {
     return this.update(id, expectedVersion, (session) =>
       session.resume(this.clock.now(), this.ids.generate()),

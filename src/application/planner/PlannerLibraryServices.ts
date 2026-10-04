@@ -29,7 +29,10 @@ export interface PlannerLibraryServices {
   readonly libraryReads: Pick<PlannerLibraryReadModels, 'create'>;
   readonly setLifeActionTime?: Pick<SetLifeActionTime, 'execute'>;
   readonly timeCapacity?: Pick<TimeCapacityService, 'get' | 'setWeekday'>;
-  readonly workSessions?: Pick<WorkSessions, 'list' | 'start' | 'pause' | 'resume' | 'finish'>;
+  readonly workSessions?: Pick<
+    WorkSessions,
+    'list' | 'start' | 'pause' | 'pauseAtDeadline' | 'resume' | 'finish'
+  >;
   readonly createLifeActionDraft: Pick<CreateLifeActionDraft, 'execute'>;
   readonly plannerInbox: Pick<PlannerInbox, 'list' | 'capture' | 'convert' | 'archive'>;
   readonly plannerFocus: Pick<PlannerFocus, 'get' | 'setRole'>;

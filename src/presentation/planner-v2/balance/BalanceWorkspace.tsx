@@ -23,6 +23,8 @@ import { balanceImportanceLabels, scoreLabel } from './BalanceLabels';
 import { VoiceTextInput } from '../../voice-input/VoiceTextInput';
 import { EntityContextMenu, type EntityMenuAction } from '../EntityContextMenu';
 import { PlannerSheet } from '../PlannerSheet';
+import { ActionResults } from '../ActionResults';
+import { actionResultsForDirection } from '../actionResultsModel';
 import './balance.css';
 
 const periods: Record<PeriodKind, string> = {
@@ -935,6 +937,13 @@ export function BalanceWorkspace({
               <p className="planner-muted">Следующее действие не выбрано.</p>
             )}
           </section>
+          <ActionResults
+            actions={actionResultsForDirection(
+              state.actions,
+              direction.direction.id.toString(),
+              direction.goals.map((goal) => goal.id.toString()),
+            )}
+          />
           <div className="balance-section-heading">
             <h2>Активные цели</h2>
             {link(

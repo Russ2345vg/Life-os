@@ -10,7 +10,7 @@ export interface PlannerActionOperations {
   readonly onOpenAction?: ((id: string) => void) | undefined;
   readonly onComplete: (id: string) => void;
   readonly onPlan: (id: string, date: string, main?: boolean) => Promise<void>;
-  readonly onLink: (id: string, goalId: string) => Promise<void>;
+  readonly onLink: (id: string, goalId: string, directionId: string) => Promise<void>;
   readonly menuForAction?: ((action: LifeAction) => readonly EntityMenuAction[]) | undefined;
   readonly onReopen?: ((id: string) => Promise<void>) | undefined;
   readonly onEdit?:
@@ -72,11 +72,12 @@ export function createPlannerActionOperations(input: {
         main === undefined ? null : 'План сохранён',
       );
     },
-    onLink: async (id, goalId) => {
+    onLink: async (id, goalId, directionId) => {
       await input.run(async () => {
         const result = await input.services.setLifeActionGoal.execute({
           lifeActionId: EntityId.create(id),
           goalId: goalId ? EntityId.create(goalId) : null,
+          directionId: directionId ? EntityId.create(directionId) : null,
         });
         if (!result.ok) throw result.error;
       }, 'Связь с целью сохранена');
