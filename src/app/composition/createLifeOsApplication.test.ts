@@ -36,6 +36,11 @@ describe('createLifeOsApplication', () => {
     expect(application.sleepSchedule).toBeDefined();
     expect(application.sleepObservations).toBeDefined();
     expect(application.sleepAlarmObservations).toBeDefined();
+    await expect(application.morningWorkout.get()).resolves.toMatchObject({
+      status: 'NOT_STARTED',
+      totalSets: 15,
+      estimatedMinutes: 30,
+    });
     expect(application.createGoal).toBeDefined();
     expect(application.createLifeActionDraft).toBeDefined();
     expect(application.completeLifeAction).toBeDefined();

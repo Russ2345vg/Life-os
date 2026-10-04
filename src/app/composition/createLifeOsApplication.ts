@@ -102,6 +102,9 @@ import { IndexedDbWalkPreferencesStore } from '../../infrastructure/persistence/
 import { createMemoryModule } from './modules/createMemoryModule';
 import { PlannerLibraryReadModels } from '../../application/planner/PlannerLibraryReadModels';
 import { IndexedDbPlannerChangeSource } from '../../infrastructure/persistence/IndexedDbPlannerChangeSource';
+import { MorningWorkoutService } from '../../application/morning/MorningWorkoutService';
+import { IndexedDbMorningCycleRepository } from '../../infrastructure/persistence/IndexedDbMorningCycleRepository';
+import { IndexedDbExerciseDefinitionRepository } from '../../infrastructure/persistence/IndexedDbExerciseDefinitionRepository';
 
 export interface CreateLifeOsApplicationDependencies {
   readonly database?: LifeOsIndexedDb;
@@ -175,6 +178,14 @@ export async function createLifeOsApplication(
       idGenerator,
     );
     const currentDay = await ensureCurrentDay.execute();
+    const morningWorkout = new MorningWorkoutService({
+      cycles: new IndexedDbMorningCycleRepository(database),
+      exercises: new IndexedDbExerciseDefinitionRepository(database),
+      clock,
+      ids: idGenerator,
+      dayId: currentDay.id,
+      date: currentDay.date,
+    });
 
     const planningRepository = new IndexedDbPlanningRepository(database, mutationRecorder);
     const planning = {
@@ -237,6 +248,7 @@ export async function createLifeOsApplication(
       lifeActionRepository,
       goalRepository,
       journalUnitOfWork,
+      directionRepository,
     );
 
     const pilotDeleteRepository = new IndexedDbPilotDeleteRepository(database, mutationRecorder);
@@ -353,6 +365,7 @@ export async function createLifeOsApplication(
       planning,
       diary,
       memory,
+      morningWorkout,
       plannerInbox,
       plannerScenarios: new PlannerScenarios(
         new IndexedDbTaskScenarioRepository(database),

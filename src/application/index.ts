@@ -67,6 +67,18 @@ export {
 export { SleepScheduleService } from './sleep/SleepScheduleService';
 export type { SleepScheduleRepository } from './sleep/SleepScheduleRepository';
 export {
+  MorningWorkoutService,
+  type MorningWorkoutItemSnapshot,
+  type MorningWorkoutRecommendationChange,
+  type MorningWorkoutRecommendationSnapshot,
+  type MorningWorkoutSetCommand,
+  type MorningWorkoutSetSnapshot,
+  type MorningWorkoutSnapshot,
+  type MorningWorkoutStatus,
+} from './morning/MorningWorkoutService';
+export type { MorningCycleRepository } from './morning/MorningCycleRepository';
+export type { ExerciseDefinitionRepository } from './morning/ExerciseDefinitionRepository';
+export {
   SyncApplicationService,
   type SyncApplication,
   type SyncApplicationDependencies,

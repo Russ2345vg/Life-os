@@ -746,6 +746,28 @@ export class MorningCycle extends Entity {
     return true;
   }
 
+  public configurePhysicalPlan(
+    items: readonly MorningPhysicalPlanItem[],
+    occurredAt: Date,
+  ): boolean {
+    this.assertPhysicalPlanEditable();
+    const nextItems = copyMorningPhysicalPlanItems(items);
+    if (
+      this.#physicalPlanItems.length === nextItems.length &&
+      this.#physicalPlanItems.every((item, index) => samePlanItem(item, nextItems[index]!))
+    ) {
+      return false;
+    }
+    this.changePhysicalPlan(
+      nextItems,
+      nextItems.length === 0
+        ? MORNING_PHYSICAL_STATUS.notConfigured
+        : MORNING_PHYSICAL_STATUS.ready,
+      occurredAt,
+    );
+    return true;
+  }
+
   public deselectPhysicalExercise(definitionId: EntityId, occurredAt: Date): boolean {
     this.assertPhysicalPlanEditable();
     const nextItems = this.#physicalPlanItems.filter(
