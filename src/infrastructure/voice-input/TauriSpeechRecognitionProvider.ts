@@ -16,7 +16,7 @@ type InvokeFunction = (command: string, args?: Record<string, unknown>) => Promi
 
 function environment(): NativeVoiceEnvironment {
   return {
-    tauri: isTauri(),
+    tauri: isTauri() || (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window),
     userAgent: typeof navigator === 'undefined' ? '' : navigator.userAgent,
   };
 }
