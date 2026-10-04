@@ -64,6 +64,13 @@ export {
   type MonthlyDirectionFocusState,
   type MonthlyDirectionFocusSuggestion,
 } from './planner/MonthlyDirectionFocusService';
+export {
+  DayAutopilotService,
+  type DayAutopilotApplyResult,
+  type DayAutopilotPreview,
+  type DayAutopilotPreviewInput,
+  type DayAutopilotRecoverySignal,
+} from './planner/DayAutopilotService';
 export { SleepScheduleService } from './sleep/SleepScheduleService';
 export type { SleepScheduleRepository } from './sleep/SleepScheduleRepository';
 export {

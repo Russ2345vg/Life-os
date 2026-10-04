@@ -1299,6 +1299,12 @@ function PlannerWorkspaceContent({
                     (new Date(`${selectedDate.toString()}T12:00:00Z`).getUTCDay() + 6) % 7
                   ] ?? null
                 }
+                {...(services.dayAutopilot
+                  ? {
+                      dayAutopilot: services.dayAutopilot,
+                      onDayAutopilotApplied: () => load(),
+                    }
+                  : {})}
                 monthlyDirectionFocus={data.monthlyDirectionFocus}
                 busy={busy}
                 menuForAction={menuForAction}

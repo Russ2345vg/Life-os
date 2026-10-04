@@ -1,6 +1,6 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { ActionSession, EntityId } from '../../domain';
+import { ActionSession, DayDate, EntityId } from '../../domain';
 import { ActionSessionRecordMapper } from '../../infrastructure/persistence/mappers/ActionSessionRecordMapper';
 import { createLifeActionDraft } from '../../test/helpers/LifeActionTestFactory';
 import { FakeClock, FakeIdGenerator } from '../../test/helpers/Fakes';
@@ -92,6 +92,43 @@ describe('WorkSessions', () => {
     await expect(service.pause(started.id.toString(), started.version)).rejects.toMatchObject({
       code: 'persistence.version_conflict',
     });
+  });
+
+  it('atomically rejects an autopilot batch when one action starts running', async () => {
+    const active = createLifeActionDraft('autopilot-active');
+    const idle = createLifeActionDraft('autopilot-idle');
+    active.setPlan(DayDate.create('2026-09-28'), false);
+    idle.setPlan(DayDate.create('2026-09-28'), false);
+    await actions.save(active);
+    await actions.save(idle);
+    await service.start(active.id.toString());
+    const activeDraft = (await actions.findById(active.id))!;
+    const idleDraft = (await actions.findById(idle.id))!;
+    const activeVersion = activeDraft.version;
+    const idleVersion = idleDraft.version;
+    activeDraft.setTimePlanning({
+      estimateMinutes: 25,
+      scheduledStartMinute: 540,
+      scheduledDurationMinutes: 25,
+    });
+    idleDraft.setTimePlanning({
+      estimateMinutes: 25,
+      scheduledStartMinute: 570,
+      scheduledDurationMinutes: 25,
+    });
+
+    await expect(
+      new IndexedDbJournalUnitOfWork(db).commit({
+        inactiveSessionActionIds: [active.id, idle.id],
+        lifeActions: [
+          { lifeAction: activeDraft, expectedVersion: activeVersion },
+          { lifeAction: idleDraft, expectedVersion: idleVersion },
+        ],
+        journalEntries: [],
+      }),
+    ).rejects.toMatchObject({ code: 'day_autopilot.active_session' });
+    expect((await actions.findById(active.id))?.scheduledStartMinute).toBeNull();
+    expect((await actions.findById(idle.id))?.scheduledStartMinute).toBeNull();
   });
 
   it('can finish imported conflicting sessions and preserves an orphaned session history', async () => {

@@ -42,6 +42,7 @@ import { PlannerCatalog } from '../../application/planner/PlannerCatalog';
 import { PlannerFocus } from '../../application/planner/PlannerFocus';
 import { PlannerInbox } from '../../application/planner/PlannerInbox';
 import { PlannerScenarios } from '../../application/planner/PlannerScenarios';
+import { DayAutopilotService } from '../../application/planner/DayAutopilotService';
 import { IndexedDbTaskScenarioRepository } from '../../infrastructure/persistence/IndexedDbTaskScenarioRepository';
 import { RecurringActions } from '../../application/planner/RecurringActions';
 import { GetDirections } from '../../application/queries/GetDirections';
@@ -149,6 +150,7 @@ export async function createLifeOsApplication(
     const goalRepository = new IndexedDbGoalRepository(database, mutationRecorder);
     const sleepScheduleRepository = new IndexedDbSleepScheduleRepository(database);
     const sleepObservationRepository = new IndexedDbSleepObservationRepository(database);
+    const actionSessionRepository = new IndexedDbActionSessionRepository(database);
 
     let meaningfulSettingsSync: MeaningfulLocalSettingsSync | null = null;
     const localSettings = new BrowserLocalSettingsStore(undefined, () => {
@@ -291,6 +293,15 @@ export async function createLifeOsApplication(
       sleepSchedule,
       sleepObservations,
     );
+    const dayAutopilot = new DayAutopilotService({
+      actions: lifeActionRepository,
+      sessions: actionSessionRepository,
+      unitOfWork: journalUnitOfWork,
+      capacity: timeCapacity,
+      sleep: sleepObservations,
+      clock,
+      currentDate: currentDateProvider,
+    });
     void sleepAlarmObservations.sync().catch(() => undefined);
 
     const getGoals = new GetGoals(goalRepository);
@@ -380,8 +391,9 @@ export async function createLifeOsApplication(
       setLifeActionPlan,
       setLifeActionTime,
       timeCapacity,
+      dayAutopilot,
       workSessions: new WorkSessions(
-        new IndexedDbActionSessionRepository(database),
+        actionSessionRepository,
         lifeActionRepository,
         journalUnitOfWork,
         clock,

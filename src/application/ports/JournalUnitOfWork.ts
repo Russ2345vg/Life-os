@@ -52,6 +52,8 @@ export interface CommitJournalStateInput {
   };
   /** Recheck the source action while atomically creating a work session. */
   readonly workSessionActionGuard?: { readonly id: EntityId; readonly expectedVersion: number };
+  /** Reject a batch when one of its actions has a running or paused work session. */
+  readonly inactiveSessionActionIds?: readonly EntityId[];
   readonly planningSetup?: {
     readonly rules: readonly RecurrenceRule[];
     readonly links: readonly ContributionLink[];

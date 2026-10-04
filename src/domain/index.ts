@@ -499,6 +499,18 @@ export {
   type MonthlyDirectionFocus,
 } from './planner/MonthlyDirectionFocus';
 export {
+  buildDayAutopilotPlan,
+  type DayAutopilotActionInput,
+  type DayAutopilotDeferredReason,
+  type DayAutopilotInput,
+  type DayAutopilotLockedReason,
+  type DayAutopilotMode,
+  type DayAutopilotPlan,
+  type DeferredAutopilotAction,
+  type LockedActionWindow,
+  type ProposedActionWindow,
+} from './planner/DayAutopilot';
+export {
   WalkCapture,
   MAX_WALK_CAPTURE_LENGTH,
   type WalkCaptureCreationData,

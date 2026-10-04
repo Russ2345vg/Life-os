@@ -254,6 +254,13 @@ async function validateExpectedState(
         input.workSessionActionGuard,
       ),
     );
+  if (input.inactiveSessionActionIds?.length)
+    checks.push(
+      validateInactiveSessionActions(
+        transaction.objectStore(LIFE_OS_STORE.actionSessions),
+        input.inactiveSessionActionIds,
+      ),
+    );
   if (input.mainActionDate !== undefined)
     checks.push(
       validateMainActionSelection(transaction.objectStore(LIFE_OS_STORE.lifeActions), input),
@@ -424,6 +431,25 @@ async function validateSessionAction(
     );
 }
 
+async function validateInactiveSessionActions(
+  store: IDBObjectStore,
+  actionIds: NonNullable<CommitJournalStateInput['inactiveSessionActionIds']>,
+): Promise<void> {
+  const protectedIds = new Set(actionIds.map((id) => id.toString()));
+  const sessions = await observeRequest<ActionSessionRecord[]>(store.getAll());
+  if (
+    sessions.some(
+      (session) =>
+        protectedIds.has(session.lifeActionId) &&
+        (session.status === 'running' || session.status === 'paused'),
+    )
+  )
+    throw new DomainError(
+      'day_autopilot.active_session',
+      'Одна из задач уже выполняется. Соберите план дня ещё раз.',
+    );
+}
+
 function collectStores(input: CommitJournalStateInput): string[] {
   const stores = new Set<string>([LIFE_OS_STORE.journal]);
   if (input.walkCaptureAction) {
@@ -441,6 +467,7 @@ function collectStores(input: CommitJournalStateInput): string[] {
   if ((input.lifeActions?.length ?? 0) > 0) stores.add(LIFE_OS_STORE.lifeActions);
   if (input.mainActionDate !== undefined) stores.add(LIFE_OS_STORE.lifeActions);
   if ((input.workSessions?.length ?? 0) > 0) stores.add(LIFE_OS_STORE.actionSessions);
+  if (input.inactiveSessionActionIds?.length) stores.add(LIFE_OS_STORE.actionSessions);
   if (input.workSessionActionGuard) stores.add(LIFE_OS_STORE.lifeActions);
   if ((input.directions?.length ?? 0) > 0) stores.add(LIFE_OS_STORE.directions);
   if ((input.projects?.length ?? 0) > 0) stores.add(LIFE_OS_STORE.goals);
@@ -489,6 +516,7 @@ function transactionFailed(error: unknown): DomainError {
       'life_action.time_conflict',
       'session.unfinished_exists',
       'session.action_unavailable',
+      'day_autopilot.active_session',
       'sync.client_update_required',
     ].includes(error.code)
   )

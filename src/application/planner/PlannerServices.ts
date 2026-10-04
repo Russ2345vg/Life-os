@@ -23,6 +23,7 @@ import type { PlannerLibraryServices } from './PlannerLibraryServices';
 import type { PlannerScenarios } from './PlannerScenarios';
 import type { PlanningServices } from './PlanningServices';
 import type { MorningWorkoutService } from '../morning/MorningWorkoutService';
+import type { DayAutopilotService } from './DayAutopilotService';
 
 export type ScenarioService = Pick<
   PlannerScenarios,
@@ -39,6 +40,7 @@ export interface PlannerServices extends PlannerLibraryServices {
   readonly coldShower?: ColdShowerService;
   readonly morningWorkout?: MorningWorkoutService;
   readonly plannerScenarios?: ScenarioService;
+  readonly dayAutopilot?: Pick<DayAutopilotService, 'preview' | 'apply'>;
   readonly balance?: BalanceServices;
   readonly planning?: PlanningServices;
   readonly createLifeActionDraft: Pick<CreateLifeActionDraft, 'execute'>;

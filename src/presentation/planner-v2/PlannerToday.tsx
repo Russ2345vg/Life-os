@@ -14,7 +14,7 @@ import { usePlanning } from './PlanningContext';
 import { PlanningActionDetails } from './PlanningActionDetails';
 import { useRef, useState } from 'react';
 import type { PlannerTodayOverview } from '../../application';
-import type { MorningWorkoutService } from '../../application';
+import type { DayAutopilotService, MorningWorkoutService } from '../../application';
 import type { ActionSession, DayDate, LifeAction } from '../../domain';
 import { MorningFocusCard } from './MorningFocusCard';
 import { MorningWorkoutCard } from './MorningWorkoutCard';
@@ -28,6 +28,7 @@ import {
   MonthlyDirectionFocusCard,
   type MonthlyDirectionFocusView,
 } from './MonthlyDirectionFocusCard';
+import { DayAutopilotCard } from './DayAutopilotCard';
 
 export function PlannerToday({
   date,
@@ -57,6 +58,8 @@ export function PlannerToday({
   scenarios,
   menuForAction,
   capacityMinutes = null,
+  dayAutopilot,
+  onDayAutopilotApplied,
 }: {
   readonly date: DayDate;
   readonly day: 'today' | 'tomorrow';
@@ -85,6 +88,8 @@ export function PlannerToday({
   readonly scenarios?: ScenarioService | undefined;
   readonly menuForAction?: (action: LifeAction) => readonly EntityMenuAction[];
   readonly capacityMinutes?: number | null;
+  readonly dayAutopilot?: Pick<DayAutopilotService, 'preview' | 'apply'>;
+  readonly onDayAutopilotApplied?: () => Promise<void> | void;
 }) {
   const [workoutResolved, setWorkoutResolved] = useState(morningWorkout === undefined);
   const [title, setTitle] = useState('');
@@ -345,6 +350,14 @@ export function PlannerToday({
                 {schedule.overCapacity && <> · План превышает доступное время</>}
               </p>
             )}
+            {day === 'today' && dayAutopilot && onDayAutopilotApplied ? (
+              <DayAutopilotCard
+                date={date}
+                service={dayAutopilot}
+                busy={busy}
+                onApplied={onDayAutopilotApplied}
+              />
+            ) : null}
             <form
               className="planner-quick-add"
               aria-label={
