@@ -14,7 +14,10 @@ import { usePlanning } from './PlanningContext';
 import { PlanningActionDetails } from './PlanningActionDetails';
 import { useRef, useState } from 'react';
 import type { PlannerTodayOverview } from '../../application';
-import type { DayDate, LifeAction } from '../../domain';
+import type { MorningWorkoutService } from '../../application';
+import type { ActionSession, DayDate, LifeAction } from '../../domain';
+import { MorningFocusCard } from './MorningFocusCard';
+import { MorningWorkoutCard } from './MorningWorkoutCard';
 import { VoiceTextInput } from '../voice-input/VoiceTextInput';
 import type { PlannerOption } from './PlannerActionForm';
 import { EntityContextMenu, type EntityMenuAction } from './EntityContextMenu';
@@ -30,6 +33,9 @@ export function PlannerToday({
   date,
   day,
   overview,
+  workSessions = null,
+  onStartMorningFocus,
+  morningWorkout,
   goals,
   directions = [],
   spheres = [],
@@ -55,6 +61,9 @@ export function PlannerToday({
   readonly date: DayDate;
   readonly day: 'today' | 'tomorrow';
   readonly overview: PlannerTodayOverview;
+  readonly workSessions?: readonly ActionSession[] | null;
+  readonly onStartMorningFocus?: (action: LifeAction) => void;
+  readonly morningWorkout?: MorningWorkoutService | undefined;
   readonly goals: readonly PlannerOption[];
   readonly directions?: readonly PlannerOption[];
   readonly spheres?: readonly PlannerOption[];
@@ -77,6 +86,7 @@ export function PlannerToday({
   readonly menuForAction?: (action: LifeAction) => readonly EntityMenuAction[];
   readonly capacityMinutes?: number | null;
 }) {
+  const [workoutResolved, setWorkoutResolved] = useState(morningWorkout === undefined);
   const [title, setTitle] = useState('');
   const [reviewed, setReviewed] = useState<readonly string[]>([]);
   const reviewKey = (action: LifeAction) =>
@@ -281,6 +291,21 @@ export function PlannerToday({
             </button>
           </div>
         </header>
+        {day === 'today' && morningWorkout ? (
+          <MorningWorkoutCard
+            service={morningWorkout}
+            onSnapshotChange={(snapshot) => setWorkoutResolved(snapshot.focusUnlocked)}
+          />
+        ) : null}
+        {day === 'today' && (
+          <MorningFocusCard
+            dateKey={date.toString()}
+            action={overview.main}
+            sessions={workSessions}
+            onStart={onStartMorningFocus}
+            unlocked={workoutResolved}
+          />
+        )}
         <section
           className="planner-day-workspace"
           aria-label={day === 'tomorrow' ? 'План на завтра' : 'План на сегодня'}

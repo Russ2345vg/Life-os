@@ -155,6 +155,9 @@ describe('Planner Today', () => {
     expect(html).toContain('План на сегодня');
     expect(html).toContain('В плане <strong>2</strong>');
     expect(html).toContain('Готово <strong>1</strong>');
+    expect(html).toContain('Утренний ритуал');
+    expect(html).toContain('0 / 60 мин');
+    expect(html).toContain('Главная задача дня');
     expect(html.indexOf('planner-day-center__header')).toBeLessThan(
       html.indexOf('aria-label="Новое действие на сегодня"'),
     );

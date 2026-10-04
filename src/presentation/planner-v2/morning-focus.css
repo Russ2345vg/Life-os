@@ -1,0 +1,65 @@
+.planner-v2 .morning-focus {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-4);
+  align-items: center;
+  padding: var(--space-6);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-large);
+  background: var(--surface-1);
+}
+
+.planner-v2 .morning-focus :is(h2, p) {
+  margin: 0;
+}
+
+.planner-v2 .morning-focus__copy {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.planner-v2 .morning-focus__copy h2 {
+  font-size: 1.25rem;
+}
+
+.planner-v2 .morning-focus__action {
+  overflow-wrap: anywhere;
+  font-weight: 700;
+}
+
+.planner-v2 .morning-focus__progress {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 15rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.planner-v2 .morning-focus__progress progress {
+  width: 100%;
+  height: var(--space-2);
+  accent-color: var(--planner-accent);
+}
+
+.planner-v2 .morning-focus__progress span {
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+}
+
+.planner-v2 .morning-focus > button {
+  grid-column: 1 / -1;
+  min-height: var(--control-sm);
+  justify-self: start;
+}
+
+@media (max-width: 760px) {
+  .planner-v2 .morning-focus {
+    grid-template-columns: minmax(0, 1fr);
+    padding: var(--space-4);
+  }
+
+  .planner-v2 .morning-focus > button {
+    grid-column: auto;
+    width: 100%;
+  }
+}

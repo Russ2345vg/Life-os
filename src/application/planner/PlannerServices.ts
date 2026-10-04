@@ -22,6 +22,7 @@ import type { MonthlyDirectionFocusService } from './MonthlyDirectionFocusServic
 import type { PlannerLibraryServices } from './PlannerLibraryServices';
 import type { PlannerScenarios } from './PlannerScenarios';
 import type { PlanningServices } from './PlanningServices';
+import type { MorningWorkoutService } from '../morning/MorningWorkoutService';
 
 export type ScenarioService = Pick<
   PlannerScenarios,
@@ -36,6 +37,7 @@ export interface PlannerServices extends PlannerLibraryServices {
   readonly memory?: MemoryServices;
   readonly diary: DiaryService;
   readonly coldShower?: ColdShowerService;
+  readonly morningWorkout?: MorningWorkoutService;
   readonly plannerScenarios?: ScenarioService;
   readonly balance?: BalanceServices;
   readonly planning?: PlanningServices;
