@@ -31,7 +31,7 @@ export interface PlannerLibraryServices {
   readonly timeCapacity?: Pick<TimeCapacityService, 'get' | 'setWeekday'>;
   readonly workSessions?: Pick<
     WorkSessions,
-    'list' | 'start' | 'pause' | 'pauseAtDeadline' | 'resume' | 'finish'
+    'list' | 'start' | 'pause' | 'pauseAtDeadline' | 'finishAtDeadline' | 'resume' | 'finish'
   >;
   readonly createLifeActionDraft: Pick<CreateLifeActionDraft, 'execute'>;
   readonly plannerInbox: Pick<PlannerInbox, 'list' | 'capture' | 'convert' | 'archive'>;

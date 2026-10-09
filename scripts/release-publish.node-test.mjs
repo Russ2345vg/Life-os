@@ -92,6 +92,22 @@ test('publishes only complete prepared assets from the matching source commit', 
   }
 });
 
+test('uses the configured portable release toolchain and signing directory', () => {
+  assert.equal(
+    releaseModule.resolveReleaseSigningDirectory({ LIFEOS_SIGNING_DIR: 'C:/signing' }),
+    'C:/signing',
+  );
+  assert.equal(releaseModule.resolveReleaseSigningDirectory({}), 'D:/Android/LifeOS/signing');
+  assert.equal(
+    buildReleasePath({
+      CARGO_HOME: 'C:/cargo',
+      RUSTUP_HOME: 'C:/rustup',
+      Path: 'C:/Windows/System32',
+    }),
+    `${join('C:/cargo', 'bin')};${join('C:/rustup', 'toolchains', 'stable-x86_64-pc-windows-msvc', 'bin')};C:/Windows/System32`,
+  );
+});
+
 test('preserves the mixed-case Windows Path value', () => {
   assert.equal(
     buildReleasePath({ Path: 'C:\\Program Files\\nodejs;C:\\Windows\\System32' }),

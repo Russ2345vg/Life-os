@@ -1,4 +1,6 @@
 import type { BalanceServices } from '../balance/BalanceServices';
+import type { DesktopFocusWindow } from '../ports/DesktopFocusWindow';
+import type { PomodoroPreferences } from '../ports/PomodoroPreferences';
 import type { AiAssistant } from '../ai/AiAssistant';
 import type { ReadAiContext } from '../ai/AiContext';
 import type { GetAnalyticsOverview } from '../analytics/GetAnalyticsOverview';
@@ -32,6 +34,8 @@ export type ScenarioService = Pick<
 >;
 
 export interface PlannerServices extends PlannerLibraryServices {
+  readonly desktopFocusWindow?: DesktopFocusWindow;
+  readonly pomodoroPreferences?: PomodoroPreferences;
   readonly connections: Pick<GetConnections, 'read' | 'more'>;
   readonly aiAssistant?: AiAssistant;
   readonly aiContext?: ReadAiContext;

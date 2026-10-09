@@ -26,6 +26,7 @@ export class ActionSessionRecordMapper {
   public static toRecord(entity: ActionSession): ActionSessionRecord {
     return {
       schemaVersion: 1,
+      ...(entity.kind === 'focus' ? { kind: 'focus' as const } : {}),
       id: entity.id.toString(),
       lifeActionId: entity.lifeActionId.toString(),
       goalIdAtStart: entity.goalIdAtStart?.toString() ?? null,
@@ -61,6 +62,7 @@ export class ActionSessionRecordMapper {
 
     const completionKind = readNullableString(record, 'completionKind');
     return ActionSession.rehydrate({
+      kind: record.kind === undefined ? 'work' : record.kind,
       id: readEntityId(record, 'id'),
       lifeActionId: readEntityId(record, 'lifeActionId'),
       goalIdAtStart: readOptionalNullableEntityId(record, 'goalIdAtStart'),

@@ -10,6 +10,27 @@ import type { ActionSessionRecord } from '../records/ActionSessionRecord';
 import { ActionSessionRecordMapper } from './ActionSessionRecordMapper';
 
 describe('ActionSessionRecordMapper', () => {
+  it('round-trips focused sessions while legacy work is not relabelled as focus', () => {
+    const focus = ActionSession.start({
+      id: id('focus'),
+      lifeActionId: id('action'),
+      startedAt: time('09:00'),
+      eventId: id('event'),
+      kind: 'focus',
+    });
+    const record = ActionSessionRecordMapper.toRecord(focus);
+    expect(record.kind).toBe('focus');
+    expect(ActionSessionRecordMapper.fromRecord(record).kind).toBe('focus');
+    const legacy = ActionSessionRecordMapper.toRecord(completedSession());
+    expect(legacy.kind).toBeUndefined();
+    expect(ActionSessionRecordMapper.fromRecord(legacy).kind).toBe('work');
+    expect(() =>
+      ActionSessionRecordMapper.fromRecord({
+        ...legacy,
+        kind: 'invalid',
+      } as unknown as ActionSessionRecord),
+    ).toThrow();
+  });
   it('преобразует completed ActionSession с несколькими паузами в независимую record', () => {
     const session = completedSession();
     const eventCount = session.getUncommittedEvents().length;

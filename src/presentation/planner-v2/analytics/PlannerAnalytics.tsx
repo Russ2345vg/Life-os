@@ -12,6 +12,7 @@ import { addDays } from '../../../domain/planner/PlanningPeriod';
 import type { PlannerRoute } from '../PlannerNavigation';
 import { AppIcon, type AppIconName } from '../../components/AppIcon';
 import { ActionRankingsPanel } from './ActionRankingsPanel';
+import { FocusHistoryPanel } from './FocusHistoryPanel';
 import './analytics.css';
 
 type AnalyticsRoute = Extract<PlannerRoute, { view: 'analytics' }>;
@@ -654,6 +655,11 @@ export function PlannerAnalytics({
       )}
       {topic === 'time' && (
         <>
+          <FocusHistoryPanel
+            history={displayed.focusHistory}
+            selectedDay={selectedDay}
+            onOpenAction={toAction}
+          />
           <p>Рабочие интервалы без пауз; ручная общая оценка времени не прибавляется.</p>
           {!displayed.days.some((day) => dayFiltered(day.date) && day.timeMilliseconds > 0) && (
             <p>В выбранные дни рабочих сессий не было.</p>

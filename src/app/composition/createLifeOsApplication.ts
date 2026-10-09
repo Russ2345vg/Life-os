@@ -410,6 +410,10 @@ export async function createLifeOsApplication(
         clock,
         idGenerator,
       ),
+      pomodoroPreferences: new LocalPomodoroPreferences(
+        typeof window === 'undefined' ? null : window.localStorage,
+      ),
+      desktopFocusWindow: new TauriDesktopFocusWindow(),
       setLifeActionGoal,
       getPlannerToday: new GetPlannerToday(lifeActionRepository),
       getGoals,
@@ -464,3 +468,5 @@ export async function createLifeOsApplication(
     throw new LifeOsApplicationInitializationError(error);
   }
 }
+import { LocalPomodoroPreferences } from '../../infrastructure/time/LocalPomodoroPreferences';
+import { TauriDesktopFocusWindow } from '../../infrastructure/time/TauriDesktopFocusWindow';

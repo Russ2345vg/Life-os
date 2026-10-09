@@ -22,16 +22,25 @@ import process from 'node:process';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const TAURI_DIR = join(ROOT, 'src-tauri');
-const SIGNING_DIR = 'D:\\Android\\LifeOS\\signing';
+const SIGNING_DIR = resolveReleaseSigningDirectory(process.env);
 const RELEASE_REPOSITORY = 'LifeOS-Releases';
 const PACKAGE_ID = 'com.lifeos.desktop';
+
+export function resolveReleaseSigningDirectory(environment) {
+  return environment.LIFEOS_SIGNING_DIR ?? 'D:/Android/LifeOS/signing';
+}
 
 export function buildReleasePath(environment) {
   const inheritedPath =
     Object.entries(environment).find(([key]) => key.toLowerCase() === 'path')?.[1] ?? '';
   const releaseTools = [
-    'D:\\Android\\CargoHome\\bin',
-    'D:\\Android\\RustupHome\\toolchains\\stable-x86_64-pc-windows-msvc\\bin',
+    join(environment.CARGO_HOME ?? 'D:\\Android\\CargoHome', 'bin'),
+    join(
+      environment.RUSTUP_HOME ?? 'D:\\Android\\RustupHome',
+      'toolchains',
+      'stable-x86_64-pc-windows-msvc',
+      'bin',
+    ),
   ];
   return [...releaseTools, ...(inheritedPath === '' ? [] : [inheritedPath])].join(';');
 }

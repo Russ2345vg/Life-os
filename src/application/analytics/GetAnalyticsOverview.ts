@@ -6,6 +6,7 @@ import { contributionIsEffective } from '../../domain/planner/CompletionContribu
 import { analyzeWalks } from '../walk/WalkAnalytics';
 import { inclusiveDays, summarizeDiaryRatings } from '../diary/DiarySummary';
 import { buildWorkTimeReport } from '../queries/GetWorkTimeReport';
+import { buildFocusHistory, type FocusHistory } from '../queries/GetFocusHistory';
 import type { WorkTimeReport, WorkTimeRow } from '../queries/GetWorkTimeReport';
 import type { AnalyticsSnapshot, AnalyticsSnapshotReader } from '../ports/AnalyticsSnapshotReader';
 import { createGoalProgressReader } from '../planner/GoalContributions';
@@ -55,6 +56,7 @@ export interface AnalyticsOverview {
   readonly days: readonly AnalyticsDay[];
   readonly previousDays: readonly AnalyticsDay[];
   readonly work: WorkTimeReport;
+  readonly focusHistory: FocusHistory;
   readonly timeEvidence: readonly {
     readonly date: string;
     readonly rows: readonly WorkTimeRow[];
@@ -366,6 +368,13 @@ export function buildAnalyticsOverview(
     days,
     previousDays,
     work,
+    focusHistory: buildFocusHistory({
+      from: period.start,
+      to: through,
+      asOf,
+      actions: snapshot.actions,
+      sessions: snapshot.sessions,
+    }),
     timeEvidence,
     completedCount: days.reduce((sum, day) => sum + day.completed.length, 0),
     timeMilliseconds: work.actualMilliseconds,

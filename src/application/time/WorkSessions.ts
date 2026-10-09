@@ -20,7 +20,7 @@ export class WorkSessions {
     return this.repository.all();
   }
 
-  public async start(actionId: string): Promise<ActionSession> {
+  public async start(actionId: string, kind: 'work' | 'focus' = 'work'): Promise<ActionSession> {
     const action = await this.actions.findById(EntityId.create(actionId));
     if (
       !action ||
@@ -33,6 +33,7 @@ export class WorkSessions {
         'Начать работу можно только с открытым действием.',
       );
     const session = ActionSession.start({
+      kind,
       id: this.ids.generate(),
       lifeActionId: action.id,
       goalIdAtStart: action.goalId,
@@ -67,6 +68,17 @@ export class WorkSessions {
   public resume(id: string, expectedVersion: number): Promise<ActionSession> {
     return this.update(id, expectedVersion, (session) =>
       session.resume(this.clock.now(), this.ids.generate()),
+    );
+  }
+
+  public finishAtDeadline(
+    id: string,
+    expectedVersion: number,
+    deadline: Date,
+  ): Promise<ActionSession> {
+    const completedAt = new Date(Math.min(deadline.getTime(), this.clock.now().getTime()));
+    return this.update(id, expectedVersion, (session) =>
+      session.complete({ completedAt, completionKind: 'completed', eventId: this.ids.generate() }),
     );
   }
 

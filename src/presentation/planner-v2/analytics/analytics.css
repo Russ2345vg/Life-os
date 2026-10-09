@@ -932,3 +932,31 @@
     scroll-behavior: auto !important;
   }
 }
+.planner-v2 .analytics-focus-history {
+  margin-bottom: 28px;
+}
+.planner-v2 .analytics-focus-history h3 {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.planner-v2 .analytics-focus-history h3 span {
+  color: var(--planner-accent);
+  font-variant-numeric: tabular-nums;
+}
+.planner-v2 .analytics-focus-history__row > div {
+  min-width: 0;
+}
+.planner-v2 .analytics-focus-history__row strong {
+  overflow-wrap: anywhere;
+}
+.planner-v2 .analytics-focus-history__row small {
+  display: block;
+  margin-top: 6px;
+  color: var(--text-secondary);
+}
+.planner-v2 .analytics-focus-history__row button {
+  min-height: 44px;
+}

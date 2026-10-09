@@ -4,6 +4,7 @@ export interface PauseIntervalRecord {
 }
 
 export interface ActionSessionRecord {
+  readonly kind?: 'work' | 'focus';
   readonly schemaVersion: 1;
   readonly id: string;
   readonly lifeActionId: string;

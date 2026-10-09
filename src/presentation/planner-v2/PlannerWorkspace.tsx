@@ -1788,6 +1788,8 @@ function PlannerWorkspaceContent({
             onCloseSelection={() => setPomodoroSelection(null)}
             workTime={workTime}
             service={services.workSessions}
+            preferences={services.pomodoroPreferences}
+            desktopWindow={services.desktopFocusWindow}
             onOpenWorkTime={() => void navigate({ view: 'time' })}
           />
         </div>

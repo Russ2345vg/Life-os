@@ -15,6 +15,7 @@ import {
 } from './events';
 
 export interface ActionSessionStartInput {
+  readonly kind?: 'work' | 'focus';
   readonly id: EntityId;
   readonly lifeActionId: EntityId;
   readonly goalIdAtStart?: EntityId | null;
@@ -30,6 +31,7 @@ export interface ActionSessionCompletionInput {
 }
 
 export interface ActionSessionRehydrationData {
+  readonly kind?: 'work' | 'focus';
   readonly id: EntityId;
   readonly lifeActionId: EntityId;
   readonly goalIdAtStart?: EntityId | null;
@@ -44,6 +46,7 @@ export interface ActionSessionRehydrationData {
 }
 
 export class ActionSession extends Entity {
+  readonly #kind: 'work' | 'focus';
   readonly #lifeActionId: EntityId;
   readonly #goalIdAtStart: EntityId | null;
   readonly #startedAt: Date;
@@ -58,6 +61,8 @@ export class ActionSession extends Entity {
 
   private constructor(data: ActionSessionRehydrationData, domainEvents: DomainEvent[]) {
     super(data.id);
+    assertSessionKind(data.kind);
+    this.#kind = data.kind ?? 'work';
     this.#lifeActionId = data.lifeActionId;
     this.#goalIdAtStart = data.goalIdAtStart ?? null;
     this.#status = data.status;
@@ -72,6 +77,7 @@ export class ActionSession extends Entity {
   }
 
   public static start(input: ActionSessionStartInput): ActionSession {
+    assertSessionKind(input.kind);
     assertEntityId(input.id, 'Идентификатор сессии');
     assertEntityId(input.lifeActionId, 'Идентификатор действия');
     if (input.goalIdAtStart != null) assertEntityId(input.goalIdAtStart, 'Идентификатор цели');
@@ -81,6 +87,7 @@ export class ActionSession extends Entity {
     const session = new ActionSession(
       {
         id: input.id,
+        kind: input.kind ?? 'work',
         lifeActionId: input.lifeActionId,
         goalIdAtStart: input.goalIdAtStart ?? null,
         status: ACTION_SESSION_STATUS.running,
@@ -109,6 +116,10 @@ export class ActionSession extends Entity {
 
   public get lifeActionId(): EntityId {
     return this.#lifeActionId;
+  }
+
+  public get kind(): 'work' | 'focus' {
+    return this.#kind;
   }
 
   public get goalIdAtStart(): EntityId | null {
@@ -347,6 +358,7 @@ export class ActionSession extends Entity {
 }
 
 function assertRehydrationInvariants(data: ActionSessionRehydrationData): void {
+  assertSessionKind(data.kind);
   assertEntityId(data.id, 'Идентификатор сессии');
   assertEntityId(data.lifeActionId, 'Идентификатор действия');
   if (data.goalIdAtStart != null) assertEntityId(data.goalIdAtStart, 'Идентификатор цели');
@@ -366,6 +378,11 @@ function assertRehydrationInvariants(data: ActionSessionRehydrationData): void {
   assertOptionalResultNote(data.resultNote);
   assertStateFields(data);
   assertPauseIntervals(data);
+}
+
+function assertSessionKind(kind: unknown): void {
+  if (kind !== undefined && kind !== 'work' && kind !== 'focus')
+    throw new DomainError('action_session.invalid_kind', 'Неизвестный вид рабочей сессии.');
 }
 
 function assertStateFields(data: ActionSessionRehydrationData): void {

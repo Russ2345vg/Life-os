@@ -11,11 +11,20 @@ mod sync_commands;
 mod sync_crypto;
 #[cfg(target_os = "windows")]
 mod windows_voice_typing;
+#[cfg(target_os = "windows")]
+mod windows_focus_window;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[cfg(target_os = "windows")]
     let builder = tauri::Builder::default()
+        .manage(windows_focus_window::FocusWindowState::default())
+        .setup(|app| {
+            use tauri::Manager;
+            if let Some(window) = app.get_webview_window("main") { let _ = windows_focus_window::cache_normal(&window); }
+            Ok(())
+        })
+        .on_window_event(windows_focus_window::on_window_event)
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             sync_commands::sync_auth_session_write,
@@ -43,6 +52,10 @@ pub fn run() {
             sync_commands::sync_hash_pairing_secret,
             sync_commands::sync_render_pairing_qr,
             sync_commands::sync_platform,
+            windows_focus_window::focus_window_set_active,
+            windows_focus_window::focus_window_restore,
+            windows_focus_window::focus_window_is_compact,
+            windows_focus_window::focus_window_drag,
             windows_voice_typing::windows_voice_typing_start
         ]);
 

@@ -37,6 +37,15 @@ const goal = {
 };
 
 describe('PilotSyncRegistryAdapters', () => {
+  it('preserves focused-session classification when a legacy peer omits it', () => {
+    const existing = { ...structuredSyncFixtures().action_session, kind: 'focus' };
+    const wire = normalizePilotRecord('action_session', existing);
+    expect(wire.kind).toBe('focus');
+    expect(prepareRemotePilotRecord('action_session', wire).kind).toBe('focus');
+    const oldWire = { ...wire };
+    delete oldWire.kind;
+    expect(prepareRemotePilotRecord('action_session', oldWire, existing).kind).toBe('focus');
+  });
   it('round-trips one sleep observation independently from the schedule', () => {
     const fixture = {
       schemaVersion: 1,

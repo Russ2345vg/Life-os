@@ -9,6 +9,9 @@ import { IndexedDbLifeActionRepository } from '../../infrastructure/persistence/
 import { IndexedDbActionSessionRepository } from '../../infrastructure/persistence/IndexedDbActionSessionRepository';
 import { IndexedDbJournalUnitOfWork } from '../../infrastructure/persistence/IndexedDbJournalUnitOfWork';
 import { WorkSessions } from '../../application/time/WorkSessions';
+import { LIFE_OS_SYNC_STORE } from './indexed-db/LifeOsIndexedDb';
+import { LIFE_OS_SYNC_REGISTRY } from '../sync/LifeOsSyncRegistry';
+import { IndexedDbPilotMutationRecorder } from '../sync/pilot/IndexedDbPilotMutationRecorder';
 
 describe('WorkSessions', () => {
   let db: LifeOsIndexedDb;
@@ -30,6 +33,64 @@ describe('WorkSessions', () => {
     );
   });
   afterEach(() => db.close());
+
+  it('captures focus once in the existing durable sync outbox', async () => {
+    const action = createLifeActionDraft('synced-focus');
+    await actions.save(action);
+    db.configureSyncMutationCapture(
+      new IndexedDbPilotMutationRecorder({ now: () => clock.now() }),
+      LIFE_OS_SYNC_REGISTRY,
+      ['direction', 'project', 'goal'],
+    );
+    const connection = await db.open();
+    await new Promise<void>((resolve, reject) => {
+      const tx = connection.transaction(LIFE_OS_SYNC_STORE.settings, 'readwrite');
+      tx.objectStore(LIFE_OS_SYNC_STORE.settings).put({
+        id: 'sync',
+        setupState: 'configured',
+        membershipStatus: 'active',
+        spaceId: '11111111-1111-4111-8111-111111111111',
+        deviceId: 'device',
+        currentKeyEpoch: 1,
+      });
+      tx.oncomplete = () => resolve();
+      tx.onabort = () => reject(tx.error);
+    });
+    await service.start(action.id.toString(), 'focus');
+    const records = await new Promise<Array<{ entityType: string; serializedPayload: string }>>(
+      (resolve, reject) => {
+        const tx = connection.transaction(LIFE_OS_SYNC_STORE.outbox, 'readonly');
+        const request = tx.objectStore(LIFE_OS_SYNC_STORE.outbox).getAll();
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      },
+    );
+    expect(records.map((record) => record.entityType).sort()).toEqual([
+      'action_session',
+      'journal_entry',
+    ]);
+    const focusRecords = records.filter((record) => record.entityType === 'action_session');
+    expect(focusRecords).toHaveLength(1);
+    expect(JSON.parse(focusRecords[0]!.serializedPayload).record.kind).toBe('focus');
+  });
+
+  it('persists one focused interval at the exact deadline after a late wake', async () => {
+    const action = createLifeActionDraft('focus-deadline');
+    await actions.save(action);
+    const started = await service.start(action.id.toString(), 'focus');
+    expect((await sessions.findById(started.id))?.kind).toBe('focus');
+    clock.setTime(new Date('2026-09-28T08:40:00Z'));
+    const finished = await service.finishAtDeadline(
+      started.id.toString(),
+      started.version,
+      new Date('2026-09-28T08:10:00Z'),
+    );
+    expect(finished.isCompleted()).toBe(true);
+    expect(finished.workedDurationAt(clock.now())).toBe(10 * 60_000);
+    expect((await sessions.findById(started.id))?.completedAt).toEqual(
+      new Date('2026-09-28T08:10:00Z'),
+    );
+  });
 
   it('runs a draft session through reload, pauses and finish without completing the action', async () => {
     const action = createLifeActionDraft('work-action');

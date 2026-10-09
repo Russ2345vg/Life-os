@@ -172,7 +172,7 @@ interface Interval {
   readonly end: number;
 }
 
-function workIntervals(session: ActionSession, asOf: number): readonly Interval[] {
+export function workIntervals(session: ActionSession, asOf: number): readonly Interval[] {
   const end = Math.min(session.completedAt?.getTime() ?? asOf, asOf);
   let cursor = session.startedAt.getTime();
   if (cursor >= end) return [];
@@ -190,19 +190,19 @@ function workIntervals(session: ActionSession, asOf: number): readonly Interval[
   if (cursor < end) work.push({ start: cursor, end });
   return work;
 }
-function localMidnight(date: string): Date {
+export function localMidnight(date: string): Date {
   const [year, month, day] = date.split('-').map(Number);
   const result = new Date(0);
   result.setFullYear(year!, month! - 1, day!);
   result.setHours(0, 0, 0, 0);
   return result;
 }
-function nextMidnight(date: Date): Date {
+export function nextMidnight(date: Date): Date {
   const result = new Date(date);
   result.setDate(result.getDate() + 1);
   result.setHours(0, 0, 0, 0);
   return result;
 }
-function localDate(date: Date): string {
+export function localDate(date: Date): string {
   return `${String(date.getFullYear()).padStart(4, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
