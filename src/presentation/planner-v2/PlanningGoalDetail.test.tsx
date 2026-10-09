@@ -115,7 +115,7 @@ describe('V2 Goal action centre', () => {
     expect(html).toContain('Пока нет действий');
     expect(html).toContain('+ Добавить действие');
     expect(html).toContain('<details class="planner-goal-details">');
-    expect(html.indexOf('Детали')).toBeLessThan(html.indexOf('История'));
+    expect(html.indexOf('Детали')).toBeLessThan(html.indexOf('История ·'));
     expect(html).toContain('Без периода');
   });
   it('offers direct completion on an active Goal without routing through its LifeActions', () => {
@@ -318,7 +318,8 @@ describe('V2 Goal action centre', () => {
     expect(html).toContain('Действия цели');
     expect(html).toContain('Выполненные · 1');
     expect(html.indexOf('Действия цели')).toBeLessThan(html.indexOf('Выполненные · 1'));
-    expect(html.indexOf('Выполненные · 1')).toBeLessThan(html.indexOf('История'));
+    expect(html.indexOf('Выполненные · 1')).toBeLessThan(html.indexOf('История ·'));
+    expect(html.indexOf('История успехов')).toBeLessThan(html.indexOf('Выполненные · 1'));
     expect(html).toContain('returnToGoal=1');
     expect(html).not.toContain('<progress');
   });

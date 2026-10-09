@@ -938,6 +938,7 @@ export function BalanceWorkspace({
             )}
           </section>
           <ActionResults
+            goals={direction.goals}
             actions={actionResultsForDirection(
               state.actions,
               direction.direction.id.toString(),

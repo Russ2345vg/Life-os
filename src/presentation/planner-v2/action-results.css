@@ -41,6 +41,16 @@
 .planner-v2 .planner-action-results__meta time {
   color: var(--text-secondary);
 }
+.planner-v2 .planner-action-results__goal {
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin-bottom: 6px !important;
+}
+.planner-v2 .planner-action-results a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
 .planner-v2 .planner-goal-latest-result {
   display: grid;
   gap: 4px;
