@@ -1,4 +1,9 @@
 import { createHash } from 'node:crypto';
+import {
+  readReleaseSyncEnvironment,
+  validateReleaseSyncEnvironment,
+  validateBuiltReleaseSync,
+} from './release-sync-config.mjs';
 import { Buffer } from 'node:buffer';
 import console from 'node:console';
 import {
@@ -256,6 +261,8 @@ function writeReleaseConfig(owner, publicKey) {
 }
 
 function prepareArtifacts({ owner, version, notes, commit }) {
+  const syncEnvironment = readReleaseSyncEnvironment(ROOT);
+  const syncConfiguration = validateReleaseSyncEnvironment(syncEnvironment);
   const secretPath = join(SIGNING_DIR, 'lifeos-updater.env');
   const publicKeyPath = join(SIGNING_DIR, 'lifeos-updater.key.pub');
   const androidProperties = join(TAURI_DIR, 'gen', 'android', 'keystore.properties');
@@ -276,6 +283,7 @@ function prepareArtifacts({ owner, version, notes, commit }) {
   const buildEnvironment = {
     ...process.env,
     ...signingEnvironment,
+    ...syncEnvironment,
     CARGO_HOME: process.env.CARGO_HOME ?? 'D:\\Android\\CargoHome',
     RUSTUP_HOME: process.env.RUSTUP_HOME ?? 'D:\\Android\\RustupHome',
     VITE_LIFEOS_ANDROID_UPDATE_ENDPOINT: androidEndpoint,
@@ -289,6 +297,7 @@ function prepareArtifacts({ owner, version, notes, commit }) {
   run(process.execPath, [join(ROOT, 'scripts', 'run-check.mjs'), 'build'], {
     env: buildEnvironment,
   });
+  validateBuiltReleaseSync(join(ROOT, 'dist'), syncConfiguration);
 
   run('npm.cmd', ['run', 'tauri', '--', 'build', '--config', configPath], {
     env: buildEnvironment,

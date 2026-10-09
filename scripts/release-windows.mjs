@@ -14,6 +14,12 @@ import process from 'node:process';
 import console from 'node:console';
 import { runBoundedProcess } from './test-infrastructure/process-runner.mjs';
 import {
+  readReleaseSyncEnvironment,
+  validateReleaseSyncEnvironment,
+  validateBuiltReleaseSync,
+  validateReleaseSyncProof,
+} from './release-sync-config.mjs';
+import {
   buildWindowsManifest,
   selectWindowsInstaller,
   validateReleaseVersion,
@@ -50,6 +56,7 @@ export function validatePreparedRelease(receipt, version, hashFile) {
       throw new Error('Unsafe asset name.');
     if (hashFile(name) !== hash) throw new Error(`Prepared asset changed: ${name}`);
   }
+  validateReleaseSyncProof(receipt.syncConfiguration);
 }
 
 export function preserveAndroidManifest(manifest) {
@@ -59,6 +66,8 @@ export function preserveAndroidManifest(manifest) {
 }
 
 async function prepare(version, directory) {
+  const syncEnvironment = readReleaseSyncEnvironment(ROOT);
+  const syncConfiguration = validateReleaseSyncEnvironment(syncEnvironment);
   const cargo = readFileSync(join(ROOT, 'src-tauri/Cargo.toml'), 'utf8');
   if (
     readJson(join(ROOT, 'package.json')).version !== version ||
@@ -99,11 +108,13 @@ async function prepare(version, directory) {
     timeoutMs: 900_000,
     env: {
       ...resolveWindowsBuildEnvironment(process.env),
+      ...syncEnvironment,
       TAURI_SIGNING_PRIVATE_KEY: readFileSync(values.TAURI_SIGNING_PRIVATE_KEY_PATH, 'utf8'),
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: values.TAURI_SIGNING_PRIVATE_KEY_PASSWORD,
     },
   });
   if (build.exitCode !== 0) throw new Error(`Windows build failed: ${build.exitCode}`);
+  validateBuiltReleaseSync(join(ROOT, 'dist'), syncConfiguration);
   const installer = selectWindowsInstaller(
     join(ROOT, 'src-tauri/target/release/bundle/nsis'),
     version,
@@ -131,7 +142,7 @@ async function prepare(version, directory) {
   assets.push('SHA256SUMS.txt');
   writeFileSync(
     join(directory, 'prepared.json'),
-    `${JSON.stringify({ version, files: Object.fromEntries(assets.map((name) => [name, digest(join(directory, name))])) }, null, 2)}\n`,
+    `${JSON.stringify({ version, syncConfiguration, files: Object.fromEntries(assets.map((name) => [name, digest(join(directory, name))])) }, null, 2)}\n`,
   );
   console.log(`Prepared Windows release: ${directory}`);
 }
@@ -210,8 +221,13 @@ async function publish(version, directory) {
 
 async function main() {
   const [action, version, ...extra] = process.argv.slice(2);
+  if (action === 'check' && version === undefined) {
+    validateReleaseSyncEnvironment(readReleaseSyncEnvironment(ROOT));
+    console.log('Production sync configuration: PASS; accounts enabled.');
+    return;
+  }
   if (!['prepare', 'publish'].includes(action) || !version || extra.length)
-    throw new Error('Usage: npm run release:windows -- <prepare|publish> X.Y.Z');
+    throw new Error('Usage: npm run release:windows -- check | <prepare|publish> X.Y.Z');
   validateReleaseVersion(version);
   const directory = join(ROOT, 'src-tauri/target/release-channel', `v${version}`, 'windows');
   if (action === 'prepare') await prepare(version, directory);

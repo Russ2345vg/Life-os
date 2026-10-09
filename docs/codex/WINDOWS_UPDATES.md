@@ -17,7 +17,9 @@ LifeOS при запуске проверяет канал
 
 1. Завершить изменения. Поднять версию в package.json, package-lock.json, src-tauri/Cargo.toml
    и записи пакета lifeos в src-tauri/Cargo.lock. Версия должна быть выше установленной.
-2. Выполнить targeted tests, `npm run test:release` и release gate `npm run verify:full`.
+2. Выбрать проверки дельты по `AGENTS.md` и `TEST_MATRIX.md`. Выпуск версии не запускает
+   полный E2E автоматически. Выполнить `npm run test:release` и
+   `npm run release:windows -- check` до долгой сборки.
 3. Подготовить подписанный Windows installer, например:
 
    ```powershell
@@ -29,6 +31,15 @@ latest.json, SHA256SUMS.txt и локальный prepared.json для пров�
 Android SDK/keystore и GitHub CLI для подготовки не нужны. Нужны существующие Windows/Rust
 build tools и updater signing configuration в `D:/Android/LifeOS/signing`.
 Ключи нельзя заменять, публиковать или коммитить. Сборка ограничена 15 минутами.
+
+Production настройки прежнего Supabase-проекта должны быть в игнорируемом `.env.production`
+или окружении сборки: `VITE_LIFEOS_SUPABASE_URL`, `VITE_LIFEOS_SUPABASE_PUBLISHABLE_KEY`,
+`VITE_LIFEOS_ACCOUNT_SYNC_ENABLED=true`. Ключ подписи обновления и Supabase client key решают
+разные задачи. Приватные server keys в клиенте запрещены.
+`prepare` останавливается до компиляции при отсутствии настроек и после сборки сверяет
+конфигурацию фактического frontend bundle; `prepared.json` содержит URL проекта и hash публичного
+ключа, без значения ключа. `publish` не принимает старый пакет без этого свидетельства.
+На новом компьютере сначала проверь production-конфигурацию, а затем сборку и подпись.
 
 ## Публикация проверенного пакета
 
@@ -55,7 +66,7 @@ npm run release:windows -- publish 1.0.17
 
 ## Одновременный выпуск Windows и Android
 
-После обновления версий и успешного `npm run test:release` и `npm run verify:full`
+После обновления версий, успешного `npm run test:release` и проверок дельты по `AGENTS.md`
 подготовьте оба подписанных пакета:
 
 ```powershell
