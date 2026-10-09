@@ -110,7 +110,7 @@ describe('Planner Today', () => {
     expect(html).toContain('#/v2/actions?view=calendar');
   });
 
-  it('presents the day plan as one compact center with visible status', () => {
+  it('puts the main action before quick add and the remaining plan', () => {
     const date = DayDate.create('2026-09-13');
     const main = createLifeActionDraft('main');
     main.setPlan(date, true);
@@ -151,17 +151,19 @@ describe('Planner Today', () => {
       }),
     );
 
-    expect(html).toContain('planner-day-center__header');
-    expect(html).toContain('Центр дня');
-    expect(html).toContain('План на сегодня');
-    expect(html).toContain('В плане <strong>2</strong>');
-    expect(html).toContain('Готово <strong>1</strong>');
-    expect(html).toContain('Утренний ритуал');
-    expect(html).toContain('0 / 60 мин');
-    expect(html).toContain('Главная задача дня');
-    expect(html.indexOf('planner-day-center__header')).toBeLessThan(
+    expect(html).toContain('aria-label="Главное сегодня"');
+    expect(html).toContain('aria-label="Остальные действия"');
+    expect(html.indexOf('aria-label="Главное сегодня"')).toBeLessThan(
       html.indexOf('aria-label="Новое действие на сегодня"'),
     );
+    expect(html.indexOf('aria-label="Новое действие на сегодня"')).toBeLessThan(
+      html.indexOf('aria-label="Остальные действия"'),
+    );
+    expect(html).toContain('Выполнено <span>1</span>');
+    expect(html).toContain('Прогресс дня');
+    expect(html).not.toContain('Утренний ритуал');
+    expect(html).not.toContain('Главная задача дня');
+    expect(html).not.toContain('Автопилот дня');
   });
 
   it('renders an optional main, collapsed completed and an accessible quick add', () => {
@@ -194,10 +196,11 @@ describe('Planner Today', () => {
     );
     expect(html).toContain('Сегодня');
     expect(html).toContain('aria-label="Новое действие на сегодня"');
-    expect(html).toContain('Выполнено');
+    expect(html).not.toContain('Выполнено <span>');
     expect(html).not.toContain('<details open');
     expect(html).not.toContain('Начать');
-    expect(html).not.toContain('Главное действие');
+    expect(html).toContain('С чего начать?');
+    expect(html).toContain('Выбрать из действий');
     expect(html).toContain('Подготовка ко сну');
     expect(html).toContain('Прогресс дня');
     expect(html).toContain('planner-today-sidebar');
@@ -415,7 +418,7 @@ describe('Today household list', () => {
     expect(html).toContain('aria-label="Порядок"');
     const group = html.slice(
       html.indexOf('aria-label="Порядок"'),
-      html.indexOf('planner-completed'),
+      html.indexOf('planner-plan-review'),
     );
     expect(group).toContain('t001-2026-10-09');
     expect(group).toContain('t002-2026-10-09');
@@ -432,7 +435,8 @@ describe('Today household list', () => {
       ),
     ).toHaveLength(1);
     expect(html).not.toContain('<details open');
-    expect(html).toContain('Готово <strong>1</strong>');
+    expect(html).toContain('2 осталось · 1 выполнено');
+    expect(html).toContain('1 из 3');
   });
   it('does not add an empty household list to unrelated plans', () => {
     expect(render(false)).not.toContain('aria-label="Порядок"');
@@ -441,7 +445,10 @@ describe('Today household list', () => {
     const html = render(true, true);
     const groupStart = html.indexOf('aria-label="Порядок"');
     expect(
-      html.slice(html.indexOf('class="planner-main"'), html.indexOf('planner-today-list')),
+      html.slice(
+        html.indexOf('aria-label="Главное сегодня"'),
+        html.indexOf('planner-quick-create'),
+      ),
     ).toContain('data-planner-action-id="plan-import:household-2026-10-v1:actions:main"');
     expect(html.slice(groupStart)).not.toContain(
       'data-planner-action-id="plan-import:household-2026-10-v1:actions:main"',
@@ -452,7 +459,7 @@ describe('Today household list', () => {
     const ordinary = html.slice(html.indexOf('planner-today-list'), groupStart);
     expect(ordinary).toContain('Действие ordinary');
     expect(ordinary.replace(/<[^>]+>/g, '')).toContain('Сфера Дом');
-    expect(html).toContain('В плане <strong>3</strong>');
+    expect(html).toContain('3 осталось · 1 выполнено');
     expect(html).toContain('1 из 4');
   });
   it('groups the selected tomorrow plan using the same day totals', () => {

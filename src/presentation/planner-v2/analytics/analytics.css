@@ -642,6 +642,17 @@
   display: inline-flex;
   align-items: center;
 }
+.analytics-action-rankings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: var(--space-6);
+  margin: var(--space-4) 0 var(--space-6);
+}
+.analytics-action-ranking {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
 .analytics-day-detail h3 {
   display: flex;
   justify-content: space-between;

@@ -22,6 +22,10 @@ import type { PlanningPeriod, PeriodMembership } from '../../domain/planner/Plan
 import './planning.css';
 import { buildGoalDynamics } from '../../application/queries/GetGoalDynamics';
 import { GoalDynamics } from './GoalDynamics';
+import { useState } from 'react';
+import type { GetConnections } from '../../application/connections/GetConnections';
+import type { PlannerRoute } from './PlannerNavigation';
+import { ConnectionsSheet } from './connections/ConnectionsSheet';
 
 export function PlanningGoalDetail({
   id,
@@ -29,6 +33,8 @@ export function PlanningGoalDetail({
   directions,
   spheres,
   menuForGoal,
+  connections,
+  onNavigate,
   ...operations
 }: {
   readonly id: string;
@@ -36,6 +42,8 @@ export function PlanningGoalDetail({
   readonly directions: readonly Direction[];
   readonly spheres: readonly Sphere[];
   readonly menuForGoal?: ((goal: Goal) => readonly EntityMenuAction[]) | undefined;
+  readonly connections?: Pick<GetConnections, 'read' | 'more'> | undefined;
+  readonly onNavigate?: ((route: PlannerRoute) => void) | undefined;
 } & PlannerViewOperations) {
   const context = usePlanning();
   if (context?.error) return <p role="alert">{context.error}</p>;
@@ -56,6 +64,8 @@ export function PlanningGoalDetail({
       today={today}
       operations={operations}
       menuForGoal={menuForGoal}
+      connections={connections}
+      onNavigate={onNavigate}
     />
   );
 }
@@ -70,6 +80,8 @@ export function GoalDetailContent({
   today,
   operations,
   menuForGoal,
+  connections,
+  onNavigate,
   periods = [],
   memberships = [],
 }: {
@@ -84,7 +96,10 @@ export function GoalDetailContent({
   readonly today: string;
   readonly operations: PlannerViewOperations;
   readonly menuForGoal?: ((goal: Goal) => readonly EntityMenuAction[]) | undefined;
+  readonly connections?: Pick<GetConnections, 'read' | 'more'> | undefined;
+  readonly onNavigate?: ((route: PlannerRoute) => void) | undefined;
 }) {
+  const [connectionsOpen, setConnectionsOpen] = useState(false);
   const { open, completed, next } = selectGoalCardActions(goal, actions);
   const id = goal.id.toString();
   const dynamics = buildGoalDynamics({ goals: [goal], actions, contributions: facts }, id, today);
@@ -130,6 +145,27 @@ export function GoalDetailContent({
         </span>
       </div>
       <EntityNeedText need={resolveGoalNeed(goal, directions)} prominent />
+      {connections && onNavigate && (
+        <>
+          <button
+            className="connections-entry"
+            type="button"
+            onClick={() => setConnectionsOpen(true)}
+          >
+            <strong>Связи</strong>
+            <span>Посмотреть связанные записи</span>
+          </button>
+          {connectionsOpen && (
+            <ConnectionsSheet
+              source={{ kind: 'goal', id }}
+              connections={connections}
+              onNavigate={onNavigate}
+              onClose={() => setConnectionsOpen(false)}
+              backLabel="К цели"
+            />
+          )}
+        </>
+      )}
       <section className="planner-goal-result" aria-label="Желаемый результат">
         <p className="planner-eyebrow">Желаемый результат</p>
         <p>{goal.achievementCriteria ?? 'Результат пока не описан.'}</p>

@@ -25,6 +25,13 @@ const DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 const TIME_PATTERN = /^(\d{2}):(\d{2})$/;
 const MINUTE_MS = 60_000;
 
+export function nominalSleepDurationMinutes(bedtime: string, wakeTime: string): number {
+  const sleep = parseTime(bedtime).totalMinutes;
+  const wake = parseTime(wakeTime).totalMinutes;
+  const duration = (wake - sleep + 24 * 60) % (24 * 60);
+  return duration === 0 ? 24 * 60 : duration;
+}
+
 export function calculateNightWindow(input: NightWindowInput): NightWindow {
   const cycleDate = parseCivilDate(input.cycleDate);
   const bedtime = parseTime(input.bedtime);

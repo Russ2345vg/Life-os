@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openDisclosure } from './helpers/disclosures';
 import { DayDate, type LifeAction } from '../../src/domain';
 import { createLifeActionDraft } from '../../src/test/helpers/LifeActionTestFactory';
 import { LifeActionRecordMapper } from '../../src/infrastructure/persistence/mappers/LifeActionRecordMapper';
@@ -32,7 +33,7 @@ test('day autopilot previews, explains and atomically applies a realistic schedu
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto('/#/v2/today');
-  await expect(page.getByRole('heading', { name: 'План на сегодня', exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'План на сегодня', exact: true })).toBeVisible();
   const today = await page.evaluate(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -54,7 +55,8 @@ test('day autopilot previews, explains and atomically applies a realistic schedu
     scheduledDurationMinutes: null,
   });
   await seedDay(page, [main, notes, later]);
-  await page.reload();
+  await page.goto('/#/v2/routine/day');
+  await openDisclosure(page, '.planner-day-autopilot__disclosure');
 
   const card = page.getByRole('region', { name: 'Автопилот дня', exact: true });
   await expect(card).toBeVisible();
@@ -72,6 +74,7 @@ test('day autopilot previews, explains and atomically applies a realistic schedu
 
   await card.getByRole('button', { name: 'Применить план', exact: true }).click();
   await expect(card).toContainText('План применён: 2 задачи.');
+  await page.goto('/#/v2/today');
   await expect(page.getByText('09:00–09:50', { exact: true })).toBeVisible();
   await expect(page.getByText('09:55–10:20', { exact: true })).toBeVisible();
 
@@ -101,6 +104,8 @@ test('day autopilot previews, explains and atomically applies a realistic schedu
   ]);
 
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/#/v2/routine/day');
+  await openDisclosure(page, '.planner-day-autopilot__disclosure');
   await expect(card).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(errors).toEqual([]);

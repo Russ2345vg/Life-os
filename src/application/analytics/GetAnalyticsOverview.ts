@@ -11,6 +11,7 @@ import type { AnalyticsSnapshot, AnalyticsSnapshotReader } from '../ports/Analyt
 import { createGoalProgressReader } from '../planner/GoalContributions';
 import { localDate } from '../planner/planningSupport';
 import { summarizeSleepObservations } from '../../domain/sleep/SleepObservation';
+import { rankCompletedActions, type ActionRankingRow } from './ActionRankings';
 
 export type AnalyticsPeriodKind = 'week' | 'month';
 export type AnalyticsTopic =
@@ -73,6 +74,8 @@ export interface AnalyticsOverview {
     readonly energyDifference: number | null;
   };
   readonly goalRows: readonly AnalyticsGoalRow[];
+  readonly goalActionCounts: readonly ActionRankingRow[];
+  readonly directionActionCounts: readonly ActionRankingRow[];
   readonly sphereTime: readonly AnalyticsSphereTime[];
   readonly balance: AnalyticsSnapshot['balance'];
   readonly walks: ReturnType<typeof analyzeWalks>;
@@ -275,6 +278,12 @@ export function buildAnalyticsOverview(
   const directions = new Map(
     snapshot.directions.map((direction) => [direction.id.toString(), direction]),
   );
+  const actionRankings = rankCompletedActions({
+    actions: days.flatMap((day) => day.completed),
+    goals: snapshot.goals,
+    directions: snapshot.directions,
+    contributions: facts,
+  });
   const spheres = new Map(snapshot.spheres.map((sphere) => [sphere.id.toString(), sphere]));
   const sphereTime = new Map<string | null, number>();
   for (const goalTime of work.goals) {
@@ -385,6 +394,7 @@ export function buildAnalyticsOverview(
           : null,
     },
     goalRows,
+    ...actionRankings,
     sphereTime: [...sphereTime]
       .map(([id, milliseconds]) => ({
         id,

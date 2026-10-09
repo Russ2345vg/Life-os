@@ -11,6 +11,7 @@ import type { GetAnalyticsOverview } from '../../../application/analytics/GetAna
 import { addDays } from '../../../domain/planner/PlanningPeriod';
 import type { PlannerRoute } from '../PlannerNavigation';
 import { AppIcon, type AppIconName } from '../../components/AppIcon';
+import { ActionRankingsPanel } from './ActionRankingsPanel';
 import './analytics.css';
 
 type AnalyticsRoute = Extract<PlannerRoute, { view: 'analytics' }>;
@@ -693,6 +694,10 @@ export function PlannerAnalytics({
       )}
       {topic === 'goals' && (
         <>
+          <ActionRankingsPanel
+            goals={displayed.goalActionCounts}
+            directions={displayed.directionActionCounts}
+          />
           <p>Начальные значения исключены. Единицы показаны по текущим настройкам целей.</p>
           {goals
             .filter(

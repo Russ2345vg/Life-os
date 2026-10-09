@@ -53,6 +53,37 @@
   box-shadow: none;
 }
 
+.planner-v2 .planner-diary-tomorrow {
+  margin-top: var(--space-6);
+}
+
+.planner-v2 .planner-diary-tomorrow > p {
+  color: var(--text-secondary);
+}
+
+.planner-v2 .planner-diary-tomorrow ul {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.planner-v2 .planner-diary-tomorrow li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--border-soft);
+}
+
+.planner-v2 .planner-diary-tomorrow li button,
+.planner-v2 .planner-diary-tomorrow li a {
+  min-height: 44px;
+}
+
 .planner-v2 .planner-diary-period-layout {
   display: grid;
   grid-template-areas: 'reflection context';
@@ -274,6 +305,11 @@
 .planner-v2 .planner-diary-actions button,
 .planner-v2 .planner-diary-save-error button {
   min-height: 44px;
+}
+
+.planner-v2 .planner-diary-action-feedback {
+  display: grid;
+  gap: var(--space-1);
 }
 
 .planner-v2 .planner-diary-save-error {

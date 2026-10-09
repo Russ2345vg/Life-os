@@ -21,9 +21,25 @@ import {
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const REPOSITORY = 'Russ2345vg/LifeOS-Releases';
-const SIGNING = 'D:/Android/LifeOS/signing';
+const SIGNING = resolveWindowsSigningDirectory(process.env);
 const readJson = (path) => JSON.parse(readFileSync(path, 'utf8'));
 const digest = (path) => createHash('sha256').update(readFileSync(path)).digest('hex');
+
+export function resolveWindowsSigningDirectory(environment) {
+  return environment.LIFEOS_SIGNING_DIR ?? 'D:/Android/LifeOS/signing';
+}
+
+export function resolveWindowsBuildEnvironment(environment) {
+  const cargoHome = environment.CARGO_HOME ?? 'D:/Android/CargoHome';
+  const rustupHome = environment.RUSTUP_HOME ?? 'D:/Android/RustupHome';
+  const pathKey = Object.keys(environment).find((key) => key.toLowerCase() === 'path') ?? 'PATH';
+  return {
+    ...environment,
+    CARGO_HOME: cargoHome,
+    RUSTUP_HOME: rustupHome,
+    [pathKey]: `${join(cargoHome, 'bin')};${environment[pathKey] ?? ''}`,
+  };
+}
 
 export function validatePreparedRelease(receipt, version, hashFile) {
   if (receipt.version !== version) throw new Error('Prepared version mismatch.');
@@ -82,10 +98,7 @@ async function prepare(version, directory) {
     cwd: ROOT,
     timeoutMs: 900_000,
     env: {
-      ...process.env,
-      CARGO_HOME: process.env.CARGO_HOME ?? 'D:/Android/CargoHome',
-      RUSTUP_HOME: process.env.RUSTUP_HOME ?? 'D:/Android/RustupHome',
-      PATH: `D:/Android/CargoHome/bin;D:/Android/RustupHome/toolchains/stable-x86_64-pc-windows-msvc/bin;${process.env.PATH}`,
+      ...resolveWindowsBuildEnvironment(process.env),
       TAURI_SIGNING_PRIVATE_KEY: readFileSync(values.TAURI_SIGNING_PRIVATE_KEY_PATH, 'utf8'),
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: values.TAURI_SIGNING_PRIVATE_KEY_PASSWORD,
     },

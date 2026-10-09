@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { openDisclosure } from './helpers/disclosures';
 import { DayDate, EntityId, Goal, LifeAction, LifeActionTitle } from '../../src/domain';
 import { addDays, automaticPeriod, membershipId } from '../../src/domain/planner/PlanningPeriod';
 import { GoalRecordMapper } from '../../src/infrastructure/persistence/mappers/GoalRecordMapper';
@@ -80,6 +81,7 @@ test('chooses the explicit goal step, adds it today, preserves the daily main an
     },
   );
   await page.reload();
+  await openDisclosure(page, '.planner-today-context');
   await page.getByRole('button', { name: 'Выбрать шаг к цели' }).click();
   const dialog = page.getByRole('dialog', { name: 'Шаг к цели' });
   await expect(dialog).toContainText('Главная цель этой недели');
@@ -89,7 +91,9 @@ test('chooses the explicit goal step, adds it today, preserves the daily main an
   await dialog.getByRole('button', { name: 'Добавить на сегодня' }).click();
   await expect(dialog).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Отменить изменение даты' })).toBeVisible();
-  await expect(page.locator('.planner-main')).toContainText('Главное дело дня');
+  await expect(page.getByRole('region', { name: 'Главное сегодня', exact: true })).toContainText(
+    'Главное дело дня',
+  );
   await expect(page.locator('[data-planner-action-id="guidance-step"]')).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('goal-guidance-added.png'), fullPage: true });
   if (testInfo.project.name === 'desktop-chrome') {
@@ -98,7 +102,9 @@ test('chooses the explicit goal step, adds it today, preserves the daily main an
   }
   await page.getByRole('button', { name: 'Отменить изменение даты' }).click();
   await expect(page.getByRole('button', { name: 'Отменить изменение даты' })).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: 'Ещё на сегодня 0' })).toBeVisible();
+  const remaining = page.getByRole('region', { name: 'Остальные действия', exact: true });
+  await expect(remaining).toContainText('План пуст');
+  await expect(remaining.getByRole('listitem')).toHaveCount(0);
   await page.getByRole('button', { name: 'Выбрать шаг к цели' }).click();
   await expect(dialog).toContainText('Без даты');
   await expect(dialog.getByRole('combobox', { name: 'Действие' })).toHaveValue('guidance-step');
@@ -139,7 +145,9 @@ test('chooses the explicit goal step, adds it today, preserves the daily main an
   await expect(page.getByRole('alert')).toHaveCount(0);
   await page.reload();
   await expect(page.locator('[data-planner-action-id="guidance-step"]')).toBeVisible();
-  await expect(page.locator('.planner-main')).toContainText('Главное дело дня');
+  await expect(page.getByRole('region', { name: 'Главное сегодня', exact: true })).toContainText(
+    'Главное дело дня',
+  );
   expect(errors).toEqual([]);
 });
 
@@ -193,6 +201,7 @@ test('requires a goal choice without a weekly primary and explains moving a date
     },
   );
   await page.reload();
+  await openDisclosure(page, '.planner-today-context');
   await page.getByRole('button', { name: 'Выбрать шаг к цели' }).click();
   const dialog = page.getByRole('dialog', { name: 'Шаг к цели' });
   await expect(dialog).toContainText('Главная цель недели не выбрана');
@@ -247,6 +256,7 @@ test('requires a goal choice without a weekly primary and explains moving a date
     .getByRole('group', { name: 'План на день' })
     .getByRole('button', { name: 'Завтра' })
     .click();
+  await openDisclosure(page, '.planner-today-context');
   await expect(page.getByRole('button', { name: 'Выбрать шаг к цели' })).toHaveCount(0);
   expect(errors).toEqual([]);
 });
@@ -257,6 +267,7 @@ test('empty guidance keeps keyboard focus, Escape return and the existing create
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto('/#/v2/today');
+  await openDisclosure(page, '.planner-today-context');
   const trigger = page.getByRole('button', { name: 'Выбрать шаг к цели' });
   await expect(trigger).toBeVisible();
   await page.evaluate(() => {
@@ -365,6 +376,7 @@ test('late completion of a closed save cannot close a newly opened guidance shee
     },
   );
   await page.reload();
+  await openDisclosure(page, '.planner-today-context');
   const trigger = page.getByRole('button', { name: 'Выбрать шаг к цели' });
   await trigger.click();
   const dialog = page.getByRole('dialog', { name: 'Шаг к цели' });

@@ -43,6 +43,9 @@ describe('PlannerDiary daily view', () => {
     expect(html).toContain('Что я сделал сегодня, чтобы мир стал лучше?');
     expect(html).toContain('Что давало силы, а что забирало?');
     expect(html).toContain('disabled=""');
+    expect(html).toContain(
+      'Для завершения дня оцените продуктивность, энергию, настроение и день в целом.',
+    );
   });
 
   it('enables completion only after four independent ratings', () => {

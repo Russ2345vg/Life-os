@@ -5,6 +5,7 @@ import {
   createDiaryDraft,
   DayDate,
   diaryPeriod,
+  Direction,
   EntityId,
   Goal,
   reviseDiaryEntry,
@@ -36,6 +37,66 @@ const empty: AnalyticsSnapshot = {
 const period = resolveAnalyticsPeriod('week', '2026-09-21', '2026-09-29');
 
 describe('analytics overview', () => {
+  it('ranks distinct completed actions by linked goal and direction', () => {
+    const direction = Direction.create({
+      id: EntityId.create('direction'),
+      name: 'Здоровье',
+      now: at,
+    });
+    const goal = (id: string) =>
+      Goal.create({
+        id: EntityId.create(id),
+        title: id,
+        status: 'active',
+        directionId: direction.id,
+        now: at,
+      });
+    const firstGoal = goal('goal-one');
+    const secondGoal = goal('goal-two');
+    const first = createReadyLifeAction('first', DayDate.create('2026-09-25'));
+    first.setGoal(firstGoal.id);
+    first.markInProgress(new Date(2026, 8, 25, 10), EntityId.create('first-start'));
+    first.complete(null, new Date(2026, 8, 25, 11), EntityId.create('first-finish'));
+    const second = createReadyLifeAction('second', DayDate.create('2026-09-25'));
+    second.setContext(null, direction.id, null);
+    second.markInProgress(new Date(2026, 8, 25, 10), EntityId.create('second-start'));
+    second.complete(null, new Date(2026, 8, 25, 12), EntityId.create('second-finish'));
+    const fact = (id: string): ProgressContribution => ({
+      id,
+      goalId: secondGoal.id.toString(),
+      actionId: first.id.toString(),
+      completionKey: first.completionKey,
+      linkId: id,
+      source: 'completion',
+      amount: 1,
+      effectiveDate: '2026-09-25',
+      occurredAt: at.toISOString(),
+      voided: false,
+      reason: 'Выполнение действия',
+      version: 1,
+      schemaVersion: 1,
+      updatedAt: at.toISOString(),
+    });
+    const overview = buildAnalyticsOverview(
+      {
+        ...empty,
+        directions: [direction],
+        goals: [firstGoal, secondGoal],
+        actions: [first, second],
+        contributions: [fact('fact-one'), fact('fact-two')],
+      },
+      period,
+      at,
+    );
+    expect(overview.goalActionCounts.map(({ id, count }) => [id, count])).toEqual([
+      ['goal-one', 1],
+      ['goal-two', 1],
+    ]);
+    expect(overview.directionActionCounts.map(({ id, count }) => [id, count])).toEqual([
+      ['direction', 2],
+    ]);
+  });
+
   it('defaults to the last full week, uses calendar months and compares only completed days', () => {
     expect(resolveAnalyticsPeriod('week', undefined, '2026-09-29')).toMatchObject({
       start: '2026-09-21',
@@ -118,6 +179,7 @@ describe('analytics overview', () => {
       'valid',
       'pending',
     ]);
+    expect(overview.goalActionCounts).toEqual([{ id: 'goal', name: 'Цель', count: 1 }]);
   });
 
   it('separates absent diary rating from zero actions and leaves unavailable comparisons blank', () => {

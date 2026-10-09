@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openDisclosure } from './helpers/disclosures';
 import { DayDate, type LifeAction } from '../../src/domain';
 import {
   createLifeActionDraft,
@@ -186,6 +187,7 @@ test('calendar schedules real actions, rejects overlaps and keeps capacity after
   await page.screenshot({ path: testInfo.outputPath('time-calendar.png'), fullPage: true });
   await page.goto('/#/v2/today');
   await expect(page.getByText('10:00–11:00', { exact: true })).toBeVisible();
+  await openDisclosure(page, '.planner-today-capacity');
   await expect(page.getByText('План: 2 ч 30 мин · Доступно: 6 ч', { exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('time-today.png'), fullPage: true });
   await page.goto('/#/v2/actions/time-undated');

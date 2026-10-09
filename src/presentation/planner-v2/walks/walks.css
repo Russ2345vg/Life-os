@@ -50,6 +50,7 @@
   border-radius: 0;
   color: var(--text-muted);
   padding: var(--space-3) var(--space-1);
+  white-space: nowrap;
 }
 .planner-walks .walk-tabs button[aria-current='page'] {
   color: var(--text-primary);
@@ -618,6 +619,20 @@
 .walk-saved-note {
   border-bottom: 1px solid var(--border-soft);
   padding: var(--space-6) 0;
+}
+.walk-followups {
+  display: grid;
+  gap: var(--space-6);
+  max-width: 900px;
+}
+.walk-followups__heading p {
+  margin-bottom: 0;
+}
+.walk-followups .walk-panel h3 {
+  margin-top: 0;
+}
+.walk-followups .walk-saved-note:last-of-type {
+  margin-bottom: var(--space-4);
 }
 @media (max-width: 1100px) and (min-width: 761px) {
   .walk-grid {

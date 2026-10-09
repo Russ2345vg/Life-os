@@ -1,0 +1,140 @@
+.planner-v2 .connections-view {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+  padding: 4px 0 28px;
+}
+
+.planner-v2 .connections-heading {
+  border-bottom: 1px solid var(--border-soft);
+  padding-bottom: 20px;
+}
+
+.planner-v2 .connections-heading h2 {
+  margin: 4px 0 6px;
+  color: var(--text-primary);
+  font-size: 28px;
+}
+
+.planner-v2 .connections-heading p:last-child {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.planner-v2 .connections-group h3 {
+  margin: 0 0 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.planner-v2 .connections-row {
+  position: relative;
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  min-height: 58px;
+  padding: 10px 30px 10px 0;
+  border: 0;
+  border-bottom: 1px solid var(--border-soft);
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+}
+
+.planner-v2 .connections-row--link {
+  cursor: pointer;
+}
+
+.planner-v2 .connections-row--link:is(:hover, :focus-visible) {
+  color: var(--accent-primary);
+}
+
+.planner-v2 .connections-row__main {
+  font-size: 15px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.planner-v2 .connections-row__reason,
+.planner-v2 .connections-row__status {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.planner-v2 .connections-row__status {
+  color: var(--warning-text, var(--text-secondary));
+}
+
+.planner-v2 .connections-row__arrow {
+  position: absolute;
+  top: 18px;
+  right: 2px;
+  color: var(--accent-primary);
+}
+
+.planner-v2 .connections-more {
+  justify-self: start;
+  min-height: 44px;
+  color: var(--accent-primary);
+}
+
+.planner-v2 .connections-empty {
+  color: var(--text-secondary);
+}
+
+.planner-v2 .connections-back {
+  display: none;
+  min-height: 44px;
+  justify-self: start;
+}
+
+.planner-v2 .planner-action-panel .connections-back {
+  display: inline-flex;
+  align-items: center;
+}
+
+.planner-v2 .memory-connections .connections-back {
+  display: inline-flex;
+  align-items: center;
+}
+
+.planner-v2 .memory-detail[hidden] {
+  display: none;
+}
+
+.planner-v2 .connections-entry {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  min-height: 64px;
+  padding: 12px 16px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--surface-1);
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.planner-v2 .connections-entry span {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.planner-v2 .connections-entry:is(:hover, :focus-visible) {
+  border-color: var(--accent-primary);
+}
+
+@media (max-width: 640px) {
+  .planner-v2 .connections-back {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .planner-v2 .connections-view {
+    padding-bottom: max(28px, env(safe-area-inset-bottom));
+  }
+}

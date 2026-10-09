@@ -4,6 +4,7 @@ import type { PlannerOption } from '../PlannerActionForm';
 import { WalkMemoryTransfer } from './WalkMemoryTransfer';
 import { WalkDiaryTransfer } from './WalkDiaryTransfer';
 import { WalkCaptures } from './WalkCaptures';
+import { WalkFollowups } from './WalkFollowups';
 import { WalkAnalyticsView } from './WalkAnalytics';
 import { WalkPlan } from './WalkPlan';
 import { WalkSourceLink } from './WalkSourceLink';
@@ -19,6 +20,8 @@ import { WalkActive } from './WalkActive';
 import { WalkCompletion } from './WalkCompletion';
 import { useWalkState, useWalkMutation, walkIntentLabel } from './useWalkState';
 import type { StartWalkInput } from '../../../application/walk/WalkCommands';
+import type { GetConnections } from '../../../application/connections/GetConnections';
+import { ConnectionsSheet } from '../connections/ConnectionsSheet';
 
 export function PlannerWalks({
   services,
@@ -28,6 +31,7 @@ export function PlannerWalks({
   memory,
   diary,
   spheres,
+  connections,
 }: {
   services: WalkServices;
   route: Extract<PlannerRoute, { view: 'walks' }>;
@@ -36,9 +40,11 @@ export function PlannerWalks({
   memory?: MemoryServices | undefined;
   diary: DiaryService;
   spheres: readonly PlannerOption[];
+  connections: Pick<GetConnections, 'read' | 'more'>;
 }) {
   const { data, error, refresh } = useWalkState(services, route.id);
   const [setup, setSetup] = useState(false);
+  const [connectionsOpen, setConnectionsOpen] = useState(false);
   const mutation = useWalkMutation();
   const go = (page: NonNullable<typeof route.page>) => onNavigate({ view: 'walks', page });
   const open = (walk: Walk) => onNavigate({ view: 'walks', id: walk.id.toString() });
@@ -59,6 +65,15 @@ export function PlannerWalks({
       },
     );
   };
+  const continueTopic = (walk: Walk) =>
+    start({
+      ...DEFAULT_WALK,
+      intent: 'reflection',
+      type: 'reflection',
+      question: walk.reflectionQuestion,
+      reflectionTemplate: walk.reflectionTemplate,
+      sphereId: walk.sphereId?.toString() ?? null,
+    });
   const selected = route.id
     ? data?.selected
     : route.page === 'active' && data?.active.length === 1
@@ -82,6 +97,7 @@ export function PlannerWalks({
               ['plan', 'План'],
               ['history', 'История'],
               ['captures', 'Мысли'],
+              ['followups', 'К чему вернуться'],
               ['analytics', 'Аналитика'],
             ] as const
           ).map(([page, label]) => (
@@ -156,15 +172,7 @@ export function PlannerWalks({
                   selected.status === 'completed' &&
                   selected.intent === 'reflection' &&
                   !selected.deletedAt
-                    ? () =>
-                        start({
-                          ...DEFAULT_WALK,
-                          intent: 'reflection',
-                          type: 'reflection',
-                          question: selected.reflectionQuestion,
-                          reflectionTemplate: selected.reflectionTemplate,
-                          sphereId: selected.sphereId?.toString() ?? null,
-                        })
+                    ? () => continueTopic(selected)
                     : undefined
                 }
               />
@@ -189,6 +197,26 @@ export function PlannerWalks({
             </>
           )}
           <WalkSourceLink walk={selected} services={services} onNavigate={onNavigate} />
+          <button
+            className="connections-entry"
+            type="button"
+            onClick={() => setConnectionsOpen(true)}
+          >
+            Посмотреть связи
+            <span>Источник прогулки и связанные записи</span>
+          </button>
+          {connectionsOpen && (
+            <ConnectionsSheet
+              source={{ kind: 'walk', id: selected.id.toString() }}
+              connections={connections}
+              onNavigate={(target) => {
+                setConnectionsOpen(false);
+                onNavigate(target);
+              }}
+              onClose={() => setConnectionsOpen(false)}
+              backLabel="Назад к прогулке"
+            />
+          )}
         </>
       ) : route.page === 'analytics' ? (
         <WalkAnalyticsView
@@ -208,6 +236,14 @@ export function PlannerWalks({
         />
       ) : route.page === 'captures' ? (
         <WalkCaptures captures={data.captures} services={services} onNavigate={onNavigate} />
+      ) : route.page === 'followups' ? (
+        <WalkFollowups
+          services={services}
+          captures={data.captures}
+          onNavigate={onNavigate}
+          onOpen={open}
+          onContinue={continueTopic}
+        />
       ) : (
         <>
           {data.active.length > 1 ? (

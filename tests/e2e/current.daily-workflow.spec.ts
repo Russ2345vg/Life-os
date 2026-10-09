@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openDisclosure } from './helpers/disclosures';
 import {
   ActionExpectedResult,
   DayDate,
@@ -292,6 +293,7 @@ test('Tomorrow moves an existing ready action, creates with an optional date and
   page,
 }) => {
   const { today, tomorrow } = await seed(page);
+  await openDisclosure(page, '.planner-today-context');
   await page.getByLabel('Главное направление', { exact: true }).selectOption('daily-direction-0');
   await expect(page.locator('.planner-notice')).toContainText(
     'Главное направление месяца сохранено',
@@ -333,10 +335,12 @@ test('Tomorrow moves an existing ready action, creates with an optional date and
   await page.getByRole('button', { name: 'Создать действие', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Завтра', exact: true })).toBeVisible();
   await page.reload();
+  await openDisclosure(page, '.planner-today-context');
   await expect(page.getByLabel('Главное направление', { exact: true })).toHaveValue(
     'daily-direction-0',
   );
   await page.getByRole('button', { name: 'Сегодня', exact: true }).click();
+  await openDisclosure(page, '.planner-today-context');
   await expect(page.getByLabel('Главное направление', { exact: true })).toHaveValue(
     'daily-direction-0',
   );

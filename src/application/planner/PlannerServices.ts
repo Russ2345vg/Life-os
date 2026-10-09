@@ -24,6 +24,7 @@ import type { PlannerScenarios } from './PlannerScenarios';
 import type { PlanningServices } from './PlanningServices';
 import type { MorningWorkoutService } from '../morning/MorningWorkoutService';
 import type { DayAutopilotService } from './DayAutopilotService';
+import type { GetConnections } from '../connections/GetConnections';
 
 export type ScenarioService = Pick<
   PlannerScenarios,
@@ -31,6 +32,7 @@ export type ScenarioService = Pick<
 >;
 
 export interface PlannerServices extends PlannerLibraryServices {
+  readonly connections: Pick<GetConnections, 'read' | 'more'>;
   readonly aiAssistant?: AiAssistant;
   readonly aiContext?: ReadAiContext;
   readonly analytics?: GetAnalyticsOverview;

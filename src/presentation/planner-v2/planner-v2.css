@@ -1,8 +1,9 @@
 .planner-v2 {
   --planner-accent: var(--accent-primary);
+  --planner-sidebar-width: 232px;
   color-scheme: dark;
   display: grid;
-  grid-template-columns: 232px minmax(0, 1fr);
+  grid-template-columns: var(--planner-sidebar-width) minmax(0, 1fr);
   min-height: 100dvh;
   background: #000;
   color: var(--text-primary);
@@ -1339,7 +1340,7 @@
 }
 @media (max-width: 1000px) {
   .planner-v2 {
-    grid-template-columns: 196px minmax(0, 1fr);
+    --planner-sidebar-width: 196px;
   }
   .planner-sidebar {
     padding: 32px 12px 24px;

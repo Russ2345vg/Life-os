@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/today_widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/lifeos_today_widget_background"
+    android:orientation="vertical"
+    android:paddingHorizontal="16dp"
+    android:paddingVertical="11dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <TextView
+            android:id="@+id/today_widget_heading"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="СЕГОДНЯ"
+            android:textColor="#FF86C5AD"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+        <TextView
+            android:id="@+id/today_widget_date"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#FFA5B4AD"
+            android:textSize="10sp" />
+    </LinearLayout>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="7dp"
+        android:background="#FF3B4A45" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="7dp"
+        android:text="ГЛАВНОЕ"
+        android:textColor="#FFA5B4AD"
+        android:textSize="10sp" />
+
+    <TextView
+        android:id="@+id/today_widget_main"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:ellipsize="end"
+        android:maxLines="2"
+        android:text="Откройте LifeOS для обновления"
+        android:textColor="#FFF0F4F1"
+        android:textSize="16sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="8dp"
+        android:background="#FF3B4A45" />
+
+    <TextView
+        android:id="@+id/today_widget_actions_heading"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="7dp"
+        android:text="ДЕЙСТВИЯ · 0"
+        android:textColor="#FFA5B4AD"
+        android:textSize="10sp" />
+
+    <TextView
+        android:id="@+id/today_widget_action_1"
+        style="@style/LifeOsTodayWidgetAction"
+        android:visibility="gone" />
+    <TextView
+        android:id="@+id/today_widget_action_2"
+        style="@style/LifeOsTodayWidgetAction"
+        android:visibility="gone" />
+    <TextView
+        android:id="@+id/today_widget_action_3"
+        style="@style/LifeOsTodayWidgetAction"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/today_widget_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="5dp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:text="План на сегодня пока не загружен"
+        android:textColor="#FFA5B4AD"
+        android:textSize="10sp" />
+</LinearLayout>

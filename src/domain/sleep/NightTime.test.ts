@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { calculateNightWindow, resolveSleepCycleDate } from './NightTime';
+import {
+  calculateNightWindow,
+  nominalSleepDurationMinutes,
+  resolveSleepCycleDate,
+} from './NightTime';
+
+describe('nominalSleepDurationMinutes', () => {
+  it('counts the interval to next morning and makes equal times explicit as a full day', () => {
+    expect(nominalSleepDurationMinutes('23:30', '07:00')).toBe(450);
+    expect(nominalSleepDurationMinutes('22:00', '06:00')).toBe(480);
+    expect(nominalSleepDurationMinutes('08:00', '08:00')).toBe(1440);
+  });
+});
 
 describe('calculateNightWindow', () => {
   it('keeps the wake time on the local day after an evening bedtime', () => {

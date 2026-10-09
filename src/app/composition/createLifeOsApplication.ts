@@ -1,5 +1,6 @@
 import { BalanceIndicators } from '../../application/balance/BalanceIndicators';
 import { GetAnalyticsOverview } from '../../application/analytics/GetAnalyticsOverview';
+import { GetConnections } from '../../application/connections/GetConnections';
 import { ReadAiContext } from '../../application/ai/AiContext';
 import { IndexedDbAnalyticsSnapshotReader } from '../../infrastructure/persistence/IndexedDbAnalyticsSnapshotReader';
 import { GetLifeBalance } from '../../application/balance/GetLifeBalance';
@@ -91,6 +92,7 @@ import { PlanImport } from '../../application/plan-import/PlanImport';
 import { LifeOsApplicationInitializationError } from './LifeOsApplicationInitializationError';
 import { createLifeOsSyncApplication } from './createLifeOsSyncApplication';
 import { IndexedDbWalkRepository } from '../../infrastructure/persistence/IndexedDbWalkRepository';
+import { IndexedDbConnectionReadRepository } from '../../infrastructure/persistence/IndexedDbConnectionReadRepository';
 import { WalkCommands } from '../../application/walk/WalkCommands';
 import { WalkCaptureCommands } from '../../application/walk/WalkCaptureCommands';
 import { WalkCaptureProcessing } from '../../application/walk/WalkCaptureProcessing';
@@ -321,10 +323,19 @@ export async function createLifeOsApplication(
     );
 
     const walkRepository = new IndexedDbWalkRepository(database);
+    const connections = new GetConnections({
+      lookup: new IndexedDbConnectionReadRepository(database),
+      goals: goalRepository,
+      actions: lifeActionRepository,
+      directions: directionRepository,
+      spheres: sphereRepository,
+      diarySource: memory.diaryImport,
+    });
     const walkCommands = new WalkCommands(walkRepository, clock, currentDateProvider, idGenerator);
     const analyticsReader = new IndexedDbAnalyticsSnapshotReader(database);
     const analytics = new GetAnalyticsOverview(analyticsReader, () => clock.now());
     const application: LifeOsApplication = {
+      connections,
       analytics,
       aiContext: new ReadAiContext(analyticsReader, plannerInbox, analytics),
       walks: {

@@ -67,3 +67,29 @@ export function buildTimeScheduleDay(
     conflictIds,
   };
 }
+
+/** One start per free gap, aligned to a quarter-hour inside the visible working day. */
+export function suggestFreeTimeStarts(
+  day: TimeScheduleDay,
+  durationMinutes: number,
+  earliestMinute: number,
+): readonly number[] {
+  if (!Number.isInteger(durationMinutes) || durationMinutes < 1) return [];
+  const align = (minute: number) => Math.ceil(minute / 15) * 15;
+  let cursor = align(Math.max(420, earliestMinute));
+  const suggestions: number[] = [];
+  for (const action of day.timed) {
+    if (action.status === 'completed') continue;
+    const start = action.scheduledStartMinute!;
+    const end = start + action.scheduledDurationMinutes!;
+    if (end <= cursor) continue;
+    if (cursor + durationMinutes <= Math.min(start, 1260)) {
+      suggestions.push(cursor);
+      if (suggestions.length === 3) return suggestions;
+    }
+    cursor = align(Math.max(cursor, end));
+    if (cursor + durationMinutes > 1260) return suggestions;
+  }
+  if (cursor + durationMinutes <= 1260) suggestions.push(cursor);
+  return suggestions;
+}

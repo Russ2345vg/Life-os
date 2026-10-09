@@ -33,7 +33,7 @@ async function seedTodayAction(page: Page) {
   ).toBeVisible();
 }
 
-test('Today keeps the morning ritual before the plan and secondary context without horizontal overflow', async ({
+test('Today prioritizes its plan and Routine keeps the morning ritual without horizontal overflow', async ({
   page,
 }) => {
   await seedTodayAction(page);
@@ -42,41 +42,46 @@ test('Today keeps the morning ritual before the plan and secondary context witho
     const focus = document.querySelector<HTMLElement>('.planner-month-focus');
     const plan = document.querySelector<HTMLElement>('.planner-day-workspace');
     const sidebar = document.querySelector<HTMLElement>('.planner-today-sidebar');
-    const workout = document.querySelector<HTMLElement>('.morning-workout');
-    const morningFocus = document.querySelector<HTMLElement>('.morning-focus');
-    if (!action || !focus || !plan || !sidebar || !workout || !morningFocus) {
+    const main = document.querySelector<HTMLElement>('.planner-today-focus');
+    const quick = document.querySelector<HTMLElement>('.planner-quick-create');
+    const list = document.querySelector<HTMLElement>('.planner-today-list');
+    const context = document.querySelector<HTMLDetailsElement>('.planner-today-context');
+    if (!action || !focus || !plan || !sidebar || !main || !quick || !list || !context) {
       throw new Error('Today layout is incomplete');
     }
     return {
       actionFontSize: getComputedStyle(action).fontSize,
-      workoutBeforeFocus: Boolean(
-        workout.compareDocumentPosition(morningFocus) & Node.DOCUMENT_POSITION_FOLLOWING,
+      mainBeforeQuick: Boolean(
+        main.compareDocumentPosition(quick) & Node.DOCUMENT_POSITION_FOLLOWING,
       ),
-      focusBeforePlan: Boolean(
-        morningFocus.compareDocumentPosition(plan) & Node.DOCUMENT_POSITION_FOLLOWING,
+      quickBeforeList: Boolean(
+        quick.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING,
       ),
       actionInPlan: plan.contains(action),
       focusAfterPlan: Boolean(
         plan.compareDocumentPosition(focus) & Node.DOCUMENT_POSITION_FOLLOWING,
       ),
       focusInSidebar: sidebar.contains(focus),
+      contextCollapsed: !context.open,
       overflow: document.documentElement.scrollWidth - window.innerWidth,
     };
   });
   expect(layout.actionFontSize).toBe('16px');
-  expect(layout.workoutBeforeFocus).toBe(true);
-  expect(layout.focusBeforePlan).toBe(true);
+  expect(layout.mainBeforeQuick).toBe(true);
+  expect(layout.quickBeforeList).toBe(true);
   expect(layout.actionInPlan).toBe(true);
   expect(layout.focusAfterPlan).toBe(true);
   expect(layout.focusInSidebar).toBe(true);
+  expect(layout.contextCollapsed).toBe(true);
   expect(layout.overflow).toBeLessThanOrEqual(1);
 
   for (const width of [360, 320]) {
     await page.setViewportSize({ width, height: 844 });
     const compactHeader = await page.evaluate(() => {
-      const links = document.querySelector('.planner-today-heading-links');
+      const controls = document.querySelector('.planner-day-switch');
+      if (!controls) throw new Error('Today day controls are missing');
       return {
-        rows: new Set([...(links?.children ?? [])].map((link) => link.getBoundingClientRect().top))
+        rows: new Set([...controls.children].map((control) => control.getBoundingClientRect().top))
           .size,
         overflow: document.documentElement.scrollWidth - window.innerWidth,
       };
@@ -84,6 +89,24 @@ test('Today keeps the morning ritual before the plan and secondary context witho
     expect(compactHeader.rows).toBe(1);
     expect(compactHeader.overflow).toBeLessThanOrEqual(1);
   }
+
+  await page.getByRole('link', { name: 'Распорядок', exact: true }).click();
+  await page.getByRole('link', { name: /Утренние практики/ }).click();
+  await expect(page.getByRole('region', { name: 'Утренняя зарядка' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Главная задача дня' })).toBeVisible();
+  const morningLayout = await page.evaluate(() => {
+    const workout = document.querySelector<HTMLElement>('.morning-workout');
+    const focus = document.querySelector<HTMLElement>('.morning-focus');
+    if (!workout || !focus) throw new Error('Morning routine layout is incomplete');
+    return {
+      workoutBeforeFocus: Boolean(
+        workout.compareDocumentPosition(focus) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ),
+      overflow: document.documentElement.scrollWidth - window.innerWidth,
+    };
+  });
+  expect(morningLayout.workoutBeforeFocus).toBe(true);
+  expect(morningLayout.overflow).toBeLessThanOrEqual(1);
 });
 
 test('Diary uses the shared 24 px header rhythm', async ({ page }) => {

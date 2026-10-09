@@ -35,6 +35,7 @@ import { PlannerWorkTime } from './PlannerWorkTime';
 import type { PlannerWorkTimeController } from './usePlannerWorkTime';
 import type { PlannerLibraryServices } from '../../application/planner/PlannerLibraryServices';
 import type { ScenarioService } from '../../application/planner/PlannerServices';
+import type { GetConnections } from '../../application/connections/GetConnections';
 
 export type { PlannerLibraryServices } from '../../application/planner/PlannerLibraryServices';
 export function PlannerLibraryWorkspace({
@@ -50,7 +51,10 @@ export function PlannerLibraryWorkspace({
   onStartFocus,
   onStartWalk,
 }: {
-  readonly services: PlannerLibraryServices & { readonly plannerScenarios?: ScenarioService };
+  readonly services: PlannerLibraryServices & {
+    readonly plannerScenarios?: ScenarioService;
+    readonly connections?: Pick<GetConnections, 'read' | 'more'> | undefined;
+  };
   readonly route: PlannerRoute;
   readonly today: string;
   readonly onNavigate: (route: PlannerRoute) => void;
@@ -492,6 +496,8 @@ export function PlannerLibraryWorkspace({
             directions={data.directions}
             spheres={data.spheres}
             menuForGoal={menuForGoal}
+            connections={services.connections}
+            onNavigate={onNavigate}
             {...operations}
           />
         </>

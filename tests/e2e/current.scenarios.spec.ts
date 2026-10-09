@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openDisclosure } from './helpers/disclosures';
 
 async function prepare(page: Page) {
   await page.goto('/#/v2/today');
@@ -15,6 +16,7 @@ async function prepare(page: Page) {
   }
 }
 async function createScenario(page: Page, title: string, reusable = true) {
+  await openDisclosure(page, '.planner-scenarios-disclosure');
   const panel = page.getByRole('region', { name: 'Сценарии задач' });
   await panel.getByRole('button', { name: 'Создать сценарий', exact: true }).click();
   await panel.getByRole('textbox', { name: 'Название сценария', exact: true }).fill(title);
@@ -64,6 +66,7 @@ test('scenario menus ignore delayed scroll events but close on actual movement a
 
 test('a post-commit read failure never creates a duplicate on save retry', async ({ page }) => {
   await page.goto('/#/v2/today');
+  await openDisclosure(page, '.planner-scenarios-disclosure');
   const panel = page.getByRole('region', { name: 'Сценарии задач' });
   await panel.getByRole('button', { name: 'Создать сценарий', exact: true }).click();
   await panel.getByRole('textbox', { name: 'Название сценария', exact: true }).fill('Один набор');
@@ -148,6 +151,7 @@ test('scenarios collect three tasks, share completion, preserve saved sets and s
     panel.getByRole('checkbox', { name: 'Выполнить: Прочитать главу', exact: true }),
   ).toBeDisabled();
   await page.reload();
+  await openDisclosure(page, '.planner-scenarios-disclosure');
   await panel
     .getByRole('combobox', { name: 'Сейчас я…' })
     .selectOption({ label: 'Дома за компьютером' });
@@ -214,6 +218,7 @@ test('day-only scenarios stay on their date while saved scenarios are reusable',
     .getByRole('group', { name: 'План на день' })
     .getByRole('button', { name: 'Завтра', exact: true })
     .click();
+  await openDisclosure(page, '.planner-scenarios-disclosure');
   const panel = page.getByRole('region', { name: 'Сценарии задач' });
   await expect(panel.getByRole('combobox')).toBeEnabled();
   await expect(panel.getByRole('option', { name: /Только сегодня/ })).toHaveCount(0);
@@ -225,6 +230,7 @@ test('day-only scenarios stay on their date while saved scenarios are reusable',
     .getByRole('group', { name: 'План на день' })
     .getByRole('button', { name: 'Сегодня', exact: true })
     .click();
+  await openDisclosure(page, '.planner-scenarios-disclosure');
   await panel.getByRole('combobox').selectOption({ label: 'Только сегодня · на этот день' });
   await expect(panel.getByRole('button', { name: 'Начать разговор', exact: true })).toBeVisible();
 });
@@ -250,6 +256,7 @@ test('missing task links can be removed and failed saves preserve the scenario',
     db.close();
   });
   await page.reload();
+  await openDisclosure(page, '.planner-scenarios-disclosure');
   await panel.getByRole('combobox').selectOption({ label: 'Проверка сохранения' });
   await expect(panel.getByText('Задача недоступна', { exact: true })).toBeVisible();
   await panel.getByRole('button', { name: 'Убрать из сценария: задача 1', exact: true }).click();
@@ -272,6 +279,7 @@ test('missing task links can be removed and failed saves preserve the scenario',
     'Несохранённое название',
   );
   await page.reload();
+  await openDisclosure(page, '.planner-scenarios-disclosure');
   await expect(panel.getByRole('option', { name: 'Проверка сохранения', exact: true })).toHaveCount(
     1,
   );

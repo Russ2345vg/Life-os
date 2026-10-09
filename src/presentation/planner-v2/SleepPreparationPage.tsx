@@ -22,6 +22,7 @@ import type {
   SleepScheduleState,
 } from '../../domain/sleep/SleepSchedule';
 import { selectSleepHistoryEntries, summarizeSleepHistory } from '../../domain/sleep/SleepSchedule';
+import { nominalSleepDurationMinutes } from '../../domain/sleep/NightTime';
 import { summarizeEveningHistory } from './eveningHistoryModel';
 import { EveningDayClosure, type EveningPlannerServices } from './EveningDayClosure';
 import { WakeManagementPanel } from './WakeManagementPanel';
@@ -35,6 +36,7 @@ export function SleepPreparationPage({
   observationService,
   alarmObservations,
   onBack,
+  backLabel = 'Сегодня',
   plannerServices,
   calendarDate,
 }: {
@@ -42,6 +44,7 @@ export function SleepPreparationPage({
   readonly observationService: SleepObservationService;
   readonly alarmObservations: SleepAlarmObservationCoordinator;
   readonly onBack: () => void;
+  readonly backLabel?: string;
   readonly plannerServices?: EveningPlannerServices;
   readonly calendarDate?: string;
 }) {
@@ -264,6 +267,7 @@ export function SleepPreparationPage({
         />
       }
       onBack={onBack}
+      backLabel={backLabel}
       onSaveSettings={(input) =>
         run(async () => {
           await service.saveSettings(input);
@@ -378,6 +382,7 @@ export function SleepPreparationView({
   morningObservation,
   historyChart,
   onBack,
+  backLabel = 'Сегодня',
   onSaveSettings,
   onComplete,
   onFinish,
@@ -413,6 +418,7 @@ export function SleepPreparationView({
   readonly morningObservation?: ReactNode;
   readonly historyChart?: ReactNode;
   readonly onBack: () => void;
+  readonly backLabel?: string;
   readonly onSaveSettings: (input: {
     bedtime: string;
     wakeTime: string;
@@ -460,8 +466,13 @@ export function SleepPreparationView({
   if (state.settings === null) {
     return (
       <section className="sleep-page sleep-page--setup">
-        <button className="sleep-back" type="button" onClick={onBack}>
-          ← Сегодня
+        <button
+          className="sleep-back"
+          type="button"
+          aria-label={`Вернуться к ${backLabel === 'Распорядок' ? 'распорядку' : 'сегодня'}`}
+          onClick={onBack}
+        >
+          ← {backLabel}
         </button>
         <p className="planner-eyebrow">Сон и подъём</p>
         <h1>Настройте своё время</h1>
@@ -484,6 +495,11 @@ export function SleepPreparationView({
   }
 
   const groups = cycle ? groupedSnapshot(cycle, state.preparationGroups) : [];
+  const preparationTotal = cycle?.preparationItems.length ?? 0;
+  const preparationDone =
+    cycle?.preparationItems.filter(({ status }) => status === 'DONE').length ?? 0;
+  const preparationPercent =
+    preparationTotal > 0 ? Math.round((preparationDone / preparationTotal) * 100) : 0;
 
   return (
     <section className="sleep-page">
@@ -492,7 +508,7 @@ export function SleepPreparationView({
           className="sleep-back"
           type="button"
           onClick={onBack}
-          aria-label="Вернуться к сегодня"
+          aria-label={`Вернуться к ${backLabel === 'Распорядок' ? 'распорядку' : 'сегодня'}`}
         >
           ←
         </button>
@@ -553,7 +569,7 @@ export function SleepPreparationView({
           <div className="sleep-section-heading">
             <div>
               <h2>Список подготовки</h2>
-              <span>{progressLabel(cycle)}</span>
+              <span>{cycle ? `${preparationDone} / ${preparationTotal}` : '—'}</span>
               <button type="button" aria-label="Действия со списком">
                 ⋮
               </button>
@@ -605,6 +621,26 @@ export function SleepPreparationView({
               </div>
             </details>
           </div>
+
+          {cycle && preparationTotal > 0 ? (
+            <div className="sleep-preparation-progress">
+              <div>
+                <span>Прогресс подготовки</span>
+                <strong>{preparationPercent}%</strong>
+              </div>
+              <div
+                className="sleep-preparation-progress__track"
+                role="progressbar"
+                aria-label="Прогресс вечерней подготовки"
+                aria-valuenow={preparationDone}
+                aria-valuemin={0}
+                aria-valuemax={preparationTotal}
+                aria-valuetext={`${preparationDone} из ${preparationTotal} пунктов выполнено`}
+              >
+                <span style={{ width: `${preparationPercent}%` }} />
+              </div>
+            </div>
+          ) : null}
 
           {cycle === null ? (
             <p role="status">Создаём список текущей ночи…</p>
@@ -690,6 +726,15 @@ export function SleepPreparationView({
               </span>
               <span>Время подъёма</span>
               <strong>{state.settings.wakeTime}</strong>
+            </div>
+            <div>
+              <span aria-hidden="true">≈</span>
+              <span>Планируется сна</span>
+              <strong>
+                {formatPlannedSleepDuration(
+                  nominalSleepDurationMinutes(state.settings.bedtime, state.settings.wakeTime),
+                )}
+              </strong>
             </div>
           </section>
 
@@ -1461,6 +1506,13 @@ function QuickForm({
   );
 }
 
+function formatPlannedSleepDuration(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  const duration = `${hours} ч${remainder ? ` ${remainder} мин` : ''}`;
+  return minutes === 24 * 60 ? `${duration} (время совпадает)` : duration;
+}
+
 function latestCycle(cycles: readonly NightCycle[]): NightCycle | null {
   return (
     [...cycles].sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())[0] ??
@@ -1514,11 +1566,6 @@ function groupedSnapshot(
     groups.set(item.groupId, group);
   }
   return [...groups.entries()].map(([id, group]) => ({ id, ...group }));
-}
-
-function progressLabel(cycle: NightCycle | null): string {
-  if (cycle === null) return '—';
-  return `${cycle.preparationItems.filter(({ status }) => status === 'DONE').length} / ${cycle.preparationItems.length}`;
 }
 
 function formatCycleDate(cycleDate: string | undefined, timeZone: string): string {

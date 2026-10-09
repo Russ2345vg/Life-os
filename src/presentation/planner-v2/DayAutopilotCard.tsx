@@ -62,72 +62,78 @@ export function DayAutopilotCard({
 
   return (
     <section className="planner-day-autopilot" aria-labelledby="day-autopilot-title">
-      <header className="planner-day-autopilot__header">
-        <div>
-          <span className="planner-eyebrow">Умное планирование</span>
-          <h3 id="day-autopilot-title">Автопилот дня</h3>
-          <p>Расставит задачи по времени, сохранит резерв и покажет, что сегодня не помещается.</p>
-        </div>
-        <span className="planner-day-autopilot__mark" aria-hidden="true">
-          ✦
-        </span>
-      </header>
+      <details className="planner-day-autopilot__disclosure">
+        <summary className="planner-day-autopilot__header">
+          <div>
+            <span className="planner-eyebrow">Умное планирование</span>
+            <h3 id="day-autopilot-title">Автопилот дня</h3>
+            <p>
+              Расставит задачи по времени, сохранит резерв и покажет, что сегодня не помещается.
+            </p>
+          </div>
+          <span className="planner-day-autopilot__mark" aria-hidden="true">
+            ⌄
+          </span>
+        </summary>
 
-      <div className="planner-day-autopilot__controls">
-        <label>
-          Начать с
-          <input
-            type="time"
-            step={300}
-            value={startTime}
-            disabled={disabled}
-            onChange={(event) => {
-              setStartTime(event.target.value);
-              setPreview(null);
-            }}
-          />
-        </label>
-        <label className="planner-day-autopilot__toggle">
-          <input
-            type="checkbox"
-            checked={rebuild}
-            disabled={disabled}
-            onChange={(event) => {
-              setRebuild(event.target.checked);
-              setPreview(null);
-            }}
-          />
-          <span>Пересобрать будущие блоки</span>
-        </label>
-        <button className="planner-primary" type="button" disabled={disabled} onClick={build}>
-          {working === 'preview' ? 'Собираю…' : 'Собрать мой день'}
-        </button>
-      </div>
+        <div className="planner-day-autopilot__body">
+          <div className="planner-day-autopilot__controls">
+            <label>
+              Начать с
+              <input
+                type="time"
+                step={300}
+                value={startTime}
+                disabled={disabled}
+                onChange={(event) => {
+                  setStartTime(event.target.value);
+                  setPreview(null);
+                }}
+              />
+            </label>
+            <label className="planner-day-autopilot__toggle">
+              <input
+                type="checkbox"
+                checked={rebuild}
+                disabled={disabled}
+                onChange={(event) => {
+                  setRebuild(event.target.checked);
+                  setPreview(null);
+                }}
+              />
+              <span>Пересобрать будущие блоки</span>
+            </label>
+            <button className="planner-primary" type="button" disabled={disabled} onClick={build}>
+              {working === 'preview' ? 'Собираю…' : 'Собрать мой день'}
+            </button>
+          </div>
 
-      {preview ? <DayAutopilotPreviewPanel preview={preview} /> : null}
-      {preview ? (
-        <div className="planner-day-autopilot__actions">
-          <button
-            className="planner-primary"
-            type="button"
-            disabled={disabled || !previewHasChanges(preview)}
-            onClick={apply}
-          >
-            {working === 'apply' ? 'Применяю…' : 'Применить план'}
-          </button>
-          <button type="button" disabled={disabled} onClick={() => setPreview(null)}>
-            Отменить
-          </button>
+          {preview ? <DayAutopilotPreviewPanel preview={preview} /> : null}
+          {preview ? (
+            <div className="planner-day-autopilot__actions">
+              <button
+                className="planner-primary"
+                type="button"
+                disabled={disabled || !previewHasChanges(preview)}
+                onClick={apply}
+              >
+                {working === 'apply' ? 'Применяю…' : 'Применить план'}
+              </button>
+              <button type="button" disabled={disabled} onClick={() => setPreview(null)}>
+                Отменить
+              </button>
+            </div>
+          ) : null}
+          <div className="planner-day-autopilot__status" aria-live="polite">
+            {message ? <p className="planner-success">{message}</p> : null}
+            {error ? (
+              <p className="planner-error" role="alert">
+                {error}
+              </p>
+            ) : null}
+          </div>
         </div>
-      ) : null}
-      <div className="planner-day-autopilot__status" aria-live="polite">
-        {message ? <p className="planner-success">{message}</p> : null}
-        {error ? (
-          <p className="planner-error" role="alert">
-            {error}
-          </p>
-        ) : null}
-      </div>
+      </details>
     </section>
   );
 }

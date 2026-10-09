@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { openDisclosure } from './helpers/disclosures';
 import { DayDate } from '../../src/domain';
 import { addDays } from '../../src/domain/planner/PlanningPeriod';
 import { createLifeActionDraft } from '../../src/test/helpers/LifeActionTestFactory';
@@ -35,11 +36,14 @@ test('date undo survives navigation, refreshes lists and preserves the destinati
     db.close();
   }, [original, main].map(LifeActionRecordMapper.toRecord));
   await page.reload();
+  await openDisclosure(page, '.planner-plan-review');
   const overdue = page.getByRole('region', { name: 'Осталось с прошлых дней' });
   await overdue.getByRole('button', { name: 'На сегодня', exact: true }).click();
   const undo = page.getByRole('button', { name: 'Отменить изменение даты', exact: true });
   await expect(undo).toBeVisible();
-  await expect(page.locator('.planner-main')).toContainText('Действие undo-main');
+  await expect(page.getByRole('region', { name: 'Главное сегодня', exact: true })).toContainText(
+    'Действие undo-main',
+  );
   expect((await undo.boundingBox())?.height).toBeGreaterThanOrEqual(44);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('date-undo.png'), fullPage: true });
@@ -58,9 +62,13 @@ test('date undo survives navigation, refreshes lists and preserves the destinati
     }),
   );
   await page.goto('/#/v2/today');
+  await openDisclosure(page, '.planner-plan-review');
   await expect(overdue).toContainText('Действие undo-original');
-  await expect(page.locator('.planner-main')).toContainText('Действие undo-main');
+  await expect(page.getByRole('region', { name: 'Главное сегодня', exact: true })).toContainText(
+    'Действие undo-main',
+  );
   await page.reload();
+  await openDisclosure(page, '.planner-plan-review');
   await expect(overdue).toContainText('Действие undo-original');
   expect(errors).toEqual([]);
 });

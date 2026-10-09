@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { EntityId, type DayDate } from '../../../domain';
 import {
   MEMORY_KINDS,
@@ -10,9 +10,11 @@ import {
 import type { MemoryServices } from '../../../application/memory/MemoryServices';
 import type { MemoryPage, MemoryQuery } from '../../../application/ports/MemoryRepository';
 import type { MemoryYearOverview } from '../../../application/memory/MemoryQueries';
+import type { GetConnections } from '../../../application/connections/GetConnections';
 import { useSyncContentChanged } from '../../sync/SyncStatusContext';
 import { PlannerSheet } from '../PlannerSheet';
 import type { PlannerRoute } from '../PlannerNavigation';
+import { ConnectionsContent } from '../connections/ConnectionsContent';
 import { MemoryEditor } from './MemoryEditor';
 import { MemoryOnThisDay } from './MemoryOnThisDay';
 import { MemoryTimeline } from './MemoryTimeline';
@@ -32,12 +34,14 @@ export function PlannerMemory({
   currentDate,
   catalog,
   onNavigate,
+  connections,
 }: {
   readonly services: MemoryServices;
   readonly route: MemoryRoute;
   readonly currentDate: DayDate;
   readonly catalog: MemoryCatalog;
   readonly onNavigate: (route: PlannerRoute) => void;
+  readonly connections: Pick<GetConnections, 'read' | 'more'>;
 }) {
   const year = route.year ?? Number(currentDate.toString().slice(0, 4));
   const mode = route.mode ?? 'timeline';
@@ -68,13 +72,26 @@ export function PlannerMemory({
     pendingPhoto: boolean;
   } | null>(null);
   const [detail, setDetail] = useState<MemoryEvent | null>(null);
+  const [detailView, setDetailView] = useState<'details' | 'connections'>('details');
+  const detailHeading = useRef<HTMLHeadingElement>(null);
+  const detailScroll = useRef(0);
+  const connectionsHeading = useRef<HTMLHeadingElement>(null);
   const [detailHasPhoto, setDetailHasPhoto] = useState(false);
   const [loadedDetailKey, setLoadedDetailKey] = useState<string | null>(null);
   const [previousId, setPreviousId] = useState(route.id);
   if (previousId !== route.id) {
     setPreviousId(route.id);
     setLoadedDetailKey(null);
+    setDetailView('details');
   }
+  useLayoutEffect(() => {
+    if (detailView === 'connections') connectionsHeading.current?.focus({ preventScroll: true });
+    else {
+      detailHeading.current?.focus({ preventScroll: true });
+      const dialog = detailHeading.current?.closest('dialog');
+      if (dialog) dialog.scrollTop = detailScroll.current;
+    }
+  }, [detailView]);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [sourceStatus, setSourceStatus] = useState<'available' | 'changed' | 'missing' | null>(
     null,
@@ -447,7 +464,7 @@ export function PlannerMemory({
       )}
       {route.id && !editor && (
         <PlannerSheet title="Воспоминание" onClose={() => navigate({})}>
-          <div className="memory-detail">
+          <div className="memory-detail" hidden={detailView === 'connections'}>
             {detailLoading ? (
               <p role="status">Загружаем воспоминание…</p>
             ) : detailError ? (
@@ -475,9 +492,23 @@ export function PlannerMemory({
                   <span className="memory-meta">
                     {memoryDate(detail.occurredOn.toString())} · {MEMORY_LABELS[detail.kind]}
                   </span>
-                  <h2>{detail.title}</h2>
+                  <h2 ref={detailHeading} tabIndex={-1}>
+                    {detail.title}
+                  </h2>
                   <p className="memory-full-story">{detail.body}</p>
                   <p className="memory-meta">{memoryContextLabel(detail.context)}</p>
+                  <button
+                    className="connections-entry"
+                    type="button"
+                    onClick={() => {
+                      detailScroll.current =
+                        detailHeading.current?.closest('dialog')?.scrollTop ?? 0;
+                      setDetailView('connections');
+                    }}
+                  >
+                    Посмотреть связи
+                    <span>Контекст и источник воспоминания</span>
+                  </button>
                   {detail.diarySource && (
                     <div className="memory-source">
                       <p className="planner-muted">
@@ -554,6 +585,18 @@ export function PlannerMemory({
               )
             )}
           </div>
+          {detailView === 'connections' && (
+            <div className="memory-connections">
+              <ConnectionsContent
+                source={{ kind: 'memory', id: route.id }}
+                connections={connections}
+                onNavigate={onNavigate}
+                headingRef={connectionsHeading}
+                onBack={() => setDetailView('details')}
+                backLabel="Назад к воспоминанию"
+              />
+            </div>
+          )}
         </PlannerSheet>
       )}
       {editor && (

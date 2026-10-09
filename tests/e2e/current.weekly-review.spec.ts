@@ -263,7 +263,9 @@ test('weekly review reads real results and persists an explicit move without rep
   await expect(step).toContainText('Выбран: Выбрать примеры работ');
   await expect(step).toContainText(`Запланировано: ${addDays(today, 1)}`);
   await page.goto('/#/v2/today');
-  await expect(page.locator('.planner-main')).toContainText('Главное на сегодня');
+  await expect(page.getByRole('region', { name: 'Главное сегодня', exact: true })).toContainText(
+    'Главное на сегодня',
+  );
   await page.goto('/#/v2/today?day=tomorrow');
   await expect(page.locator('main')).toContainText('Выбрать примеры работ');
   const stored = await page.evaluate(async () => {

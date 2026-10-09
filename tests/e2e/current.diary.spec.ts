@@ -192,7 +192,8 @@ test('daily diary saves, survives navigation and recovers a failed draft', async
   const today = await localToday(page);
   const navigation = page.getByRole('navigation', { name: 'Рабочий интерфейс' });
   const diaryLink = navigation.getByRole('link', { name: 'Дневник', exact: true });
-  await expect(navigation.locator(':scope > a:visible, :scope > button:visible')).toHaveCount(5);
+  await expect(navigation.locator(':scope > a:visible, :scope > button:visible')).toHaveCount(6);
+  await expect(navigation.getByRole('link', { name: 'Распорядок', exact: true })).toBeVisible();
   await diaryLink.focus();
   await expect(diaryLink).toBeFocused();
   await page.keyboard.press('Enter');

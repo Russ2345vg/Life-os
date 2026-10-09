@@ -69,6 +69,8 @@ describe('DayAutopilotCard', () => {
     expect(html).toContain('Собрать мой день');
     expect(html).toContain('type="time"');
     expect(html).toContain('Пересобрать будущие блоки');
+    expect(html).toContain('<summary class="planner-day-autopilot__header"');
+    expect(html).toContain('<details class="planner-day-autopilot__disclosure"');
   });
 
   it('explains the proposed order, assumptions, recovery reserve and deferrals', () => {

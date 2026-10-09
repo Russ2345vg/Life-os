@@ -50,6 +50,25 @@ const operations: PlannerViewOperations = {
 };
 
 describe('V2 Goal action centre', () => {
+  it('places a compact connections entry between context and the desired result', () => {
+    const html = renderToStaticMarkup(
+      createElement(GoalDetailContent, {
+        goal,
+        actions: [],
+        directions: [],
+        spheres: [],
+        facts: [],
+        today: '2026-09-14',
+        operations,
+        connections: { read: vi.fn(), more: vi.fn() },
+        onNavigate: vi.fn(),
+      }),
+    );
+    expect(html.indexOf('>Связи<')).toBeGreaterThan(html.indexOf('planner-goal-context'));
+    expect(html.indexOf('>Связи<')).toBeLessThan(html.indexOf('Желаемый результат'));
+    expect(html).toContain('Посмотреть связанные записи');
+  });
+
   it('shows the need before collapsed action and goal details', () => {
     const item = Goal.create({
       id: EntityId.create('visible-need'),

@@ -36,6 +36,9 @@ describe('Planner scenarios presentation', () => {
     expect(html).toContain('Загружаем сценарии');
     expect(html).toContain('Обычный план дня');
     expect(html).toContain('Все задачи');
+    expect(html).toContain(
+      '<details class="planner-scenarios-disclosure"><summary>Сценарии</summary>',
+    );
     expect(html.indexOf('Обычный план дня')).toBeLessThan(
       html.indexOf('class="planner-scenarios"'),
     );

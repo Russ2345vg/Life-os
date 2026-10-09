@@ -3,6 +3,8 @@ mod android_alarm;
 #[cfg(target_os = "android")]
 mod android_speech;
 #[cfg(target_os = "android")]
+mod android_today_widget;
+#[cfg(target_os = "android")]
 mod android_updater;
 mod secure_key_store;
 mod sync_commands;
@@ -49,11 +51,14 @@ pub fn run() {
         .plugin(android_updater::init())
         .plugin(android_alarm::init())
         .plugin(android_speech::init())
+        .plugin(android_today_widget::init())
         .plugin(secure_key_store::android::init())
         .invoke_handler(tauri::generate_handler![
             android_updater::android_check_update,
             android_updater::android_download_and_install,
             android_speech::android_speech_recognize,
+            android_today_widget::android_today_widget_update,
+            android_today_widget::android_today_widget_consume_open,
             android_alarm::android_alarm_reconcile,
             android_alarm::android_alarm_status,
             android_alarm::android_alarm_list_sounds,

@@ -19,6 +19,7 @@ describe('Memory screen', () => {
         currentDate: DayDate.create('2026-09-29'),
         catalog: { spheres: [], directions: [], goals: [] },
         onNavigate: vi.fn(),
+        connections: { read: vi.fn(), more: vi.fn() },
       }),
     );
     expect(html).toContain('Загружаем воспоминания');

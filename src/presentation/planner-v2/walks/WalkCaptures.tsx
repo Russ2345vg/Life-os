@@ -39,7 +39,7 @@ export function WalkCaptures({
     </section>
   );
 }
-function Capture({
+export function Capture({
   capture,
   services,
   onNavigate,

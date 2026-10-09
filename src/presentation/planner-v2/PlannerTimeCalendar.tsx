@@ -1,6 +1,9 @@
 import { useState, type CSSProperties, type FormEvent, type MouseEvent } from 'react';
 import type { LifeAction } from '../../domain';
-import { buildTimeScheduleDay } from '../../application/queries/GetTimeSchedule';
+import {
+  buildTimeScheduleDay,
+  suggestFreeTimeStarts,
+} from '../../application/queries/GetTimeSchedule';
 import { PlannerSheet } from './PlannerSheet';
 import { plannerDateLabel, type PlannerViews } from './plannerViewsModel';
 import { PlannerActionTimeSheet } from './PlannerActionTimeSheet';
@@ -50,6 +53,9 @@ export function PlannerTimeCalendar({
   const [capacityDraft, setCapacityDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [suggestedFor, setSuggestedFor] = useState<string | null>(null);
+  const [placing, setPlacing] = useState(false);
+  const [placementError, setPlacementError] = useState<string | null>(null);
   const weekStart = shiftDays(selected, -weekday(selected));
   const dates = Array.from({ length: 7 }, (_, index) => shiftDays(weekStart, index));
   const visibleDates = mode === 'week' ? dates : [selected];
@@ -80,9 +86,30 @@ export function PlannerTimeCalendar({
   );
   const gridHeight = (endHour - startHour) * 48;
   const goals = data.goalsByDate.get(selected) ?? [];
+  const now = new Date();
+  const earliestMinute = selected === today ? now.getHours() * 60 + now.getMinutes() : 420;
 
   const openTime = (action: LifeAction) => {
     setEditing(action);
+  };
+  const placeInWindow = async (action: LifeAction, start: number) => {
+    if (placing || busy || action.estimateMinutes === null) return;
+    setPlacing(true);
+    setPlacementError(null);
+    try {
+      await onSetTime(
+        action.id.toString(),
+        action.estimateMinutes,
+        start,
+        action.estimateMinutes,
+        action.version,
+      );
+      setSuggestedFor(null);
+    } catch (reason: unknown) {
+      setPlacementError(reason instanceof Error ? reason.message : 'Не удалось назначить время.');
+    } finally {
+      setPlacing(false);
+    }
   };
   const openAction = (event: MouseEvent<HTMLAnchorElement>, id: string) => {
     if (
@@ -352,28 +379,84 @@ export function PlannerTimeCalendar({
                   : 'Все действия дня получили время. Можно выбрать другой день.'}
               </p>
             )}
-            {selectedDay.untimed.map((action) => (
-              <div className="planner-time-untimed" key={action.id.toString()}>
-                <a
-                  href={`#/v2/actions/${encodeURIComponent(action.id.toString())}`}
-                  onClick={(event) => openAction(event, action.id.toString())}
-                >
-                  {action.title.toString()}
-                </a>
-                <span>
-                  {action.status === 'completed'
-                    ? 'Выполнено'
-                    : action.estimateMinutes === null
-                      ? 'Длительность не задана'
-                      : durationLabel(action.estimateMinutes)}
-                </span>
-                {(action.status === 'draft' || action.status === 'ready') && (
-                  <button type="button" onClick={() => openTime(action)} disabled={busy}>
-                    Выбрать время
-                  </button>
-                )}
-              </div>
-            ))}
+            {selectedDay.untimed.map((action) => {
+              const suggestions =
+                suggestedFor === action.id.toString() && action.estimateMinutes !== null
+                  ? suggestFreeTimeStarts(selectedDay, action.estimateMinutes, earliestMinute)
+                  : [];
+              return (
+                <div className="planner-time-untimed" key={action.id.toString()}>
+                  <a
+                    href={`#/v2/actions/${encodeURIComponent(action.id.toString())}`}
+                    onClick={(event) => openAction(event, action.id.toString())}
+                  >
+                    {action.title.toString()}
+                  </a>
+                  <span>
+                    {action.status === 'completed'
+                      ? 'Выполнено'
+                      : action.estimateMinutes === null
+                        ? 'Длительность не задана'
+                        : durationLabel(action.estimateMinutes)}
+                  </span>
+                  {(action.status === 'draft' || action.status === 'ready') && (
+                    <>
+                      {action.estimateMinutes !== null && (
+                        <button
+                          type="button"
+                          aria-expanded={suggestedFor === action.id.toString()}
+                          onClick={() => {
+                            setSuggestedFor(
+                              suggestedFor === action.id.toString() ? null : action.id.toString(),
+                            );
+                            setPlacementError(null);
+                          }}
+                          disabled={busy || placing}
+                        >
+                          Подобрать окно
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => openTime(action)}
+                        disabled={busy || placing}
+                      >
+                        Выбрать время
+                      </button>
+                      {suggestedFor === action.id.toString() && action.estimateMinutes !== null && (
+                        <div
+                          className="planner-time-suggestions"
+                          aria-label={`Свободные окна: ${action.title}`}
+                        >
+                          <p className="planner-muted">Ближайшие свободные окна</p>
+                          {suggestions.map((start) => (
+                            <button
+                              type="button"
+                              key={start}
+                              disabled={busy || placing}
+                              onClick={() => void placeInWindow(action, start)}
+                            >
+                              Поставить {clockTime(start)}–
+                              {clockTime(start + action.estimateMinutes!)}
+                            </button>
+                          ))}
+                          {suggestions.length === 0 && (
+                            <p className="planner-muted">
+                              Подходящих окон до 21:00 нет. Выберите время вручную.
+                            </p>
+                          )}
+                          {placementError && (
+                            <p role="alert" className="planner-error">
+                              {placementError}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })}
           </section>
           {goals.length > 0 && (
             <section>

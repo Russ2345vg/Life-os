@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openDisclosure } from './helpers/disclosures';
 import { DayDate, EntityId, LifeAction, LifeActionTitle } from '../../src/domain';
 import { addDays } from '../../src/domain/planner/PlanningPeriod';
 import { LifeActionRecordMapper } from '../../src/infrastructure/persistence/mappers/LifeActionRecordMapper';
@@ -54,6 +55,7 @@ async function seed(page: Page) {
   ];
   await putActions(page, actions);
   await page.reload();
+  await openDisclosure(page, '.planner-plan-review');
   const overdue = page.getByRole('region', { name: 'Осталось с прошлых дней' });
   await expect(overdue).toBeVisible();
   return { today, yesterday, actions, overdue };
@@ -68,6 +70,7 @@ test('plan review surfaces repeated ready actions and preserves the chosen main 
   repeated.reschedule(DayDate.create(today), new Date(), EntityId.create('repeat-2'));
   await putActions(page, [repeated]);
   await page.reload();
+  await openDisclosure(page, '.planner-plan-review');
   const review = page.locator('.planner-plan-review');
   await expect(review.locator('summary')).toContainText('4 требуют решения');
   const repeats = page.getByRole('region', { name: 'Повторно перенесено на сегодня' });
@@ -80,6 +83,7 @@ test('plan review surfaces repeated ready actions and preserves the chosen main 
   await expect(page.locator('.planner-today-list')).toContainText('Действие review-repeat');
   await expect(review.locator('summary')).toContainText('3 требуют решения');
   await page.reload();
+  await openDisclosure(page, '.planner-plan-review');
   await expect(repeats).toContainText('Зафиксировано переносов: 2');
   await repeats.getByRole('button', { name: 'Выбрать дату' }).click();
   await repeats
@@ -87,11 +91,14 @@ test('plan review surfaces repeated ready actions and preserves the chosen main 
     .fill(addDays(today, 1));
   await repeats.getByRole('button', { name: 'Сохранить дату' }).click();
   await expect(repeats).toHaveCount(0);
-  await expect(page.locator('.planner-main')).toContainText('Главное дело сегодня');
+  await expect(page.getByRole('region', { name: 'Главное сегодня', exact: true })).toContainText(
+    'Главное дело сегодня',
+  );
   await expect(review.locator('summary')).toContainText('3 требуют решения');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('plan-review.png'), fullPage: true });
   await page.reload();
+  await openDisclosure(page, '.planner-plan-review');
   await expect(page.getByRole('region', { name: 'Повторно перенесено на сегодня' })).toHaveCount(0);
 });
 
@@ -122,7 +129,9 @@ test('unfinished previous days: three decisions persist without replacing the ma
   await expect(
     overdue.getByRole('button', { name: 'Дело для другой даты', exact: true }),
   ).toBeFocused();
-  await expect(page.locator('.planner-main')).toContainText('Главное дело сегодня');
+  await expect(page.getByRole('region', { name: 'Главное сегодня', exact: true })).toContainText(
+    'Главное дело сегодня',
+  );
   await expect(page.locator('.planner-today-list')).toContainText('Вчерашнее главное дело');
 
   const dated = row('Дело для другой даты');
@@ -142,12 +151,18 @@ test('unfinished previous days: three decisions persist without replacing the ma
   await row('Дело без обязательного срока')
     .getByRole('button', { name: 'Убрать из плана' })
     .click();
-  await expect(overdue).toHaveCount(0);
+  await expect(
+    page.getByRole('region', { name: 'Осталось с прошлых дней', includeHidden: true }),
+  ).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Сегодня', exact: true })).toBeFocused();
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Сегодня', exact: true })).toBeVisible();
-  await expect(overdue).toHaveCount(0);
-  await expect(page.locator('.planner-main')).toContainText('Главное дело сегодня');
+  await expect(
+    page.getByRole('region', { name: 'Осталось с прошлых дней', includeHidden: true }),
+  ).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Главное сегодня', exact: true })).toContainText(
+    'Главное дело сегодня',
+  );
   await expect(page.locator('.planner-today-list')).toContainText('Вчерашнее главное дело');
   const undated = page
     .locator('details')
@@ -193,6 +208,7 @@ test('unfinished previous days: legacy restrictions and a failed stale action re
   );
   await putActions(page, [ready, running, completed]);
   await page.reload();
+  await openDisclosure(page, '.planner-plan-review');
   const readyRow = overdue.getByRole('listitem').filter({ hasText: 'Действие legacy-ready' });
   await expect(readyRow.getByRole('button', { name: 'Убрать из плана' })).toHaveCount(0);
   await readyRow.getByRole('button', { name: 'На сегодня', exact: true }).click();
@@ -215,5 +231,7 @@ test('unfinished previous days: legacy restrictions and a failed stale action re
   await expect(stale).toHaveCount(0);
   await page.getByRole('button', { name: 'Завтра', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Завтра', exact: true })).toBeVisible();
-  await expect(overdue).toHaveCount(0);
+  await expect(
+    page.getByRole('region', { name: 'Осталось с прошлых дней', includeHidden: true }),
+  ).toHaveCount(0);
 });

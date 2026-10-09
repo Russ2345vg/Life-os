@@ -10,7 +10,7 @@ for (const viewport of [
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
-    await page.goto('/#/v2/today');
+    await page.goto('/#/v2/routine/morning');
 
     const card = page.getByRole('region', { name: 'Утренняя зарядка' });
     await expect(card).toContainText('≈ 30 минут');

@@ -2,8 +2,10 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  completePreparationItem,
   createEmptySleepSchedule,
   ensureNightCycle,
+  finishPreparation,
   updateSleepSettings,
   type SleepScheduleState,
 } from '../../domain/sleep/SleepSchedule';
@@ -53,6 +55,8 @@ describe('SleepPreparationView', () => {
     });
 
     expect(html).toContain('Подготовка ко сну');
+    expect(html).toContain('Планируется сна');
+    expect(html).toContain('8 ч 45 мин');
     expect(html).toContain('Проветрить комнату');
     expect(html).toContain('Поставить стакан воды');
     expect(html).toContain('Завершить подготовку');
@@ -64,6 +68,45 @@ describe('SleepPreparationView', () => {
     expect(html).toContain('Пропустить ближайший');
     expect(html).toContain('Повторяемый список');
     expect(html).toContain('Базовый пункт');
+  });
+
+  it('shows a separate preparation progress line and percentage without changing checklist items', () => {
+    const configured = updateSleepSettings(
+      createEmptySleepSchedule(),
+      { bedtime: '22:30', wakeTime: '07:15', timeZone: 'Asia/Chita', enabled: true },
+      new Date('2026-09-20T12:00:00.000Z'),
+    );
+    const opened = ensureNightCycle(configured, {
+      cycleDate: '2026-09-20',
+      cycleId: 'night-1',
+      createdAt: new Date('2026-09-20T12:00:00.000Z'),
+    }).state;
+    const total = opened.nightCycles[0]!.preparationItems.length;
+    const before = render(opened);
+    expect(before).toContain('aria-label="Прогресс вечерней подготовки"');
+    expect(before).toContain(`aria-valuenow="0" aria-valuemin="0" aria-valuemax="${total}"`);
+
+    const firstItem = opened.nightCycles[0]!.preparationItems[0]!;
+    const changed = completePreparationItem(
+      opened,
+      '2026-09-20',
+      firstItem.id,
+      new Date('2026-09-20T13:00:00.000Z'),
+    );
+    const after = render(changed);
+    expect(after).toContain(`aria-valuenow="1" aria-valuemin="0" aria-valuemax="${total}"`);
+    expect(after).toContain(`${Math.round(100 / total)}%`);
+    expect(after).toContain(firstItem.title);
+
+    const skipped = finishPreparation(
+      opened,
+      '2026-09-20',
+      'SKIPPED_TODAY',
+      new Date('2026-09-20T13:00:00.000Z'),
+    );
+    const skippedHtml = render(skipped);
+    expect(skippedHtml).toContain('aria-valuenow="0"');
+    expect(skippedHtml).toContain('0%');
   });
 
   it('shows every missing Android capability without claiming that the alarm is ready', () => {

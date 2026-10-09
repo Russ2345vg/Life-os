@@ -182,6 +182,29 @@
   align-self: start;
   color: var(--accent-primary);
 }
+.planner-time-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 0 2px;
+}
+.planner-time-suggestions p {
+  flex-basis: 100%;
+  margin: 0;
+}
+.planner-v2 .planner-time-suggestions button {
+  min-height: 44px;
+  padding: 8px 10px;
+  color: var(--accent-primary);
+  background: var(--surface-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-small);
+}
+.planner-v2 .planner-time-suggestions button:hover,
+.planner-v2 .planner-time-suggestions button:focus-visible {
+  border-color: var(--border-accent);
+  background: var(--surface-selected);
+}
 .planner-time-conflicts {
   color: var(--text-primary);
 }

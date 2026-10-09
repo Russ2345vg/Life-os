@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openDisclosure } from './helpers/disclosures';
 import {
   DayDate,
   EntityId,
@@ -219,6 +220,7 @@ test('MASTER hierarchy creates and edits linked records through contextual panel
   ).toBeVisible();
   await page.screenshot({ path: info.outputPath('goals.png'), fullPage: true });
   await page.goto('/#/v2/today');
+  await openDisclosure(page, '.planner-today-context');
   await page
     .getByLabel('Главное направление', { exact: true })
     .selectOption({ label: 'Дом MASTER → Жильё MASTER' });

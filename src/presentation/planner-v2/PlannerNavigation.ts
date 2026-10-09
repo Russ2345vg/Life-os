@@ -13,7 +13,8 @@ export type PlannerRoute =
     }
   | {
       readonly view: 'walks';
-      readonly page?: 'overview' | 'active' | 'history' | 'captures' | 'plan' | 'analytics';
+      readonly page?:
+        'overview' | 'active' | 'history' | 'captures' | 'plan' | 'analytics' | 'followups';
       readonly id?: string;
       readonly search?: string;
       readonly status?: string;
@@ -32,7 +33,10 @@ export type PlannerRoute =
   | { readonly view: 'goal'; readonly id: string; readonly edit?: boolean }
   | { readonly view: 'planning'; readonly sphereId?: string }
   | { readonly view: 'today'; readonly day?: 'tomorrow' }
-  | { readonly view: 'sleep' }
+  | { readonly view: 'routine' }
+  | { readonly view: 'morning' }
+  | { readonly view: 'autopilot' }
+  | { readonly view: 'sleep'; readonly from?: 'routine' }
   | { readonly view: 'account' }
   | {
       readonly view: 'memory';
@@ -139,7 +143,13 @@ export function parsePlannerRoute(hash: string): PlannerRoute | null {
       view: 'today',
       ...(new URLSearchParams(query).get('day') === 'tomorrow' ? { day: 'tomorrow' as const } : {}),
     };
-  if (path === '#/v2/sleep') return { view: 'sleep' };
+  if (path === '#/v2/routine') return { view: 'routine' };
+  if (path === '#/v2/routine/morning') return { view: 'morning' };
+  if (path === '#/v2/routine/day') return { view: 'autopilot' };
+  if (path === '#/v2/sleep')
+    return new URLSearchParams(query).get('from') === 'routine'
+      ? { view: 'sleep', from: 'routine' }
+      : { view: 'sleep' };
   if (path === '#/v2/walks' || path?.startsWith('#/v2/walks/')) {
     try {
       const part =
@@ -161,6 +171,7 @@ export function parsePlannerRoute(hash: string): PlannerRoute | null {
         'captures',
         'plan',
         'analytics',
+        'followups',
       ] as const)
         if (part === page) return { view: 'walks', page, ...filters };
       return { view: 'walks', id: part };
@@ -305,7 +316,11 @@ export function buildPlannerRoute(route: PlannerRoute): string {
     return `#/v2/goals${filter ? `${filter}&period=week` : '?period=week'}`;
   if (route.view === 'today')
     return route.day === 'tomorrow' ? '#/v2/today?day=tomorrow' : '#/v2/today';
-  if (route.view === 'sleep') return '#/v2/sleep';
+  if (route.view === 'routine') return '#/v2/routine';
+  if (route.view === 'morning') return '#/v2/routine/morning';
+  if (route.view === 'autopilot') return '#/v2/routine/day';
+  if (route.view === 'sleep')
+    return route.from === 'routine' ? '#/v2/sleep?from=routine' : '#/v2/sleep';
   if (route.view === 'account') return '#/v2/account';
   if (route.view === 'memory') {
     const params = new URLSearchParams();

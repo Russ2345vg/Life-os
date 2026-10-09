@@ -9,7 +9,13 @@ import {
   parsePlannerLocation,
   type PlannerLocation,
 } from '../presentation/planner-v2/PlannerLocation';
-import { SyncStatusProvider } from '../presentation/sync/SyncStatusContext';
+import { SyncStatusProvider, useSyncContentChanged } from '../presentation/sync/SyncStatusContext';
+import type { PlannerServices } from '../application/planner/PlannerServices';
+import { buildTodayWidgetSnapshot } from '../application/queries/TodayWidgetSnapshot';
+import {
+  isAndroidWidgetRuntime,
+  TauriTodayWidgetGateway,
+} from '../infrastructure/widget/TauriTodayWidgetGateway';
 import { createPlannerLocationNavigation } from './lifecycle/PlannerLocationNavigation';
 import { startBrowserCurrentDateRefresh } from './lifecycle/BrowserCurrentDateRefresh';
 import { useLifeOsApplication } from './providers';
@@ -117,6 +123,7 @@ export function ApplicationShell() {
     (nextRoute: PlannerRoute) => navigation.navigate(nextRoute),
     [navigation],
   );
+  const openTodayFromWidget = useCallback(() => navigate({ view: 'today' }), [navigate]);
   const openAction = useCallback(
     (actionId: string) => navigation.openAction(actionId),
     [navigation],
@@ -131,6 +138,11 @@ export function ApplicationShell() {
 
   return (
     <SyncStatusProvider sync={application.sync}>
+      <TodayWidgetCoordinator
+        services={application}
+        currentDate={currentDate}
+        onOpenToday={openTodayFromWidget}
+      />
       <RouteLeaveGuardProvider guard={leaveGuard}>
         <Suspense fallback={<p role="status">Загружаем…</p>}>
           <PlannerWorkspace
@@ -148,6 +160,65 @@ export function ApplicationShell() {
       </RouteLeaveGuardProvider>
     </SyncStatusProvider>
   );
+}
+
+function TodayWidgetCoordinator({
+  services,
+  currentDate,
+  onOpenToday,
+}: {
+  readonly services: Pick<PlannerServices, 'getPlannerToday' | 'planning'>;
+  readonly currentDate: DayDate;
+  readonly onOpenToday: () => Promise<boolean> | void;
+}) {
+  const [gateway] = useState(() => new TauriTodayWidgetGateway());
+  const sequence = useRef(0);
+  const refresh = useCallback(() => {
+    if (!isAndroidWidgetRuntime()) return;
+    const request = ++sequence.current;
+    void (async () => {
+      const overview = await services.getPlannerToday.execute(currentDate);
+      if (request !== sequence.current) return;
+      await gateway.update(buildTodayWidgetSnapshot(currentDate.toString(), overview, Date.now()));
+    })().catch(() => {
+      // The last native snapshot remains visibly stale until a successful read.
+    });
+  }, [services, currentDate, gateway]);
+  useSyncContentChanged('lifeActions', refresh);
+  useEffect(() => {
+    if (!isAndroidWidgetRuntime()) return;
+    if (!services.planning) {
+      refresh();
+      return;
+    }
+    void services.planning.recurrence
+      .materialize(currentDate.toString())
+      .then(refresh)
+      .catch(refresh);
+  }, [services, currentDate, refresh]);
+  useEffect(() => {
+    if (!isAndroidWidgetRuntime()) return;
+    const open = () => {
+      void gateway
+        .consumeOpenToday()
+        .then((requested) => {
+          if (requested) void onOpenToday();
+        })
+        .catch(() => {});
+      refresh();
+    };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') open();
+    };
+    open();
+    window.addEventListener('focus', open);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('focus', open);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [gateway, onOpenToday, refresh]);
+  return null;
 }
 
 export function createGuardedNavigator(

@@ -27,6 +27,7 @@ import { MemoryEditor } from '../memory/MemoryEditor';
 import { memoryError, type MemoryCatalog } from '../memory/memoryPresentation';
 import type { WalkServices } from '../../../application/walk/WalkServices';
 import { WalkDayFacts } from '../walks/WalkDayFacts';
+import { DiaryTomorrowTransfer, type DiaryTomorrowTransferServices } from './DiaryTomorrowTransfer';
 
 type DiaryMemoryTransfer = (field: DiaryMemoryField, getVersion: () => number | null) => void;
 
@@ -37,9 +38,11 @@ export function PlannerDiary({
   onNavigate,
   memory,
   walks,
+  tomorrowTransfer,
 }: {
   readonly service: DiaryService;
   readonly walks?: WalkServices | undefined;
+  readonly tomorrowTransfer?: DiaryTomorrowTransferServices | undefined;
   readonly route: Extract<PlannerRoute, { view: 'diary' }>;
   readonly currentDate: DayDate;
   readonly onNavigate: (route: PlannerRoute) => void;
@@ -192,6 +195,7 @@ export function PlannerDiary({
           entry={state.entry}
           onMemory={memoryAction}
           memoryBusy={importing}
+          tomorrowTransfer={tomorrowTransfer}
         />
       ) : state.kind === 'week' && state.date === resolved.date ? (
         <DiaryWeekEditor
@@ -299,12 +303,14 @@ function DiaryDayEditor({
   entry,
   onMemory,
   memoryBusy = false,
+  tomorrowTransfer,
 }: {
   readonly service: DiaryService;
   readonly date: DayDate;
   readonly entry: DiaryDayEntry | null;
   readonly onMemory?: DiaryMemoryTransfer | undefined;
   readonly memoryBusy?: boolean;
+  readonly tomorrowTransfer?: DiaryTomorrowTransferServices | undefined;
 }) {
   const guard = useRouteLeaveGuard();
   const initial = useMemo(
@@ -406,6 +412,9 @@ function DiaryDayEditor({
         onChange={change}
         onComplete={() => void complete()}
       />
+      {completed && tomorrowTransfer && (
+        <DiaryTomorrowTransfer date={date.toString()} services={tomorrowTransfer} />
+      )}
     </>
   );
 }

@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import type { GetConnections } from '../../application/connections/GetConnections';
 import type { PlannerActionOperations } from './PlannerActionList';
 import { PlannerActionList } from './PlannerActionList';
 import type { SetActionTime } from './PlannerActionTimeSheet';
@@ -7,6 +8,8 @@ import type { usePlannerLibraryReadModel } from './usePlannerLibraryReadModel';
 import { PlannerSheet } from './PlannerSheet';
 import { QuickAccessGuardScope, useQuickAccess } from './QuickAccessContext';
 import { PlannerUnsavedChangesConfirmation } from './PlannerUnsavedChangesConfirmation';
+import type { PlannerRoute } from './PlannerNavigation';
+import { ConnectionsContent } from './connections/ConnectionsContent';
 import {
   createPlannerActionPanelLeaveGuard,
   type PlannerActionPanelLeaveGuard,
@@ -28,6 +31,8 @@ export function PlannerActionPanel({
   commandError,
   onDismissCommandError,
   onStartWalk,
+  connections,
+  onNavigate,
 }: {
   readonly actionId: string;
   readonly today: string;
@@ -43,6 +48,8 @@ export function PlannerActionPanel({
   readonly commandError: string | null;
   readonly onDismissCommandError: () => void;
   readonly onStartWalk?: ((actionId: string, requestId: string) => Promise<void>) | undefined;
+  readonly connections: Pick<GetConnections, 'read' | 'more'>;
+  readonly onNavigate: (route: PlannerRoute) => void;
 }) {
   const quick = useQuickAccess();
   const quickRef = useRef(quick);
@@ -50,6 +57,17 @@ export function PlannerActionPanel({
     quickRef.current = quick;
   }, [quick]);
   const heading = useRef<HTMLHeadingElement>(null);
+  const connectionsHeading = useRef<HTMLHeadingElement>(null);
+  const detailsScroll = useRef(0);
+  const [view, setView] = useState<'details' | 'connections'>('details');
+  useLayoutEffect(() => {
+    if (view === 'connections') connectionsHeading.current?.focus({ preventScroll: true });
+    else {
+      heading.current?.focus({ preventScroll: true });
+      const dialog = heading.current?.closest('dialog');
+      if (dialog) dialog.scrollTop = detailsScroll.current;
+    }
+  }, [view]);
   const [confirm, setConfirm] = useState(false);
   const [busyMessage, setBusyMessage] = useState(false);
   const [walkStartError, setWalkStartError] = useState('');
@@ -107,79 +125,106 @@ export function PlannerActionPanel({
         title="Действие"
         onClose={onClose}
         lockScroll
-        initialFocus={() => heading.current}
+        initialFocus={() => (view === 'connections' ? connectionsHeading.current : heading.current)}
         returnFocus={onReturnFocus}
       >
         <div className="planner-action-panel">
-          <header className="planner-action-panel__heading">
-            <p className="planner-eyebrow">Управление действием</p>
-            <h2 ref={heading} tabIndex={-1}>
-              {selected?.title.toString() ?? 'Действие'}
-            </h2>
-          </header>
-          {selected?.walkPlan && onStartWalk && (
-            <div>
+          <div hidden={view === 'connections'}>
+            <header className="planner-action-panel__heading">
+              <p className="planner-eyebrow">Управление действием</p>
+              <h2 ref={heading} tabIndex={-1}>
+                {selected?.title.toString() ?? 'Действие'}
+              </h2>
+            </header>
+            {selected && (
               <button
-                disabled={walkStartBusy}
+                className="connections-entry"
+                type="button"
                 onClick={() => {
-                  if (!walkRequestId.current) walkRequestId.current = crypto.randomUUID();
-                  setWalkStartBusy(true);
-                  setWalkStartError('');
-                  void onStartWalk(actionId, walkRequestId.current)
-                    .catch((failure: unknown) =>
-                      setWalkStartError(
-                        failure instanceof Error ? failure.message : 'Не удалось начать прогулку.',
-                      ),
-                    )
-                    .finally(() => setWalkStartBusy(false));
+                  detailsScroll.current = heading.current?.closest('dialog')?.scrollTop ?? 0;
+                  setView('connections');
                 }}
               >
-                Начать прогулку по плану
+                Посмотреть связи
+                <span>Цель, план, вклад и прогулки действия</span>
               </button>
-              {walkStartError && <p role="alert">{walkStartError}</p>}
-            </div>
-          )}
-          {data ? (
-            <PlannerActionList
-              key={actionId}
-              actions={data.actions}
-              goals={data.goals}
-              directions={data.directions}
-              spheres={data.spheres}
-              today={today}
-              selectedId={actionId}
-              onNew={() => undefined}
-              onSetTime={onSetTime}
-              presentation="panel"
-              {...operations}
+            )}
+            {selected?.walkPlan && onStartWalk && (
+              <div>
+                <button
+                  disabled={walkStartBusy}
+                  onClick={() => {
+                    if (!walkRequestId.current) walkRequestId.current = crypto.randomUUID();
+                    setWalkStartBusy(true);
+                    setWalkStartError('');
+                    void onStartWalk(actionId, walkRequestId.current)
+                      .catch((failure: unknown) =>
+                        setWalkStartError(
+                          failure instanceof Error
+                            ? failure.message
+                            : 'Не удалось начать прогулку.',
+                        ),
+                      )
+                      .finally(() => setWalkStartBusy(false));
+                  }}
+                >
+                  Начать прогулку по плану
+                </button>
+                {walkStartError && <p role="alert">{walkStartError}</p>}
+              </div>
+            )}
+            {data ? (
+              <PlannerActionList
+                key={actionId}
+                actions={data.actions}
+                goals={data.goals}
+                directions={data.directions}
+                spheres={data.spheres}
+                today={today}
+                selectedId={actionId}
+                onNew={() => undefined}
+                onSetTime={onSetTime}
+                presentation="panel"
+                {...operations}
+              />
+            ) : reads.snapshot.error ? (
+              <div role="alert" className="planner-error">
+                <p>Не удалось загрузить действие. {reads.snapshot.error.message}</p>
+                <button type="button" onClick={() => void onRetry()}>
+                  Повторить загрузку
+                </button>
+              </div>
+            ) : (
+              <p role="status">Загружаем действие…</p>
+            )}
+            {feedback && (
+              <div role="alert" className="planner-error">
+                <p>{feedback}</p>
+                <button type="button" onClick={onRetryCompletion}>
+                  Повторить загрузку
+                </button>
+              </div>
+            )}
+            {commandError && (
+              <div role="alert" className="planner-error">
+                <p>{commandError}</p>
+                <button type="button" onClick={onDismissCommandError}>
+                  Закрыть сообщение
+                </button>
+              </div>
+            )}
+            {busyMessage && <p role="status">Дождитесь завершения сохранения.</p>}
+          </div>
+          {view === 'connections' && (
+            <ConnectionsContent
+              source={{ kind: 'lifeAction', id: actionId }}
+              connections={connections}
+              onNavigate={onNavigate}
+              headingRef={connectionsHeading}
+              onBack={() => setView('details')}
+              backLabel="Назад к действию"
             />
-          ) : reads.snapshot.error ? (
-            <div role="alert" className="planner-error">
-              <p>Не удалось загрузить действие. {reads.snapshot.error.message}</p>
-              <button type="button" onClick={() => void onRetry()}>
-                Повторить загрузку
-              </button>
-            </div>
-          ) : (
-            <p role="status">Загружаем действие…</p>
           )}
-          {feedback && (
-            <div role="alert" className="planner-error">
-              <p>{feedback}</p>
-              <button type="button" onClick={onRetryCompletion}>
-                Повторить загрузку
-              </button>
-            </div>
-          )}
-          {commandError && (
-            <div role="alert" className="planner-error">
-              <p>{commandError}</p>
-              <button type="button" onClick={onDismissCommandError}>
-                Закрыть сообщение
-              </button>
-            </div>
-          )}
-          {busyMessage && <p role="status">Дождитесь завершения сохранения.</p>}
           {confirmation && !childHost && confirmation}
         </div>
       </PlannerSheet>

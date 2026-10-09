@@ -30,6 +30,17 @@ const libraryReads = new PlannerLibraryReadModels(
 );
 
 describe('V2 preview routes', () => {
+  it('roundtrips routine destinations and preserves the evening return path', () => {
+    for (const route of [
+      { view: 'routine' },
+      { view: 'morning' },
+      { view: 'autopilot' },
+      { view: 'sleep', from: 'routine' },
+    ] as const) {
+      expect(parsePlannerRoute(buildPlannerRoute(route))).toEqual(route);
+    }
+    expect(parsePlannerRoute('#/v2/sleep')).toEqual({ view: 'sleep' });
+  });
   it('opens the needs catalog and an encoded need', () => {
     expect(parsePlannerRoute('#/v2/needs')).toEqual({ view: 'needs' });
     const detail = { view: 'needs', need: 'Свобода и выбор / путь' } as const;
@@ -48,6 +59,7 @@ describe('V2 preview routes', () => {
       expect(parsePlannerRoute(buildPlannerRoute(route))).toEqual(route);
     }
     expect(parsePlannerRoute('#/v2/walks/walk%20one')).toEqual({ view: 'walks', id: 'walk one' });
+    expect(parsePlannerRoute('#/v2/walks/followups')).toEqual({ view: 'walks', page: 'followups' });
     expect(parsePlannerRoute('#/v2/walks/%zz')).toBeNull();
   });
   let application: Awaited<ReturnType<typeof createLifeOsApplication>>;
@@ -177,13 +189,19 @@ describe('V2 preview routes', () => {
     );
     const mainNav = markup.match(/<nav aria-label="Рабочий интерфейс">([\s\S]*?)<\/nav>/)?.[1];
     expect(mainNav).toBeDefined();
-    expect(mainNav?.match(/<a /g)).toHaveLength(10);
-    expect(mainNav).toContain('Сферы');
-    expect(mainNav).toContain('Направления');
-    expect(mainNav).toContain('Потребности');
+    expect(mainNav?.match(/<a /g)).toHaveLength(5);
+    expect(mainNav).toContain('Распорядок');
+    expect(mainNav).not.toContain('Сферы');
+    expect(mainNav).not.toContain('Направления');
+    expect(mainNav).not.toContain('Потребности');
     expect(mainNav).toContain('Дневник');
-    expect(mainNav).toContain('Аналитика');
+    expect(mainNav).not.toContain('Аналитика');
     expect(mainNav).not.toContain('Планирование');
+    const moreMenu = markup.match(/<div id="planner-more-menu"[\s\S]*?<\/div>/)?.[0];
+    expect(moreMenu).toContain('Сферы');
+    expect(moreMenu).toContain('Направления');
+    expect(moreMenu).toContain('Потребности');
+    expect(moreMenu).toContain('Аналитика');
     expect(mainNav).toMatch(/href="#\/v2\/goals" aria-current="page"/);
     expect(markup).not.toContain('Планы');
     expect(unexpectedRead).not.toHaveBeenCalled();
@@ -207,7 +225,7 @@ describe('V2 preview routes', () => {
         }),
       );
       const nav = markup.match(/<nav aria-label="Рабочий интерфейс">([\s\S]*?)<\/nav>/)?.[1];
-      expect(nav?.match(/<a /g)).toHaveLength(10);
+      expect(nav?.match(/<a /g)).toHaveLength(5);
       expect(nav).toContain('class="planner-nav-more" type="button" aria-current="page"');
       expect(markup).toContain('href="#/v2/sleep"');
       expect(unexpectedRead).not.toHaveBeenCalled();
@@ -230,7 +248,7 @@ describe('V2 preview routes', () => {
     expect(markup).toContain('href="#/v2/inbox"');
     expect(markup).toContain('href="#/v2/analytics"');
     const nav = markup.match(/<nav aria-label="Рабочий интерфейс">([\s\S]*?)<\/nav>/)?.[1] ?? '';
-    expect(nav.match(/class="planner-nav-secondary"/g)).toHaveLength(6);
+    expect(nav.match(/<a /g)).toHaveLength(5);
     expect(markup).not.toContain('Старая версия');
     expect(markup).not.toContain('<span>V2</span>');
   });

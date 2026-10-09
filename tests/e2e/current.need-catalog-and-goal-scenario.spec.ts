@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { openDisclosure } from './helpers/disclosures';
 
 test('a selected need shows its goal and inherited action on desktop and mobile', async ({
   page,
@@ -57,6 +58,7 @@ test('a custom need appears in the catalog and remains after reload', async ({ p
 
 test('a new action from a goal joins the selected existing scenario', async ({ page }) => {
   await page.goto('/#/v2/today');
+  await openDisclosure(page, '.planner-scenarios-disclosure');
   const scenarios = page.getByRole('region', { name: 'Сценарии задач' });
   await scenarios.getByRole('button', { name: 'Создать сценарий', exact: true }).click();
   await scenarios
@@ -76,6 +78,7 @@ test('a new action from a goal joins the selected existing scenario', async ({ p
     .selectOption({ label: 'Утренний ритм · 0 из 3' });
   await page.getByRole('button', { name: 'Создать действие', exact: true }).click();
   await page.goto('/#/v2/today');
+  await openDisclosure(page, '.planner-scenarios-disclosure');
   await scenarios
     .getByRole('combobox', { name: 'Сейчас я…' })
     .selectOption({ label: 'Утренний ритм' });

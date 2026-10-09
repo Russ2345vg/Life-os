@@ -15,10 +15,7 @@ import { usePlanning } from './PlanningContext';
 import { PlanningActionDetails } from './PlanningActionDetails';
 import { useRef, useState } from 'react';
 import type { PlannerTodayOverview } from '../../application';
-import type { DayAutopilotService, MorningWorkoutService } from '../../application';
-import type { ActionSession, DayDate, LifeAction } from '../../domain';
-import { MorningFocusCard } from './MorningFocusCard';
-import { MorningWorkoutCard } from './MorningWorkoutCard';
+import type { DayDate, LifeAction } from '../../domain';
 import { VoiceTextInput } from '../voice-input/VoiceTextInput';
 import type { PlannerOption } from './PlannerActionForm';
 import { EntityContextMenu, type EntityMenuAction } from './EntityContextMenu';
@@ -29,15 +26,11 @@ import {
   MonthlyDirectionFocusCard,
   type MonthlyDirectionFocusView,
 } from './MonthlyDirectionFocusCard';
-import { DayAutopilotCard } from './DayAutopilotCard';
 
 export function PlannerToday({
   date,
   day,
   overview,
-  workSessions = null,
-  onStartMorningFocus,
-  morningWorkout,
   goals,
   directions = [],
   spheres = [],
@@ -59,15 +52,10 @@ export function PlannerToday({
   scenarios,
   menuForAction,
   capacityMinutes = null,
-  dayAutopilot,
-  onDayAutopilotApplied,
 }: {
   readonly date: DayDate;
   readonly day: 'today' | 'tomorrow';
   readonly overview: PlannerTodayOverview;
-  readonly workSessions?: readonly ActionSession[] | null;
-  readonly onStartMorningFocus?: (action: LifeAction) => void;
-  readonly morningWorkout?: MorningWorkoutService | undefined;
   readonly goals: readonly PlannerOption[];
   readonly directions?: readonly PlannerOption[];
   readonly spheres?: readonly PlannerOption[];
@@ -89,10 +77,7 @@ export function PlannerToday({
   readonly scenarios?: ScenarioService | undefined;
   readonly menuForAction?: (action: LifeAction) => readonly EntityMenuAction[];
   readonly capacityMinutes?: number | null;
-  readonly dayAutopilot?: Pick<DayAutopilotService, 'preview' | 'apply'>;
-  readonly onDayAutopilotApplied?: () => Promise<void> | void;
 }) {
-  const [workoutResolved, setWorkoutResolved] = useState(morningWorkout === undefined);
   const [title, setTitle] = useState('');
   const [reviewed, setReviewed] = useState<readonly string[]>([]);
   const reviewKey = (action: LifeAction) =>
@@ -254,116 +239,55 @@ export function PlannerToday({
   };
   return (
     <div className="planner-today planner-today-layout">
+      <header className="planner-page-heading">
+        <div>
+          <h1 ref={heading} tabIndex={-1}>
+            {day === 'tomorrow' ? 'Завтра' : 'Сегодня'}
+          </h1>
+          <p className="planner-eyebrow">{dateLabel}</p>
+        </div>
+        <div className="planner-day-switch" role="group" aria-label="План на день">
+          <button type="button" aria-pressed={day === 'today'} onClick={() => onSelectDay('today')}>
+            Сегодня
+          </button>
+          <button
+            type="button"
+            aria-pressed={day === 'tomorrow'}
+            onClick={() => onSelectDay('tomorrow')}
+          >
+            Завтра
+          </button>
+        </div>
+      </header>
       <div className="planner-today-main">
-        <header className="planner-page-heading">
-          <div>
-            <h1 ref={heading} tabIndex={-1}>
-              {day === 'tomorrow' ? 'Завтра' : 'Сегодня'}
-            </h1>
-            <p className="planner-eyebrow">{dateLabel}</p>
-            <div className="planner-today-heading-links">
-              <a className="planner-text-link" href="#/v2/actions?view=time">
-                Рабочее время
-              </a>
-              {day === 'today' && (
-                <a className="planner-text-link" href="#/v2/walks?origin=today">
-                  Прогулка
-                </a>
-              )}
-              {day === 'today' && onOpenGoalGuidance ? (
-                <button
-                  aria-label="Выбрать шаг к цели"
-                  className="planner-text-link"
-                  type="button"
-                  onClick={onOpenGoalGuidance}
-                >
-                  <span className="planner-today-guidance-label">Выбрать шаг к цели</span>
-                  <span className="planner-today-guidance-label--short" aria-hidden="true">
-                    Шаг к цели
-                  </span>
-                </button>
-              ) : null}
-            </div>
-          </div>
-          <div className="planner-day-switch" role="group" aria-label="План на день">
-            <button
-              type="button"
-              aria-pressed={day === 'today'}
-              onClick={() => onSelectDay('today')}
-            >
-              Сегодня
-            </button>
-            <button
-              type="button"
-              aria-pressed={day === 'tomorrow'}
-              onClick={() => onSelectDay('tomorrow')}
-            >
-              Завтра
-            </button>
-          </div>
-        </header>
-        {day === 'today' && morningWorkout ? (
-          <MorningWorkoutCard
-            service={morningWorkout}
-            onSnapshotChange={(snapshot) => setWorkoutResolved(snapshot.focusUnlocked)}
-          />
-        ) : null}
-        {day === 'today' && (
-          <MorningFocusCard
-            dateKey={date.toString()}
-            action={overview.main}
-            sessions={workSessions}
-            onStart={onStartMorningFocus}
-            unlocked={workoutResolved}
-          />
-        )}
         <section
           className="planner-day-workspace"
           aria-label={day === 'tomorrow' ? 'План на завтра' : 'План на сегодня'}
         >
-          <header className="planner-day-center__header">
-            <div>
-              <span className="planner-eyebrow">
-                {day === 'tomorrow' ? 'Планирование следующего дня' : 'Центр дня'}
-              </span>
-              <h2 id="planner-day-center-title">
-                {day === 'tomorrow' ? 'План на завтра' : 'План на сегодня'}
-              </h2>
-            </div>
-            <div className="planner-day-center__stats" role="group" aria-label="Состояние плана">
-              <span>
-                В плане <strong>{plannedCount}</strong>
-              </span>
-              <span>
-                Готово <strong>{overview.completed.length}</strong>
-              </span>
-            </div>
-          </header>
-          <section className="planner-quick-create" aria-labelledby="planner-day-center-title">
-            {(schedule.timed.length + schedule.untimed.length > 0 || capacityMinutes !== null) && (
-              <p
-                className={`planner-day-center__capacity ${
-                  schedule.overCapacity ? 'planner-error' : 'planner-muted'
-                }`}
-              >
-                План: {durationLabel(schedule.plannedMinutes)} ·{' '}
-                {capacityMinutes === null
-                  ? 'Доступное время не задано'
-                  : `Доступно: ${durationLabel(capacityMinutes)}`}
-                {schedule.unknownEstimateCount > 0 && (
-                  <> · Без оценки: {schedule.unknownEstimateCount}</>
-                )}
-                {schedule.overCapacity && <> · План превышает доступное время</>}
-              </p>
+          <section
+            className="planner-today-focus"
+            aria-label={day === 'tomorrow' ? 'Главное завтра' : 'Главное сегодня'}
+          >
+            <span className="planner-eyebrow">
+              {day === 'tomorrow' ? 'ГЛАВНОЕ ЗАВТРА' : 'ГЛАВНОЕ СЕГОДНЯ'}
+            </span>
+            {overview.main ? (
+              <ul>{row(overview.main, 'main')}</ul>
+            ) : (
+              <div className="planner-today-focus__empty">
+                <h2>С чего начать?</h2>
+                <p>
+                  {plannedCount
+                    ? 'Отметьте звёздочкой одно дело из плана. Оно появится здесь.'
+                    : 'Выберите существующее действие или добавьте новое.'}
+                </p>
+                <button type="button" onClick={() => setChoosing(true)} aria-expanded={choosing}>
+                  Выбрать из действий →
+                </button>
+              </div>
             )}
-            {day === 'today' && dayAutopilot && onDayAutopilotApplied ? (
-              <DayAutopilotCard
-                date={date}
-                service={dayAutopilot}
-                busy={busy}
-                onApplied={onDayAutopilotApplied}
-              />
-            ) : null}
+          </section>
+          <section className="planner-quick-create" aria-label="Быстрое добавление">
             <form
               className="planner-quick-add"
               aria-label={
@@ -406,14 +330,14 @@ export function PlannerToday({
               </button>
             </form>
           </section>
-          {day === 'tomorrow' && (
+          {(day === 'tomorrow' || choosing) && (
             <div className="planner-tomorrow-choose">
               <button
                 type="button"
                 onClick={() => setChoosing((value) => !value)}
                 aria-expanded={choosing}
               >
-                + Выбрать существующее действие
+                {choosing ? 'Скрыть выбор действий' : '+ Выбрать существующее действие'}
               </button>
               {choosing && (
                 <div className="planner-tomorrow-candidates">
@@ -440,7 +364,7 @@ export function PlannerToday({
                               setChoosing(false);
                             }}
                           >
-                            На завтра
+                            {day === 'tomorrow' ? 'На завтра' : 'На сегодня'}
                           </button>
                         </li>
                       ))}
@@ -467,16 +391,17 @@ export function PlannerToday({
               row(action, action.status === 'completed' ? 'completed' : 'scenario', remove)
             }
           >
-            {overview.main ? (
-              <section className="planner-main">
-                <h2>Главное действие</h2>
-                <ul>{row(overview.main, 'main')}</ul>
-              </section>
-            ) : null}
-            <section className="planner-today-list">
+            <section
+              className="planner-today-list"
+              aria-label={
+                day === 'tomorrow' ? 'Остальные действия на завтра' : 'Остальные действия'
+              }
+            >
               <h2>
-                {day === 'tomorrow' ? 'На завтра' : overview.main ? 'Ещё на сегодня' : 'На сегодня'}{' '}
-                <span>{ordinaryActions.length}</span>
+                {day === 'tomorrow' ? 'Остальные действия на завтра' : 'Остальные действия'}{' '}
+                <span>
+                  {ordinaryActions.length ? `${ordinaryActions.length} осталось` : 'План пуст'}
+                </span>
               </h2>
               {ordinaryActions.length === 0 ? (
                 <p className="planner-empty">
@@ -499,16 +424,14 @@ export function PlannerToday({
               completed={householdCompleted}
               renderAction={(action, completed) => row(action, completed ? 'completed' : 'today')}
             />
-            <details className="planner-details planner-completed">
-              <summary>
-                Выполнено <span>{ordinaryCompleted.length}</span>
-              </summary>
-              {ordinaryCompleted.length ? (
+            {ordinaryCompleted.length ? (
+              <details className="planner-details planner-completed">
+                <summary>
+                  Выполнено <span>{ordinaryCompleted.length}</span>
+                </summary>
                 <ul>{ordinaryCompleted.map((action) => row(action, 'completed'))}</ul>
-              ) : (
-                <p className="planner-empty">Здесь появятся действия, выполненные в этот день.</p>
-              )}
-            </details>
+              </details>
+            ) : null}
             {overview.unscheduled.length ? (
               <details className="planner-details">
                 <summary>
@@ -519,11 +442,7 @@ export function PlannerToday({
             ) : null}
           </PlannerScenariosPanel>
           {day === 'today' && (
-            <details
-              className="planner-details planner-plan-review"
-              open
-              hidden={reviewCount === 0}
-            >
+            <details className="planner-details planner-plan-review" hidden={reviewCount === 0}>
               <summary>Разобрать план · {reviewCount} требуют решения</summary>
               <p className="planner-muted">
                 На сегодня: {overview.actions.length + (overview.main ? 1 : 0)}.{' '}
@@ -564,14 +483,30 @@ export function PlannerToday({
               ) : null}
             </details>
           )}
+          {(schedule.timed.length + schedule.untimed.length > 0 || capacityMinutes !== null) && (
+            <details className="planner-today-capacity" open={schedule.overCapacity}>
+              <summary>
+                Время плана{schedule.overCapacity ? ' · превышено доступное время' : ''}
+              </summary>
+              <p
+                className={`planner-day-center__capacity ${
+                  schedule.overCapacity ? 'planner-error' : 'planner-muted'
+                }`}
+              >
+                План: {durationLabel(schedule.plannedMinutes)} ·{' '}
+                {capacityMinutes === null
+                  ? 'Доступное время не задано'
+                  : `Доступно: ${durationLabel(capacityMinutes)}`}
+                {schedule.unknownEstimateCount > 0 && (
+                  <> · Без оценки: {schedule.unknownEstimateCount}</>
+                )}
+                {schedule.overCapacity && <> · План превышает доступное время</>}
+              </p>
+            </details>
+          )}
         </section>
       </div>
       <aside className="planner-today-sidebar" aria-label="Обзор дня">
-        <MonthlyDirectionFocusCard
-          value={monthlyDirectionFocus}
-          busy={busy}
-          onChange={onMonthlyDirectionChange}
-        />
         <section className="planner-day-progress">
           <h2>Прогресс дня</h2>
           <div hidden={!total}>
@@ -588,41 +523,63 @@ export function PlannerToday({
               : 'Добавьте первое действие — здесь появится прогресс дня.'}
           </p>
         </section>
-        <section className="planner-day-shortcuts">
-          <h2>Быстрые действия</h2>
-          <button type="button" onClick={() => onSelectDay(day === 'today' ? 'tomorrow' : 'today')}>
-            <AppIcon name="today" />
-            {day === 'today' ? 'Планировать завтра' : 'Вернуться к сегодня'}
-          </button>
-          <a href="#/v2/inbox">
-            <AppIcon name="history" />
-            Открыть входящие →
-          </a>
-          <a href="#/v2/actions?view=calendar">
-            <AppIcon name="today" />
-            Открыть календарь →
-          </a>
-        </section>
-        {day === 'today' ? (
-          <button
-            className={`planner-sleep-entry${sleepEntry?.active ? ' planner-sleep-entry--active' : ''}`}
-            type="button"
-            onClick={onOpenSleep}
-          >
-            <span className="planner-sleep-entry__icon" aria-hidden="true">
-              ☾
-            </span>
-            <span>
-              <strong>Подготовка ко сну</strong>
-              <small>
-                {sleepEntry?.active
-                  ? 'Вечерняя подготовка уже доступна'
-                  : 'Настроить вечерний список и отметить готовность'}
-              </small>
-            </span>
-            <span aria-hidden="true">→</span>
-          </button>
-        ) : null}
+        <details className="planner-today-context">
+          <summary>Фокус месяца и полезные переходы</summary>
+          <MonthlyDirectionFocusCard
+            value={monthlyDirectionFocus}
+            busy={busy}
+            onChange={onMonthlyDirectionChange}
+          />
+          <div className="planner-today-context__links">
+            <a href="#/v2/actions?view=time" aria-label="Рабочее время">
+              Рабочее время →
+            </a>
+            {day === 'today' && (
+              <a href="#/v2/walks?origin=today" aria-label="Прогулка">
+                Прогулка →
+              </a>
+            )}
+            {day === 'today' && onOpenGoalGuidance ? (
+              <button type="button" aria-label="Выбрать шаг к цели" onClick={onOpenGoalGuidance}>
+                Выбрать шаг к цели →
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => onSelectDay(day === 'today' ? 'tomorrow' : 'today')}
+            >
+              <AppIcon name="today" />
+              {day === 'today' ? 'Планировать завтра' : 'Вернуться к сегодня'}
+            </button>
+            <a href="#/v2/inbox">
+              <AppIcon name="history" />
+              Открыть входящие →
+            </a>
+            <a href="#/v2/actions?view=calendar">
+              <AppIcon name="today" />
+              Открыть календарь →
+            </a>
+            {day === 'today' ? (
+              <button
+                className={`planner-sleep-entry${sleepEntry?.active ? ' planner-sleep-entry--active' : ''}`}
+                type="button"
+                onClick={onOpenSleep}
+              >
+                <span className="planner-sleep-entry__icon" aria-hidden="true">
+                  ☾
+                </span>
+                <span>
+                  <strong>Подготовка ко сну</strong>
+                  <small>
+                    {sleepEntry?.active
+                      ? 'Вечерняя подготовка уже доступна'
+                      : 'Настроить вечерний список и отметить готовность'}
+                  </small>
+                </span>
+              </button>
+            ) : null}
+          </div>
+        </details>
       </aside>
     </div>
   );

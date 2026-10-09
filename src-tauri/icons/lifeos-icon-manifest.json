@@ -1,0 +1,8 @@
+{
+  "default": "lifeos-icon-source.svg",
+  "bg_color": "#1b2924",
+  "android_bg": "lifeos-icon-background.svg",
+  "android_fg": "lifeos-icon-foreground.svg",
+  "android_fg_scale": 80,
+  "android_monochrome": "lifeos-icon-monochrome.svg"
+}

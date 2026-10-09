@@ -76,19 +76,27 @@ export function DiaryDayView({
         {text('note', 'Свободная заметка', 5)}
       </div>
       <div className="planner-diary-actions">
-        <span role="status">
-          {status === 'saving'
-            ? 'Сохраняем…'
-            : status === 'failed'
-              ? 'Не удалось сохранить'
-              : status === 'completed'
-                ? 'День завершён'
-                : 'Все изменения сохранены'}
-        </span>
+        <div className="planner-diary-action-feedback">
+          <span role="status">
+            {status === 'saving'
+              ? 'Сохраняем…'
+              : status === 'failed'
+                ? 'Не удалось сохранить'
+                : status === 'completed'
+                  ? 'День завершён'
+                  : 'Все изменения сохранены'}
+          </span>
+          {!canComplete && (
+            <span id="diary-day-completion-help">
+              Для завершения дня оцените продуктивность, энергию, настроение и день в целом.
+            </span>
+          )}
+        </div>
         <button
           className="planner-primary"
           type="button"
           disabled={disabled || !canComplete || status === 'saving'}
+          aria-describedby={!canComplete ? 'diary-day-completion-help' : undefined}
           onClick={onComplete}
         >
           Завершить день

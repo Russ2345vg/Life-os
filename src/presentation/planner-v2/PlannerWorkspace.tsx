@@ -41,6 +41,8 @@ import { NeedChoicesProvider } from './NeedPicker';
 import { PlannerNeeds } from './PlannerNeeds';
 import { buildNeedCatalog } from './needCatalogModel';
 import { PlannerToday } from './PlannerToday';
+import { RoutineLanding } from './RoutineLanding';
+import { RoutineAutopilotPage, RoutineMorningPage } from './RoutinePages';
 import { buildPlannerRoute, type PlannerRoute } from './PlannerNavigation';
 import {
   emptyActionDraft,
@@ -349,7 +351,13 @@ function PlannerWorkspaceContent({
   }
   const load = useCallback(
     async (options?: { readonly refreshPlanning?: boolean }) => {
-      if (route.view === 'sleep' || route.view === 'account' || route.view === 'diary') return;
+      if (
+        route.view === 'routine' ||
+        route.view === 'sleep' ||
+        route.view === 'account' ||
+        route.view === 'diary'
+      )
+        return;
       const outcome = await refreshSession.run(
         async () => {
           const date = DayDate.create(selectedDateKey);
@@ -668,12 +676,18 @@ function PlannerWorkspaceContent({
       );
     else navigate({ view: 'actions' });
   };
-  const navLink = (target: PlannerRoute, label: string, icon: AppIconName) => (
+  const navLink = (
+    target: PlannerRoute,
+    label: string,
+    icon: AppIconName,
+    mobileLabel?: string,
+  ) => (
     <PlannerWorkspaceNavLink
       route={route}
       target={target}
       label={label}
       icon={icon}
+      mobileLabel={mobileLabel}
       onNavigate={navigate}
     />
   );
@@ -921,7 +935,9 @@ function PlannerWorkspaceContent({
   return (
     <PlanningProvider value={planningContext}>
       <NeedChoicesProvider catalog={needCatalog}>
-        <div className={`planner-v2${route.view === 'sleep' ? ' planner-v2--sleep' : ''}`}>
+        <div
+          className={`planner-v2${route.view === 'sleep' ? ' planner-v2--sleep' : ''}${route.view === 'sleep' && route.from === 'routine' ? ' planner-v2--routine-sleep' : ''}`}
+        >
           <a
             className="planner-skip"
             href="#planner-main-content"
@@ -954,20 +970,9 @@ function PlannerWorkspaceContent({
             />
             <nav aria-label="Рабочий интерфейс">
               {navLink({ view: 'today' }, 'Сегодня', 'today')}
-              <span className="planner-nav-secondary">
-                {navLink({ view: 'spheres' }, 'Сферы', 'goals')}
-              </span>
-              <span className="planner-nav-secondary">
-                {navLink({ view: 'directions' }, 'Направления', 'goals')}
-              </span>
-              <span className="planner-nav-secondary">
-                {navLink({ view: 'needs' }, 'Потребности', 'goals')}
-              </span>
+              {navLink({ view: 'routine' }, 'Распорядок', 'routine', 'Ритм')}
               {navLink({ view: 'goals' }, 'Цели', 'goals')}
               {navLink({ view: 'actions' }, 'Действия', 'actions')}
-              <span className="planner-nav-secondary">
-                {navLink({ view: 'inbox' }, 'Входящие', 'history')}
-              </span>
               {navLink(
                 {
                   view: 'diary',
@@ -977,19 +982,6 @@ function PlannerWorkspaceContent({
                 'Дневник',
                 'history',
               )}
-              {services.memory && (
-                <span className="planner-nav-secondary">
-                  {navLink({ view: 'memory' }, 'Память жизни', 'history')}
-                </span>
-              )}
-              {services.walks && (
-                <span className="planner-nav-secondary">
-                  {navLink({ view: 'walks', page: 'overview' }, 'Прогулки', 'walks')}
-                </span>
-              )}
-              <span className="planner-nav-secondary">
-                {navLink({ view: 'analytics' }, 'Аналитика', 'history')}
-              </span>
               <button
                 ref={moreButton}
                 className="planner-nav-more"
@@ -1003,7 +995,7 @@ function PlannerWorkspaceContent({
                     'directions',
                     'direction',
                     'needs',
-                    'sleep',
+                    ...(route.view === 'sleep' && route.from === 'routine' ? [] : ['sleep']),
                     'memory',
                     'walks',
                     'analytics',
@@ -1136,6 +1128,7 @@ function PlannerWorkspaceContent({
             ) : route.view === 'walks' ? (
               services.walks ? (
                 <PlannerWalks
+                  connections={services.connections}
                   spheres={data?.spheres ?? []}
                   diary={services.diary}
                   memory={services.memory}
@@ -1151,6 +1144,10 @@ function PlannerWorkspaceContent({
               <PlannerDiary
                 walks={services.walks}
                 service={services.diary}
+                tomorrowTransfer={{
+                  getPlannerToday: services.getPlannerToday,
+                  setLifeActionPlan: services.setLifeActionPlan,
+                }}
                 route={route}
                 currentDate={currentDate}
                 onNavigate={navigate}
@@ -1170,6 +1167,7 @@ function PlannerWorkspaceContent({
             ) : route.view === 'memory' ? (
               services.memory ? (
                 <PlannerMemory
+                  connections={services.connections}
                   services={services.memory}
                   route={route}
                   currentDate={currentDate}
@@ -1218,8 +1216,13 @@ function PlannerWorkspaceContent({
                 alarmObservations={services.sleepAlarmObservations}
                 plannerServices={services}
                 calendarDate={currentDate.toString()}
-                onBack={() => navigate({ view: 'today' })}
+                backLabel={route.from === 'routine' ? 'Распорядок' : 'Сегодня'}
+                onBack={() =>
+                  navigate(route.from === 'routine' ? { view: 'routine' } : { view: 'today' })
+                }
               />
+            ) : route.view === 'routine' ? (
+              <RoutineLanding onNavigate={navigate} />
             ) : route.view === 'planning' ? (
               <PlannerLibraryWorkspace
                 reads={libraryReads}
@@ -1281,14 +1284,29 @@ function PlannerWorkspaceContent({
                   Загружаем…
                 </div>
               )
+            ) : route.view === 'morning' ? (
+              <RoutineMorningPage
+                date={currentDate}
+                overview={data.overview}
+                sessions={workTime.sessions}
+                workout={services.morningWorkout}
+                onStartFocus={(action) => startMorningFocus(action, currentDate.toString())}
+                onOpenToday={() => void navigate({ view: 'today' })}
+                onBack={() => void navigate({ view: 'routine' })}
+              />
+            ) : route.view === 'autopilot' ? (
+              <RoutineAutopilotPage
+                date={currentDate}
+                service={services.dayAutopilot}
+                busy={busy}
+                onApplied={() => load()}
+                onBack={() => void navigate({ view: 'routine' })}
+              />
             ) : route.view === 'today' ? (
               <PlannerToday
                 date={selectedDate}
                 day={route.day === 'tomorrow' ? 'tomorrow' : 'today'}
                 overview={data.overview}
-                workSessions={workTime.sessions}
-                morningWorkout={services.morningWorkout}
-                onStartMorningFocus={(action) => startMorningFocus(action, selectedDate.toString())}
                 scenarios={services.plannerScenarios}
                 goals={data.goals}
                 directions={data.directions}
@@ -1299,12 +1317,6 @@ function PlannerWorkspaceContent({
                     (new Date(`${selectedDate.toString()}T12:00:00Z`).getUTCDay() + 6) % 7
                   ] ?? null
                 }
-                {...(services.dayAutopilot
-                  ? {
-                      dayAutopilot: services.dayAutopilot,
-                      onDayAutopilotApplied: () => load(),
-                    }
-                  : {})}
                 monthlyDirectionFocus={data.monthlyDirectionFocus}
                 busy={busy}
                 menuForAction={menuForAction}
@@ -1717,6 +1729,8 @@ function PlannerWorkspaceContent({
           {actionPanelId && onCloseAction && registerPanelGuard && (
             <PlannerActionPanel
               actionId={actionPanelId}
+              connections={services.connections}
+              onNavigate={(target) => void navigate(target)}
               today={selectedDateKey}
               reads={libraryReads}
               operations={panelOperations}
@@ -1788,6 +1802,7 @@ function PlannerWorkspaceNavLink({
   target,
   label,
   icon,
+  mobileLabel,
   onNavigate,
 }: {
   readonly className?: string;
@@ -1795,14 +1810,20 @@ function PlannerWorkspaceNavLink({
   readonly target: PlannerRoute;
   readonly label: string;
   readonly icon: AppIconName;
+  readonly mobileLabel?: string | undefined;
   readonly onNavigate: (route: PlannerRoute) => void;
 }) {
   return (
     <a
       className={className}
       href={buildPlannerRoute(target)}
+      aria-label={mobileLabel ? label : undefined}
       aria-current={
         route.view === target.view ||
+        (target.view === 'routine' &&
+          (route.view === 'morning' ||
+            route.view === 'autopilot' ||
+            (route.view === 'sleep' && route.from === 'routine'))) ||
         (target.view === 'spheres' && route.view === 'sphere') ||
         (target.view === 'directions' && route.view === 'direction') ||
         ('section' in route && route.section === target.view) ||
@@ -1820,7 +1841,12 @@ function PlannerWorkspaceNavLink({
       }}
     >
       <AppIcon name={icon} />
-      <span>{label}</span>
+      <span className={mobileLabel ? 'planner-nav-full-label' : undefined}>{label}</span>
+      {mobileLabel ? (
+        <span className="planner-nav-mobile-label" aria-hidden="true">
+          {mobileLabel}
+        </span>
+      ) : null}
     </a>
   );
 }

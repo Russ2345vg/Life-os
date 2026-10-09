@@ -2,11 +2,9 @@ import { expect, test } from '@playwright/test';
 
 test('analytics opens from navigation and preserves its calendar period in the URL', async ({
   page,
-}, testInfo) => {
+}) => {
   await page.goto('/#/v2/today');
-  if (testInfo.project.name === 'mobile-chrome') {
-    await page.getByRole('button', { name: 'Ещё', exact: true }).click();
-  }
+  await page.getByRole('button', { name: 'Ещё', exact: true }).click();
   await page.getByRole('link', { name: 'Аналитика', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Аналитика', exact: true })).toBeVisible();
   await expect(

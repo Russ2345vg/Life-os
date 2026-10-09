@@ -3,13 +3,15 @@ import { expect, test } from '@playwright/test';
 test('morning focus uses the main action and keeps its work after reload', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.goto('/#/v2/today');
+  await page.goto('/#/v2/routine/morning');
   const card = page.getByRole('region', { name: 'Главная задача дня' });
   await expect(card).toContainText('Выберите главное действие');
+  await page.getByRole('button', { name: /Выбрать главное действие в плане на сегодня/ }).click();
 
   await page.getByRole('textbox', { name: 'Новое действие на сегодня' }).fill('Утренний фокус QA');
   await page.getByRole('button', { name: 'Создать', exact: true }).click();
   await page.getByRole('button', { name: 'Сделать главным: Утренний фокус QA' }).click();
+  await page.goto('/#/v2/routine/morning');
   await expect(card).toContainText('Утренний фокус QA');
   await expect(card).toContainText('0 / 60 мин');
 
