@@ -1,5 +1,57 @@
 import { expect, test } from '@playwright/test';
 
+test('legacy synced walk start explains the required question and then saves an ordinary note', async ({
+  page,
+}, info) => {
+  await page.goto('/#/v2/walks');
+  await expect(page.getByRole('button', { name: 'Начать прогулку', exact: true })).toBeVisible();
+  await page.evaluate(async () => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const opening = indexedDB.open('lifeos');
+      opening.onsuccess = () => resolve(opening.result);
+      opening.onerror = () => reject(opening.error);
+    });
+    const tx = db.transaction('sync_settings', 'readwrite');
+    const store = tx.objectStore('sync_settings');
+    store.put({
+      id: 'sync',
+      setupState: 'configured',
+      membershipStatus: 'active',
+      spaceId: 'test-walk-space',
+      deviceId: 'test-walk-device',
+      currentKeyEpoch: 1,
+    });
+    store.delete('walk-data-format:v2');
+    await new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onabort = () => reject(tx.error);
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  });
+  await page.getByRole('button', { name: 'Начать прогулку', exact: true }).click();
+  await expect(page.locator('.planner-walks')).toContainText('Свободная прогулка без вопроса');
+  await page.screenshot({ path: info.outputPath('legacy-start.png'), fullPage: true });
+  const setup = page.getByLabel('Настроить прогулку', { exact: true });
+  await expect(setup).toBeVisible();
+  const question = setup.getByRole('textbox', { name: 'Вопрос для прогулки', exact: true });
+  await expect(question).toBeFocused();
+  await expect(question).toHaveAttribute('required');
+  await expect(setup.getByRole('button', { name: 'Начать прогулку', exact: true })).toBeDisabled();
+  await question.fill('Что я хочу сохранить из сегодняшнего дня?');
+  await setup.getByRole('button', { name: 'Начать прогулку', exact: true }).click();
+  await expect(page.getByText('Идёт прогулка', { exact: true })).toBeVisible();
+  await page.getByText('Вопросы для заметки', { exact: true }).click();
+  await page.getByRole('button', { name: 'Добавить вопрос в заметку', exact: true }).click();
+  const note = page.getByRole('textbox', { name: 'Новая мысль', exact: true });
+  const draft = await note.inputValue();
+  await note.fill(draft + 'Спокойный вечер');
+  await page.getByRole('button', { name: 'Сохранить мысль', exact: true }).click();
+  await expect(page.locator('.walk-notes p')).toContainText('Спокойный вечер');
+  await page.reload();
+  await expect(page.locator('.walk-notes p')).toContainText('Спокойный вечер');
+});
+
 test('questions preserve the draft, focus the note and persist as an ordinary thought', async ({
   page,
 }, info) => {
@@ -8,7 +60,10 @@ test('questions preserve the draft, focus the note and persist as an ordinary th
   page.on('console', (message) => {
     if (message.type() === 'error') errors.push(message.text());
   });
-  await page.goto('/#/v2/walks');
+  await page.goto('/#/v2/today');
+  await page.getByRole('button', { name: 'Ещё', exact: true }).click();
+  await page.getByRole('link', { name: 'Прогулки', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Прогулки', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Начать прогулку', exact: true }).click();
   const note = page.getByRole('textbox', { name: 'Новая мысль', exact: true });
   await note.fill('Уже записанная мысль');

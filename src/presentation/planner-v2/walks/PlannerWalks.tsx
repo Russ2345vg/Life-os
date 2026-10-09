@@ -22,6 +22,7 @@ import { useWalkState, useWalkMutation, walkIntentLabel } from './useWalkState';
 import type { StartWalkInput } from '../../../application/walk/WalkCommands';
 import type { GetConnections } from '../../../application/connections/GetConnections';
 import { ConnectionsSheet } from '../connections/ConnectionsSheet';
+import { DomainError } from '../../../shared/errors/DomainError';
 
 export function PlannerWalks({
   services,
@@ -44,6 +45,7 @@ export function PlannerWalks({
 }) {
   const { data, error, refresh } = useWalkState(services, route.id);
   const [setup, setSetup] = useState(false);
+  const [questionRequired, setQuestionRequired] = useState(false);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
   const mutation = useWalkMutation();
   const go = (page: NonNullable<typeof route.page>) => onNavigate({ view: 'walks', page });
@@ -58,9 +60,22 @@ export function PlannerWalks({
     };
     void mutation.perform(
       `start:${JSON.stringify(prepared)}`,
-      (requestId) => services.commands.start({ ...prepared, requestId }),
+      (requestId) =>
+        services.commands.start({ ...prepared, requestId }).catch((failure: unknown) => {
+          if (
+            failure instanceof DomainError &&
+            failure.code === 'sync.client_update_required' &&
+            !prepared.question?.trim() &&
+            (prepared.reflectionTemplate == null || prepared.reflectionTemplate === 'freeThought')
+          ) {
+            setQuestionRequired(true);
+            setSetup(true);
+          }
+          throw failure;
+        }),
       (walk) => {
         setSetup(false);
+        setQuestionRequired(false);
         open(walk);
       },
     );
@@ -329,6 +344,7 @@ export function PlannerWalks({
           onClose={() => setSetup(false)}
           busy={mutation.busy}
           error={mutation.error}
+          questionRequired={questionRequired}
         />
       )}
     </div>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { StartWalkInput } from '../../../application/walk/WalkCommands';
 import { PlannerSheet } from '../PlannerSheet';
 import { VoiceTextArea } from '../../voice-input/VoiceTextArea';
@@ -20,16 +20,23 @@ export function WalkStartForm({
   busy,
   error,
   spheres,
+  questionRequired = false,
 }: {
   onStart: (input: Omit<StartWalkInput, 'requestId'>) => void;
   onClose: () => void;
   busy: boolean;
   error: string;
   spheres: readonly PlannerOption[];
+  questionRequired?: boolean;
 }) {
   const [draft, setDraft] = useState(DEFAULT_WALK);
+  const questionInput = useRef<HTMLTextAreaElement>(null);
   return (
-    <PlannerSheet title="Настроить прогулку" onClose={onClose}>
+    <PlannerSheet
+      title="Настроить прогулку"
+      onClose={onClose}
+      {...(questionRequired ? { initialFocus: () => questionInput.current } : {})}
+    >
       <form
         className="walk-form"
         onSubmit={(event) => {
@@ -89,12 +96,23 @@ export function WalkStartForm({
             />
           </label>
         )}
-        <label htmlFor="walk-question">Вопрос — необязательно</label>
+        {questionRequired && (
+          <p id="walk-question-requirement">
+            Чтобы сохранить прогулку на подключённых устройствах, сейчас нужен вопрос. Например:
+            «Что я хочу сохранить из сегодняшнего дня?»
+          </p>
+        )}
+        <label htmlFor="walk-question">
+          {questionRequired ? 'Вопрос для прогулки' : 'Вопрос — необязательно'}
+        </label>
         <VoiceTextArea
+          ref={questionInput}
           id="walk-question"
           value={draft.question ?? ''}
           maxLength={500}
           rows={3}
+          required={questionRequired}
+          aria-describedby={questionRequired ? 'walk-question-requirement' : undefined}
           onValueChange={(question) => setDraft({ ...draft, question })}
         />
         {draft.intent === 'reflection' && (
@@ -166,7 +184,10 @@ export function WalkStartForm({
           />
         </details>
         {error && <p role="alert">{error}</p>}
-        <button className="planner-primary" disabled={busy}>
+        <button
+          className="planner-primary"
+          disabled={busy || (questionRequired && !draft.question?.trim())}
+        >
           Начать прогулку
         </button>
       </form>
