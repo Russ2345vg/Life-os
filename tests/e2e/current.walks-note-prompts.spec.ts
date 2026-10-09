@@ -3,6 +3,11 @@ import { expect, test } from '@playwright/test';
 test('legacy synced walk start explains the required question and then saves an ordinary note', async ({
   page,
 }, info) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message.text());
+  });
   await page.goto('/#/v2/walks');
   await expect(page.getByRole('button', { name: 'Начать прогулку', exact: true })).toBeVisible();
   await page.evaluate(async () => {
@@ -50,6 +55,8 @@ test('legacy synced walk start explains the required question and then saves an 
   await expect(page.locator('.walk-notes p')).toContainText('Спокойный вечер');
   await page.reload();
   await expect(page.locator('.walk-notes p')).toContainText('Спокойный вечер');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(errors).toEqual([]);
 });
 
 test('questions preserve the draft, focus the note and persist as an ordinary thought', async ({
