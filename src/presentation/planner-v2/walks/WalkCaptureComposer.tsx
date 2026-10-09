@@ -1,8 +1,12 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { WalkServices } from '../../../application/walk/WalkServices';
-import type { WalkCapture } from '../../../domain/walk-capture/WalkCapture';
+import {
+  MAX_WALK_CAPTURE_LENGTH,
+  type WalkCapture,
+} from '../../../domain/walk-capture/WalkCapture';
 import { VoiceTextArea } from '../../voice-input/VoiceTextArea';
 import { useWalkMutation } from './useWalkState';
+import { WalkNotePrompts } from './WalkNotePrompts';
 export function WalkCaptureComposer({
   services,
   walkId,
@@ -14,11 +18,24 @@ export function WalkCaptureComposer({
 }) {
   const [text, setText] = useState('');
   const [saved, setSaved] = useState(false);
+  const textarea = useRef<HTMLTextAreaElement>(null);
   const mutation = useWalkMutation();
   return (
     <aside className="walk-side">
       <h2>Мысли на ходу</h2>
       <p>Запишите коротко, чтобы вернуться позже.</p>
+      <WalkNotePrompts
+        draft={text}
+        busy={mutation.busy}
+        onAppend={(value) => {
+          setText(value);
+          setSaved(false);
+          requestAnimationFrame(() => {
+            textarea.current?.focus();
+            textarea.current?.setSelectionRange(value.length, value.length);
+          });
+        }}
+      />
       <form
         onSubmit={(event) => {
           event.preventDefault();
@@ -34,9 +51,10 @@ export function WalkCaptureComposer({
       >
         <label htmlFor="walk-thought">Новая мысль</label>
         <VoiceTextArea
+          ref={textarea}
           id="walk-thought"
           rows={4}
-          maxLength={500}
+          maxLength={MAX_WALK_CAPTURE_LENGTH}
           value={text}
           onValueChange={(value) => {
             setText(value);
@@ -45,7 +63,9 @@ export function WalkCaptureComposer({
           placeholder="Что хочется сохранить?"
         />
         <div className="walk-composer-footer">
-          <small>{text.length}/500</small>
+          <small>
+            {text.length}/{MAX_WALK_CAPTURE_LENGTH}
+          </small>
           <button disabled={mutation.busy || !text.trim()}>Сохранить мысль</button>
         </div>
         {mutation.error && <p role="alert">{mutation.error}</p>}
