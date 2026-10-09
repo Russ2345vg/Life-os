@@ -1,3 +1,4 @@
+import { HouseholdTaskList, isHouseholdAction } from './HouseholdTaskList';
 import { RecurrenceBadge } from './RecurrenceBadge';
 import { ActionGoalProgress } from './ActionGoalProgress';
 import { useQuickAccessGuard } from './QuickAccessContext';
@@ -128,6 +129,11 @@ export function PlannerToday({
             a.status !== 'cancelled',
         ),
   );
+
+  const ordinaryActions = overview.actions.filter((action) => !isHouseholdAction(action));
+  const ordinaryCompleted = overview.completed.filter((action) => !isHouseholdAction(action));
+  const householdActions = overview.actions.filter(isHouseholdAction);
+  const householdCompleted = overview.completed.filter(isHouseholdAction);
 
   const total = overview.actions.length + overview.completed.length + (overview.main ? 1 : 0);
   const plannedCount = overview.actions.length + (overview.main ? 1 : 0);
@@ -470,28 +476,35 @@ export function PlannerToday({
             <section className="planner-today-list">
               <h2>
                 {day === 'tomorrow' ? 'На завтра' : overview.main ? 'Ещё на сегодня' : 'На сегодня'}{' '}
-                <span>{overview.actions.length}</span>
+                <span>{ordinaryActions.length}</span>
               </h2>
-              {overview.actions.length === 0 ? (
+              {ordinaryActions.length === 0 ? (
                 <p className="planner-empty">
-                  {overview.main
-                    ? 'Остальное можно добавить позже.'
-                    : day === 'tomorrow'
-                      ? 'На завтра пока ничего не запланировано.'
-                      : overview.completed.length
-                        ? 'Всё выполнено. Можно спокойно завершить день.'
-                        : 'На сегодня пока ничего не запланировано.'}
+                  {householdActions.length || householdCompleted.length
+                    ? 'Бытовые дела собраны в списке «Порядок».'
+                    : overview.main
+                      ? 'Остальное можно добавить позже.'
+                      : day === 'tomorrow'
+                        ? 'На завтра пока ничего не запланировано.'
+                        : ordinaryCompleted.length
+                          ? 'Всё выполнено. Можно спокойно завершить день.'
+                          : 'На сегодня пока ничего не запланировано.'}
                 </p>
               ) : (
-                <ul>{overview.actions.map((action) => row(action, 'today'))}</ul>
+                <ul>{ordinaryActions.map((action) => row(action, 'today'))}</ul>
               )}
             </section>
+            <HouseholdTaskList
+              pending={householdActions}
+              completed={householdCompleted}
+              renderAction={(action, completed) => row(action, completed ? 'completed' : 'today')}
+            />
             <details className="planner-details planner-completed">
               <summary>
-                Выполнено <span>{overview.completed.length}</span>
+                Выполнено <span>{ordinaryCompleted.length}</span>
               </summary>
-              {overview.completed.length ? (
-                <ul>{overview.completed.map((action) => row(action, 'completed'))}</ul>
+              {ordinaryCompleted.length ? (
+                <ul>{ordinaryCompleted.map((action) => row(action, 'completed'))}</ul>
               ) : (
                 <p className="planner-empty">Здесь появятся действия, выполненные в этот день.</p>
               )}

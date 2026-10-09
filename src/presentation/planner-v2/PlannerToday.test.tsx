@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { DayDate, EntityId, LifeAction, LifeActionTitle } from '../../domain';
 import { PlannerToday } from './PlannerToday';
+import { HouseholdTaskList } from './HouseholdTaskList';
 import {
   createLifeActionDraft,
   createReadyLifeAction,
@@ -355,5 +356,133 @@ describe('Today unfinished previous days', () => {
     expect(runningHtml).toContain('Действие уже выполняется');
     expect(runningHtml).not.toContain('Выбрать дату');
     expect(runningHtml).not.toContain('Убрать из плана');
+  });
+});
+
+describe('Today household list', () => {
+  const render = (
+    includeHousehold = true,
+    mainHousehold = false,
+    day: 'today' | 'tomorrow' = 'today',
+  ) => {
+    const date = DayDate.create('2026-10-09');
+    const ordinary = createLifeActionDraft('ordinary', { sphereId: EntityId.create('home') });
+    ordinary.setPlan(date, false);
+    const household = createLifeActionDraft(
+      'plan-import:household-2026-10-v1:actions:t001-2026-10-09',
+    );
+    household.setPlan(date, false);
+    const done = createLifeActionDraft('plan-import:household-2026-10-v1:actions:t002-2026-10-09');
+    const main = createLifeActionDraft('plan-import:household-2026-10-v1:actions:main');
+    main.setPlan(date, true);
+    return renderToStaticMarkup(
+      createElement(PlannerToday, {
+        date,
+        day,
+        overview: {
+          main: mainHousehold ? main : null,
+          actions: includeHousehold ? [ordinary, household] : [ordinary],
+          completed: includeHousehold ? [done] : [],
+          unscheduled: [],
+          overdue: [],
+        },
+        goals: [],
+        availableActions: [ordinary, household, done, ...(mainHousehold ? [main] : [])],
+        spheres: [{ id: 'home', title: 'Дом' }],
+        monthlyDirectionFocus: {
+          month: '2026-10',
+          hasCurrent: false,
+          directionId: null,
+          directionLabel: null,
+          suggestion: null,
+          choices: [],
+        },
+        busy: false,
+        onSelectDay: vi.fn(),
+        onOpenAction: vi.fn(),
+        onMonthlyDirectionChange: vi.fn(),
+        onComplete: vi.fn(),
+        onPlan: vi.fn(),
+        onReschedule: async () => {},
+        onQuickAdd: async () => {},
+        onNewAction: vi.fn(),
+        onOpenSleep: vi.fn(),
+      }),
+    );
+  };
+  it('keeps imported household actions in a collapsed list and counts completed items there', () => {
+    const html = render();
+    expect(html).toContain('aria-label="Порядок"');
+    const group = html.slice(
+      html.indexOf('aria-label="Порядок"'),
+      html.indexOf('planner-completed'),
+    );
+    expect(group).toContain('t001-2026-10-09');
+    expect(group).toContain('t002-2026-10-09');
+    expect(group).toContain('Выполнено 1 из 2');
+    const normal = html.slice(
+      html.indexOf('planner-today-list'),
+      html.indexOf('aria-label="Порядок"'),
+    );
+    expect(normal).toContain('Действие ordinary');
+    expect(normal).not.toContain('t001-2026-10-09');
+    expect(
+      html.match(
+        /data-planner-action-id="plan-import:household-2026-10-v1:actions:t001-2026-10-09"/g,
+      ),
+    ).toHaveLength(1);
+    expect(html).not.toContain('<details open');
+    expect(html).toContain('Готово <strong>1</strong>');
+  });
+  it('does not add an empty household list to unrelated plans', () => {
+    expect(render(false)).not.toContain('aria-label="Порядок"');
+  });
+  it('keeps a household main action separate and unrelated Home actions in the ordinary plan', () => {
+    const html = render(true, true);
+    const groupStart = html.indexOf('aria-label="Порядок"');
+    expect(
+      html.slice(html.indexOf('class="planner-main"'), html.indexOf('planner-today-list')),
+    ).toContain('data-planner-action-id="plan-import:household-2026-10-v1:actions:main"');
+    expect(html.slice(groupStart)).not.toContain(
+      'data-planner-action-id="plan-import:household-2026-10-v1:actions:main"',
+    );
+    expect(
+      html.match(/data-planner-action-id="plan-import:household-2026-10-v1:actions:main"/g),
+    ).toHaveLength(1);
+    const ordinary = html.slice(html.indexOf('planner-today-list'), groupStart);
+    expect(ordinary).toContain('Действие ordinary');
+    expect(ordinary.replace(/<[^>]+>/g, '')).toContain('Сфера Дом');
+    expect(html).toContain('В плане <strong>3</strong>');
+    expect(html).toContain('1 из 4');
+  });
+  it('groups the selected tomorrow plan using the same day totals', () => {
+    const html = render(true, false, 'tomorrow');
+    expect(html).toContain('План на завтра');
+    expect(html).toContain('aria-label="Порядок"');
+    expect(html).toContain('Выполнено 1 из 2');
+    expect(html).toContain('1 из 3');
+  });
+  it('renders collapsed when reading browser preferences is unavailable', () => {
+    vi.stubGlobal('window', {
+      localStorage: {
+        getItem: () => {
+          throw new Error('Storage unavailable');
+        },
+      },
+    });
+    try {
+      const html = renderToStaticMarkup(
+        createElement(HouseholdTaskList, {
+          pending: [createLifeActionDraft('plan-import:household-2026-10-v1:actions:test')],
+          completed: [],
+          renderAction: (action) =>
+            createElement('li', { key: action.id.toString() }, action.title.toString()),
+        }),
+      );
+      expect(html).toContain('aria-label="Порядок"');
+      expect(html).not.toContain(' open=""');
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
