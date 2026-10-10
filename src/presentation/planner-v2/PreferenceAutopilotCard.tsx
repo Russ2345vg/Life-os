@@ -14,7 +14,7 @@ import {
 } from '../../domain/planner/AutopilotPreferences';
 import { autopilotLocalTime } from '../../application/planner/AutopilotConstraints';
 import { AutopilotPreferencesForm } from './AutopilotPreferencesForm';
-import { AutopilotPlanPreview } from './AutopilotPlanPreview';
+import { AutopilotPlanPreview, AutopilotTimeline } from './AutopilotPlanPreview';
 import './autopilot-preferences.css';
 export type DayAutopilotClient = Pick<
   DayAutopilotService,
@@ -44,12 +44,15 @@ export function PreferenceAutopilotCard({
   const dateKey = date.toString();
   useEffect(() => {
     const current = ++generation.current;
-    void service
-      .getSetup(DayDate.create(dateKey))
-      .then((value) => {
+    void Promise.all([
+      service.getSetup(DayDate.create(dateKey)),
+      service.readSchedule(DayDate.create(dateKey), DayDate.create(dateKey)),
+    ])
+      .then(([value, schedule]) => {
         if (generation.current !== current) return;
         const local = autopilotLocalTime(new Date(), value.timeZone);
         setSetup(value);
+        setApplied(schedule[0] ?? null);
         setPreferences(value.preferences.value);
         setDraft({
           ...value.draft.value,
@@ -63,7 +66,7 @@ export function PreferenceAutopilotCard({
         if (generation.current === current) setError(errorText(reason));
       });
     return () => {
-      generation.current = current + 1;
+      generation.current += 1;
     };
   }, [dateKey, service]);
   const disabled = busy || working;
@@ -74,7 +77,6 @@ export function PreferenceAutopilotCard({
     setPreview(null);
     setError(null);
     setMessage(null);
-    setApplied(null);
     try {
       const validatedPrefs = validateAutopilotPreferences(preferences),
         validatedDraft = validateAutopilotDayDraft(editedDraft);
@@ -127,6 +129,28 @@ export function PreferenceAutopilotCard({
         setPreview(null);
         setError(errorText(reason));
       }
+    } finally {
+      if (generation.current === current) setWorking(false);
+    }
+  };
+  const reload = async () => {
+    if (disabled) return;
+    const current = ++generation.current;
+    setWorking(true);
+    try {
+      const [value, schedule] = await Promise.all([
+        service.getSetup(DayDate.create(dateKey)),
+        service.readSchedule(DayDate.create(dateKey), DayDate.create(dateKey)),
+      ]);
+      if (generation.current !== current) return;
+      setSetup(value);
+      setPreferences(value.preferences.value);
+      setDraft(value.draft.value);
+      setApplied(schedule[0] ?? null);
+      setError(null);
+      setPreview(null);
+    } catch (reason: unknown) {
+      if (generation.current === current) setError(errorText(reason));
     } finally {
       if (generation.current === current) setWorking(false);
     }
@@ -217,30 +241,26 @@ export function PreferenceAutopilotCard({
               </p>
             )}
           </div>
-          {error && !working && (
-            <button
-              type="button"
-              onClick={() =>
-                void service
-                  .getSetup(DayDate.create(dateKey))
-                  .then((value) => {
-                    setSetup(value);
-                    setPreferences(value.preferences.value);
-                    setDraft(value.draft.value);
-                    setError(null);
-                    setPreview(null);
-                  })
-                  .catch((reason: unknown) => setError(errorText(reason)))
-              }
-            >
+          {error && (
+            <button type="button" disabled={disabled} onClick={() => void reload()}>
               Загрузить сохранённые настройки
             </button>
           )}
-          {applied && (
-            <p className="planner-muted">
-              В расписании {applied.blocks.filter((block) => block.kind !== 'sleep').length} блоков.{' '}
-              <a href="#/v2/actions?view=calendar">Открыть календарь →</a>
-            </p>
+          {applied && applied.blocks.length > 0 && !preview && (
+            <div className="planner-day-autopilot__preview">
+              <h4>Сохранённое расписание</h4>
+              <AutopilotTimeline
+                blocks={applied.blocks}
+                proposals={[]}
+                date={applied.date}
+                name="Сохранённое расписание"
+                busy={disabled}
+              />
+              <p className="planner-muted">
+                В расписании {applied.blocks.filter((block) => block.kind !== 'sleep').length}{' '}
+                блоков. <a href="#/v2/actions?view=calendar">Открыть календарь →</a>
+              </p>
+            </div>
           )}
           {draft?.excludedActionIds.length ? (
             <button
@@ -262,6 +282,7 @@ export function PreferenceAutopilotCard({
 function hasChanges(preview: DayAutopilotPreview): boolean {
   return (
     preview.proposals.length > 0 ||
+    (preview.mode === 'rebuild' && (preview.affectedRoutineBlocks?.length ?? 0) > 0) ||
     preview.timeline?.some(
       (block) => !block.protected && !block.actionId && ['walk', 'rest'].includes(block.kind),
     ) === true ||

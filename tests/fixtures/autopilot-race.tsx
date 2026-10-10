@@ -12,10 +12,13 @@ import '../../src/presentation/planner-v2/planner-premium.css';
 const app = await createLifeOsApplication();
 const source = app.dayAutopilot!;
 const pending: Array<() => void> = [];
+let delayNextSetup = false;
 const service: DayAutopilotClient = {
   getSetup: async (date) => {
     const setup = await source.getSetup(date);
-    return date.toString() === '2026-10-10'
+    const delayed = delayNextSetup || date.toString() === '2026-10-10';
+    delayNextSetup = false;
+    return delayed
       ? new Promise<AutopilotSetup>((resolve) => pending.push(() => resolve(setup)))
       : setup;
   },
@@ -33,6 +36,13 @@ function Fixture() {
       <button onClick={() => setDate('2026-10-11')}>Показать 11 октября</button>
       <button onClick={() => pending.splice(0).forEach((resolve) => resolve())}>
         Завершить старую загрузку
+      </button>
+      <button
+        onClick={() => {
+          delayNextSetup = true;
+        }}
+      >
+        Задержать следующую загрузку
       </button>
       <button
         onClick={() =>

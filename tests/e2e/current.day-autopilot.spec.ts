@@ -133,6 +133,10 @@ test('preferences choose backlog work, edit preview and preserve routines after 
   });
   await card.getByRole('button', { name: 'Применить план', exact: true }).click();
   await expect(card).toContainText('План применён: 3 задачи.');
+  const savedTimeline = card.getByRole('list', { name: 'Сохранённое расписание', exact: true });
+  await expect(savedTimeline).toContainText('09:00–09:40');
+  await expect(savedTimeline).toContainText('Отдых');
+  await expect(savedTimeline).toContainText('Прогулка');
   const after = await stored(page);
   expect(after.actionSessions).toEqual(before.actionSessions);
   const actions = after.lifeActions as Array<{
@@ -154,6 +158,12 @@ test('preferences choose backlog work, edit preview and preserve routines after 
   await expect(card.getByLabel('Пожелания на день', { exact: true })).toHaveValue(
     'Действие autopilot-household',
   );
+  await expect(savedTimeline).toContainText('09:00–09:40');
+  await expect(savedTimeline).toContainText('Прогулка');
+  await page.screenshot({
+    path: `artifacts/visual-qa/preference-day-autopilot/saved-${info.project.name}.png`,
+    fullPage: true,
+  });
   await page.goto('/#/v2/actions?view=calendar');
   await page.getByRole('button', { name: 'День', exact: true }).click();
   const routines = page.locator('.planner-time-routine-list');

@@ -1,3 +1,5 @@
+import type { AutopilotScheduleBlock } from '../../domain/planner/AutopilotSchedule';
+import type { ProposedActionWindow } from '../../domain/planner/DayAutopilot';
 import type { DayAutopilotPreview } from '../../application';
 import { clockTime, durationLabel } from './timePresentation';
 export function AutopilotPlanPreview({
@@ -50,85 +52,15 @@ export function AutopilotPlanPreview({
           {durationLabel(preview.recoverySignal.minutes)}.
         </p>
       )}
-      <ol
-        className="planner-day-autopilot__timeline autopilot-timeline"
-        aria-label="Предложенные блоки"
-      >
-        {blocks.map((block) => {
-          const proposal = preview.proposals.find((item) => item.actionId === block.actionId);
-          return (
-            <li key={block.id} data-kind={block.kind}>
-              <time>
-                {clockTime(block.startMinute)}–{clockTime(block.endMinute)}
-              </time>
-              <span className="planner-day-autopilot__line" aria-hidden="true" />
-              <div>
-                <strong>{block.title}</strong>
-                <span>
-                  {proposal
-                    ? proposal.isMain
-                      ? 'Главное'
-                      : proposal.reason === 'focus'
-                        ? 'Главный фокус'
-                        : proposal.reason === 'wish'
-                          ? 'Пожелание на день'
-                          : 'Из плана дня'
-                    : block.protected
-                      ? 'Сохранённое окно'
-                      : block.kind === 'reserve'
-                        ? 'Не занят делами'
-                        : 'Распорядок'}{' '}
-                  · {durationLabel(block.endMinute - block.startMinute)}
-                  {proposal?.usedDefaultEstimate ? ' · Оценка 25 минут — можно изменить' : ''}
-                  {proposal?.previousDate !== undefined && proposal.previousDate !== preview.date
-                    ? ` · ${proposal.previousDate ? `перенос с ${proposal.previousDate}` : 'из дел без даты'}`
-                    : ''}
-                </span>
-                {proposal && (
-                  <div className="autopilot-timeline__edit">
-                    <label>
-                      Длительность: {proposal.title}
-                      <input
-                        type="number"
-                        min={1}
-                        max={1440}
-                        defaultValue={proposal.durationMinutes}
-                        key={`${proposal.actionId}:${proposal.durationMinutes}`}
-                        disabled={busy}
-                        onBlur={(event) => {
-                          const value = Number(event.target.value);
-                          if (value !== proposal.durationMinutes)
-                            onDuration(proposal.actionId, value);
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter') {
-                            event.preventDefault();
-                            event.currentTarget.blur();
-                          }
-                        }}
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => onExclude(proposal.actionId)}
-                    >
-                      Исключить
-                    </button>
-                  </div>
-                )}
-                {block.kind === 'morning' ? (
-                  <a href="#/v2/routine/morning">Открыть утренние практики →</a>
-                ) : block.kind === 'evening' || block.kind === 'sleep' ? (
-                  <a href="#/v2/sleep?from=routine">Открыть подготовку ко сну →</a>
-                ) : block.kind === 'walk' ? (
-                  <a href="#/v2/walks">Открыть прогулки →</a>
-                ) : null}
-              </div>
-            </li>
-          );
-        })}
-      </ol>
+      <AutopilotTimeline
+        blocks={blocks}
+        proposals={preview.proposals}
+        date={preview.date}
+        name="Предложенные блоки"
+        busy={busy}
+        onDuration={onDuration}
+        onExclude={onExclude}
+      />
       {!preview.proposals.length && (
         <p className="planner-empty">Подходящих свободных дел нет. Измените фокус или пожелания.</p>
       )}
@@ -158,5 +90,102 @@ export function AutopilotPlanPreview({
         </div>
       ) : null}
     </div>
+  );
+}
+
+export function AutopilotTimeline({
+  blocks,
+  proposals,
+  date,
+  name,
+  busy,
+  onDuration,
+  onExclude,
+}: {
+  readonly blocks: readonly AutopilotScheduleBlock[];
+  readonly proposals: readonly ProposedActionWindow[];
+  readonly date: string;
+  readonly name: string;
+  readonly busy: boolean;
+  readonly onDuration?: (actionId: string, minutes: number) => void;
+  readonly onExclude?: (actionId: string) => void;
+}) {
+  return (
+    <ol className="planner-day-autopilot__timeline autopilot-timeline" aria-label={name}>
+      {blocks.map((block) => {
+        const proposal = proposals.find((item) => item.actionId === block.actionId);
+        return (
+          <li key={block.id} data-kind={block.kind}>
+            <time>
+              {clockTime(block.startMinute)}–{clockTime(block.endMinute)}
+            </time>
+            <span className="planner-day-autopilot__line" aria-hidden="true" />
+            <div>
+              <strong>{block.title}</strong>
+              <span>
+                {proposal
+                  ? proposal.isMain
+                    ? 'Главное'
+                    : proposal.reason === 'focus'
+                      ? 'Главный фокус'
+                      : proposal.reason === 'wish'
+                        ? 'Пожелание на день'
+                        : 'Из плана дня'
+                  : block.protected
+                    ? 'Сохранённое окно'
+                    : block.kind === 'reserve'
+                      ? 'Не занят делами'
+                      : 'Распорядок'}{' '}
+                · {durationLabel(block.endMinute - block.startMinute)}
+                {proposal?.usedDefaultEstimate ? ' · Оценка 25 минут — можно изменить' : ''}
+                {proposal?.previousDate !== undefined && proposal.previousDate !== date
+                  ? ` · ${proposal.previousDate ? `перенос с ${proposal.previousDate}` : 'из дел без даты'}`
+                  : ''}
+              </span>
+              {proposal && onDuration && onExclude && (
+                <div className="autopilot-timeline__edit">
+                  <label>
+                    Длительность: {proposal.title}
+                    <input
+                      type="number"
+                      min={1}
+                      max={1440}
+                      defaultValue={proposal.durationMinutes}
+                      key={`${proposal.actionId}:${proposal.durationMinutes}`}
+                      disabled={busy}
+                      onBlur={(event) => {
+                        const value = Number(event.target.value);
+                        if (value !== proposal.durationMinutes)
+                          onDuration(proposal.actionId, value);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          event.currentTarget.blur();
+                        }
+                      }}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => onExclude(proposal.actionId)}
+                  >
+                    Исключить
+                  </button>
+                </div>
+              )}
+              {block.kind === 'morning' ? (
+                <a href="#/v2/routine/morning">Открыть утренние практики →</a>
+              ) : block.kind === 'evening' || block.kind === 'sleep' ? (
+                <a href="#/v2/sleep?from=routine">Открыть подготовку ко сну →</a>
+              ) : block.kind === 'walk' ? (
+                <a href="#/v2/walks">Открыть прогулки →</a>
+              ) : null}
+            </div>
+          </li>
+        );
+      })}
+    </ol>
   );
 }

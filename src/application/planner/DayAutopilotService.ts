@@ -47,6 +47,11 @@ export interface DayAutopilotRecoverySignal {
 }
 
 export interface DayAutopilotPreview extends DayAutopilotPlan {
+  readonly affectedRoutineBlocks?: readonly {
+    readonly id: string;
+    readonly startMinute: number;
+    readonly expectedVersion: number;
+  }[];
   readonly guard?: AutopilotGuardSnapshot;
   readonly timeZone?: string;
   readonly wishResolution?: AutopilotWishResolution;

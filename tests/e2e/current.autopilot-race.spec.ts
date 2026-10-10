@@ -22,4 +22,14 @@ test('late old date response and stale draft save retain the current wish text',
   await expect(page.getByRole('alert')).toBeVisible();
   await expect(wishes).toHaveValue('Сегодняшний текст');
   await expect(page.getByRole('button', { name: 'Применить план', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Задержать следующую загрузку' }).click();
+  await page.getByRole('button', { name: 'Загрузить сохранённые настройки' }).click();
+  await expect(wishes).toBeDisabled();
+  await expect(wishes).toHaveValue('Сегодняшний текст');
+  await page.getByRole('button', { name: 'Завершить старую загрузку' }).click();
+  await expect(wishes).toBeEnabled();
+  await expect(wishes).toHaveValue('Текст другого редактора');
+  await wishes.fill('Новый текст после загрузки');
+  await page.getByRole('button', { name: 'Завершить старую загрузку' }).click();
+  await expect(wishes).toHaveValue('Новый текст после загрузки');
 });

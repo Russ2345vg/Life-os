@@ -114,6 +114,7 @@ export function buildPreferenceDayAutopilotPlan(input: DayAutopilotInput): DayAu
       (action.plannedDate === undefined || action.plannedDate === input.date);
     const fixed =
       action.protectedBySession ||
+      timeline.some((block) => block.actionId === action.id && block.protected) ||
       (hasWindow && (input.mode === 'fill' || action.scheduledStartMinute! < input.startMinute));
     if (!fixed) continue;
     used.add(action.id);
@@ -189,8 +190,6 @@ export function buildPreferenceDayAutopilotPlan(input: DayAutopilotInput): DayAu
   );
   let budget = freeMinutes - reserveMinutes,
     cursor = input.startMinute,
-    accumulated = 0,
-    intervals = 0,
     restOrdinal = timeline.reduce(
       (next, block) =>
         block.kind === 'rest' && isAutopilotOwnedBlock(block.id, input.date)
@@ -199,6 +198,30 @@ export function buildPreferenceDayAutopilotPlan(input: DayAutopilotInput): DayAu
       0,
     );
   const failed = new Set<string>();
+  function recoveryAt(minute: number): { accumulated: number; intervals: number } {
+    let accumulated = 0,
+      intervals = 0;
+    for (const block of [...timeline].sort((a, b) => a.startMinute - b.startMinute)) {
+      if (block.endMinute > minute) continue;
+      if (block.kind === 'action' || (block.kind === 'manual' && block.actionId)) {
+        const before = Math.floor(accumulated / pomodoro.focusMinutes);
+        accumulated += block.endMinute - block.startMinute;
+        intervals += Math.floor(accumulated / pomodoro.focusMinutes) - before;
+      } else if (
+        ['walk', 'sleep', 'morning', 'evening'].includes(block.kind) ||
+        (block.kind === 'rest' && block.endMinute - block.startMinute >= pomodoro.longBreakMinutes)
+      ) {
+        accumulated = 0;
+        intervals = 0;
+      } else if (
+        block.kind === 'rest' &&
+        block.endMinute - block.startMinute >= pomodoro.shortBreakMinutes
+      ) {
+        accumulated %= pomodoro.focusMinutes;
+      }
+    }
+    return { accumulated, intervals };
+  }
   function tryAction(
     id: string,
     reason: ProposedActionWindow['reason'],
@@ -213,19 +236,19 @@ export function buildPreferenceDayAutopilotPlan(input: DayAutopilotInput): DayAu
         'day_autopilot.invalid_duration',
         'Длительность дела должна быть целым числом от 1 до 1440 минут.',
       );
-    const due = accumulated >= pomodoro.focusMinutes;
-    const long = intervals >= 4;
-    const rest = due ? (long ? pomodoro.longBreakMinutes : pomodoro.shortBreakMinutes) : 0;
-    let placement: { start: number; rest: number; resetByWalk: boolean } | null = null;
+    let placement: { start: number; rest: number; long: boolean } | null = null;
     for (const gap of freeScheduleIntervals(Math.max(cursor, input.startMinute), end!, timeline)) {
-      const walkBetween = timeline.some(
-        (block) =>
-          block.kind === 'walk' && block.endMinute > cursor && block.endMinute <= gap.startMinute,
-      );
-      const restHere = walkBetween ? 0 : rest;
+      const recovery = recoveryAt(gap.startMinute);
+      const long = recovery.intervals >= 4;
+      const restHere =
+        recovery.accumulated >= pomodoro.focusMinutes
+          ? long
+            ? pomodoro.longBreakMinutes
+            : pomodoro.shortBreakMinutes
+          : 0;
       if (duration + restHere > budget || gap.startMinute + restHere + duration > gap.endMinute)
         continue;
-      placement = { start: gap.startMinute + restHere, rest: restHere, resetByWalk: walkBetween };
+      placement = { start: gap.startMinute + restHere, rest: restHere, long };
       break;
     }
     if (!placement) {
@@ -243,27 +266,18 @@ export function buildPreferenceDayAutopilotPlan(input: DayAutopilotInput): DayAu
       return false;
     }
     used.add(id);
-    if (placement.resetByWalk) {
-      accumulated = 0;
-      intervals = 0;
-    }
     if (placement.rest) {
       timeline.push({
         id: autopilotOwnedBlockId(input.date, 'rest', restOrdinal++),
         kind: 'rest',
-        title: long ? 'Длинный отдых' : 'Отдых',
+        title: placement.long ? 'Длинный отдых' : 'Отдых',
         startMinute: placement.start - placement.rest,
         endMinute: placement.start,
         sourceId: null,
         actionId: null,
         protected: false,
       });
-      accumulated %= pomodoro.focusMinutes;
-      if (long) intervals = 0;
     }
-    const beforeIntervals = Math.floor(accumulated / pomodoro.focusMinutes);
-    accumulated += duration;
-    intervals += Math.floor(accumulated / pomodoro.focusMinutes) - beforeIntervals;
     const estimateSource =
       override !== undefined
         ? 'user'
@@ -302,7 +316,12 @@ export function buildPreferenceDayAutopilotPlan(input: DayAutopilotInput): DayAu
   for (const id of groups.focus) if (tryAction(id, 'focus', null)) break;
   for (const wish of groups.wishes)
     for (const id of wish.actionIds)
-      if (used.has(id) || tryAction(id, 'wish', wish.reference)) break;
+      if (
+        proposals.some((item) => item.actionId === id) ||
+        locked.some((item) => item.actionId === id) ||
+        tryAction(id, 'wish', wish.reference)
+      )
+        break;
   for (const id of groups.focus) tryAction(id, 'focus', null);
   for (const id of groups.todayFallback) tryAction(id, 'day_order', null);
   if (input.mode === 'rebuild')

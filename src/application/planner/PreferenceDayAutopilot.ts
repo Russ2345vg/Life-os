@@ -193,6 +193,11 @@ export class PreferenceDayAutopilot {
       source.catalog,
       draft.value.wishReferences,
     );
+    if (wishes.unavailable?.length)
+      throw new DomainError(
+        'day_autopilot.wish_unavailable',
+        'Выбранное пожелание больше недоступно. Исправьте текст или удалите недоступную связь.',
+      );
     if (wishes.unresolved.length)
       throw new DomainError(
         'day_autopilot.wishes_unresolved',
@@ -214,7 +219,7 @@ export class PreferenceDayAutopilot {
       date,
       now,
       preferences: preferences.value,
-      draft: draft.value,
+      draft: { ...draft.value, startMinute },
       sleep: source.sleep,
       routineBlocks: source.routineBlocks,
       walks: source.walks,
@@ -256,6 +261,21 @@ export class PreferenceDayAutopilot {
       guard: buildAutopilotGuard(source),
       timeZone,
       wishResolution: wishes,
+      affectedRoutineBlocks:
+        input.mode === 'rebuild'
+          ? source.routineBlocks
+              .filter(
+                (block) =>
+                  isAutopilotOwnedBlock(block.id.toString(), date) &&
+                  block.anchorDate.toString() === date &&
+                  minuteOf(block.startTime) >= startMinute,
+              )
+              .map((block) => ({
+                id: block.id.toString(),
+                startMinute: minuteOf(block.startTime),
+                expectedVersion: block.version,
+              }))
+          : [],
       uncoveredWishes: groups.wishes
         .filter((wish) => !wish.actionIds.some((id) => accepted.has(id)))
         .map((wish) => wish.reference),
@@ -263,7 +283,8 @@ export class PreferenceDayAutopilot {
   }
 
   public async apply(preview: DayAutopilotPreview): Promise<DayAutopilotApplyResult> {
-    if (!preview.guard || !preview.timeline || !preview.timeZone) throw stale();
+    if (!preview.guard || !preview.timeline || !preview.timeZone || !preview.affectedRoutineBlocks)
+      throw stale();
     const source = await this.source(preview.date);
     if (buildAutopilotGuard(source).sourceFingerprint !== preview.guard.sourceFingerprint)
       throw stale();
@@ -274,6 +295,10 @@ export class PreferenceDayAutopilot {
       local.date === preview.date
         ? local.minute + (now.getSeconds() || now.getMilliseconds() ? 1 : 0)
         : 0;
+    // Time passing does not change the source fingerprint. Reject the whole original
+    // batch rather than silently shrinking its deletes or moving an already started block.
+    if (preview.affectedRoutineBlocks.some((block) => block.startMinute < currentMinute))
+      throw stale();
     if (
       preview.proposals.some(
         (item) =>
@@ -358,6 +383,7 @@ export class PreferenceDayAutopilot {
       )
         throw stale();
       const old = source.routineBlocks.find((item) => item.id.toString() === block.id);
+      if (old && minuteOf(old.startTime) < currentMinute) throw stale();
       const details = {
         anchorDate: DayDate.create(preview.date),
         title: block.title,
@@ -384,7 +410,7 @@ export class PreferenceDayAutopilot {
                 isAutopilotOwnedBlock(block.id.toString(), preview.date) &&
                 block.anchorDate.toString() === preview.date &&
                 !generatedIds.has(block.id.toString()) &&
-                minuteOf(block.startTime) >= Math.max(currentMinute, preview.startMinute),
+                preview.affectedRoutineBlocks!.some((item) => item.id === block.id.toString()),
             )
             .map((block) => ({ id: block.id, expectedVersion: block.version }))
         : [];

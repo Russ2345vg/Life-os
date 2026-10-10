@@ -1,5 +1,6 @@
 import { DayDate } from '../../domain/day/DayDate';
 import type { LifeAction } from '../../domain/life-action/LifeAction';
+import { LIFE_ACTION_STATUS } from '../../domain/life-action/LifeActionStatus';
 import type { RoutineBlock } from '../../domain/routine-block/RoutineBlock';
 import type { SleepScheduleState } from '../../domain/sleep/SleepSchedule';
 import { calculateNightWindow } from '../../domain/sleep/NightTime';
@@ -190,11 +191,17 @@ export function buildAutopilotConstraints(
         ? input.actions.find(
             (action) =>
               action.id.equals(assignment.actionId) &&
+              !action.isArchived() &&
+              !action.isDeleted() &&
+              action.status !== 'cancelled' &&
+              (input.readback ||
+                isAutopilotOpenAction(action) ||
+                action.status === LIFE_ACTION_STATUS.inProgress) &&
               action.plannedDate?.toString() === date &&
-              action.scheduledStartMinute !== null,
+              action.scheduledStartMinute === start &&
+              action.scheduledDurationMinutes === end - start,
           )
         : undefined;
-    if (linked) continue;
     add(
       owned ? (block.assignment.kind === 'walk' ? 'walk' : 'rest') : 'manual',
       start,
@@ -202,10 +209,14 @@ export function buildAutopilotConstraints(
       block.id.toString(),
       block.title,
       block.id.toString(),
+      linked?.id.toString() ?? null,
     );
   }
   const walks = input.walks.filter((walk) => walk.deletedAt === null);
-  const active = walks.filter((walk) => walk.status === 'running' || walk.status === 'paused');
+  const active =
+    nowLocal.date === date
+      ? walks.filter((walk) => walk.status === 'running' || walk.status === 'paused')
+      : [];
   for (const walk of active) {
     if (nowLocal.date !== date) continue;
     const remaining =

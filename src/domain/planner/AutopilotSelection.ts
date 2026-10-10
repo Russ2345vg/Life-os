@@ -12,6 +12,7 @@ export interface AutopilotCatalog {
   readonly links: readonly ContributionLink[];
 }
 export interface AutopilotWishResolution {
+  readonly unavailable?: readonly AutopilotReference[];
   readonly matches: readonly AutopilotReference[];
   readonly unresolved: readonly {
     readonly text: string;
@@ -80,11 +81,7 @@ export function resolveAutopilotWishes(
     title: normalize(autopilotReferenceTitle(ref, catalog)),
   }));
   const known = new Set(entries.map((item) => key(item.ref)));
-  if (explicit.some((ref) => !known.has(key(ref))))
-    throw new DomainError(
-      'day_autopilot.wish_unavailable',
-      'Выбранное пожелание больше недоступно. Выберите существующее направление, цель или дело.',
-    );
+  const unavailable = explicit.filter((ref) => !known.has(key(ref)));
   const matches = new Map<string, AutopilotReference>();
   const unresolved: AutopilotWishResolution['unresolved'][number][] = [];
   const exactWhole = entries.some((entry) => entry.title === normalize(text));
@@ -111,8 +108,8 @@ export function resolveAutopilotWishes(
     if (resolved) matches.set(key(resolved), resolved);
     else unresolved.push({ text: segment.trim(), candidates });
   }
-  for (const ref of explicit) matches.set(key(ref), ref);
-  return { matches: [...matches.values()], unresolved };
+  for (const ref of explicit) if (known.has(key(ref))) matches.set(key(ref), ref);
+  return { matches: [...matches.values()], unresolved, unavailable };
 }
 export function selectAutopilotCandidates(
   date: string,

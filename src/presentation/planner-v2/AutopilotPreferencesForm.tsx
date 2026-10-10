@@ -116,6 +116,34 @@ export function AutopilotPreferencesForm({
           onValueChange={(wishes) => onDraft({ ...draft, wishes, wishReferences: [] })}
         />
       </VoiceField>
+      {setup.wishResolution.unavailable
+        ?.filter((reference) =>
+          draft.wishReferences.some(
+            (item) => item.kind === reference.kind && item.id === reference.id,
+          ),
+        )
+        .map((reference) => (
+          <div className="autopilot-form__resolve" key={JSON.stringify(reference)}>
+            <p role="status">
+              Пожелание недоступно: {autopilotReferenceTitle(reference, setup.catalog)}. Исправьте
+              текст или удалите связь.
+            </p>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() =>
+                onDraft({
+                  ...draft,
+                  wishReferences: draft.wishReferences.filter(
+                    (item) => item.kind !== reference.kind || item.id !== reference.id,
+                  ),
+                })
+              }
+            >
+              Удалить недоступную связь
+            </button>
+          </div>
+        ))}
       {draft.wishes === setup.draft.value.wishes &&
         setup.wishResolution.unresolved.map((item) => (
           <div className="autopilot-form__resolve" key={item.text}>
