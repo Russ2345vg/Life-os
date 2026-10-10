@@ -329,6 +329,119 @@ describe('bounded recurring actions', () => {
     ).toEqual(persisted);
   });
 
+  it.each([
+    { command: 'remove', kind: 'daily' },
+    { command: 'materialize', kind: 'daily' },
+    { command: 'remove', kind: 'count' },
+    { command: 'materialize', kind: 'count' },
+  ] as const)(
+    '$command reconciles $kind occurrences when the removed rule arrives before its actions',
+    async ({ command, kind }) => {
+      const factory = new IDBFactory();
+      const db = new LifeOsIndexedDb(factory);
+      const repo = new IndexedDbPlanningRepository(db);
+      const clock = new FakeClock(new Date('2026-09-14T10:00:00Z'));
+      const ids = new FakeIdGenerator('partial-series-delete');
+      const recurring = new RecurringActions(repo, clock, ids);
+      try {
+        const seriesInput = {
+          ...input,
+          schedule: { kind },
+          maxCompletions: kind === 'count' ? 3 : null,
+        };
+        const rule = await recurring.save(seriesInput);
+        const otherRule = await recurring.save(seriesInput);
+        await recurring.materialize('2026-09-14', '2026-09-16');
+        const completed = (await repo.read()).actions.find(
+          (action) => action.occurrence?.ruleId === rule.id,
+        )!;
+        const complete = new CompleteLifeAction(
+          new IndexedDbLifeActionRepository(db),
+          clock,
+          ids,
+          new IndexedDbJournalUnitOfWork(db),
+        );
+        expect((await complete.execute({ lifeActionId: completed.id })).ok).toBe(true);
+        await recurring.materialize('2026-09-14', '2026-09-16');
+        const staleOccurrence = (await repo.read()).actions.find(
+          (action) => action.occurrence?.ruleId === rule.id && action.status === 'draft',
+        )!;
+        const history = LifeActionRecordMapper.toRecord(
+          (await repo.read()).actions.find((action) => action.id.equals(completed.id))!,
+        );
+        const removedRule = normalizePilotRecord('recurrence_rule', {
+          ...rule,
+          paused: true,
+          removedAt: clock.now().toISOString(),
+          lastRemovedAt: clock.now().toISOString(),
+          version: rule.version + 1,
+          revision: rule.revision + 1,
+          updatedAt: clock.now().toISOString(),
+        });
+        await applyRemotePilotRecord(await db.open(), 'recurrence_rule', removedRule);
+        const storedRule = (await repo.read()).rules.find((r) => r.id === rule.id)!;
+        const reconcile = () =>
+          command === 'remove'
+            ? recurring.remove(rule.id)
+            : recurring.materialize('2026-09-14', '2026-09-16');
+        await reconcile();
+        const state = await repo.read();
+        expect(
+          state.actions
+            .filter(
+              (action) => action.occurrence?.ruleId === rule.id && action.status !== 'completed',
+            )
+            .every((action) => action.status === 'cancelled' && action.isArchived()),
+        ).toBe(true);
+        expect(
+          LifeActionRecordMapper.toRecord(
+            state.actions.find((action) => action.id.equals(completed.id))!,
+          ),
+        ).toEqual(history);
+        expect(
+          state.actions.filter(
+            (action) => action.occurrence?.ruleId === otherRule.id && !action.isArchived(),
+          ),
+        ).toHaveLength(kind === 'count' ? 1 : 3);
+        expect(
+          RecurrenceRuleRecordMapper.toRecord(state.rules.find((r) => r.id === rule.id)!),
+        ).toEqual(RecurrenceRuleRecordMapper.toRecord(storedRule));
+        await reconcile();
+        expect((await repo.read()).actions.map(LifeActionRecordMapper.toRecord)).toEqual(
+          state.actions.map(LifeActionRecordMapper.toRecord),
+        );
+        // A stale action can arrive later than the rule and the first reconciliation.
+        await applyRemotePilotRecord(
+          await db.open(),
+          'life_action',
+          normalizePilotRecord('life_action', LifeActionRecordMapper.toRecord(staleOccurrence)),
+        );
+        await reconcile();
+        expect(
+          (await repo.read()).actions
+            .find((action) => action.id.equals(staleOccurrence.id))
+            ?.isArchived(),
+        ).toBe(true);
+        db.close();
+        const reopened = new LifeOsIndexedDb(factory);
+        try {
+          const reloaded = await new IndexedDbPlanningRepository(reopened).read();
+          expect(
+            reloaded.actions
+              .filter(
+                (action) => action.occurrence?.ruleId === rule.id && action.status !== 'completed',
+              )
+              .every((action) => action.isArchived()),
+          ).toBe(true);
+        } finally {
+          reopened.close();
+        }
+      } finally {
+        db.close();
+      }
+    },
+  );
+
   it('removes an entire series, preserves completed history and never materializes it again', async () => {
     const factory = new IDBFactory();
     const db = new LifeOsIndexedDb(factory);

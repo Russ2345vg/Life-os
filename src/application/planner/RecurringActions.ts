@@ -135,6 +135,9 @@ export class RecurringActions {
       (s) => {
         let created = 0;
         const now = this.clock.now();
+        // Sync can deliver the removed rule before its occurrence records.
+        for (const rule of s.rules.filter((r) => r.removedAt != null || r.purgedAt != null))
+          this.reconcileRemoved(s, rule.id, now);
         for (const rule of s.rules.filter(
           (r) => r.removedAt == null && r.purgedAt == null && (!onlyRuleId || r.id === onlyRuleId),
         )) {
@@ -301,47 +304,54 @@ export class RecurringActions {
     return this.repository.change((s) => {
       const rule = this.requireRule(s, id);
       if (rule.purgedAt != null) throw new DomainError('trash.expired', 'Серия удалена навсегда.');
-      if (rule.removedAt != null) return;
       const now = this.clock.now();
       const removedAt = now.toISOString();
-      put(
-        s.rules,
-        validateRule({
-          ...rule,
-          paused: true,
-          pauseUntil: null,
-          removedAt,
-          lastRemovedAt: removedAt,
-          restoredFromTrashAt: null,
-          revision: rule.revision + 1,
-          version: rule.version + 1,
-          updatedAt: removedAt,
-        }),
-      );
-      let cancelledOccurrences = 0;
-      for (const action of s.actions.filter(
-        (candidate) =>
-          candidate.occurrence?.ruleId === id &&
-          !candidate.isArchived() &&
-          candidate.status !== 'completed',
-      )) {
-        if (action.status !== 'cancelled') {
-          action.cancel(now, this.ids.generate(), ActionCancelReason.create('Серия удалена'));
-          cancelledOccurrences += 1;
-        }
-        action.archive(now, this.ids.generate());
+      if (rule.removedAt == null)
+        put(
+          s.rules,
+          validateRule({
+            ...rule,
+            paused: true,
+            pauseUntil: null,
+            removedAt,
+            lastRemovedAt: removedAt,
+            restoredFromTrashAt: null,
+            revision: rule.revision + 1,
+            version: rule.version + 1,
+            updatedAt: removedAt,
+          }),
+        );
+      this.reconcileRemoved(s, id, now, rule.removedAt == null);
+    });
+  }
+  private reconcileRemoved(s: PlanningState, id: string, now: Date, recordDeletion = false) {
+    let cancelledOccurrences = 0;
+    const occurrences = s.actions.filter(
+      (candidate) =>
+        candidate.occurrence?.ruleId === id &&
+        !candidate.isArchived() &&
+        candidate.status !== 'completed',
+    );
+    for (const action of occurrences) {
+      if (action.status !== 'cancelled') {
+        action.cancel(now, this.ids.generate(), ActionCancelReason.create('Серия удалена'));
+        cancelledOccurrences += 1;
       }
-      for (const membership of s.memberships.filter(
-        (candidate) =>
-          candidate.entityType === 'rule' && candidate.entityId === id && !candidate.removed,
-      ))
-        put(s.memberships, {
-          ...membership,
-          removed: true,
-          focused: false,
-          version: membership.version + 1,
-          updatedAt: removedAt,
-        });
+      action.archive(now, this.ids.generate());
+    }
+    const memberships = s.memberships.filter(
+      (candidate) =>
+        candidate.entityType === 'rule' && candidate.entityId === id && !candidate.removed,
+    );
+    for (const membership of memberships)
+      put(s.memberships, {
+        ...membership,
+        removed: true,
+        focused: false,
+        version: membership.version + 1,
+        updatedAt: now.toISOString(),
+      });
+    if (recordDeletion || occurrences.length || memberships.length)
       s.journal.push(
         planningJournal(
           this.ids.generate().toString(),
@@ -352,7 +362,6 @@ export class RecurringActions {
           { cancelledOccurrences },
         ),
       );
-    });
   }
   async restore(id: string): Promise<void> {
     return this.repository.change((s) => {

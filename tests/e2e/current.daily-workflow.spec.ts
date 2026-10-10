@@ -289,6 +289,75 @@ test('Actions shows one recurring series and can remove one occurrence or the wh
   ).toEqual({ removed: true, open: 0 });
 });
 
+for (const view of ['actions', 'today'] as const) {
+  test(`Deleting an already removed series clears its remaining cards in ${view} immediately and after reload`, async ({
+    page,
+  }, testInfo) => {
+    if (testInfo.project.name === 'desktop-chrome')
+      await page.setViewportSize({ width: 1440, height: 1000 });
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    page.on('console', (message) => {
+      if (message.type() === 'error') errors.push(message.text());
+    });
+    const { ruleId, title } = await seedRecurringSeries(page);
+    if (view === 'today') await page.goto('/#/v2/today');
+    await expect(
+      page.getByRole('checkbox', { name: `Выполнить: ${title}`, exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText('Каждый день', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: `Действия: ${title}`, exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Удалить всю серию', exact: true }).click();
+    await expect(page.getByRole('alertdialog')).toBeVisible();
+    // The remote series deletion arrives after the user opens the confirmation.
+    await page.evaluate(async (id) => {
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('lifeos');
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction('recurrenceRules', 'readwrite');
+        const store = tx.objectStore('recurrenceRules');
+        const read = store.get(id);
+        read.onsuccess = () => {
+          const rule = read.result as Record<string, unknown>;
+          store.put({
+            ...rule,
+            removedAt: new Date().toISOString(),
+            paused: true,
+            pauseUntil: null,
+          });
+        };
+        tx.oncomplete = () => resolve();
+        tx.onabort = () => reject(tx.error);
+      });
+      db.close();
+    }, ruleId);
+    await page
+      .getByRole('alertdialog')
+      .getByRole('button', { name: 'Удалить всю серию', exact: true })
+      .click();
+    await expect(page.locator('.planner-notice')).toContainText('Серия удалена');
+    await expect(
+      page.getByRole('checkbox', { name: `Выполнить: ${title}`, exact: true }),
+    ).toHaveCount(0);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath('series-deleted.png'), fullPage: true });
+    await page.reload();
+    await expect(
+      page.getByRole('checkbox', { name: `Выполнить: ${title}`, exact: true }),
+    ).toHaveCount(0);
+    await page.goto('/#/v2/today');
+    await expect(
+      page.getByRole('checkbox', { name: `Выполнить: ${title}`, exact: true }),
+    ).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+}
+
 test('Tomorrow moves an existing ready action, creates with an optional date and keeps monthly main direction', async ({
   page,
 }) => {
