@@ -191,7 +191,13 @@ export function buildPreferenceDayAutopilotPlan(input: DayAutopilotInput): DayAu
     cursor = input.startMinute,
     accumulated = 0,
     intervals = 0,
-    restOrdinal = 0;
+    restOrdinal = timeline.reduce(
+      (next, block) =>
+        block.kind === 'rest' && isAutopilotOwnedBlock(block.id, input.date)
+          ? Math.max(next, Number(block.id.split(':').at(-1)) + 1)
+          : next,
+      0,
+    );
   const failed = new Set<string>();
   function tryAction(
     id: string,
@@ -302,7 +308,8 @@ export function buildPreferenceDayAutopilotPlan(input: DayAutopilotInput): DayAu
   if (input.mode === 'rebuild')
     for (const action of input.actions) {
       if (
-        used.has(action.id) ||
+        proposals.some((item) => item.actionId === action.id) ||
+        locked.some((item) => item.actionId === action.id) ||
         deferred.some((item) => item.actionId === action.id) ||
         action.plannedDate !== input.date ||
         action.scheduledStartMinute === null ||

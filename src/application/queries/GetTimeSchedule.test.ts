@@ -25,6 +25,33 @@ function planned(
 }
 
 describe('buildTimeScheduleDay', () => {
+  it('uses routine and rest windows for conflicts and free slots without counting them as work', () => {
+    const day = buildTimeScheduleDay(date.toString(), [planned('a', 600, 30, null)], null, [
+      {
+        id: 'rest',
+        kind: 'rest',
+        title: 'Отдых',
+        startMinute: 620,
+        endMinute: 660,
+        sourceId: 'rest',
+        actionId: null,
+        protected: true,
+      },
+      {
+        id: 'evening',
+        kind: 'evening',
+        title: 'Вечер',
+        startMinute: 720,
+        endMinute: 1260,
+        sourceId: null,
+        actionId: null,
+        protected: true,
+      },
+    ]);
+    expect(day.conflictIds).toEqual(new Set(['a', 'rest']));
+    expect(day.plannedMinutes).toBe(30);
+    expect(suggestFreeTimeStarts(day, 60, 600)).toEqual([660]);
+  });
   it('counts blocks and untimed estimates without treating unknown estimates as zero', () => {
     const day = buildTimeScheduleDay(
       date.toString(),

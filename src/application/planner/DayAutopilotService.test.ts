@@ -11,6 +11,56 @@ import type { ActionSessionRepository } from '../ports/ActionSessionRepository';
 import type { JournalUnitOfWork } from '../ports/JournalUnitOfWork';
 import type { LifeActionRepository } from '../ports/LifeActionRepository';
 import { DayAutopilotService } from './DayAutopilotService';
+import { preferenceAutopilotFixture } from '../../test/helpers/PreferenceAutopilotFixture';
+import { Direction } from '../../domain';
+
+describe('preference day autopilot service', () => {
+  it('requires full catalog support and an explicit range instead of the eight hour fallback', async () => {
+    const f = await preferenceAutopilotFixture();
+    try {
+      const current = await f.settings.getDraft(f.date.toString());
+      await f.settings.saveDraft({ ...current.value, endMinute: null }, current.version);
+      await expect(f.service.preview({ date: f.date, mode: 'fill' })).rejects.toThrow();
+      const missing = {
+        ...f.dependencies,
+        actions: {
+          findById: f.dependencies.actions.findById.bind(f.actions),
+          findByDate: f.dependencies.actions.findByDate.bind(f.actions),
+          findByDecisionId: f.dependencies.actions.findByDecisionId.bind(f.actions),
+          save: f.dependencies.actions.save.bind(f.actions),
+        },
+      };
+      await expect(new DayAutopilotService(missing).getSetup(f.date)).rejects.toThrow();
+    } finally {
+      f.db.close();
+    }
+  });
+  it('reads investment actions outside today and prioritizes resolved wishes without unrelated filler', async () => {
+    const f = await preferenceAutopilotFixture();
+    try {
+      const direction = Direction.create({
+        id: EntityId.create('invest'),
+        name: 'Инвестиции',
+        now: f.clock.now(),
+      });
+      await f.profile.directions.create(direction);
+      const action = createLifeActionDraft('investment');
+      action.setContext(null, direction.id, null);
+      await f.actions.save(action);
+      await f.actions.save(createLifeActionDraft('unrelated'));
+      const prefs = await f.settings.getPreferences();
+      await f.settings.savePreferences(
+        { ...prefs.value, focus: { kind: 'direction', id: 'invest' } },
+        prefs.version,
+      );
+      const preview = await f.service.preview({ date: f.date, mode: 'fill' });
+      expect(preview.proposals.map((item) => item.actionId)).toEqual(['investment']);
+      expect(preview.proposals[0]?.reason).toBe('focus');
+    } finally {
+      f.db.close();
+    }
+  });
+});
 
 const date = DayDate.create('2026-10-04');
 

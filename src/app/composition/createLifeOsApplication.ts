@@ -51,6 +51,9 @@ import { GetGoals } from '../../application/queries/GetGoals';
 import { GetPlannerToday } from '../../application/queries/GetPlannerToday';
 import { GetSpheres } from '../../application/queries/GetSpheres';
 import { SleepScheduleService } from '../../application/sleep/SleepScheduleService';
+import { AutopilotSettingsService } from '../../application/planner/AutopilotSettingsService';
+import { IndexedDbAutopilotSettingsStore } from '../../infrastructure/persistence/IndexedDbAutopilotSettingsStore';
+import { IndexedDbRoutineBlockRepository } from '../../infrastructure/persistence/IndexedDbRoutineBlockRepository';
 import { SleepObservationService } from '../../application/sleep/SleepObservationService';
 import { SleepAlarmObservationCoordinator } from '../../application/sleep/SleepAlarmObservationCoordinator';
 import { ColdShowerService } from '../../application/sleep/ColdShowerService';
@@ -295,15 +298,6 @@ export async function createLifeOsApplication(
       sleepSchedule,
       sleepObservations,
     );
-    const dayAutopilot = new DayAutopilotService({
-      actions: lifeActionRepository,
-      sessions: actionSessionRepository,
-      unitOfWork: journalUnitOfWork,
-      capacity: timeCapacity,
-      sleep: sleepObservations,
-      clock,
-      currentDate: currentDateProvider,
-    });
     void sleepAlarmObservations.sync().catch(() => undefined);
 
     const getGoals = new GetGoals(goalRepository);
@@ -323,6 +317,29 @@ export async function createLifeOsApplication(
     );
 
     const walkRepository = new IndexedDbWalkRepository(database);
+    const pomodoroPreferences = new LocalPomodoroPreferences(
+      typeof window === 'undefined' ? null : window.localStorage,
+    );
+    const dayAutopilot = new DayAutopilotService({
+      actions: lifeActionRepository,
+      sessions: actionSessionRepository,
+      unitOfWork: journalUnitOfWork,
+      capacity: timeCapacity,
+      sleep: sleepObservations,
+      clock,
+      currentDate: currentDateProvider,
+      profile: {
+        settings: new AutopilotSettingsService(new IndexedDbAutopilotSettingsStore(database)),
+        schedule: sleepSchedule,
+        goals: goalRepository,
+        directions: directionRepository,
+        planning: planningRepository,
+        blocks: new IndexedDbRoutineBlockRepository(database),
+        walks: walkRepository,
+        pomodoro: pomodoroPreferences,
+        ids: idGenerator,
+      },
+    });
     const connections = new GetConnections({
       lookup: new IndexedDbConnectionReadRepository(database),
       goals: goalRepository,
@@ -410,9 +427,7 @@ export async function createLifeOsApplication(
         clock,
         idGenerator,
       ),
-      pomodoroPreferences: new LocalPomodoroPreferences(
-        typeof window === 'undefined' ? null : window.localStorage,
-      ),
+      pomodoroPreferences,
       desktopFocusWindow: new TauriDesktopFocusWindow(),
       setLifeActionGoal,
       getPlannerToday: new GetPlannerToday(lifeActionRepository),

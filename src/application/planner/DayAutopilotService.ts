@@ -17,6 +17,20 @@ import type { JournalUnitOfWork } from '../ports/JournalUnitOfWork';
 import type { LifeActionRepository } from '../ports/LifeActionRepository';
 import type { TimeCapacityService } from '../time/TimeCapacityService';
 import type { SleepObservationService } from '../sleep/SleepObservationService';
+import {
+  PreferenceDayAutopilot,
+  type AutopilotProfile,
+  type AutopilotSetup,
+  type AutopilotDaySchedule,
+} from './PreferenceDayAutopilot';
+import type {
+  AutopilotPreferences,
+  AutopilotDayDraft,
+  AutopilotReference,
+} from '../../domain/planner/AutopilotPreferences';
+import type { AutopilotWishResolution } from '../../domain/planner/AutopilotSelection';
+import type { AutopilotGuardSnapshot } from './AutopilotGuard';
+export type { AutopilotSetup, AutopilotDaySchedule } from './PreferenceDayAutopilot';
 
 const DEFAULT_CAPACITY_MINUTES = 8 * 60;
 const SHORT_NIGHT_MINUTES = 7 * 60;
@@ -33,6 +47,10 @@ export interface DayAutopilotRecoverySignal {
 }
 
 export interface DayAutopilotPreview extends DayAutopilotPlan {
+  readonly guard?: AutopilotGuardSnapshot;
+  readonly timeZone?: string;
+  readonly wishResolution?: AutopilotWishResolution;
+  readonly uncoveredWishes?: readonly AutopilotReference[];
   readonly createdAt: string;
   readonly capacityMinutes: number;
   readonly capacityAssumed: boolean;
@@ -40,10 +58,12 @@ export interface DayAutopilotPreview extends DayAutopilotPlan {
 }
 
 export interface DayAutopilotApplyResult {
+  readonly routineBlockCount?: number;
   readonly updatedCount: number;
 }
 
-interface DayAutopilotDependencies {
+export interface DayAutopilotDependencies {
+  readonly profile?: AutopilotProfile;
   readonly actions: LifeActionRepository;
   readonly sessions: ActionSessionRepository;
   readonly unitOfWork: JournalUnitOfWork;
@@ -54,9 +74,37 @@ interface DayAutopilotDependencies {
 }
 
 export class DayAutopilotService {
-  public constructor(private readonly dependencies: DayAutopilotDependencies) {}
+  private readonly preferencePlanner: PreferenceDayAutopilot | null;
+  public constructor(private readonly dependencies: DayAutopilotDependencies) {
+    this.preferencePlanner = dependencies.profile
+      ? new PreferenceDayAutopilot(dependencies, dependencies.profile)
+      : null;
+  }
+  public getSetup(date: DayDate): Promise<AutopilotSetup> {
+    return this.requiredPlanner().getSetup(date);
+  }
+  public readSchedule(from: DayDate, to: DayDate): Promise<readonly AutopilotDaySchedule[]> {
+    return this.requiredPlanner().readSchedule(from, to);
+  }
+  public savePreferences(value: AutopilotPreferences, expectedVersion: number) {
+    this.requiredPlanner();
+    return this.dependencies.profile!.settings.savePreferences(value, expectedVersion);
+  }
+  public saveDraft(value: AutopilotDayDraft, expectedVersion: number) {
+    this.requiredPlanner();
+    return this.dependencies.profile!.settings.saveDraft(value, expectedVersion);
+  }
+  private requiredPlanner(): PreferenceDayAutopilot {
+    if (!this.preferencePlanner)
+      throw new DomainError(
+        'day_autopilot.profile_required',
+        'Автопилот предпочтений недоступен в этой сборке.',
+      );
+    return this.preferencePlanner;
+  }
 
   public async preview(input: DayAutopilotPreviewInput): Promise<DayAutopilotPreview> {
+    if (this.preferencePlanner) return this.preferencePlanner.preview(input);
     const date = input.date.toString();
     const createdAt = this.dependencies.clock.now();
     const [actions, sessions, capacities, observations] = await Promise.all([
@@ -102,6 +150,7 @@ export class DayAutopilotService {
   }
 
   public async apply(preview: DayAutopilotPreview): Promise<DayAutopilotApplyResult> {
+    if (this.preferencePlanner) return this.preferencePlanner.apply(preview);
     this.assertFreshRebuild(preview);
     const instructions = [
       ...preview.proposals.map((proposal) => ({
@@ -201,7 +250,7 @@ function stalePreviewError(): DomainError {
   );
 }
 
-function toPlannerInput(action: LifeAction, activeActionIds: ReadonlySet<string>) {
+export function toPlannerInput(action: LifeAction, activeActionIds: ReadonlySet<string>) {
   return {
     id: action.id.toString(),
     title: action.title.toString(),
@@ -216,7 +265,7 @@ function toPlannerInput(action: LifeAction, activeActionIds: ReadonlySet<string>
   };
 }
 
-function recoverySignalForDate(
+export function recoverySignalForDate(
   observations: readonly SleepObservation[],
   date: string,
 ): DayAutopilotRecoverySignal | null {

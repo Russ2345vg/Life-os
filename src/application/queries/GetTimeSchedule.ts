@@ -1,6 +1,11 @@
 import type { LifeAction } from '../../domain';
+import {
+  scheduleConflictIds,
+  type AutopilotScheduleBlock,
+} from '../../domain/planner/AutopilotSchedule';
 
 export interface TimeScheduleDay {
+  readonly blocks: readonly AutopilotScheduleBlock[];
   readonly timed: readonly LifeAction[];
   readonly untimed: readonly LifeAction[];
   readonly scheduledMinutes: number;
@@ -17,6 +22,7 @@ export function buildTimeScheduleDay(
   date: string,
   actions: readonly LifeAction[],
   capacityMinutes: number | null,
+  blocks: readonly AutopilotScheduleBlock[] = [],
 ): TimeScheduleDay {
   const available = actions.filter(
     (action) =>
@@ -38,7 +44,26 @@ export function buildTimeScheduleDay(
     0,
   );
   const plannedMinutes = scheduledMinutes + untimedEstimateMinutes;
+  const routineWindows = blocks.filter(
+    (block) => block.kind !== 'action' && !block.actionId && block.kind !== 'reserve',
+  );
   const conflictIds = new Set<string>();
+  const unified = scheduleConflictIds([
+    ...routineWindows,
+    ...timed
+      .filter((action) => action.status !== 'completed')
+      .map((action): AutopilotScheduleBlock => ({
+        id: action.id.toString(),
+        kind: 'action',
+        title: action.title.toString(),
+        startMinute: action.scheduledStartMinute!,
+        endMinute: action.scheduledStartMinute! + action.scheduledDurationMinutes!,
+        sourceId: action.id.toString(),
+        actionId: action.id.toString(),
+        protected: true,
+      })),
+  ]);
+  for (const id of unified) conflictIds.add(id);
   for (let i = 0; i < timed.length; i++) {
     const left = timed[i]!;
     if (left.status === 'completed') continue;
@@ -55,6 +80,7 @@ export function buildTimeScheduleDay(
     }
   }
   return {
+    blocks: routineWindows,
     timed,
     untimed,
     scheduledMinutes,
@@ -78,10 +104,18 @@ export function suggestFreeTimeStarts(
   const align = (minute: number) => Math.ceil(minute / 15) * 15;
   let cursor = align(Math.max(420, earliestMinute));
   const suggestions: number[] = [];
-  for (const action of day.timed) {
-    if (action.status === 'completed') continue;
-    const start = action.scheduledStartMinute!;
-    const end = start + action.scheduledDurationMinutes!;
+  const occupied = [
+    ...day.blocks,
+    ...day.timed
+      .filter((action) => action.status !== 'completed')
+      .map((action) => ({
+        startMinute: action.scheduledStartMinute!,
+        endMinute: action.scheduledStartMinute! + action.scheduledDurationMinutes!,
+      })),
+  ].sort((a, b) => a.startMinute - b.startMinute);
+  for (const block of occupied) {
+    const start = block.startMinute;
+    const end = block.endMinute;
     if (end <= cursor) continue;
     if (cursor + durationMinutes <= Math.min(start, 1260)) {
       suggestions.push(cursor);
