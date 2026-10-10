@@ -8,7 +8,7 @@
 
 **Tech Stack:** Существующие TypeScript, React 19, IndexedDB, Vitest/fake-indexeddb, Playwright и Tauri. Новых библиотек нет.
 
-**Spec:** [Утверждённая спецификация](../../design/features/2026-10-10-preference-day-autopilot.md). Статус этого плана: подготовлен для проверки; реализация ещё не начата.
+**Spec:** [Утверждённая спецификация](../../design/features/2026-10-10-preference-day-autopilot.md). Tasks 1–7 реализованы и проверены; исходные шаги ниже сохранены как план. Результаты и решения: [evidence report](../../codex/reports/2026-10-10-preference-day-autopilot.md). Native выпуск отложен пользователем.
 
 ## Global Constraints
 
