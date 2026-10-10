@@ -12,16 +12,14 @@ describe('routine block atomic persistence', () => {
     const db = new LifeOsIndexedDb(new IDBFactory());
     const connection = await db.open(),
       seed = connection.transaction('sync_settings', 'readwrite');
-    seed
-      .objectStore('sync_settings')
-      .put({
-        id: 'sync',
-        setupState: 'configured',
-        membershipStatus: 'active',
-        spaceId: 'space',
-        deviceId: 'desktop',
-        currentKeyEpoch: 1,
-      });
+    seed.objectStore('sync_settings').put({
+      id: 'sync',
+      setupState: 'configured',
+      membershipStatus: 'active',
+      spaceId: 'space',
+      deviceId: 'desktop',
+      currentKeyEpoch: 1,
+    });
     await done(seed);
     db.configureSyncMutationCapture(new IndexedDbPilotMutationRecorder(), LIFE_OS_SYNC_REGISTRY);
     const unit = new IndexedDbJournalUnitOfWork(db);
@@ -44,10 +42,13 @@ describe('routine block atomic persistence', () => {
       database.transaction('sync_outbox').objectStore('sync_outbox').getAll(),
     );
     expect(mutations).toHaveLength(2);
-    expect(JSON.parse(String(mutations[1]?.serializedPayload))).toMatchObject({
-      operation: 'tombstone',
-      entityType: 'routine_block',
-    });
+    const payloads = mutations.map(
+      (mutation) =>
+        JSON.parse(String(mutation.serializedPayload)) as { operation: string; entityType: string },
+    );
+    // getAll orders random outbox IDs, not commit chronology.
+    expect(payloads.map((payload) => payload.operation).sort()).toEqual(['tombstone', 'upsert']);
+    expect(payloads.every((payload) => payload.entityType === 'routine_block')).toBe(true);
     db.close();
   });
 });
