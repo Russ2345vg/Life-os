@@ -46,7 +46,10 @@ export interface PlannerServices extends PlannerLibraryServices {
   readonly coldShower?: ColdShowerService;
   readonly morningWorkout?: MorningWorkoutService;
   readonly plannerScenarios?: ScenarioService;
-  readonly dayAutopilot?: Pick<DayAutopilotService, 'preview' | 'apply'>;
+  readonly dayAutopilot?: Pick<
+    DayAutopilotService,
+    'preview' | 'apply' | 'getSetup' | 'savePreferences' | 'saveDraft' | 'readSchedule'
+  >;
   readonly balance?: BalanceServices;
   readonly planning?: PlanningServices;
   readonly createLifeActionDraft: Pick<CreateLifeActionDraft, 'execute'>;

@@ -1,0 +1,92 @@
+.planner-v2 .autopilot-form {
+  display: grid;
+  gap: var(--space-4);
+}
+.planner-v2 .autopilot-form label {
+  display: grid;
+  gap: var(--space-2);
+  font-size: var(--planner-type-meta);
+  color: var(--text-secondary);
+  min-width: 0;
+}
+.planner-v2 .autopilot-form :is(input:not([type='checkbox']), select, textarea) {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--control-md);
+}
+.planner-v2 .autopilot-form p {
+  margin: var(--space-2) 0 0;
+}
+.planner-v2 .autopilot-form__range {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+.planner-v2 .autopilot-form__routine {
+  border-top: 1px solid var(--border-soft);
+  padding-top: var(--space-4);
+}
+.planner-v2 .autopilot-form__routine > summary {
+  min-height: var(--control-md);
+  cursor: pointer;
+}
+.planner-v2 .autopilot-form__routine > :not(summary) {
+  margin-bottom: var(--space-4);
+}
+.planner-v2 .autopilot-form .planner-day-autopilot__toggle {
+  display: flex;
+  min-height: var(--control-md);
+}
+.planner-v2 .autopilot-form__resolve {
+  border-inline-start: 2px solid var(--warning);
+  padding-inline-start: var(--space-3);
+}
+.planner-v2 .autopilot-timeline__edit {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  align-items: end;
+  margin-top: var(--space-2);
+}
+.planner-v2 .autopilot-timeline__edit label {
+  display: grid;
+  gap: var(--space-1);
+  color: var(--text-secondary);
+  font-size: var(--planner-type-meta);
+}
+.planner-v2 .autopilot-timeline__edit input {
+  width: 7rem;
+  min-height: var(--control-md);
+}
+.planner-v2 .autopilot-timeline__edit button {
+  min-height: var(--control-md);
+}
+.planner-v2
+  .autopilot-timeline
+  li[data-kind]:not([data-kind='action'])
+  .planner-day-autopilot__line::before {
+  background: var(--text-muted);
+}
+.planner-v2 .planner-day-autopilot__timeline.autopilot-timeline li {
+  min-width: 0;
+}
+.planner-v2 .autopilot-timeline strong {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 40rem) {
+  .planner-v2 .autopilot-form__range {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .planner-v2 .planner-day-autopilot__timeline.autopilot-timeline li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-2);
+    padding-block: var(--space-3);
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .planner-v2 .autopilot-timeline .planner-day-autopilot__line {
+    display: none;
+  }
+  .planner-v2 .autopilot-timeline time {
+    font-size: var(--planner-type-meta);
+  }
+}

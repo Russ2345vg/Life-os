@@ -1,5 +1,9 @@
-import { useState, type CSSProperties, type FormEvent, type MouseEvent } from 'react';
-import type { LifeAction } from '../../domain';
+import { useEffect, useState, type CSSProperties, type FormEvent, type MouseEvent } from 'react';
+import { DayDate, type LifeAction } from '../../domain';
+import type {
+  DayAutopilotService,
+  AutopilotDaySchedule,
+} from '../../application/planner/DayAutopilotService';
 import {
   buildTimeScheduleDay,
   suggestFreeTimeStarts,
@@ -11,6 +15,7 @@ import { clockTime, durationLabel } from './timePresentation';
 import './planner-time-calendar.css';
 
 interface Props {
+  readonly autopilot?: Pick<DayAutopilotService, 'readSchedule'> | undefined;
   readonly data: PlannerViews;
   readonly today: string;
   readonly mode: 'week' | 'day';
@@ -46,6 +51,7 @@ export function PlannerTimeCalendar({
   onSetTime,
   onSetCapacity,
   onOpenAction,
+  autopilot,
 }: Props) {
   const [selected, setSelected] = useState(today);
   const [editing, setEditing] = useState<LifeAction | null>(null);
@@ -56,27 +62,63 @@ export function PlannerTimeCalendar({
   const [suggestedFor, setSuggestedFor] = useState<string | null>(null);
   const [placing, setPlacing] = useState(false);
   const [placementError, setPlacementError] = useState<string | null>(null);
+  const [schedule, setSchedule] = useState<readonly AutopilotDaySchedule[]>([]);
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
   const weekStart = shiftDays(selected, -weekday(selected));
   const dates = Array.from({ length: 7 }, (_, index) => shiftDays(weekStart, index));
   const visibleDates = mode === 'week' ? dates : [selected];
+  const from = visibleDates[0]!,
+    to = visibleDates.at(-1)!;
+  useEffect(() => {
+    let cancelled = false;
+    if (autopilot)
+      void autopilot
+        .readSchedule(DayDate.create(from), DayDate.create(to))
+        .then((value) => {
+          if (!cancelled) {
+            setSchedule(value);
+            setScheduleError(null);
+          }
+        })
+        .catch((reason: unknown) => {
+          if (!cancelled) {
+            setSchedule([]);
+            setScheduleError(
+              reason instanceof Error ? reason.message : 'Не удалось прочитать распорядок.',
+            );
+          }
+        });
+    return () => {
+      cancelled = true;
+    };
+  }, [from, to, autopilot, data.actions]);
   const days = new Map(
     visibleDates.map((date) => [
       date,
-      buildTimeScheduleDay(date, data.actions, capacity[weekday(date)] ?? null),
+      buildTimeScheduleDay(
+        date,
+        data.actions,
+        capacity[weekday(date)] ?? null,
+        schedule.find((day) => day.date === date)?.blocks,
+      ),
     ]),
   );
   const selectedDay = buildTimeScheduleDay(
     selected,
     data.actions,
     capacity[weekday(selected)] ?? null,
+    schedule.find((day) => day.date === selected)?.blocks,
   );
   const allTimed = [...days.values()].flatMap((day) => day.timed);
+  const allRoutine = [...days.values()].flatMap((day) => day.blocks);
   const startHour = Math.min(
     7,
+    ...allRoutine.map((block) => Math.floor(block.startMinute / 60)),
     ...allTimed.map((action) => Math.max(0, Math.floor(action.scheduledStartMinute! / 60) - 1)),
   );
   const endHour = Math.max(
     21,
+    ...allRoutine.map((block) => Math.ceil(block.endMinute / 60)),
     ...allTimed.map((action) =>
       Math.min(
         24,
@@ -159,6 +201,11 @@ export function PlannerTimeCalendar({
   };
   return (
     <div className="planner-time">
+      {scheduleError && (
+        <p className="planner-error" role="alert">
+          {scheduleError}
+        </p>
+      )}
       <header className="planner-time-heading">
         <div>
           <h2>{mode === 'week' ? 'Расписание недели' : 'Расписание дня'}</h2>
@@ -235,6 +282,20 @@ export function PlannerTimeCalendar({
                   style={{ height: gridHeight }}
                   aria-label={plannerDateLabel(date)}
                 >
+                  {day.blocks.map((block) => (
+                    <div
+                      key={block.id}
+                      aria-hidden="true"
+                      className={`planner-time-block planner-time-block--routine${day.conflictIds.has(block.id) ? ' planner-time-block--conflict' : ''}`}
+                      style={{
+                        top: ((block.startMinute - startHour * 60) / 60) * 48,
+                        height: Math.max(2, ((block.endMinute - block.startMinute) / 60) * 48),
+                      }}
+                    >
+                      <span>{clockTime(block.startMinute)}</span>
+                      {block.endMinute - block.startMinute >= 30 && <strong>{block.title}</strong>}
+                    </div>
+                  ))}
                   {day.timed.map((action) => {
                     const interactive = action.scheduledDurationMinutes! >= 60;
                     const Block = interactive ? 'button' : 'div';
@@ -275,6 +336,24 @@ export function PlannerTimeCalendar({
           </div>
         </section>
         <aside className="planner-time-context" aria-label="Сведения о выбранном дне">
+          {selectedDay.blocks.length > 0 && (
+            <details className="planner-time-routine-list" open>
+              <summary>Распорядок и отдых</summary>
+              <ul>
+                {selectedDay.blocks.map((block) => (
+                  <li key={block.id}>
+                    <time>
+                      {clockTime(block.startMinute)}–{clockTime(block.endMinute)}
+                    </time>
+                    <span>
+                      {block.title}
+                      {selectedDay.conflictIds.has(block.id) ? ' · пересечение' : ''}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
           <section className="planner-time-capacity">
             <p className="planner-time-eyebrow">
               {plannerDateLabel(selected, { weekday: 'long', day: 'numeric', month: 'long' })}

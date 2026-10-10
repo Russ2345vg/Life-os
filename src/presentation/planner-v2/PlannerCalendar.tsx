@@ -8,6 +8,7 @@ import {
 } from './plannerViewsModel';
 import { PlannerBatch, PlannerGoalCard, type PlannerViewOperations } from './PlannerViewParts';
 import { PlannerTimeCalendar } from './PlannerTimeCalendar';
+import type { DayAutopilotService } from '../../application/planner/DayAutopilotService';
 
 export function PlannerCalendar({
   data,
@@ -15,11 +16,13 @@ export function PlannerCalendar({
   onSetTime,
   capacity,
   onSetCapacity,
+  autopilot,
   ...operations
 }: PlannerViewOperations & {
   readonly data: PlannerViews;
   readonly today: string;
   readonly capacity: readonly (number | null)[];
+  readonly autopilot?: Pick<DayAutopilotService, 'readSchedule'> | undefined;
   readonly onSetTime: (
     id: string,
     estimateMinutes: number | null,
@@ -48,6 +51,7 @@ export function PlannerCalendar({
         <PlannerMonthCalendar data={data} today={today} {...operations} />
       ) : (
         <PlannerTimeCalendar
+          autopilot={autopilot}
           data={data}
           today={today}
           mode={mode}

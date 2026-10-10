@@ -77,7 +77,12 @@ export function RoutineAutopilotPage({
   onBack,
 }: {
   readonly date: DayDate;
-  readonly service?: Pick<DayAutopilotService, 'preview' | 'apply'> | undefined;
+  readonly service?:
+    | (Pick<DayAutopilotService, 'preview' | 'apply'> &
+        Partial<
+          Pick<DayAutopilotService, 'getSetup' | 'savePreferences' | 'saveDraft' | 'readSchedule'>
+        >)
+    | undefined;
   readonly busy: boolean;
   readonly onApplied: () => Promise<void> | void;
   readonly onBack: () => void;

@@ -1,3 +1,29 @@
+.planner-v2 .planner-time-block--routine {
+  background: var(--surface-3);
+  border-color: var(--border-strong);
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+.planner-v2 .planner-time-routine-list {
+  margin-bottom: var(--space-4);
+}
+.planner-v2 .planner-time-routine-list summary {
+  min-height: var(--control-md);
+}
+.planner-v2 .planner-time-routine-list ul {
+  display: grid;
+  gap: var(--space-2);
+  list-style: none;
+  padding: 0;
+}
+.planner-v2 .planner-time-routine-list li {
+  display: grid;
+  gap: var(--space-1);
+}
+.planner-v2 .planner-time-routine-list time {
+  color: var(--text-muted);
+  font-size: var(--planner-type-meta);
+}
 .planner-time-modes {
   display: inline-flex;
   gap: 4px;

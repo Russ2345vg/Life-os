@@ -2,8 +2,29 @@ import { useState } from 'react';
 import type { DayAutopilotPreview, DayAutopilotService } from '../../application';
 import type { DayDate } from '../../domain';
 import { clockTime, durationLabel } from './timePresentation';
+import { PreferenceAutopilotCard, type DayAutopilotClient } from './PreferenceAutopilotCard';
 
-export function DayAutopilotCard({
+export function DayAutopilotCard(props: {
+  readonly date: DayDate;
+  readonly service: Pick<DayAutopilotService, 'preview' | 'apply'> & Partial<DayAutopilotClient>;
+  readonly busy: boolean;
+  readonly onApplied: () => Promise<void> | void;
+}) {
+  return props.service.getSetup &&
+    props.service.readSchedule &&
+    props.service.savePreferences &&
+    props.service.saveDraft ? (
+    <PreferenceAutopilotCard
+      {...props}
+      key={props.date.toString()}
+      service={props.service as DayAutopilotClient}
+    />
+  ) : (
+    <LegacyDayAutopilotCard {...props} />
+  );
+}
+
+function LegacyDayAutopilotCard({
   date,
   service,
   busy,
