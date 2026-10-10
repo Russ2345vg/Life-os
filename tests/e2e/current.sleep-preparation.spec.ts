@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
+test.use({ timezoneId: 'Asia/Chita' });
+
 async function configureSleep(page: Page) {
   await page.goto('/#/v2/sleep');
   await page.getByLabel('Сон', { exact: true }).fill('22:30');
@@ -7,34 +9,6 @@ async function configureSleep(page: Page) {
   await page.getByRole('button', { name: 'Сохранить время', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Список подготовки' })).toBeVisible();
   await page.getByRole('button', { name: '＋ Добавить пункт', exact: true }).click();
-}
-
-async function makeCurrentNightDue(page: Page) {
-  await page.evaluate(async () => {
-    const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const opening = indexedDB.open('lifeos');
-      opening.addEventListener('success', () => resolve(opening.result));
-      opening.addEventListener('error', () => reject(opening.error));
-    });
-    await new Promise<void>((resolve, reject) => {
-      const transaction = database.transaction('sleepSchedules', 'readwrite');
-      const store = transaction.objectStore('sleepSchedules');
-      const loading = store.get('sleep-schedule');
-      loading.addEventListener('success', () => {
-        const record = loading.result as {
-          nightCycles: Array<{ plannedSleepAt: string; plannedWakeAt: string }>;
-        };
-        const cycle = record.nightCycles.at(-1)!;
-        cycle.plannedSleepAt = new Date(Date.now() - 10 * 60 * 60_000).toISOString();
-        cycle.plannedWakeAt = new Date(Date.now() - 60 * 60_000).toISOString();
-        store.put(record);
-      });
-      transaction.addEventListener('complete', () => resolve());
-      transaction.addEventListener('error', () => reject(transaction.error));
-      transaction.addEventListener('abort', () => reject(transaction.error));
-    });
-    database.close();
-  });
 }
 
 async function seedTrustedWakeDraft(page: Page) {
@@ -55,19 +29,20 @@ async function seedTrustedWakeDraft(page: Page) {
       request.addEventListener('success', () => resolve(request.result));
       request.addEventListener('error', () => reject(request.error));
     });
-    const cycle = schedule.nightCycles.at(-1)!;
+    const cycleDate = '2026-10-03';
+    const cycle = schedule.nightCycles.find((item) => item.cycleDate === cycleDate);
     const now = new Date().toISOString();
     await new Promise<void>((resolve, reject) => {
       const transaction = database.transaction('sleepObservations', 'readwrite');
       transaction.objectStore('sleepObservations').put({
         schemaVersion: 1,
-        id: `sleep-observation:${cycle.cycleDate}`,
-        cycleDate: cycle.cycleDate,
-        nightCycleId: cycle.id,
+        id: `sleep-observation:${cycleDate}`,
+        cycleDate,
+        nightCycleId: cycle?.id ?? null,
         wentToBedAt: null,
-        wokeAt: cycle.plannedWakeAt,
+        wokeAt: '2026-10-03T22:15:00.000Z',
         wakeSource: 'ALARM_QR',
-        wakeOccurrenceId: `wake:${cycle.cycleDate}`,
+        wakeOccurrenceId: `wake:${cycleDate}`,
         timeZone: schedule.settings.timeZone,
         confirmedAt: null,
         createdAt: now,
@@ -131,14 +106,12 @@ test('failed sleep catalog additions preserve the entered title for retry', asyn
 test('manual morning observation persists, updates the chart and stays usable on mobile', async ({
   page,
 }) => {
+  await page.clock.install({ time: new Date('2026-10-04T01:00:00Z') });
   await configureSleep(page);
-  await expect(page.getByRole('heading', { name: 'Как прошла ночь?' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Записать сон' })).toBeVisible();
   await expect(page.getByText('начало часа без экранов')).toHaveCount(0);
-  await makeCurrentNightDue(page);
-  await page.reload();
-
   const form = page.locator('.sleep-observation-form');
-  await expect(page.getByRole('heading', { name: 'Как прошла ночь?' })).toBeVisible();
+  await expect(form.getByLabel('Дата подъёма', { exact: true })).toHaveValue('2026-10-04');
   await expect(form.getByLabel('Во сколько встал?')).toHaveValue('');
   await form.getByLabel('Во сколько лёг?').fill('22:30');
   await form.getByLabel('Во сколько встал?').fill('07:15');
@@ -157,6 +130,7 @@ test('manual morning observation persists, updates the chart and stays usable on
 test('trusted alarm dismissal prefills wake time and remains editable before confirmation', async ({
   page,
 }) => {
+  await page.clock.install({ time: new Date('2026-10-04T01:00:00Z') });
   await configureSleep(page);
   await seedTrustedWakeDraft(page);
   await page.reload();

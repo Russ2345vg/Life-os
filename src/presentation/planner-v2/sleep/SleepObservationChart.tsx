@@ -47,6 +47,7 @@ export function SleepObservationChart({
       <section className="sleep-observation-chart sleep-observation-chart--state">
         <h2>Режим сна</h2>
         <p>График появится после первой подтверждённой ночи.</p>
+        <p>В форме «Записать сон» выше укажите время, когда легли и встали, и сохраните ночь.</p>
       </section>
     );
   }

@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from 'react';
 import { useQuickAccessGuard, useQuickAccessUncontrolledForm } from './QuickAccessContext';
 import type { SleepScheduleService } from '../../application/sleep/SleepScheduleService';
 import type { SleepObservationService } from '../../application/sleep/SleepObservationService';
@@ -22,13 +30,15 @@ import type {
   SleepScheduleState,
 } from '../../domain/sleep/SleepSchedule';
 import { selectSleepHistoryEntries, summarizeSleepHistory } from '../../domain/sleep/SleepSchedule';
-import { nominalSleepDurationMinutes } from '../../domain/sleep/NightTime';
+import { calculateNightWindow, nominalSleepDurationMinutes } from '../../domain/sleep/NightTime';
 import { summarizeEveningHistory } from './eveningHistoryModel';
 import { EveningDayClosure, type EveningPlannerServices } from './EveningDayClosure';
 import { WakeManagementPanel } from './WakeManagementPanel';
 import { isWakeScheduleAcknowledged, wakeProbeLabel } from './wakeManagementModel';
 import { SleepObservationForm } from './sleep/SleepObservationForm';
 import { SleepObservationChart } from './sleep/SleepObservationChart';
+import { cycleDateFromWakeDate, localWakeDate } from './sleep/sleepObservationDateModel';
+import { DomainError } from '../../shared/errors/DomainError';
 import './evening-support.css';
 
 export function SleepPreparationPage({
@@ -51,15 +61,21 @@ export function SleepPreparationPage({
   const [state, setState] = useState<SleepScheduleState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [observation, setObservation] = useState<SleepObservation | null>(null);
   const [observationBusy, setObservationBusy] = useState(false);
   const [observationError, setObservationError] = useState<string | null>(null);
   const [observationSaved, setObservationSaved] = useState(false);
   const [observationHistory, setObservationHistory] = useState<readonly SleepObservation[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState<string | null>(null);
-  const [pageOpenedAt] = useState(() => Date.now());
-  useQuickAccessGuard(() => ({ dirty: false, busy }));
+  const [observationNow, setObservationNow] = useState(() => new Date());
+  const observationNowRef = useRef(observationNow);
+  const [selectedWakeDate, setSelectedWakeDate] = useState<string | null>(null);
+  const selectedWakeDateRef = useRef<string | null>(null);
+  const observationDirtyRef = useRef(false);
+  useQuickAccessGuard(() => ({
+    dirty: observationDirtyRef.current,
+    busy: busy || observationBusy,
+  }));
   const [alarmStatus, setAlarmStatus] = useState<WakeAlarmStatus>(unavailableWakeAlarmStatus());
   const [alarmSounds, setAlarmSounds] = useState<readonly AlarmSound[]>([
     { uri: null, title: 'Системный сигнал' },
@@ -69,9 +85,40 @@ export function SleepPreparationPage({
   );
   const busyRef = useRef(busy);
   const loadedRef = useRef(false);
+  const updateObservationClock = useCallback((now: Date, timeZone: string) => {
+    const previousDate = localWakeDate(observationNowRef.current, timeZone);
+    if (previousDate === localWakeDate(now, timeZone)) return;
+    if (selectedWakeDateRef.current === null) {
+      if (observationDirtyRef.current) {
+        selectedWakeDateRef.current = previousDate;
+        setSelectedWakeDate(previousDate);
+      } else {
+        setObservationSaved(false);
+        setObservationError(null);
+      }
+    }
+    observationNowRef.current = now;
+    setObservationNow(now);
+  }, []);
   useEffect(() => {
     busyRef.current = busy;
   }, [busy]);
+
+  const recordingTimeZone = state?.settings?.timeZone;
+  useEffect(() => {
+    if (!recordingTimeZone) return;
+    const tick = () => {
+      if (!busyRef.current) updateObservationClock(new Date(), recordingTimeZone);
+    };
+    const timer = window.setInterval(tick, 60_000);
+    window.addEventListener('focus', tick);
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', tick);
+      document.removeEventListener('visibilitychange', tick);
+    };
+  }, [recordingTimeZone, updateObservationClock]);
 
   useEffect(() => {
     let active = true;
@@ -93,11 +140,14 @@ export function SleepPreparationPage({
         setAlarmStatus(synchronized.alarm);
         setAlarmSounds(sounds);
         setDismissalSetup(loadedDismissalSetup);
-        const [latestObservation, history] = await Promise.all([
-          observationForLatestCycle(observationService, synchronized.state),
-          observationHistoryForState(observationService, synchronized.state),
-        ]);
-        setObservation(latestObservation);
+        const now = new Date();
+        const history = await observationHistoryForState(
+          observationService,
+          synchronized.state,
+          now,
+        );
+        if (!active) return;
+        updateObservationClock(now, synchronized.state.settings?.timeZone ?? 'UTC');
         setObservationHistory(history);
         setHistoryLoading(false);
         loadedRef.current = true;
@@ -112,7 +162,7 @@ export function SleepPreparationPage({
     return () => {
       active = false;
     };
-  }, [alarmObservations, observationService, service]);
+  }, [alarmObservations, observationService, service, updateObservationClock]);
 
   useEffect(() => {
     let active = true;
@@ -122,6 +172,7 @@ export function SleepPreparationPage({
         !active ||
         pending ||
         busyRef.current ||
+        observationDirtyRef.current ||
         !loadedRef.current ||
         document.visibilityState === 'hidden'
       )
@@ -139,11 +190,15 @@ export function SleepPreparationPage({
             setState(synchronized.state);
             setAlarmStatus(synchronized.alarm);
             setDismissalSetup(setup);
-            const [latestObservation, history] = await Promise.all([
-              observationForLatestCycle(observationService, synchronized.state),
-              observationHistoryForState(observationService, synchronized.state),
-            ]);
-            setObservation(latestObservation);
+            const now = new Date();
+            const history = await observationHistoryForState(
+              observationService,
+              synchronized.state,
+              now,
+              selectedWakeDateRef.current,
+            );
+            if (!active) return;
+            updateObservationClock(now, synchronized.state.settings?.timeZone ?? 'UTC');
             setObservationHistory(history);
             setHistoryError(null);
           }
@@ -165,7 +220,7 @@ export function SleepPreparationPage({
       window.removeEventListener('focus', refresh);
       document.removeEventListener('visibilitychange', refresh);
     };
-  }, [alarmObservations, observationService, service]);
+  }, [alarmObservations, observationService, service, updateObservationClock]);
 
   const run = async (work: () => Promise<SleepScheduleState>) => {
     if (busyRef.current) return false;
@@ -200,10 +255,20 @@ export function SleepPreparationPage({
     );
   }
 
-  const observationCycle = latestCycle(state.nightCycles);
-  const showObservation =
-    observationCycle !== null &&
-    (observation !== null || observationCycle.plannedWakeAt.getTime() <= pageOpenedAt);
+  const latestWakeDate = localWakeDate(observationNow, state.settings?.timeZone ?? 'UTC');
+  const wakeDate = selectedWakeDate ?? latestWakeDate;
+  const observationCycleDate = cycleDateFromWakeDate(wakeDate);
+  const observation =
+    observationHistory.find(({ cycleDate }) => cycleDate === observationCycleDate) ?? null;
+  const observationTimeZone = observation?.timeZone ?? state.settings?.timeZone ?? 'UTC';
+  const observationCycle = state.nightCycles.find(
+    ({ cycleDate }) => cycleDate === observationCycleDate,
+  );
+  const plannedWentToBedAt =
+    observationCycle?.plannedSleepAt ??
+    (state.settings
+      ? calculateNightWindow({ ...state.settings, cycleDate: observationCycleDate }).plannedSleepAt
+      : null);
 
   return (
     <SleepPreparationView
@@ -216,18 +281,57 @@ export function SleepPreparationPage({
       alarmSounds={alarmSounds}
       dismissalSetup={dismissalSetup}
       morningObservation={
-        showObservation && observationCycle !== null ? (
+        state.settings !== null ? (
           <SleepObservationForm
-            key={`${observationCycle.cycleDate}:${observation?.updatedAt.toISOString() ?? 'new'}`}
-            cycleDate={observationCycle.cycleDate}
-            timeZone={state.settings?.timeZone ?? observation?.timeZone ?? 'UTC'}
-            plannedWentToBedAt={observationCycle.plannedSleepAt}
+            key={`${observationCycleDate}:${observation?.updatedAt.toISOString() ?? 'new'}`}
+            cycleDate={observationCycleDate}
+            timeZone={observationTimeZone}
+            plannedWentToBedAt={plannedWentToBedAt}
             observation={observation}
-            busy={observationBusy}
+            busy={busy || observationBusy || historyLoading}
             error={observationError}
             saved={observationSaved}
+            wakeDate={wakeDate}
+            latestWakeDate={latestWakeDate}
+            onDirtyChange={(dirty) => {
+              observationDirtyRef.current = dirty;
+            }}
+            onWakeDateChange={(value) => {
+              if (busyRef.current) return;
+              let cycleDate: string;
+              try {
+                cycleDate = cycleDateFromWakeDate(value);
+                if (value > latestWakeDate)
+                  throw new TypeError('Выберите сегодняшнюю или прошедшую дату подъёма.');
+              } catch (reason: unknown) {
+                setObservationError(messageOf(reason));
+                return;
+              }
+              selectedWakeDateRef.current = value;
+              observationDirtyRef.current = false;
+              setSelectedWakeDate(value);
+              setObservationSaved(false);
+              setObservationError(null);
+              busyRef.current = true;
+              setBusy(true);
+              void observationService
+                .history(cycleDate, cycleDate)
+                .then((loaded) => {
+                  setObservationHistory((current) => [
+                    ...current.filter((item) => item.cycleDate !== cycleDate),
+                    ...loaded,
+                  ]);
+                })
+                .catch((reason: unknown) => setObservationError(messageOf(reason)))
+                .finally(() => {
+                  busyRef.current = false;
+                  setBusy(false);
+                });
+            }}
             onSave={async (input) => {
-              if (observationBusy) return;
+              if (busyRef.current) return;
+              busyRef.current = true;
+              setBusy(true);
               setObservationBusy(true);
               setObservationError(null);
               setObservationSaved(false);
@@ -235,24 +339,30 @@ export function SleepPreparationPage({
                 const saved =
                   observation !== null && isConfirmedSleepObservation(observation)
                     ? await observationService.revise({
-                        cycleDate: observationCycle.cycleDate,
+                        cycleDate: observationCycleDate,
                         ...input,
                       })
                     : await observationService.confirm({
-                        cycleDate: observationCycle.cycleDate,
+                        cycleDate: observationCycleDate,
                         ...input,
                       });
-                setObservation(saved);
                 setObservationHistory((current) =>
                   [saved, ...current.filter(({ cycleDate }) => cycleDate !== saved.cycleDate)].sort(
                     (left, right) => right.cycleDate.localeCompare(left.cycleDate),
                   ),
                 );
                 setObservationSaved(true);
+                observationDirtyRef.current = false;
               } catch (reason: unknown) {
-                setObservationError(messageOf(reason));
+                setObservationError(
+                  reason instanceof DomainError && reason.code.startsWith('persistence.')
+                    ? 'Не удалось сохранить ночь. Введённое время сохранено — попробуйте ещё раз.'
+                    : messageOf(reason),
+                );
               } finally {
                 setObservationBusy(false);
+                busyRef.current = false;
+                setBusy(false);
               }
             }}
           />
@@ -314,10 +424,17 @@ export function SleepPreparationPage({
       onSyncAlarm={() =>
         run(async () => {
           const synchronized = await alarmObservations.sync();
-          setObservation(await observationForLatestCycle(observationService, synchronized.state));
-          setObservationHistory(
-            await observationHistoryForState(observationService, synchronized.state),
-          );
+          const now = new Date();
+          updateObservationClock(now, synchronized.state.settings?.timeZone ?? 'UTC');
+          if (!observationDirtyRef.current) {
+            const history = await observationHistoryForState(
+              observationService,
+              synchronized.state,
+              now,
+              selectedWakeDateRef.current,
+            );
+            if (!observationDirtyRef.current) setObservationHistory(history);
+          }
           return synchronized.state;
         })
       }
@@ -536,6 +653,7 @@ export function SleepPreparationView({
       ) : null}
 
       {morningObservation}
+      {historyChart}
 
       <WakeManagementPanel
         state={state}
@@ -816,7 +934,6 @@ export function SleepPreparationView({
           </section>
         </aside>
       </div>
-      {historyChart}
       <div className="sleep-alarm-mobile-status">
         <div className="sleep-history-mobile">
           <SleepHistoryPanel state={state} timeZone={state.settings.timeZone} />
@@ -1520,23 +1637,19 @@ function latestCycle(cycles: readonly NightCycle[]): NightCycle | null {
   );
 }
 
-async function observationForLatestCycle(
-  service: SleepObservationService,
-  state: SleepScheduleState,
-): Promise<SleepObservation | null> {
-  const cycle = latestCycle(state.nightCycles);
-  if (cycle === null) return null;
-  const history = await service.history(cycle.cycleDate, cycle.cycleDate);
-  return history[0] ?? null;
-}
-
 async function observationHistoryForState(
   service: SleepObservationService,
   state: SleepScheduleState,
+  now: Date,
+  selectedWakeDate: string | null = null,
 ): Promise<readonly SleepObservation[]> {
-  const cycle = latestCycle(state.nightCycles);
-  if (cycle === null) return [];
-  return service.history(addCycleDays(cycle.cycleDate, -29), cycle.cycleDate);
+  if (state.settings === null) return [];
+  const today = localWakeDate(now, state.settings.timeZone);
+  const from = addCycleDays(today, -30);
+  const history = await service.history(from, today);
+  const selected = selectedWakeDate === null ? null : cycleDateFromWakeDate(selectedWakeDate);
+  if (selected === null || (selected >= from && selected <= today)) return history;
+  return [...history, ...(await service.history(selected, selected))];
 }
 
 function addCycleDays(cycleDate: string, days: number): string {

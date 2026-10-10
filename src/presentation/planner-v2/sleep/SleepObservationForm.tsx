@@ -12,6 +12,10 @@ export function SleepObservationForm({
   error,
   saved,
   onSave,
+  wakeDate,
+  latestWakeDate,
+  onWakeDateChange,
+  onDirtyChange,
 }: {
   readonly cycleDate: string;
   readonly timeZone: string;
@@ -21,6 +25,10 @@ export function SleepObservationForm({
   readonly error: string | null;
   readonly saved: boolean;
   readonly onSave: (input: { readonly wentToBedAt: Date; readonly wokeAt: Date }) => Promise<void>;
+  readonly wakeDate?: string;
+  readonly latestWakeDate?: string;
+  readonly onWakeDateChange?: (value: string) => void;
+  readonly onDirtyChange?: (dirty: boolean) => void;
 }) {
   const suggestedBedtime = formatLocalTime(
     observation?.wentToBedAt ?? plannedWentToBedAt,
@@ -36,6 +44,8 @@ export function SleepObservationForm({
     if (busy) return;
     try {
       const window = observationWindowFromTimes(cycleDate, wentToBed, wokeAt, timeZone);
+      if (window.wokeAt.getTime() > Date.now())
+        throw new TypeError('Время подъёма ещё не наступило. Проверьте дату и время.');
       setLocalError(null);
       void onSave(window);
     } catch (reason: unknown) {
@@ -44,18 +54,43 @@ export function SleepObservationForm({
   };
 
   return (
-    <section className="sleep-observation-card" aria-labelledby="sleep-observation-title">
+    <section
+      id="sleep-recording"
+      className="sleep-observation-card"
+      aria-labelledby="sleep-observation-title"
+    >
       <div className="sleep-observation-card__intro">
         <div>
           <p className="planner-eyebrow">Ночь {formatCycleDate(cycleDate)}</p>
-          <h2 id="sleep-observation-title">Как прошла ночь?</h2>
+          <h2 id="sleep-observation-title">Записать сон</h2>
         </div>
-        <span className="sleep-observation-card__status">Утреннее наблюдение</span>
+        <span className="sleep-observation-card__status">
+          {observation?.confirmedAt ? 'Ночь записана' : 'Запись ночи'}
+        </span>
       </div>
       <p className="sleep-observation-card__lead">
-        Подтвердите фактическое время. Плановое время — только подсказка.
+        Укажите фактическое время — после сохранения ночь появится на графике.
       </p>
       <form className="sleep-observation-form" onSubmit={submit}>
+        {wakeDate !== undefined && onWakeDateChange ? (
+          <label className="sleep-observation-form__date">
+            <span id="sleep-recording-date-label">Дата подъёма</span>
+            <input
+              name="wakeDate"
+              aria-labelledby="sleep-recording-date-label"
+              aria-describedby="sleep-recording-date-help"
+              type="date"
+              value={wakeDate}
+              max={latestWakeDate}
+              required
+              disabled={busy}
+              onChange={(event) => onWakeDateChange(event.currentTarget.value)}
+            />
+            <small id="sleep-recording-date-help">
+              Выберите другую дату, если пропустили ночь.
+            </small>
+          </label>
+        ) : null}
         <label>
           <span>Во сколько лёг?</span>
           <input
@@ -64,9 +99,12 @@ export function SleepObservationForm({
             value={wentToBed}
             required
             disabled={busy}
-            onChange={(event) => setWentToBed(event.currentTarget.value)}
+            onChange={(event) => {
+              setWentToBed(event.currentTarget.value);
+              onDirtyChange?.(true);
+            }}
           />
-          <small>Можно исправить предложенное время.</small>
+          <small>Плановое время — только подсказка.</small>
         </label>
         <label>
           <span>Во сколько встал?</span>
@@ -76,7 +114,10 @@ export function SleepObservationForm({
             value={wokeAt}
             required
             disabled={busy}
-            onChange={(event) => setWokeAt(event.currentTarget.value)}
+            onChange={(event) => {
+              setWokeAt(event.currentTarget.value);
+              onDirtyChange?.(true);
+            }}
           />
           <small>{wakeSourceLabel(observation)}</small>
         </label>

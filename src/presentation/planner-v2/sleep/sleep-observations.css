@@ -61,6 +61,14 @@
   font-weight: 600;
 }
 
+.planner-v2 .sleep-observation-form__date {
+  grid-column: 1 / -1;
+}
+
+.planner-v2 .sleep-observation-form__date input {
+  max-width: 260px;
+}
+
 .planner-v2 .sleep-observation-form input {
   min-height: var(--control-lg);
   padding-inline: var(--space-3);
@@ -113,13 +121,11 @@
     padding: var(--space-4);
   }
 
-  .planner-v2 .sleep-observation-card__intro,
   .planner-v2 .sleep-observation-form,
   .planner-v2 .sleep-observation-form__footer {
     grid-template-columns: 1fr;
   }
 
-  .planner-v2 .sleep-observation-card__intro,
   .planner-v2 .sleep-observation-form__footer {
     align-items: stretch;
     flex-direction: column;
@@ -128,6 +134,11 @@
   .planner-v2 .sleep-observation-card__status {
     width: fit-content;
     white-space: normal;
+  }
+
+  .planner-v2 .sleep-observation-form {
+    gap: var(--space-3);
+    margin-top: var(--space-4);
   }
 
   .planner-v2 .sleep-observation-form__footer button {

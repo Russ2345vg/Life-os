@@ -65,4 +65,11 @@ describe('SleepObservationForm', () => {
       wokeAt: new Date('2026-10-03T23:45:00.000Z'),
     });
   });
+
+  it('keeps an after-midnight bedtime on the selected morning date', () => {
+    expect(observationWindowFromTimes('2026-10-03', '00:35', '08:45', 'Asia/Chita')).toEqual({
+      wentToBedAt: new Date('2026-10-03T15:35:00.000Z'),
+      wokeAt: new Date('2026-10-03T23:45:00.000Z'),
+    });
+  });
 });
