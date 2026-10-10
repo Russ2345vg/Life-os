@@ -8,6 +8,7 @@ import { PlanningGoalDetail } from './PlanningGoalDetail';
 import { usePlanning } from './PlanningContext';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { EntityId, type Goal, type LifeAction } from '../../domain';
+import { addDays } from '../../domain/planner/PlanningPeriod';
 import { PlannerInbox } from './PlannerInbox';
 import { PlannerGoalList } from './PlannerGoalList';
 import { PlannerWeeklyReview } from './PlannerWeeklyReview';
@@ -197,6 +198,18 @@ export function PlannerLibraryWorkspace({
             label: 'Редактировать',
             run: () => onNavigate({ view: 'action', id: action.id.toString() }),
           },
+          ...(action.plannedDate?.toString() !== addDays(today, 1)
+            ? [
+                {
+                  label: 'Перенести на завтра',
+                  run: () =>
+                    run(
+                      () => onChangeDate(action.id.toString(), addDays(today, 1)),
+                      'Действие перенесено на завтра',
+                    ),
+                },
+              ]
+            : []),
         ]
       : []),
     ...(action.status === 'completed' && services.planning

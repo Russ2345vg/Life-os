@@ -546,6 +546,19 @@ function PlannerWorkspaceContent({
               void openActionFromSource(action.id.toString());
             },
           },
+          ...(action.plannedDate?.toString() !== addDays(currentDate.toString(), 1)
+            ? [
+                {
+                  label: 'Перенести на завтра',
+                  run: () =>
+                    run(
+                      () => changeDate(action.id.toString(), addDays(currentDate.toString(), 1)),
+                      'Действие перенесено на завтра',
+                      true,
+                    ),
+                },
+              ]
+            : []),
         ]
       : []),
     ...(action.status === 'completed' && services.planning

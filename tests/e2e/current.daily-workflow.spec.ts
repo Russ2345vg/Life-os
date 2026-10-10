@@ -358,6 +358,142 @@ for (const view of ['actions', 'today'] as const) {
   });
 }
 
+async function readStoredActions(page: Page) {
+  return page.evaluate(async () => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('lifeos');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    try {
+      return await new Promise<Record<string, unknown>[]>((resolve, reject) => {
+        const request = db.transaction('lifeActions').objectStore('lifeActions').getAll();
+        request.onsuccess = () => resolve(request.result as Record<string, unknown>[]);
+        request.onerror = () => reject(request.error);
+      });
+    } finally {
+      db.close();
+    }
+  });
+}
+
+async function openActionContextMenu(page: Page, title: string, desktop: boolean) {
+  const row = page.locator('.planner-entity-context').filter({
+    has: page.getByRole('checkbox', { name: `Выполнить: ${title}`, exact: true }),
+  });
+  if (desktop) await row.click({ button: 'right' });
+  else await row.getByRole('button', { name: `Действия: ${title}`, exact: true }).click();
+  await expect(page.getByRole('menu', { name: `Действия: ${title}`, exact: true })).toBeVisible();
+}
+
+for (const view of ['today', 'actions'] as const) {
+  test(`Action context menu moves draft and ready actions to tomorrow in ${view}`, async ({
+    page,
+  }, testInfo) => {
+    const desktop = testInfo.project.name === 'desktop-chrome';
+    if (desktop) await page.setViewportSize({ width: 1440, height: 1000 });
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    page.on('console', (message) => {
+      if (message.type() === 'error') errors.push(message.text());
+    });
+    const { today, tomorrow } = await seed(page);
+    if (view === 'actions') await page.goto('/#/v2/actions');
+    const original = await readStoredActions(page);
+    for (const [id, title] of [
+      ['daily-action-0', 'Прогулка'],
+      ['daily-action-1', 'Подготовленное действие'],
+    ] as const) {
+      await openActionContextMenu(page, title, desktop);
+      const move = page.getByRole('menuitem', { name: 'Перенести на завтра', exact: true });
+      await expect(move).toBeVisible();
+      if (id === 'daily-action-0')
+        // Full-page capture resizes a tall mobile page, which deliberately closes its menu.
+        await page.screenshot({ path: testInfo.outputPath('action-menu.png') });
+      const bounds = await move.boundingBox();
+      expect(bounds).not.toBeNull();
+      expect(bounds!.height).toBeGreaterThanOrEqual(44);
+      expect(bounds!.x).toBeGreaterThanOrEqual(0);
+      expect(bounds!.y).toBeGreaterThanOrEqual(0);
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+      expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(page.viewportSize()!.height);
+      await move.click();
+      await expect(page.getByText('Действие перенесено на завтра', { exact: true })).toBeVisible();
+      await expect
+        .poll(
+          async () =>
+            (await readStoredActions(page)).find((record) => record.id === id)?.plannedDate,
+        )
+        .toBe(tomorrow);
+      if (id === 'daily-action-0') {
+        await page.getByRole('button', { name: 'Отменить изменение даты', exact: true }).click();
+        await expect
+          .poll(
+            async () =>
+              (await readStoredActions(page)).find((record) => record.id === id)?.plannedDate,
+          )
+          .toBe(today);
+        await openActionContextMenu(page, title, desktop);
+        await page.getByRole('menuitem', { name: 'Перенести на завтра', exact: true }).click();
+        await expect
+          .poll(
+            async () =>
+              (await readStoredActions(page)).find((record) => record.id === id)?.plannedDate,
+          )
+          .toBe(tomorrow);
+      }
+      const stored = (await readStoredActions(page)).find((record) => record.id === id)!;
+      const before = original.find((record) => record.id === id)!;
+      expect(stored).toMatchObject({
+        status: before.status,
+        goalId: before.goalId,
+        directionId: before.directionId,
+        sphereId: before.sphereId,
+        expectedResult: before.expectedResult,
+      });
+    }
+    await page.reload();
+    await page.goto('/#/v2/today?day=tomorrow');
+    for (const title of ['Прогулка', 'Подготовленное действие'])
+      await expect(
+        page.getByRole('checkbox', { name: `Выполнить: ${title}`, exact: true }),
+      ).toBeVisible();
+    await openActionContextMenu(page, 'Прогулка', desktop);
+    await expect(
+      page.getByRole('menuitem', { name: 'Перенести на завтра', exact: true }),
+    ).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+    expect(errors).toEqual([]);
+  });
+}
+
+test('Action context menu moves only the selected recurring occurrence to tomorrow', async ({
+  page,
+}, testInfo) => {
+  const { today, title } = await seedRecurringSeries(page);
+  await expect(page.getByText('Каждый день', { exact: true })).toBeVisible();
+  const original = await readStoredActions(page);
+  const nextOccurrence = original.find((record) => record.id === 'e2e-series-1')!;
+  await openActionContextMenu(page, title, testInfo.project.name === 'desktop-chrome');
+  await page.getByRole('menuitem', { name: 'Перенести на завтра', exact: true }).click();
+  await expect
+    .poll(
+      async () =>
+        (await readStoredActions(page)).find((record) => record.id === 'e2e-series-0')?.plannedDate,
+    )
+    .toBe(addDays(today, 1));
+  await page.reload();
+  const stored = await readStoredActions(page);
+  expect(stored.find((record) => record.id === 'e2e-series-0')).toMatchObject({
+    plannedDate: addDays(today, 1),
+    occurrence: { slot: today, originalDate: today, manualDate: true },
+  });
+  expect(stored.find((record) => record.id === 'e2e-series-1')).toEqual(nextOccurrence);
+});
+
 test('Tomorrow moves an existing ready action, creates with an optional date and keeps monthly main direction', async ({
   page,
 }) => {
