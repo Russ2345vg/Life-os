@@ -1,11 +1,16 @@
 import type { ActionPriority } from './RecurrenceRule';
 import { DomainError } from '../../shared/errors/DomainError';
+import { buildPreferenceDayAutopilotPlan, type AutopilotScheduleBlock } from './AutopilotSchedule';
+import type { AutopilotCandidateGroups } from './AutopilotSelection';
+import type { AutopilotReference } from './AutopilotPreferences';
+import type { PomodoroSettings } from '../pomodoro/ActionPomodoroCycle';
 
 export type DayAutopilotMode = 'fill' | 'rebuild';
 export type DayAutopilotLockedReason = 'existing_window' | 'past_window' | 'active_session';
 export type DayAutopilotDeferredReason = 'no_capacity' | 'active_session';
 
 export interface DayAutopilotActionInput {
+  readonly plannedDate?: string | null;
   readonly id: string;
   readonly title: string;
   readonly version: number;
@@ -19,6 +24,13 @@ export interface DayAutopilotActionInput {
 }
 
 export interface DayAutopilotInput {
+  readonly endMinute?: number;
+  readonly groups?: AutopilotCandidateGroups;
+  readonly maxActions?: number;
+  readonly constraints?: readonly AutopilotScheduleBlock[];
+  readonly pomodoro?: PomodoroSettings;
+  readonly excludedActionIds?: readonly string[];
+  readonly durationOverrides?: readonly { readonly actionId: string; readonly minutes: number }[];
   readonly date: string;
   readonly mode: DayAutopilotMode;
   readonly startMinute: number;
@@ -36,7 +48,10 @@ export interface ProposedActionWindow {
   readonly durationMinutes: number;
   readonly isMain: boolean;
   readonly usedDefaultEstimate: boolean;
-  readonly reason: 'main_action' | 'priority' | 'day_order';
+  readonly reason: 'main_action' | 'priority' | 'day_order' | 'focus' | 'wish';
+  readonly previousDate?: string | null;
+  readonly estimateSource?: 'default' | 'stored' | 'user';
+  readonly selectionReference?: AutopilotReference | null;
 }
 
 export interface LockedActionWindow {
@@ -58,6 +73,7 @@ export interface DeferredAutopilotAction {
 }
 
 export interface DayAutopilotPlan {
+  readonly timeline?: readonly AutopilotScheduleBlock[];
   readonly date: string;
   readonly mode: DayAutopilotMode;
   readonly startMinute: number;
@@ -75,6 +91,7 @@ const BETWEEN_ACTIONS_MINUTES = 5;
 const MINIMUM_RESERVE_MINUTES = 30;
 
 export function buildDayAutopilotPlan(input: DayAutopilotInput): DayAutopilotPlan {
+  if (input.groups) return buildPreferenceDayAutopilotPlan(input);
   assertMinute(input.startMinute, 'Начало автоплана');
   if (!Number.isInteger(input.capacityMinutes) || input.capacityMinutes <= 0)
     throw new DomainError(
