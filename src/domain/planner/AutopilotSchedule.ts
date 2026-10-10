@@ -211,7 +211,7 @@ export function buildPreferenceDayAutopilotPlan(input: DayAutopilotInput): DayAu
     const long = intervals >= 4;
     const rest = due ? (long ? pomodoro.longBreakMinutes : pomodoro.shortBreakMinutes) : 0;
     let placement: { start: number; rest: number; resetByWalk: boolean } | null = null;
-    for (const gap of freeScheduleIntervals(Math.max(cursor, input.startMinute), end, timeline)) {
+    for (const gap of freeScheduleIntervals(Math.max(cursor, input.startMinute), end!, timeline)) {
       const walkBetween = timeline.some(
         (block) =>
           block.kind === 'walk' && block.endMinute > cursor && block.endMinute <= gap.startMinute,

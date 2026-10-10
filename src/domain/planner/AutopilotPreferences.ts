@@ -86,7 +86,7 @@ export function validateAutopilotPreferences(value: unknown): AutopilotPreferenc
   const focus = raw.focus === null ? null : reference(raw.focus);
   if (focus?.kind === 'action' || typeof walk.enabled !== 'boolean') return invalid();
   return {
-    focus,
+    focus: focus ? { kind: focus.kind, id: focus.id } : null,
     maxActions: integer(raw.maxActions, 1, 12),
     morningMinutes: integer(raw.morningMinutes, 1, 1440),
     eveningMinutes: integer(raw.eveningMinutes, 1, 1440),

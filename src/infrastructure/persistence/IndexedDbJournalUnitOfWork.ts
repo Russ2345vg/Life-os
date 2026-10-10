@@ -25,6 +25,8 @@ import { WalkCaptureRecordMapper } from './mappers/WalkCaptureRecordMapper';
 import { assertWalkPayloadCompatible } from '../../application/walk/WalkSyncCompatibility';
 import { confirmedWalkDataFormat } from '../sync/WalkDataFormat';
 import type { SyncSettingsRecord } from './records/SyncStoreRecords';
+import { RoutineBlockRecordMapper } from './mappers/RoutineBlockRecordMapper';
+import { validateAutopilotGuard, AUTOPILOT_GUARD_STORES } from './AutopilotTransactionGuard';
 import {
   IndexedDbPilotMutationRecorder,
   PILOT_MUTATION_STORES,
@@ -154,12 +156,27 @@ export class IndexedDbJournalUnitOfWork implements JournalUnitOfWork {
         });
       }
       await validateExpectedState(transaction, input);
+      if (input.autopilotGuard) await validateAutopilotGuard(transaction, input.autopilotGuard);
       if (input.lifeActions?.length)
         await commitCompletionContributions(
           transaction,
           input.lifeActions.map((c) => c.lifeAction),
         );
       const writes: Promise<unknown>[] = [];
+      for (const change of input.routineBlocks ?? [])
+        writes.push(
+          observeRequest(
+            transaction
+              .objectStore(LIFE_OS_STORE.routineBlocks)
+              .put(RoutineBlockRecordMapper.toRecord(change.block)),
+          ),
+        );
+      for (const change of input.deletedRoutineBlocks ?? [])
+        writes.push(
+          observeRequest(
+            transaction.objectStore(LIFE_OS_STORE.routineBlocks).delete(change.id.toString()),
+          ),
+        );
       for (const change of input.days ?? []) {
         writes.push(
           observeRequest(
@@ -247,6 +264,22 @@ async function validateExpectedState(
   input: CommitJournalStateInput,
 ): Promise<void> {
   const checks: Promise<void>[] = [];
+  for (const change of input.routineBlocks ?? [])
+    checks.push(
+      validateVersion(
+        transaction.objectStore(LIFE_OS_STORE.routineBlocks),
+        change.block.id.toString(),
+        change.expectedVersion,
+      ),
+    );
+  for (const change of input.deletedRoutineBlocks ?? [])
+    checks.push(
+      validateVersion(
+        transaction.objectStore(LIFE_OS_STORE.routineBlocks),
+        change.id.toString(),
+        change.expectedVersion,
+      ),
+    );
   if (input.workSessionActionGuard)
     checks.push(
       validateSessionAction(
@@ -452,6 +485,9 @@ async function validateInactiveSessionActions(
 
 function collectStores(input: CommitJournalStateInput): string[] {
   const stores = new Set<string>([LIFE_OS_STORE.journal]);
+  if (input.routineBlocks?.length || input.deletedRoutineBlocks?.length)
+    stores.add(LIFE_OS_STORE.routineBlocks);
+  if (input.autopilotGuard) for (const store of AUTOPILOT_GUARD_STORES) stores.add(store);
   if (input.walkCaptureAction) {
     stores.add('walkCaptures');
     stores.add('sync_settings');

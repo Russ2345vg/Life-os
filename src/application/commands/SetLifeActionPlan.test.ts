@@ -8,6 +8,29 @@ import { FakeClock, FakeIdGenerator } from '../../test/helpers/Fakes';
 import type { JournalUnitOfWork } from '../ports/JournalUnitOfWork';
 import type { LifeActionRepository } from '../ports/LifeActionRepository';
 import { SetLifeActionPlan } from './SetLifeActionPlan';
+import { prepareLifeActionPlan } from './prepareLifeActionPlan';
+
+it('prepares ready recurring date events without committing and preserves occurrence identity', () => {
+  const action = createReadyLifeAction('recurring-prepare', DayDate.create('2026-10-09'));
+  action.setPlanningMetadata({
+    occurrence: {
+      ruleId: 'r',
+      slot: '2026-10-09',
+      originalDate: '2026-10-09',
+      ruleRevision: 1,
+      manualDate: false,
+    },
+  });
+  const journal = prepareLifeActionPlan(
+    action,
+    { lifeActionId: action.id, plannedDate: DayDate.create('2026-10-10'), isNext: false },
+    new FakeClock(new Date('2026-10-10T00:00:00Z')),
+    new FakeIdGenerator('prepare'),
+  );
+  expect(action.plannedDate?.toString()).toBe('2026-10-10');
+  expect(action.occurrence).toMatchObject({ ruleId: 'r', slot: '2026-10-09', manualDate: true });
+  expect(journal.length).toBeGreaterThan(0);
+});
 
 const ORIGINAL_DATE = DayDate.create('2026-09-25');
 const NEXT_DATE = DayDate.create('2026-09-26');

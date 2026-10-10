@@ -2,6 +2,8 @@ import type { RecurrenceRule } from '../../domain/planner/RecurrenceRule';
 import type { ContributionLink } from '../../domain/planner/ProgressContribution';
 import type { WalkCapture } from '../../domain/walk-capture/WalkCapture';
 import type { WalkRequest } from './WalkUnitOfWork';
+import type { RoutineBlock } from '../../domain/routine-block/RoutineBlock';
+import type { AutopilotGuardSnapshot } from '../planner/AutopilotGuard';
 import type {
   ActionSession,
   Day,
@@ -45,6 +47,15 @@ export interface JournalProjectChange {
 }
 
 export interface CommitJournalStateInput {
+  readonly routineBlocks?: readonly {
+    readonly block: RoutineBlock;
+    readonly expectedVersion: number | null;
+  }[];
+  readonly deletedRoutineBlocks?: readonly {
+    readonly id: EntityId;
+    readonly expectedVersion: number;
+  }[];
+  readonly autopilotGuard?: AutopilotGuardSnapshot;
   readonly walkCaptureAction?: {
     readonly capture: WalkCapture;
     readonly expectedVersion: number;

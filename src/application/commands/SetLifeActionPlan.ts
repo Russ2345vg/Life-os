@@ -15,6 +15,7 @@ import type { LifeActionRepository } from '../ports/LifeActionRepository';
 import { createLifeActionJournalEntries } from '../journal/createJournalEntries';
 import { lifeActionDomainFailure, lifeActionNotFound } from './lifeActionCommandResult';
 import { clearPreviousMainActions } from './lifeActionPlanning';
+import { prepareLifeActionPlan } from './prepareLifeActionPlan';
 
 export interface SetLifeActionPlanInput {
   readonly lifeActionId: EntityId;
@@ -144,35 +145,15 @@ export class SetLifeActionPlan {
     input: SetLifeActionPlanInput,
   ): Promise<Result<LifeAction, DomainError>> {
     try {
-      if (input.allowedStatuses && !input.allowedStatuses.includes(action.status))
-        throw new DomainError(
-          'life_action.status_changed',
-          'Состояние действия изменилось. Обновите список и повторите попытку.',
-        );
       const expectedVersion = action.version;
-      const previousDate = action.plannedDate?.toString() ?? null;
       const completed = action.status === LIFE_ACTION_STATUS.completed;
       const isNext = input.isNext ?? (input.plannedDate === null ? false : action.isNext);
-      if (
-        action.status !== LIFE_ACTION_STATUS.draft &&
-        !completed &&
-        action.plannedDate?.toString() !== input.plannedDate?.toString()
-      ) {
-        if (action.status === LIFE_ACTION_STATUS.inProgress)
-          throw new DomainError(
-            'life_action.plan_in_progress',
-            'Дату выполняемого действия можно менять только через прежний рабочий процесс.',
-          );
-        if (input.plannedDate === null)
-          throw new DomainError(
-            'life_action.legacy_date_required',
-            'У подготовленного действия можно изменить дату, но нельзя убрать её.',
-          );
-        action.reschedule(input.plannedDate, this.clock.now(), this.ids.generate());
-      }
-      action.setPlan(input.plannedDate, isNext);
-      if (action.occurrence && previousDate !== (input.plannedDate?.toString() ?? null))
-        action.setPlanningMetadata({ occurrence: { ...action.occurrence, manualDate: true } });
+      const journalEntries = prepareLifeActionPlan(
+        action,
+        { ...input, isNext },
+        this.clock,
+        this.ids,
+      );
       const previous =
         !completed && isNext && input.plannedDate !== null
           ? await clearPreviousMainActions(this.repository, input.plannedDate, action)
@@ -183,26 +164,7 @@ export class SetLifeActionPlan {
           ? { mainActionDate: input.plannedDate }
           : {}),
         lifeActions: [...previous, { lifeAction: action, expectedVersion }],
-        journalEntries: [
-          ...createLifeActionJournalEntries(action),
-          ...(action.occurrence && previousDate !== (action.plannedDate?.toString() ?? null)
-            ? [
-                planningJournal(
-                  this.ids.generate().toString(),
-                  'LifeAction',
-                  action.id.toString(),
-                  'Дата повторения изменена',
-                  this.clock.now(),
-                  {
-                    ruleId: action.occurrence.ruleId,
-                    slot: action.occurrence.slot,
-                    previousDate,
-                    nextDate: action.plannedDate?.toString() ?? null,
-                  },
-                ),
-              ]
-            : []),
-        ],
+        journalEntries,
       });
       return success(action);
     } catch (error: unknown) {
