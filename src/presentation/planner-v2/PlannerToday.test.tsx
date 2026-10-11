@@ -11,6 +11,55 @@ import {
 } from '../../test/helpers/LifeActionTestFactory';
 
 describe('Planner Today', () => {
+  it('offers existing day-plan actions as main choices without offering unscheduled or future actions', () => {
+    const date = DayDate.create('2026-09-13');
+    const draft = createLifeActionDraft('planned-draft');
+    draft.setPlan(date, false);
+    const ready = createReadyLifeAction('planned-ready', date);
+    const unscheduled = createLifeActionDraft('unscheduled-choice');
+    const future = createLifeActionDraft('future-choice');
+    future.setPlan(DayDate.create('2026-09-14'), false);
+    const html = renderToStaticMarkup(
+      createElement(PlannerToday, {
+        date,
+        day: 'today',
+        overview: {
+          main: null,
+          actions: [draft, ready],
+          unscheduled: [unscheduled],
+          completed: [],
+          overdue: [],
+        },
+        goals: [],
+        availableActions: [draft, ready, unscheduled, future],
+        monthlyDirectionFocus: {
+          month: '2026-09',
+          hasCurrent: false,
+          directionId: null,
+          directionLabel: null,
+          suggestion: null,
+          choices: [],
+        },
+        busy: false,
+        onSelectDay: vi.fn(),
+        onOpenAction: vi.fn(),
+        onMonthlyDirectionChange: vi.fn(),
+        onComplete: vi.fn(),
+        onPlan: vi.fn(),
+        onReschedule: async () => {},
+        onQuickAdd: async () => {},
+        onNewAction: vi.fn(),
+        onOpenSleep: vi.fn(),
+      }),
+    );
+    const focus = html.match(/<section[^>]+aria-label="Главное сегодня"[\s\S]*?<\/section>/)?.[0];
+    expect(focus).toBeDefined();
+    expect(focus).toContain(`aria-label="Сделать главным: ${draft.title.toString()}"`);
+    expect(focus).toContain(`aria-label="Сделать главным: ${ready.title.toString()}"`);
+    expect(focus).not.toContain(`aria-label="Сделать главным: ${unscheduled.title.toString()}"`);
+    expect(focus).not.toContain(`aria-label="Сделать главным: ${future.title.toString()}"`);
+  });
+
   it('shows the action sphere and direction in the day plan', () => {
     const date = DayDate.create('2026-09-13');
     const action = LifeAction.createDraft({

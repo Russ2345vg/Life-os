@@ -155,6 +155,34 @@ async function seedRecurringSeries(page: Page) {
   return { today, ruleId: rule.id, title: rule.title };
 }
 
+test('Today chooses its main action from the existing day plan without creating a duplicate', async ({
+  page,
+}, testInfo) => {
+  await seed(page);
+  const focus = page.getByRole('region', { name: 'Главное сегодня', exact: true });
+  await page.screenshot({ path: testInfo.outputPath('today-main-before.png'), fullPage: true });
+  await focus.getByRole('button', { name: /Выбрать/ }).click();
+  const choices = focus.getByRole('region', { name: 'Выбор главного дела', exact: true });
+  await expect(choices).toBeVisible();
+  await expect(choices.getByText('Прогулка', { exact: true })).toBeVisible();
+  await expect(choices.getByText('Подготовленное действие', { exact: true })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('today-main-choices.png'), fullPage: true });
+
+  await choices.getByRole('button', { name: 'Сделать главным: Прогулка', exact: true }).click();
+  await expect(focus.getByRole('button', { name: 'Прогулка', exact: true })).toBeVisible();
+  await expect(
+    focus.getByRole('button', { name: 'Убрать главный приоритет: Прогулка' }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await expect(choices).toHaveCount(0);
+  await expect(page.locator('[data-planner-action-id="daily-action-0"]')).toHaveCount(1);
+  await expect(page.locator('.planner-day-progress strong')).toHaveText('0 из 2');
+  await page.reload();
+  await expect(focus.getByRole('button', { name: 'Прогулка', exact: true })).toBeVisible();
+  await expect(page.locator('[data-planner-action-id="daily-action-0"]')).toHaveCount(1);
+  await expect(page.locator('.planner-day-progress strong')).toHaveText('0 из 2');
+  await page.screenshot({ path: testInfo.outputPath('today-main-selected.png'), fullPage: true });
+});
+
 test('Today opens the action body; completion stays completed until explicit reopen', async ({
   page,
 }) => {
