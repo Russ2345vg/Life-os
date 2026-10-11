@@ -1,6 +1,12 @@
 import type { WakeObservationSource } from '../../../domain/sleep/SleepObservation';
+import type { SleepMorningFeedback } from '../../../domain/sleep/SleepMorningFeedback';
 
 export interface SleepObservationRecord {
+  readonly morningFeedback?: {
+    readonly sleepQuality: SleepMorningFeedback['sleepQuality'];
+    readonly energy: SleepMorningFeedback['energy'];
+    readonly recordedAt: string;
+  };
   readonly schemaVersion: 1;
   readonly id: string;
   readonly cycleDate: string;

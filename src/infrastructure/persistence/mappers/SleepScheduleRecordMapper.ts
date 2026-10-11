@@ -18,6 +18,14 @@ import { createDefaultPreparationCatalog } from '../../../domain/sleep/SleepSche
 import { DEFAULT_SLEEP_ALARM_SOUND } from '../../../domain/sleep/SleepSchedule';
 import type { SleepScheduleRecord } from '../records/SleepScheduleRecord';
 import {
+  validateSleepPreparationTiming,
+  type SleepPreparationTiming,
+} from '../../../domain/sleep/SleepPreparationTiming';
+import type {
+  AndroidAlarmOutcome,
+  AndroidAlarmReport,
+} from '../../../domain/sleep/AndroidAlarmReport';
+import {
   validateColdShowerEntry,
   type ColdShowerEntry,
   type ColdShowerStatus,
@@ -31,6 +39,7 @@ import {
   readIsoDate,
   readOptionalNullableIsoDate,
   readOptionalNullableString,
+  readNullableString,
   readNumber,
   readRecordArray,
   readString,
@@ -39,10 +48,28 @@ import {
 
 export class SleepScheduleRecordMapper {
   public static toRecord(state: SleepScheduleState): SleepScheduleRecord {
+    if (state.preparationTiming !== undefined)
+      validateSleepPreparationTiming(state.preparationTiming);
     return {
       schemaVersion: 1,
+      ...(state.preparationTiming === undefined
+        ? {}
+        : { preparationTiming: { ...state.preparationTiming } }),
       id: SLEEP_SCHEDULE_ID,
       version: state.version,
+      ...(state.androidAlarmReport === undefined
+        ? {}
+        : {
+            androidAlarmReport: {
+              source: state.androidAlarmReport.source,
+              checkedAt: state.androidAlarmReport.checkedAt.toISOString(),
+              scheduleKey: state.androidAlarmReport.scheduleKey,
+              outcome: state.androidAlarmReport.outcome,
+              acknowledgedSettingsVersion: state.androidAlarmReport.acknowledgedSettingsVersion,
+              nextOccurrenceId: state.androidAlarmReport.nextOccurrenceId,
+              nextScheduledAt: state.androidAlarmReport.nextScheduledAt?.toISOString() ?? null,
+            },
+          }),
       ...(state.coldShowerEntries === undefined
         ? {}
         : {
@@ -100,6 +127,8 @@ export class SleepScheduleRecordMapper {
     const settings =
       settingsValue === null ? null : readSettings(asRecord(settingsValue, 'settings'));
     const defaults = createDefaultPreparationCatalog();
+    const androidAlarmReport = readAndroidAlarmReport(value.androidAlarmReport);
+    const preparationTiming = readPreparationTiming(value.preparationTiming);
     const preparationGroups = Array.isArray(value.preparationGroups)
       ? readRecordArray(value, 'preparationGroups').map((group) => ({
           id: readString(group, 'id'),
@@ -120,6 +149,8 @@ export class SleepScheduleRecordMapper {
     return {
       id: SLEEP_SCHEDULE_ID,
       version: readInteger(value, 'version'),
+      ...(preparationTiming === undefined ? {} : { preparationTiming }),
+      ...(androidAlarmReport === undefined ? {} : { androidAlarmReport }),
       ...(value.coldShowerEntries === undefined
         ? {}
         : { coldShowerEntries: readColdShowerEntries(value) }),
@@ -186,6 +217,69 @@ export class SleepScheduleRecordMapper {
           }))
         : [],
     };
+  }
+}
+
+function readPreparationTiming(value: unknown): SleepPreparationTiming | undefined {
+  if (value === undefined) return undefined;
+  try {
+    const record = asRecord(value, 'preparationTiming');
+    const timing = {
+      totalPreparationMinutes: readNumber(record, 'totalPreparationMinutes'),
+      stretchingItemId: readNullableString(record, 'stretchingItemId'),
+      stretchingMinutes: readNumber(record, 'stretchingMinutes'),
+    };
+    validateSleepPreparationTiming(timing);
+    return timing;
+  } catch {
+    return undefined;
+  }
+}
+
+function readAndroidAlarmReport(value: unknown): AndroidAlarmReport | undefined {
+  if (value === undefined) return undefined;
+  try {
+    const record = asRecord(value, 'androidAlarmReport');
+    if (readString(record, 'source') !== 'ANDROID') return undefined;
+    const outcome = readString(record, 'outcome') as AndroidAlarmOutcome;
+    if (
+      !['CONFIRMED', 'DISABLED', 'PERMISSION_REQUIRED', 'ERROR', 'NOT_CONFIRMED'].includes(outcome)
+    )
+      return undefined;
+    const scheduleKey = readString(record, 'scheduleKey');
+    if (scheduleKey.length === 0) return undefined;
+    const acknowledgedSettingsVersion =
+      record.acknowledgedSettingsVersion === null
+        ? null
+        : readInteger(record, 'acknowledgedSettingsVersion');
+    const nextOccurrenceId =
+      record.nextOccurrenceId === null ? null : readString(record, 'nextOccurrenceId');
+    const nextScheduledAt =
+      record.nextScheduledAt === null ? null : readIsoDate(record, 'nextScheduledAt');
+    if (
+      outcome === 'CONFIRMED' &&
+      (acknowledgedSettingsVersion === null || !nextOccurrenceId || nextScheduledAt === null)
+    )
+      return undefined;
+    if (
+      outcome === 'DISABLED' &&
+      (acknowledgedSettingsVersion === null ||
+        nextOccurrenceId !== null ||
+        nextScheduledAt !== null)
+    )
+      return undefined;
+    return {
+      source: 'ANDROID',
+      checkedAt: readIsoDate(record, 'checkedAt'),
+      scheduleKey,
+      outcome,
+      acknowledgedSettingsVersion,
+      nextOccurrenceId,
+      nextScheduledAt,
+    };
+  } catch {
+    // Optional device telemetry must never block loading the primary alarm settings.
+    return undefined;
   }
 }
 

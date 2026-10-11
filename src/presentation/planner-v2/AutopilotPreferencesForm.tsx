@@ -12,6 +12,7 @@ import {
 import { VoiceField } from '../voice-input/VoiceField';
 import { VoiceTextArea } from '../voice-input/VoiceTextArea';
 import { clockTime } from './timePresentation';
+import { AutopilotOrganizationForm } from './AutopilotOrganizationForm';
 
 export function AutopilotPreferencesForm({
   setup,
@@ -23,6 +24,7 @@ export function AutopilotPreferencesForm({
   onDraft,
   onRebuild,
   onBuild,
+  onPersistPreferences,
 }: {
   readonly setup: AutopilotSetup;
   readonly preferences: AutopilotPreferences;
@@ -33,6 +35,7 @@ export function AutopilotPreferencesForm({
   readonly onDraft: (value: AutopilotDayDraft) => void;
   readonly onRebuild: (value: boolean) => void;
   readonly onBuild: () => void;
+  readonly onPersistPreferences?: (value: AutopilotPreferences) => Promise<boolean>;
 }) {
   const focusValue = preferences.focus ? JSON.stringify(preferences.focus) : '';
   const directions = setup.catalog.directions.filter((item) => item.status === 'active');
@@ -116,6 +119,15 @@ export function AutopilotPreferencesForm({
           onValueChange={(wishes) => onDraft({ ...draft, wishes, wishReferences: [] })}
         />
       </VoiceField>
+      <AutopilotOrganizationForm
+        setup={setup}
+        preferences={preferences}
+        draft={draft}
+        busy={busy}
+        onPreferences={onPreferences}
+        onDraft={onDraft}
+        onPersist={onPersistPreferences ?? (async () => false)}
+      />
       {setup.wishResolution.unavailable
         ?.filter((reference) =>
           draft.wishReferences.some(

@@ -4,6 +4,7 @@ import type { Direction } from '../direction/Direction';
 import type { ContributionLink } from './ProgressContribution';
 import type { AutopilotReference, AutopilotFocus } from './AutopilotPreferences';
 import { DomainError } from '../../shared/errors/DomainError';
+import type { AutopilotBalance } from './AutopilotOrganization';
 
 export interface AutopilotCatalog {
   readonly actions: readonly LifeAction[];
@@ -20,6 +21,7 @@ export interface AutopilotWishResolution {
   }[];
 }
 export interface AutopilotCandidateGroups {
+  readonly balance?: readonly (AutopilotBalance & { readonly actionIds: readonly string[] })[];
   readonly main: readonly string[];
   readonly focus: readonly string[];
   readonly wishes: readonly {
@@ -116,6 +118,7 @@ export function selectAutopilotCandidates(
   catalog: AutopilotCatalog,
   focus: AutopilotFocus | null,
   wishes: readonly AutopilotReference[],
+  balance: readonly AutopilotBalance[] = [],
 ): AutopilotCandidateGroups {
   const available = new Set(availableReferences(catalog).map(key));
   if (focus && !available.has(key(focus)))
@@ -125,6 +128,11 @@ export function selectAutopilotCandidates(
     );
   if (wishes.some((ref) => !available.has(key(ref))))
     throw new DomainError('day_autopilot.wish_unavailable', 'Обновите выбранные пожелания.');
+  if (balance.some((item) => !available.has(`direction:${item.directionId}`)))
+    throw new DomainError(
+      'day_autopilot.balance_unavailable',
+      'Направление баланса удалено или неактивно. Исправьте баланс.',
+    );
   const excluded: AutopilotCandidateGroups['excluded'][number][] = [];
   const eligible: LifeAction[] = [];
   const occurrences = new Map<string, LifeAction>();
@@ -197,6 +205,16 @@ export function selectAutopilotCandidates(
     );
   };
   return {
+    ...(balance.length
+      ? {
+          balance: balance.map((item) => ({
+            ...item,
+            actionIds: eligible
+              .filter((action) => matches(action, { kind: 'direction', id: item.directionId }))
+              .map((action) => action.id.toString()),
+          })),
+        }
+      : {}),
     main: eligible
       .filter((item) => item.isNext && item.plannedDate?.toString() === date)
       .map((item) => item.id.toString()),

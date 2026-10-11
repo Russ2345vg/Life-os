@@ -208,6 +208,7 @@ export class PreferenceDayAutopilot {
       source.catalog,
       preferences.value.focus,
       wishes.matches,
+      preferences.value.balance,
     );
     const recoverySignal = recoverySignalForDate(source.sleepObservations, date);
     const activeIds = new Set(
@@ -239,6 +240,12 @@ export class PreferenceDayAutopilot {
       pomodoro: this.profile.pomodoro.read(),
       excludedActionIds: draft.value.excludedActionIds,
       durationOverrides: draft.value.durationOverrides,
+      groupSimilar: preferences.value.groupSimilar ?? false,
+      actionRules: preferences.value.actionRules ?? [],
+      pinnedWindows: draft.value.pinnedWindows ?? [],
+      completedActionIds: source.catalog.actions
+        .filter((action) => !action.isDeleted() && action.status === LIFE_ACTION_STATUS.completed)
+        .map((action) => action.id.toString()),
       actions: source.catalog.actions
         .filter(
           (action) =>
@@ -249,6 +256,14 @@ export class PreferenceDayAutopilot {
         .map((action) => ({
           ...toPlannerInput(action, activeIds),
           plannedDate: action.plannedDate?.toString() ?? null,
+          contextKey:
+            action.directionId?.toString() ??
+            (action.goalId
+              ? source.catalog.goals
+                  .find((goal) => goal.id.equals(action.goalId!))
+                  ?.directionId?.toString()
+              : null) ??
+            null,
         })),
     });
     const accepted = new Set([...plan.proposals, ...plan.locked].map((item) => item.actionId));
@@ -346,7 +361,9 @@ export class PreferenceDayAutopilot {
     }
     for (const item of preview.deferred.filter(
       (item) =>
-        preview.mode === 'rebuild' && item.hadScheduledWindow && item.reason === 'no_capacity',
+        preview.mode === 'rebuild' &&
+        item.hadScheduledWindow &&
+        (item.reason === 'no_capacity' || item.reason === 'dependency'),
     )) {
       const action = source.catalog.actions.find(
         (action) => action.id.toString() === item.actionId,

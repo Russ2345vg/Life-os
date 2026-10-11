@@ -16,6 +16,7 @@ import {
   renamePreparationItem,
   reopenPreparationItem,
   setPreparationItemEnabled,
+  setSleepPreparationTiming,
   setSleepFeatureEnabled,
   setNearestWakeTime,
   clearNearestWakeTime,
@@ -29,6 +30,7 @@ import {
   type PreparationCompletionKind,
 } from '../../domain/sleep/SleepSchedule';
 import { resolveSleepCycleDate } from '../../domain/sleep/NightTime';
+import type { SleepPreparationTiming } from '../../domain/sleep/SleepPreparationTiming';
 import type { Clock } from '../ports/Clock';
 import type { IdGenerator } from '../ports/IdGenerator';
 import type { SleepScheduleRepository } from './SleepScheduleRepository';
@@ -37,10 +39,14 @@ import {
   type AlarmSound,
   type WakeAlarmGateway,
   type WakeAlarmPermissionIssue,
-  type WakeAlarmSchedule,
   type WakeAlarmStatus,
   type WakeDismissalSetup,
 } from './WakeAlarmGateway';
+import {
+  buildWakeAlarmSchedule,
+  createAndroidAlarmReport,
+  wakeAlarmScheduleKey,
+} from './WakeAlarmConfirmation';
 
 const NATIVE_SCHEDULE_HORIZON_DAYS = 2;
 
@@ -64,6 +70,12 @@ export class SleepScheduleService {
 
   public async getState(): Promise<SleepScheduleState> {
     return (await this.#repository.load()) ?? createEmptySleepSchedule();
+  }
+
+  public async savePreparationTiming(timing: SleepPreparationTiming): Promise<SleepScheduleState> {
+    return this.#repository.update((current) =>
+      setSleepPreparationTiming(current ?? createEmptySleepSchedule(), timing),
+    );
   }
 
   public async saveSettings(input: SleepSettingsInput): Promise<SleepScheduleState> {
@@ -330,7 +342,17 @@ export class SleepScheduleService {
         nextId: () => this.#idGenerator.generate().toString(),
       });
     });
-    return { state, alarm: await this.#reconcileNative(state) };
+    const startedAt = this.#clock.now();
+    let alarm: WakeAlarmStatus;
+    try {
+      alarm = await this.#reconcileNative(state, startedAt);
+    } catch (error) {
+      if (nativeStatus.supported) {
+        await this.#saveAndroidReport(state, { ...nativeStatus, state: 'ERROR' }, startedAt);
+      }
+      throw error;
+    }
+    return { state: await this.#saveAndroidReport(state, alarm, startedAt), alarm };
   }
 
   public async getAlarmStatus(): Promise<WakeAlarmStatus> {
@@ -371,41 +393,27 @@ export class SleepScheduleService {
     return this.#alarmGateway.saveEmergencyPhrase(phrase);
   }
 
-  async #reconcileNative(state: SleepScheduleState): Promise<WakeAlarmStatus> {
-    const settings = state.settings;
-    if (settings === null) return this.#alarmGateway.status();
-    const now = this.#clock.now().getTime();
-    const nextOccurrence = state.wakeOccurrences
-      .filter(
-        (occurrence) => occurrence.status === 'SCHEDULED' && occurrence.scheduledAt.getTime() > now,
-      )
-      .sort(
-        (left, right) =>
-          left.scheduledAt.getTime() - right.scheduledAt.getTime() ||
-          left.id.localeCompare(right.id),
-      )[0];
-    const activeCycleDate = currentCycleDate(state, this.#clock.now());
-    const activeCycle = state.nightCycles.find(({ cycleDate }) => cycleDate === activeCycleDate);
-    const schedule: WakeAlarmSchedule = {
-      enabled: settings.enabled,
-      settingsVersion: settings.version,
-      bedtime: settings.bedtime,
-      wakeTime: settings.wakeTime,
-      timeZone: settings.timeZone,
-      quietModeEnabled: settings.quietModeEnabled,
-      currentCycleDate: activeCycleDate,
-      repeatReminderSuppressed: activeCycle?.preparationCompletionKind != null,
-      sound: settings.alarmSound,
-      nextOccurrence:
-        settings.enabled && nextOccurrence !== undefined
-          ? {
-              id: nextOccurrence.id,
-              cycleDate: nextOccurrence.cycleDate,
-              scheduledAt: nextOccurrence.scheduledAt,
-            }
-          : null,
-    };
-    return this.#alarmGateway.reconcile(schedule);
+  async #saveAndroidReport(
+    state: SleepScheduleState,
+    alarm: WakeAlarmStatus,
+    startedAt: Date,
+  ): Promise<SleepScheduleState> {
+    const report = createAndroidAlarmReport(state, alarm, startedAt);
+    if (!report) return (await this.#repository.load()) ?? state;
+    const checkedAt = this.#clock.now();
+    return this.#repository.update((current) => {
+      const latest = current ?? createEmptySleepSchedule();
+      if (wakeAlarmScheduleKey(latest, checkedAt) !== report.scheduleKey) return latest;
+      return { ...latest, androidAlarmReport: { ...report, checkedAt } };
+    });
+  }
+
+  async #reconcileNative(
+    state: SleepScheduleState,
+    now = this.#clock.now(),
+  ): Promise<WakeAlarmStatus> {
+    const schedule = buildWakeAlarmSchedule(state, now);
+    return schedule ? this.#alarmGateway.reconcile(schedule) : this.#alarmGateway.status();
   }
 }
 

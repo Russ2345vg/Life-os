@@ -1,0 +1,126 @@
+.planner-v2 .sleep-guide {
+  margin-block: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-medium);
+  background: var(--surface-1);
+}
+.planner-v2 .sleep-guide--active {
+  border-color: color-mix(in srgb, var(--planner-accent) 40%, var(--border-soft));
+}
+.planner-v2 .sleep-guide__start,
+.planner-v2 .sleep-guide__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+.planner-v2 .sleep-guide__start {
+  justify-content: space-between;
+}
+.planner-v2 .sleep-guide h3 {
+  margin-block: var(--space-3);
+  font-size: clamp(20px, 2vw, 24px);
+}
+.planner-v2 .sleep-guide :is(button, input) {
+  min-height: var(--control-lg, 48px);
+}
+.planner-v2 .sleep-guide button:focus-visible {
+  outline: 2px solid var(--planner-accent);
+  outline-offset: 3px;
+}
+.planner-v2 .sleep-guide__timer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-block: var(--space-4);
+}
+.planner-v2 .sleep-guide__timer label {
+  display: grid;
+  gap: var(--space-1);
+  max-width: 110px;
+}
+.planner-v2 .sleep-guide__timer input {
+  width: 100%;
+  box-sizing: border-box;
+}
+.planner-v2 .sleep-guide__timer output {
+  font-size: 24px;
+  font-variant-numeric: tabular-nums;
+}
+.planner-v2 .sleep-guide__timer :is(small, p) {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--text-secondary);
+}
+.planner-v2 .sleep-guide__next {
+  color: var(--text-secondary);
+}
+
+.planner-v2 .sleep-preparation-timing {
+  margin-block: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-medium);
+  background: var(--surface-1);
+}
+.planner-v2 .sleep-preparation-timing p {
+  margin-block: var(--space-2);
+  color: var(--text-secondary);
+}
+.planner-v2 .sleep-preparation-timing strong {
+  color: var(--text-primary);
+}
+.planner-v2 .sleep-preparation-timing summary {
+  width: fit-content;
+  min-width: 44px;
+  min-height: 44px;
+  padding: var(--space-3);
+  cursor: pointer;
+  color: var(--planner-accent);
+}
+.planner-v2 .sleep-preparation-timing form {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+.planner-v2 .sleep-preparation-timing :is(label, .sleep-preparation-timing__field) {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.planner-v2 .sleep-preparation-timing :is(input, select) {
+  width: 100%;
+  min-width: 44px;
+  min-height: 44px;
+  box-sizing: border-box;
+  background: var(--surface-field);
+  color: var(--text-primary);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-small);
+  padding: var(--space-2) var(--space-3);
+  font: inherit;
+}
+.planner-v2 .sleep-preparation-timing button {
+  min-height: 44px;
+  min-width: 44px;
+}
+.planner-v2 .sleep-preparation-timing :is(input, select, summary, button):focus-visible {
+  outline: 2px solid var(--planner-accent);
+  outline-offset: 2px;
+}
+.planner-v2 .sleep-preparation-timing [role='alert'] {
+  color: var(--danger);
+}
+@media (max-width: 700px) {
+  .planner-v2 .sleep-guide__start {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .planner-v2 .sleep-guide__actions {
+    align-items: stretch;
+    flex-direction: column;
+    width: 100%;
+  }
+}

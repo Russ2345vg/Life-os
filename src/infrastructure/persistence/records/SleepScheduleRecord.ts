@@ -4,8 +4,12 @@ import type {
   WakeResultKind,
   WakeOccurrenceStatus,
 } from '../../../domain/sleep/SleepSchedule';
+import type { AndroidAlarmOutcome } from '../../../domain/sleep/AndroidAlarmReport';
+import type { SleepPreparationTiming } from '../../../domain/sleep/SleepPreparationTiming';
 
 export interface SleepScheduleRecord {
+  readonly preparationTiming?: SleepPreparationTiming;
+  readonly androidAlarmReport?: AndroidAlarmReportRecord;
   readonly coldShowerEntries?: readonly ColdShowerEntryRecord[];
   readonly schemaVersion: 1;
   readonly id: 'sleep-schedule';
@@ -18,6 +22,16 @@ export interface SleepScheduleRecord {
   readonly alarmExceptions: readonly AlarmExceptionRecord[];
   readonly sleepEvents?: readonly SleepEventRecord[];
   readonly wakeResults?: readonly WakeResultRecord[];
+}
+
+export interface AndroidAlarmReportRecord {
+  readonly source: 'ANDROID';
+  readonly checkedAt: string;
+  readonly scheduleKey: string;
+  readonly outcome: AndroidAlarmOutcome;
+  readonly acknowledgedSettingsVersion: number | null;
+  readonly nextOccurrenceId: string | null;
+  readonly nextScheduledAt: string | null;
 }
 
 export interface ColdShowerEntryRecord {

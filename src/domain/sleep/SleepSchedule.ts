@@ -1,5 +1,11 @@
 import { calculateNightWindow } from './NightTime';
 import type { ColdShowerEntry } from './ColdShower';
+import type { AndroidAlarmReport } from './AndroidAlarmReport';
+import {
+  validateSleepPreparationTiming,
+  resolveStretchingItem,
+  type SleepPreparationTiming,
+} from './SleepPreparationTiming';
 
 export const SLEEP_SCHEDULE_ID = 'sleep-schedule';
 
@@ -170,6 +176,8 @@ export interface SleepHistoryEntry {
 }
 
 export interface SleepScheduleState {
+  readonly preparationTiming?: SleepPreparationTiming;
+  readonly androidAlarmReport?: AndroidAlarmReport;
   readonly coldShowerEntries?: readonly ColdShowerEntry[];
   readonly id: typeof SLEEP_SCHEDULE_ID;
   readonly version: number;
@@ -194,6 +202,19 @@ export interface RebuildWakeScheduleInput {
   readonly cycleDates: readonly string[];
   readonly now: Date;
   readonly nextId: () => string;
+}
+
+export function setSleepPreparationTiming(
+  state: SleepScheduleState,
+  timing: SleepPreparationTiming,
+): SleepScheduleState {
+  validateSleepPreparationTiming(timing);
+  if (
+    timing.stretchingItemId !== null &&
+    resolveStretchingItem(timing, state.preparationItems) === null
+  )
+    throw new TypeError('Пункт растяжки недоступен. Выберите включённый пункт из списка.');
+  return changed(state, { preparationTiming: { ...timing } });
 }
 
 export function createEmptySleepSchedule(): SleepScheduleState {

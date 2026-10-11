@@ -8,8 +8,12 @@ import {
   type ReactNode,
 } from 'react';
 import { useQuickAccessGuard, useQuickAccessUncontrolledForm } from './QuickAccessContext';
+import { useSyncContentChanged } from '../sync/SyncStatusContext';
 import type { SleepScheduleService } from '../../application/sleep/SleepScheduleService';
-import type { SleepObservationService } from '../../application/sleep/SleepObservationService';
+import type {
+  SleepObservationService,
+  SleepQuickEntryContext,
+} from '../../application/sleep/SleepObservationService';
 import type { SleepAlarmObservationCoordinator } from '../../application/sleep/SleepAlarmObservationCoordinator';
 import {
   isConfirmedSleepObservation,
@@ -30,16 +34,39 @@ import type {
   SleepScheduleState,
 } from '../../domain/sleep/SleepSchedule';
 import { selectSleepHistoryEntries, summarizeSleepHistory } from '../../domain/sleep/SleepSchedule';
-import { calculateNightWindow, nominalSleepDurationMinutes } from '../../domain/sleep/NightTime';
+import {
+  calculateNightWindow,
+  nominalSleepDurationMinutes,
+  resolveSleepCycleDate,
+} from '../../domain/sleep/NightTime';
 import { summarizeEveningHistory } from './eveningHistoryModel';
 import { EveningDayClosure, type EveningPlannerServices } from './EveningDayClosure';
 import { WakeManagementPanel } from './WakeManagementPanel';
-import { isWakeScheduleAcknowledged, wakeProbeLabel } from './wakeManagementModel';
+import { wakeProbeLabel } from './wakeManagementModel';
+import { androidAlarmReportView } from './sleep/androidAlarmReportModel';
 import { SleepObservationForm } from './sleep/SleepObservationForm';
 import { SleepObservationChart } from './sleep/SleepObservationChart';
+import { SleepQuickEntry } from './sleep/SleepQuickEntry';
+import { SleepMorningFeedback } from './sleep/SleepMorningFeedback';
+import type { SleepMorningFeedbackPatch } from '../../domain/sleep/SleepMorningFeedback';
+import { SleepPreparationGuide } from './sleep/SleepPreparationGuide';
+import { SleepPreparationTiming } from './sleep/SleepPreparationTiming';
+import {
+  defaultSleepPreparationTiming,
+  resolveStretchingItem,
+  type SleepPreparationTiming as PreparationTiming,
+} from '../../domain/sleep/SleepPreparationTiming';
+import { loadSleepObservationHistory } from './sleep/sleepObservationHistoryLoader';
+import { resolveSleepPageMode, type SleepPageMode } from './sleep/sleepPageMode';
 import { cycleDateFromWakeDate, localWakeDate } from './sleep/sleepObservationDateModel';
 import { DomainError } from '../../shared/errors/DomainError';
 import './evening-support.css';
+
+interface MorningFeedbackAttempt {
+  readonly cycleDate: string;
+  readonly timeZone: string;
+  readonly patch: SleepMorningFeedbackPatch | null;
+}
 
 export function SleepPreparationPage({
   service,
@@ -72,6 +99,35 @@ export function SleepPreparationPage({
   const [selectedWakeDate, setSelectedWakeDate] = useState<string | null>(null);
   const selectedWakeDateRef = useRef<string | null>(null);
   const observationDirtyRef = useRef(false);
+  const [observationDirty, setObservationDirty] = useState(false);
+  const [observationDraftContext, setObservationDraftContext] = useState<{
+    readonly wakeDate: string;
+    readonly timeZone: string;
+    readonly mode: SleepPageMode;
+  } | null>(null);
+  const [syncContentRevision, setSyncContentRevision] = useState(0);
+  const notifySleepContent = useCallback(
+    () => setSyncContentRevision((revision) => revision + 1),
+    [],
+  );
+  useSyncContentChanged('sleepSchedules', notifySleepContent);
+  const [modeOverride, setModeOverride] = useState<'AUTO' | SleepPageMode>('AUTO');
+  const [quickContext, setQuickContext] = useState<SleepQuickEntryContext | null>(null);
+  const [quickError, setQuickError] = useState<string | null>(null);
+  const [quickSaved, setQuickSaved] = useState(false);
+  const feedbackAttemptRef = useRef<MorningFeedbackAttempt | null>(null);
+  const [feedbackResult, setFeedbackResult] = useState<{
+    readonly cycleDate: string;
+    readonly status: string | null;
+    readonly error: string | null;
+  } | null>(null);
+  const [feedbackBusy, setFeedbackBusy] = useState(false);
+  const [observationSyncRevision, setObservationSyncRevision] = useState(0);
+  const notifyObservations = useCallback(
+    () => setObservationSyncRevision((revision) => revision + 1),
+    [],
+  );
+  useSyncContentChanged('sleepObservations', notifyObservations);
   useQuickAccessGuard(() => ({
     dirty: observationDirtyRef.current,
     busy: busy || observationBusy,
@@ -87,8 +143,7 @@ export function SleepPreparationPage({
   const loadedRef = useRef(false);
   const updateObservationClock = useCallback((now: Date, timeZone: string) => {
     const previousDate = localWakeDate(observationNowRef.current, timeZone);
-    if (previousDate === localWakeDate(now, timeZone)) return;
-    if (selectedWakeDateRef.current === null) {
+    if (previousDate !== localWakeDate(now, timeZone) && selectedWakeDateRef.current === null) {
       if (observationDirtyRef.current) {
         selectedWakeDateRef.current = previousDate;
         setSelectedWakeDate(previousDate);
@@ -104,7 +159,72 @@ export function SleepPreparationPage({
     busyRef.current = busy;
   }, [busy]);
 
-  const recordingTimeZone = state?.settings?.timeZone;
+  const recordingTimeZone = observationDraftContext?.timeZone ?? state?.settings?.timeZone;
+  const stateLoaded = state !== null;
+  useEffect(() => {
+    if (observationSyncRevision === 0 || !state || busy || observationDirty || historyLoading)
+      return;
+    let active = true;
+    void observationHistoryForState(
+      observationService,
+      state,
+      observationNowRef.current,
+      selectedWakeDateRef.current,
+    )
+      .then((history) => {
+        if (active && !observationDirtyRef.current) {
+          setObservationHistory(history);
+          setHistoryError(null);
+        }
+      })
+      .catch((reason: unknown) => {
+        if (active) setHistoryError(messageOf(reason));
+      });
+    return () => {
+      active = false;
+    };
+  }, [observationSyncRevision, state, busy, observationDirty, historyLoading, observationService]);
+  useEffect(() => {
+    if (syncContentRevision === 0 || busy || !stateLoaded) return;
+    let active = true;
+    void service
+      .getState()
+      .then((latest) => {
+        // Read only schedule/report state: incoming sync must not replace an observation draft.
+        if (active && !busyRef.current) setState(latest);
+      })
+      .catch((reason: unknown) => {
+        if (active) setError(messageOf(reason));
+      });
+    return () => {
+      active = false;
+    };
+  }, [syncContentRevision, busy, stateLoaded, service]);
+  useEffect(() => {
+    if (!recordingTimeZone || busy || historyLoading) return;
+    let active = true;
+    void observationService
+      .quickEntryContext(observationNow)
+      .then((context) => {
+        if (active) {
+          setQuickContext(context);
+        }
+      })
+      .catch((reason: unknown) => {
+        if (active) setQuickError(messageOf(reason));
+      });
+    return () => {
+      active = false;
+    };
+  }, [
+    recordingTimeZone,
+    state?.settings?.wakeTime,
+    observationService,
+    observationNow,
+    observationHistory,
+    busy,
+    historyLoading,
+  ]);
   useEffect(() => {
     if (!recordingTimeZone) return;
     const tick = () => {
@@ -247,6 +367,51 @@ export function SleepPreparationPage({
     }
   };
 
+  const saveMorningFeedback = async (attempt: MorningFeedbackAttempt) => {
+    if (busyRef.current || observationDirtyRef.current || historyLoading || historyError !== null)
+      return;
+    busyRef.current = true;
+    setBusy(true);
+    setFeedbackBusy(true);
+    feedbackAttemptRef.current = attempt;
+    setFeedbackResult({ cycleDate: attempt.cycleDate, status: null, error: null });
+    try {
+      const saved =
+        attempt.patch === null
+          ? await observationService.clearMorningFeedback(attempt.cycleDate)
+          : await observationService.setMorningFeedback({
+              cycleDate: attempt.cycleDate,
+              timeZone: attempt.timeZone,
+              feedback: attempt.patch,
+            });
+      if (saved)
+        setObservationHistory((current) =>
+          [saved, ...current.filter((item) => item.cycleDate !== saved.cycleDate)].sort((a, b) =>
+            b.cycleDate.localeCompare(a.cycleDate),
+          ),
+        );
+      setFeedbackResult({
+        cycleDate: attempt.cycleDate,
+        status: attempt.patch === null ? 'Оценка сброшена' : 'Оценка сохранена',
+        error: null,
+      });
+      feedbackAttemptRef.current = null;
+    } catch (reason: unknown) {
+      setFeedbackResult({
+        cycleDate: attempt.cycleDate,
+        status: null,
+        error:
+          reason instanceof DomainError && reason.code.startsWith('persistence.')
+            ? 'Не удалось сохранить оценку. Попробуйте ещё раз.'
+            : messageOf(reason),
+      });
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+      setFeedbackBusy(false);
+    }
+  };
+
   if (state === null) {
     return (
       <section className="sleep-page sleep-page--loading" aria-live="polite">
@@ -255,12 +420,12 @@ export function SleepPreparationPage({
     );
   }
 
-  const latestWakeDate = localWakeDate(observationNow, state.settings?.timeZone ?? 'UTC');
-  const wakeDate = selectedWakeDate ?? latestWakeDate;
+  const latestWakeDate = localWakeDate(observationNow, recordingTimeZone ?? 'UTC');
+  const wakeDate = observationDraftContext?.wakeDate ?? selectedWakeDate ?? latestWakeDate;
   const observationCycleDate = cycleDateFromWakeDate(wakeDate);
   const observation =
     observationHistory.find(({ cycleDate }) => cycleDate === observationCycleDate) ?? null;
-  const observationTimeZone = observation?.timeZone ?? state.settings?.timeZone ?? 'UTC';
+  const observationTimeZone = observation?.timeZone ?? recordingTimeZone ?? 'UTC';
   const observationCycle = state.nightCycles.find(
     ({ cycleDate }) => cycleDate === observationCycleDate,
   );
@@ -269,6 +434,45 @@ export function SleepPreparationPage({
     (state.settings
       ? calculateNightWindow({ ...state.settings, cycleDate: observationCycleDate }).plannedSleepAt
       : null);
+  const mode =
+    modeOverride === 'AUTO'
+      ? (observationDraftContext?.mode ??
+        (state.settings ? resolveSleepPageMode(observationNow, state.settings) : 'EVENING'))
+      : modeOverride;
+  const quickDate =
+    quickContext &&
+    (mode === 'EVENING' ? quickContext.bedtimeCycleDate : quickContext.wakeCycleDate);
+  const editRecording = () => {
+    const element = document.getElementById('sleep-recording');
+    element?.scrollIntoView({ block: 'start' });
+    element
+      ?.querySelector<HTMLInputElement>('input[name="wentToBed"]')
+      ?.focus({ preventScroll: true });
+  };
+  const retryHistory = async () => {
+    if (busyRef.current || observationDirtyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
+    setHistoryLoading(true);
+    setHistoryError(null);
+    try {
+      setObservationHistory(
+        await observationHistoryForState(
+          observationService,
+          state,
+          new Date(),
+          selectedWakeDateRef.current,
+        ),
+      );
+      setObservationError(null);
+    } catch (reason: unknown) {
+      setHistoryError(messageOf(reason));
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+      setHistoryLoading(false);
+    }
+  };
 
   return (
     <SleepPreparationView
@@ -280,92 +484,218 @@ export function SleepPreparationPage({
       alarmStatus={alarmStatus}
       alarmSounds={alarmSounds}
       dismissalSetup={dismissalSetup}
-      morningObservation={
-        state.settings !== null ? (
-          <SleepObservationForm
-            key={`${observationCycleDate}:${observation?.updatedAt.toISOString() ?? 'new'}`}
-            cycleDate={observationCycleDate}
-            timeZone={observationTimeZone}
-            plannedWentToBedAt={plannedWentToBedAt}
-            observation={observation}
+      pageMode={mode}
+      preparationNow={observationNow}
+      onSavePreparationTiming={(timing) => run(() => service.savePreparationTiming(timing))}
+      modeControl={
+        state.settings ? (
+          <div className="planner-segments sleep-mode-control" aria-label="Вид раздела сна">
+            {(['AUTO', 'MORNING', 'EVENING'] as const).map((value) => (
+              <button
+                type="button"
+                key={value}
+                aria-pressed={modeOverride === value}
+                onClick={() => setModeOverride(value)}
+              >
+                {value === 'AUTO' ? 'Авто' : value === 'MORNING' ? 'Утро' : 'Вечер'}
+              </button>
+            ))}
+          </div>
+        ) : null
+      }
+      quickEntry={
+        quickDate ? (
+          <SleepQuickEntry
+            mode={mode}
+            cycleDate={quickDate}
+            observation={observationHistory.find((item) => item.cycleDate === quickDate) ?? null}
             busy={busy || observationBusy || historyLoading}
-            error={observationError}
-            saved={observationSaved}
-            wakeDate={wakeDate}
-            latestWakeDate={latestWakeDate}
-            onDirtyChange={(dirty) => {
-              observationDirtyRef.current = dirty;
-            }}
-            onWakeDateChange={(value) => {
-              if (busyRef.current) return;
-              let cycleDate: string;
-              try {
-                cycleDate = cycleDateFromWakeDate(value);
-                if (value > latestWakeDate)
-                  throw new TypeError('Выберите сегодняшнюю или прошедшую дату подъёма.');
-              } catch (reason: unknown) {
-                setObservationError(messageOf(reason));
-                return;
-              }
-              selectedWakeDateRef.current = value;
-              observationDirtyRef.current = false;
-              setSelectedWakeDate(value);
-              setObservationSaved(false);
-              setObservationError(null);
-              busyRef.current = true;
-              setBusy(true);
-              void observationService
-                .history(cycleDate, cycleDate)
-                .then((loaded) => {
-                  setObservationHistory((current) => [
-                    ...current.filter((item) => item.cycleDate !== cycleDate),
-                    ...loaded,
-                  ]);
-                })
-                .catch((reason: unknown) => setObservationError(messageOf(reason)))
-                .finally(() => {
-                  busyRef.current = false;
-                  setBusy(false);
-                });
-            }}
-            onSave={async (input) => {
-              if (busyRef.current) return;
+            dirty={observationDirty}
+            error={quickError}
+            saved={quickSaved}
+            onEdit={editRecording}
+            onMark={async () => {
+              if (busyRef.current || observationDirtyRef.current) return;
               busyRef.current = true;
               setBusy(true);
               setObservationBusy(true);
-              setObservationError(null);
-              setObservationSaved(false);
+              setQuickError(null);
+              setQuickSaved(false);
               try {
                 const saved =
-                  observation !== null && isConfirmedSleepObservation(observation)
-                    ? await observationService.revise({
-                        cycleDate: observationCycleDate,
-                        ...input,
-                      })
-                    : await observationService.confirm({
-                        cycleDate: observationCycleDate,
-                        ...input,
-                      });
-                setObservationHistory((current) =>
-                  [saved, ...current.filter(({ cycleDate }) => cycleDate !== saved.cycleDate)].sort(
-                    (left, right) => right.cycleDate.localeCompare(left.cycleDate),
-                  ),
-                );
-                setObservationSaved(true);
-                observationDirtyRef.current = false;
+                  mode === 'EVENING'
+                    ? await observationService.markBedtimeNow()
+                    : await observationService.markWakeNow();
+                setObservationHistory((current) => [
+                  saved,
+                  ...current.filter((item) => item.cycleDate !== saved.cycleDate),
+                ]);
+                if (mode === 'MORNING') {
+                  const wake = new Date(`${saved.cycleDate}T12:00:00Z`);
+                  wake.setUTCDate(wake.getUTCDate() + 1);
+                  const date = wake.toISOString().slice(0, 10);
+                  selectedWakeDateRef.current = date;
+                  setSelectedWakeDate(date);
+                  setModeOverride('MORNING');
+                }
+                setQuickSaved(true);
               } catch (reason: unknown) {
-                setObservationError(
+                setQuickError(
                   reason instanceof DomainError && reason.code.startsWith('persistence.')
-                    ? 'Не удалось сохранить ночь. Введённое время сохранено — попробуйте ещё раз.'
+                    ? 'Не удалось сохранить отметку. Попробуйте ещё раз.'
                     : messageOf(reason),
                 );
               } finally {
-                setObservationBusy(false);
                 busyRef.current = false;
                 setBusy(false);
+                setObservationBusy(false);
               }
             }}
           />
+        ) : null
+      }
+      morningObservation={
+        state.settings !== null ? (
+          <>
+            <SleepObservationForm
+              key={`${observationCycleDate}:${observation?.updatedAt.toISOString() ?? 'new'}`}
+              cycleDate={observationCycleDate}
+              timeZone={observationTimeZone}
+              plannedWentToBedAt={plannedWentToBedAt}
+              observation={observation}
+              busy={busy || observationBusy || historyLoading || historyError !== null}
+              error={observationError}
+              saved={observationSaved}
+              wakeDate={wakeDate}
+              latestWakeDate={latestWakeDate}
+              onDirtyChange={(dirty) => {
+                observationDirtyRef.current = dirty;
+                setObservationDirty(dirty);
+                setObservationDraftContext((current) =>
+                  dirty ? (current ?? { wakeDate, timeZone: observationTimeZone, mode }) : null,
+                );
+              }}
+              onWakeDateChange={(value) => {
+                if (busyRef.current || observationDirtyRef.current) return;
+                try {
+                  cycleDateFromWakeDate(value);
+                  if (value > latestWakeDate)
+                    throw new TypeError('Выберите сегодняшнюю или прошедшую дату подъёма.');
+                } catch (reason: unknown) {
+                  setObservationError(messageOf(reason));
+                  return;
+                }
+                selectedWakeDateRef.current = value;
+                observationDirtyRef.current = false;
+                setObservationDirty(false);
+                setObservationDraftContext(null);
+                setQuickSaved(false);
+                setSelectedWakeDate(value);
+                setObservationSaved(false);
+                setObservationError(null);
+                busyRef.current = true;
+                setBusy(true);
+                setHistoryLoading(true);
+                setHistoryError(null);
+                void observationHistoryForState(observationService, state, observationNow, value)
+                  .then((loaded) => {
+                    setObservationHistory(loaded);
+                  })
+                  .catch((reason: unknown) => {
+                    setObservationError(messageOf(reason));
+                    setHistoryError(messageOf(reason));
+                  })
+                  .finally(() => {
+                    busyRef.current = false;
+                    setBusy(false);
+                    setHistoryLoading(false);
+                  });
+              }}
+              onSave={async (input) => {
+                if (busyRef.current) return;
+                busyRef.current = true;
+                setBusy(true);
+                setObservationBusy(true);
+                setObservationError(null);
+                setObservationSaved(false);
+                try {
+                  const saved =
+                    observation !== null && isConfirmedSleepObservation(observation)
+                      ? await observationService.revise({
+                          cycleDate: observationCycleDate,
+                          ...input,
+                        })
+                      : await observationService.confirm({
+                          cycleDate: observationCycleDate,
+                          ...input,
+                          timeZone: observationTimeZone,
+                        });
+                  setObservationHistory((current) =>
+                    [
+                      saved,
+                      ...current.filter(({ cycleDate }) => cycleDate !== saved.cycleDate),
+                    ].sort((left, right) => right.cycleDate.localeCompare(left.cycleDate)),
+                  );
+                  setObservationSaved(true);
+                  observationDirtyRef.current = false;
+                  setObservationDirty(false);
+                  setObservationDraftContext(null);
+                  setQuickSaved(false);
+                } catch (reason: unknown) {
+                  setObservationError(
+                    reason instanceof DomainError && reason.code.startsWith('persistence.')
+                      ? 'Не удалось сохранить ночь. Введённое время сохранено — попробуйте ещё раз.'
+                      : messageOf(reason),
+                  );
+                } finally {
+                  setObservationBusy(false);
+                  busyRef.current = false;
+                  setBusy(false);
+                }
+              }}
+            />
+            {mode === 'MORNING' ? (
+              <SleepMorningFeedback
+                feedback={observation?.morningFeedback}
+                busy={feedbackBusy}
+                disabledReason={
+                  observationDirty
+                    ? 'Сначала сохраните времена или сбросьте изменения.'
+                    : wakeDate > localWakeDate(observationNow, observationTimeZone)
+                      ? 'Будущую ночь пока нельзя оценить.'
+                      : busy || observationBusy || historyLoading
+                        ? 'Подождите завершения загрузки или сохранения.'
+                        : historyError
+                          ? 'Сначала повторите загрузку истории.'
+                          : null
+                }
+                status={
+                  feedbackResult?.cycleDate === observationCycleDate ? feedbackResult.status : null
+                }
+                error={
+                  feedbackResult?.cycleDate === observationCycleDate ? feedbackResult.error : null
+                }
+                onSelect={(patch) =>
+                  void saveMorningFeedback({
+                    cycleDate: observationCycleDate,
+                    timeZone: observationTimeZone,
+                    patch,
+                  })
+                }
+                onClear={() =>
+                  void saveMorningFeedback({
+                    cycleDate: observationCycleDate,
+                    timeZone: observationTimeZone,
+                    patch: null,
+                  })
+                }
+                onRetry={() => {
+                  if (feedbackAttemptRef.current?.cycleDate === observationCycleDate)
+                    void saveMorningFeedback(feedbackAttemptRef.current);
+                }}
+              />
+            ) : null}
+          </>
         ) : null
       }
       historyChart={
@@ -374,6 +704,10 @@ export function SleepPreparationPage({
           plans={state.nightCycles}
           loading={historyLoading}
           error={historyError}
+          endCycleDate={observationCycleDate}
+          timeZone={state.settings?.timeZone ?? 'UTC'}
+          onRecord={editRecording}
+          onRetry={() => void retryHistory()}
         />
       }
       onBack={onBack}
@@ -498,6 +832,11 @@ export function SleepPreparationView({
   dismissalSetup,
   morningObservation,
   historyChart,
+  pageMode = 'MORNING',
+  preparationNow = new Date(),
+  onSavePreparationTiming,
+  modeControl,
+  quickEntry,
   onBack,
   backLabel = 'Сегодня',
   onSaveSettings,
@@ -534,6 +873,11 @@ export function SleepPreparationView({
   readonly dismissalSetup: WakeDismissalSetup;
   readonly morningObservation?: ReactNode;
   readonly historyChart?: ReactNode;
+  readonly pageMode?: SleepPageMode;
+  readonly preparationNow?: Date;
+  readonly onSavePreparationTiming?: (timing: PreparationTiming) => void | Promise<boolean>;
+  readonly modeControl?: ReactNode;
+  readonly quickEntry?: ReactNode;
   readonly onBack: () => void;
   readonly backLabel?: string;
   readonly onSaveSettings: (input: {
@@ -572,6 +916,8 @@ export function SleepPreparationView({
   );
   const cycle = latestCycle(state.nightCycles);
   const completed = cycle?.preparationCompletionKind !== null && cycle !== undefined;
+  const preparationTiming = state.preparationTiming ?? defaultSleepPreparationTiming();
+  const stretchingItem = resolveStretchingItem(preparationTiming, state.preparationItems);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsRef = useRef<HTMLDetailsElement>(null);
   useEffect(() => {
@@ -618,43 +964,8 @@ export function SleepPreparationView({
   const preparationPercent =
     preparationTotal > 0 ? Math.round((preparationDone / preparationTotal) * 100) : 0;
 
-  return (
-    <section className="sleep-page">
-      <header className="sleep-topbar">
-        <button
-          className="sleep-back"
-          type="button"
-          onClick={onBack}
-          aria-label={`Вернуться к ${backLabel === 'Распорядок' ? 'распорядку' : 'сегодня'}`}
-        >
-          ←
-        </button>
-        <div className="sleep-title-block">
-          <h1>Сон и подъём</h1>
-          <p>Ближайший сигнал и спокойная подготовка</p>
-        </div>
-        <div className="sleep-topbar-actions">
-          <span className="sleep-date">
-            {formatCycleDate(cycle?.cycleDate, state.settings.timeZone)}
-          </span>
-          <button type="button" aria-label="Календарь" onClick={onBack}>
-            ▣
-          </button>
-          <button type="button" aria-label="Другие действия">
-            •••
-          </button>
-        </div>
-      </header>
-
-      {error ? (
-        <p className="planner-error" role="alert">
-          {error}
-        </p>
-      ) : null}
-
-      {morningObservation}
-      {historyChart}
-
+  const preparation = (
+    <>
       <WakeManagementPanel
         state={state}
         status={alarmStatus}
@@ -667,11 +978,8 @@ export function SleepPreparationView({
       >
         <AlarmStatusPanel
           status={alarmStatus}
-          expectedSettingsVersion={state.settings.version}
-          wakeTime={state.settings.wakeTime}
-          timeZone={state.settings.timeZone}
+          state={state}
           busy={busy}
-          scheduleAcknowledged={isWakeScheduleAcknowledged(state, alarmStatus, new Date())}
           onScheduleTest={onScheduleTestAlarm}
           onOpenSettings={onOpenAlarmSettings}
           {...(onSyncAlarm ? { onSyncAlarm } : {})}
@@ -740,6 +1048,30 @@ export function SleepPreparationView({
             </details>
           </div>
 
+          {pageMode === 'EVENING' && onSavePreparationTiming ? (
+            <SleepPreparationTiming
+              timing={preparationTiming}
+              items={state.preparationItems}
+              plannedSleepAt={
+                cycle?.plannedSleepAt ??
+                calculateNightWindow({
+                  ...state.settings,
+                  cycleDate: resolveSleepCycleDate(
+                    preparationNow,
+                    timeZone,
+                    state.settings.wakeTime,
+                  ),
+                }).plannedSleepAt
+              }
+              timeZone={timeZone}
+              now={preparationNow}
+              completed={completed}
+              busy={busy}
+              error={error}
+              onSave={onSavePreparationTiming}
+            />
+          ) : null}
+
           {cycle && preparationTotal > 0 ? (
             <div className="sleep-preparation-progress">
               <div>
@@ -763,47 +1095,59 @@ export function SleepPreparationView({
           {cycle === null ? (
             <p role="status">Создаём список текущей ночи…</p>
           ) : (
-            <div className="sleep-groups">
-              {groups.map((group) => (
-                <section className="sleep-check-group" key={group.id}>
-                  <header>
-                    <span className="sleep-group-icon" aria-hidden="true">
-                      <SleepGlyph kind={groupIcon(group.title)} />
-                    </span>
-                    <h3>{group.title}</h3>
-                    <span>
-                      {group.items.filter(({ status }) => status === 'DONE').length}/
-                      {group.items.length}
-                    </span>
-                    <span aria-hidden="true">⌄</span>
-                  </header>
-                  <ul>
-                    {group.items.map((item) => (
-                      <li key={item.id}>
-                        <label>
-                          <input
-                            type="checkbox"
-                            checked={item.status === 'DONE'}
-                            disabled={busy || completed || item.status === 'SKIPPED'}
-                            onChange={(event) => onComplete(item.id, event.currentTarget.checked)}
-                          />
-                          <span className="sleep-item-icon" aria-hidden="true">
-                            <SleepGlyph kind={itemIcon(item.title)} />
-                          </span>
-                          <span className={item.status === 'SKIPPED' ? 'sleep-item--skipped' : ''}>
-                            {item.title}
-                          </span>
-                          {item.status === 'SKIPPED' ? <small>Пропущено</small> : null}
-                          <span className="sleep-item-menu" aria-hidden="true">
-                            ⋮
-                          </span>
-                        </label>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              ))}
-            </div>
+            <SleepPreparationGuide
+              key={cycle.id}
+              cycle={cycle}
+              busy={busy}
+              stretchingItemId={stretchingItem?.id ?? null}
+              stretchingMinutes={preparationTiming.stretchingMinutes}
+              onComplete={(id) => onComplete(id, true)}
+              onFinish={() => onFinish('WITH_SKIPS')}
+            >
+              <div className="sleep-groups">
+                {groups.map((group) => (
+                  <section className="sleep-check-group" key={group.id}>
+                    <header>
+                      <span className="sleep-group-icon" aria-hidden="true">
+                        <SleepGlyph kind={groupIcon(group.title)} />
+                      </span>
+                      <h3>{group.title}</h3>
+                      <span>
+                        {group.items.filter(({ status }) => status === 'DONE').length}/
+                        {group.items.length}
+                      </span>
+                      <span aria-hidden="true">⌄</span>
+                    </header>
+                    <ul>
+                      {group.items.map((item) => (
+                        <li key={item.id}>
+                          <label>
+                            <input
+                              type="checkbox"
+                              checked={item.status === 'DONE'}
+                              disabled={busy || completed || item.status === 'SKIPPED'}
+                              onChange={(event) => onComplete(item.id, event.currentTarget.checked)}
+                            />
+                            <span className="sleep-item-icon" aria-hidden="true">
+                              <SleepGlyph kind={itemIcon(item.title)} />
+                            </span>
+                            <span
+                              className={item.status === 'SKIPPED' ? 'sleep-item--skipped' : ''}
+                            >
+                              {item.title}
+                            </span>
+                            {item.status === 'SKIPPED' ? <small>Пропущено</small> : null}
+                            <span className="sleep-item-menu" aria-hidden="true">
+                              ⋮
+                            </span>
+                          </label>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                ))}
+              </div>
+            </SleepPreparationGuide>
           )}
 
           <div className="sleep-add-actions">
@@ -939,19 +1283,66 @@ export function SleepPreparationView({
           <SleepHistoryPanel state={state} timeZone={state.settings.timeZone} />
         </div>
       </div>
+    </>
+  );
+  const content = {
+    recording: <div key="recording">{morningObservation}</div>,
+    history: <div key="history">{historyChart}</div>,
+    preparation: <div key="preparation">{preparation}</div>,
+  };
+  const sections =
+    pageMode === 'MORNING'
+      ? [content.recording, content.history, content.preparation]
+      : [content.preparation, content.recording, content.history];
+
+  return (
+    <section className="sleep-page">
+      <header className="sleep-topbar">
+        <button
+          className="sleep-back"
+          type="button"
+          onClick={onBack}
+          aria-label={`Вернуться к ${backLabel === 'Распорядок' ? 'распорядку' : 'сегодня'}`}
+        >
+          ←
+        </button>
+        <div className="sleep-title-block">
+          <h1>Сон и подъём</h1>
+          <p>Ближайший сигнал и спокойная подготовка</p>
+        </div>
+        <div className="sleep-topbar-actions">
+          <span className="sleep-date">
+            {formatCycleDate(cycle?.cycleDate, state.settings.timeZone)}
+          </span>
+          <button type="button" aria-label="Календарь" onClick={onBack}>
+            ▣
+          </button>
+          <button type="button" aria-label="Другие действия">
+            •••
+          </button>
+        </div>
+      </header>
+
+      {error ? (
+        <p className="planner-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+
+      {modeControl}
+      {quickEntry}
+
+      {sections}
     </section>
   );
 }
 
 function AlarmStatusPanel({
   status,
-  expectedSettingsVersion,
-  wakeTime,
-  timeZone,
+  state,
   busy,
   onScheduleTest,
   onOpenSettings,
-  scheduleAcknowledged,
   onSyncAlarm,
   onExportDismissalQr,
   dismissalSetup,
@@ -959,31 +1350,32 @@ function AlarmStatusPanel({
   onSaveEmergencyPhrase,
 }: {
   readonly status: WakeAlarmStatus;
-  readonly expectedSettingsVersion: number;
-  readonly wakeTime: string;
-  readonly timeZone: string;
+  readonly state: SleepScheduleState;
   readonly busy: boolean;
   readonly onScheduleTest: () => void;
   readonly onOpenSettings: (issue: WakeAlarmPermissionIssue) => void;
-  readonly scheduleAcknowledged: boolean;
   readonly onSyncAlarm?: () => void;
   readonly onExportDismissalQr?: () => void;
   readonly dismissalSetup: WakeDismissalSetup;
   readonly onRegenerateDismissalQr: () => void;
   readonly onSaveEmergencyPhrase: (phrase: string) => void;
 }) {
-  const label = alarmStatusLabel(
-    status,
-    scheduleAcknowledged ? expectedSettingsVersion : -1,
-    wakeTime,
-    timeZone,
-  );
+  const view = androidAlarmReportView(state, new Date(), status);
   return (
-    <section className={`sleep-alarm-status sleep-alarm-status--${status.state.toLowerCase()}`}>
+    <section
+      className={`sleep-alarm-status sleep-alarm-status--${view.tone}`}
+      aria-label="Подтверждение будильника Android"
+    >
       <div className="sleep-alarm-status__heading">
         <span>Будильник Android</span>
-        <strong>{label}</strong>
+        <strong role="status">{view.label}</strong>
       </div>
+      {view.nextSignalLabel ? <small>{view.nextSignalLabel}</small> : null}
+      {view.checkedAtLabel ? <small>{view.checkedAtLabel}</small> : null}
+      <p className="sleep-alarm-next-action">{view.nextAction}</p>
+      {status.supported && status.state === 'RINGING' ? (
+        <small>Сигнал звучит на этом телефоне</small>
+      ) : null}
       {status.supported && status.message ? <small>{status.message}</small> : null}
       <p
         className={
@@ -1135,33 +1527,6 @@ function WakeDismissalSetupPanel({
       <small>QR и фраза проверяются локально; прежний QR после замены недействителен.</small>
     </section>
   );
-}
-
-function alarmStatusLabel(
-  status: WakeAlarmStatus,
-  expectedSettingsVersion: number,
-  wakeTime: string,
-  timeZone: string,
-): string {
-  if (!status.supported) return 'Ожидает применения на Android';
-  if (status.state === 'PERMISSION_REQUIRED') return 'Требуются разрешения Android';
-  if (status.state === 'ERROR') return 'Ошибка постановки';
-  if (status.state === 'RINGING') return 'Сигнал звучит';
-  if (
-    status.state === 'SCHEDULED' &&
-    status.acknowledgedSettingsVersion === expectedSettingsVersion &&
-    status.nextScheduledAt !== null
-  ) {
-    const time = new Intl.DateTimeFormat('ru-RU', {
-      timeZone,
-      hour: '2-digit',
-      minute: '2-digit',
-      hourCycle: 'h23',
-    }).format(status.nextScheduledAt);
-    return `Установлен на ${time}`;
-  }
-  if (status.state === 'READY') return 'Расписание выключено';
-  return `Ожидает постановки на ${wakeTime}`;
 }
 
 function alarmIssueLabel(issue: WakeAlarmPermissionIssue): string {
@@ -1644,18 +2009,7 @@ async function observationHistoryForState(
   selectedWakeDate: string | null = null,
 ): Promise<readonly SleepObservation[]> {
   if (state.settings === null) return [];
-  const today = localWakeDate(now, state.settings.timeZone);
-  const from = addCycleDays(today, -30);
-  const history = await service.history(from, today);
-  const selected = selectedWakeDate === null ? null : cycleDateFromWakeDate(selectedWakeDate);
-  if (selected === null || (selected >= from && selected <= today)) return history;
-  return [...history, ...(await service.history(selected, selected))];
-}
-
-function addCycleDays(cycleDate: string, days: number): string {
-  const value = new Date(`${cycleDate}T12:00:00.000Z`);
-  value.setUTCDate(value.getUTCDate() + days);
-  return value.toISOString().slice(0, 10);
+  return loadSleepObservationHistory(service, now, state.settings.timeZone, selectedWakeDate);
 }
 
 function groupedSnapshot(

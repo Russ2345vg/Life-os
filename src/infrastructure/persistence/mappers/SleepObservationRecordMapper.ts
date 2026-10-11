@@ -5,6 +5,10 @@ import {
 } from '../../../domain/sleep/SleepObservation';
 import type { SleepObservationRecord } from '../records/SleepObservationRecord';
 import {
+  validateSleepMorningFeedback,
+  type SleepMorningFeedback,
+} from '../../../domain/sleep/SleepMorningFeedback';
+import {
   assertRecordAndSchemaVersion,
   invalidRecord,
   readIsoDate,
@@ -20,6 +24,14 @@ export const SleepObservationRecordMapper = {
     validateSleepObservation(observation);
     return {
       schemaVersion: 1,
+      ...(observation.morningFeedback === undefined
+        ? {}
+        : {
+            morningFeedback: {
+              ...observation.morningFeedback,
+              recordedAt: observation.morningFeedback.recordedAt.toISOString(),
+            },
+          }),
       id: observation.id,
       cycleDate: observation.cycleDate,
       nightCycleId: observation.nightCycleId,
@@ -36,7 +48,9 @@ export const SleepObservationRecordMapper = {
 
   fromRecord(value: unknown): SleepObservation {
     assertRecordAndSchemaVersion(value);
+    const morningFeedback = readMorningFeedback(value.morningFeedback);
     const observation: SleepObservation = {
+      ...(morningFeedback === undefined ? {} : { morningFeedback }),
       id: readString(value, 'id'),
       cycleDate: readString(value, 'cycleDate'),
       nightCycleId: readNullableString(value, 'nightCycleId'),
@@ -57,6 +71,36 @@ export const SleepObservationRecordMapper = {
     return observation;
   },
 };
+
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function readMorningFeedback(value: unknown): SleepMorningFeedback | undefined {
+  if (!isRecord(value)) return undefined;
+  try {
+    const sleepQuality = value.sleepQuality;
+    const energy = value.energy;
+    if (
+      sleepQuality !== null &&
+      sleepQuality !== 'GOOD' &&
+      sleepQuality !== 'OK' &&
+      sleepQuality !== 'POOR'
+    )
+      return undefined;
+    if (energy !== null && energy !== 'ENERGETIC' && energy !== 'OK' && energy !== 'TIRED')
+      return undefined;
+    const feedback: SleepMorningFeedback = {
+      sleepQuality,
+      energy,
+      recordedAt: readIsoDate(value, 'recordedAt'),
+    };
+    validateSleepMorningFeedback(feedback);
+    return feedback;
+  } catch {
+    return undefined;
+  }
+}
 
 function readWakeSource(record: UnknownRecord): WakeObservationSource | null {
   const value = readNullableString(record, 'wakeSource');

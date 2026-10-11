@@ -14,6 +14,233 @@ import type { SleepScheduleRepository, SleepScheduleUpdate } from './SleepSchedu
 import { SleepObservationService } from './SleepObservationService';
 
 describe('SleepObservationService', () => {
+  it('queues independent choices and retries a failed put without duplicates', async () => {
+    const observations = new InMemorySleepObservationRepository();
+    const clock = new FakeClock(new Date('2026-10-11T01:00:00Z'));
+    const service = new SleepObservationService(
+      observations,
+      new InMemorySleepScheduleRepository(schedule()),
+      clock,
+    );
+    const input = { cycleDate: '2026-10-10', feedback: { sleepQuality: 'GOOD' as const } };
+    observations.failNextSave = true;
+    await expect(service.setMorningFeedback(input)).rejects.toThrow('save failed');
+    await Promise.all([
+      service.setMorningFeedback(input),
+      service.setMorningFeedback({ cycleDate: input.cycleDate, feedback: { energy: 'TIRED' } }),
+    ]);
+    expect(observations.values.size).toBe(1);
+    expect(observations.values.get(input.cycleDate)).toMatchObject({
+      id: 'sleep-observation:2026-10-10',
+      timeZone: 'Asia/Chita',
+      wentToBedAt: null,
+      wokeAt: null,
+      confirmedAt: null,
+      morningFeedback: { sleepQuality: 'GOOD', energy: 'TIRED' },
+    });
+    await service.clearMorningFeedback(input.cycleDate);
+    expect(observations.values.get(input.cycleDate)).not.toHaveProperty('morningFeedback');
+    expect(await service.clearMorningFeedback('2026-10-09')).toBeNull();
+    expect(observations.values.size).toBe(1);
+  });
+  it('retains feedback through alarm prefill and confirmed times', async () => {
+    const observations = new InMemorySleepObservationRepository();
+    const schedules = new InMemorySleepScheduleRepository(schedule());
+    const clock = new FakeClock(new Date('2026-10-04T01:00:00Z'));
+    const service = new SleepObservationService(observations, schedules, clock);
+    const rated = await service.setMorningFeedback({
+      cycleDate: '2026-10-03',
+      feedback: { energy: 'ENERGETIC' },
+      timeZone: 'Asia/Chita',
+    });
+    const alarm = await service.reconcileWakeResult(schedule(), wakeResult('QR'));
+    expect(alarm?.morningFeedback).toEqual(rated.morningFeedback);
+    const confirmed = await service.confirm({
+      cycleDate: '2026-10-03',
+      wentToBedAt: new Date('2026-10-03T14:00:00Z'),
+      wokeAt: alarm!.wokeAt!,
+    });
+    schedules.state = {
+      ...schedule(),
+      settings: { ...schedule().settings!, timeZone: 'America/Los_Angeles' },
+    };
+    clock.setTime(new Date('2026-10-04T01:10:00Z'));
+    const updated = await service.setMorningFeedback({
+      cycleDate: '2026-10-03',
+      feedback: { sleepQuality: 'OK' },
+    });
+    expect(updated).toMatchObject({
+      timeZone: 'Asia/Chita',
+      createdAt: rated.createdAt,
+      confirmedAt: confirmed.confirmedAt,
+      wentToBedAt: confirmed.wentToBedAt,
+      wokeAt: confirmed.wokeAt,
+      morningFeedback: { sleepQuality: 'OK', energy: 'ENERGETIC' },
+    });
+  });
+  it('rejects a future selected wake date without persisting an observation', async () => {
+    const observations = new InMemorySleepObservationRepository();
+    const service = new SleepObservationService(
+      observations,
+      new InMemorySleepScheduleRepository(schedule()),
+      new FakeClock(new Date('2026-10-10T20:00:00Z')),
+    );
+    await expect(
+      service.setMorningFeedback({
+        cycleDate: '2026-10-10',
+        timeZone: 'America/Los_Angeles',
+        feedback: { energy: 'TIRED' },
+      }),
+    ).rejects.toThrow('будущ');
+    expect(observations.values.size).toBe(0);
+  });
+  it('retains the timezone of an entered observation after synced schedule settings change', async () => {
+    const original = schedule();
+    const schedules = new InMemorySleepScheduleRepository({
+      ...original,
+      settings: { ...original.settings!, timeZone: 'Pacific/Kiritimati' },
+    });
+    const service = new SleepObservationService(
+      new InMemorySleepObservationRepository(),
+      schedules,
+      new FakeClock(new Date('2026-10-04T05:00:00Z')),
+    );
+    const saved = await service.confirm({
+      cycleDate: '2026-10-03',
+      wentToBedAt: new Date('2026-10-03T14:30:00Z'),
+      wokeAt: new Date('2026-10-04T00:45:00Z'),
+      timeZone: 'Asia/Chita',
+    });
+    expect(saved.timeZone).toBe('Asia/Chita');
+    expect(saved.wentToBedAt?.toISOString()).toBe('2026-10-03T14:30:00.000Z');
+  });
+  it('previews the bed draft at the same clock instant and rejects a zero-length wake', async () => {
+    const observations = new InMemorySleepObservationRepository();
+    const clock = new FakeClock(new Date('2026-10-03T14:30:00Z'));
+    const service = new SleepObservationService(
+      observations,
+      new InMemorySleepScheduleRepository(schedule()),
+      clock,
+    );
+    await service.markBedtimeNow();
+    expect((await service.quickEntryContext()).wakeCycleDate).toBe('2026-10-03');
+    await expect(service.markWakeNow()).rejects.toThrow('раньше');
+    expect(observations.values.size).toBe(1);
+  });
+  it('records an after-midnight bedtime and late manual wake in the same draft', async () => {
+    const observations = new InMemorySleepObservationRepository();
+    const clock = new FakeClock(new Date('2026-10-03T16:00:00Z'));
+    const service = new SleepObservationService(
+      observations,
+      new InMemorySleepScheduleRepository(schedule()),
+      clock,
+    );
+    const bed = await service.markBedtimeNow();
+    expect(bed.cycleDate).toBe('2026-10-03');
+    clock.setTime(new Date('2026-10-04T02:00:00Z'));
+    const wake = await service.markWakeNow();
+    expect(wake).toMatchObject({
+      cycleDate: bed.cycleDate,
+      wentToBedAt: bed.wentToBedAt,
+      wokeAt: clock.now(),
+      wakeSource: 'MANUAL',
+      confirmedAt: null,
+    });
+    clock.setTime(new Date('2026-10-04T02:10:00Z'));
+    expect(await service.markWakeNow()).toEqual(wake);
+    expect(observations.values.size).toBe(1);
+  });
+
+  it('uses the past night without bedtime and never overwrites a confirmed night', async () => {
+    const observations = new InMemorySleepObservationRepository();
+    const clock = new FakeClock(new Date('2026-10-04T02:00:00Z'));
+    const service = new SleepObservationService(
+      observations,
+      new InMemorySleepScheduleRepository(schedule()),
+      clock,
+    );
+    expect(await service.markWakeNow()).toMatchObject({
+      cycleDate: '2026-10-03',
+      wentToBedAt: null,
+    });
+    const confirmed = await service.confirm({
+      cycleDate: '2026-10-03',
+      wentToBedAt: new Date('2026-10-03T14:00:00Z'),
+      wokeAt: clock.now(),
+    });
+    clock.setTime(new Date('2026-10-04T03:00:00Z'));
+    expect(await service.markWakeNow()).toEqual(confirmed);
+  });
+
+  it('replaces an alarm hint with explicit manual wake and ignores a stale bed draft', async () => {
+    const observations = new InMemorySleepObservationRepository();
+    const clock = new FakeClock(new Date('2026-10-03T14:30:00Z'));
+    const service = new SleepObservationService(
+      observations,
+      new InMemorySleepScheduleRepository(schedule()),
+      clock,
+    );
+    await service.markBedtimeNow();
+    clock.setTime(new Date('2026-10-04T01:00:00Z'));
+    const hint = await service.reconcileWakeResult(schedule(), wakeResult('QR'));
+    expect(hint?.wentToBedAt?.toISOString()).toBe('2026-10-03T14:30:00.000Z');
+    expect(hint?.wakeSource).toBe('ALARM_QR');
+    expect(await service.markWakeNow()).toMatchObject({
+      wakeSource: 'MANUAL',
+      wokeAt: clock.now(),
+    });
+    clock.setTime(new Date('2026-10-07T02:00:00Z'));
+    expect(await service.markWakeNow()).toMatchObject({
+      cycleDate: '2026-10-06',
+      wentToBedAt: null,
+    });
+  });
+
+  it('serializes a simultaneous alarm import and manual wake without losing the bedtime', async () => {
+    const observations = new InMemorySleepObservationRepository();
+    const clock = new FakeClock(new Date('2026-10-03T14:30:00Z'));
+    const service = new SleepObservationService(
+      observations,
+      new InMemorySleepScheduleRepository(schedule()),
+      clock,
+    );
+    await service.markBedtimeNow();
+    clock.setTime(new Date('2026-10-04T01:00:00Z'));
+    await Promise.all([
+      service.reconcileWakeResult(schedule(), wakeResult('QR')),
+      service.markWakeNow(),
+    ]);
+    const final = observations.values.get('2026-10-03');
+    expect(final).toMatchObject({
+      wentToBedAt: new Date('2026-10-03T14:30:00Z'),
+      wokeAt: clock.now(),
+      wakeSource: 'MANUAL',
+    });
+    expect(await service.reconcileWakeResult(schedule(), wakeResult('QR'))).toEqual(final);
+  });
+
+  it('allows retry after a failed write and serializes confirm against another mark', async () => {
+    const observations = new InMemorySleepObservationRepository();
+    const clock = new FakeClock(new Date('2026-10-03T14:30:00Z'));
+    const service = new SleepObservationService(
+      observations,
+      new InMemorySleepScheduleRepository(schedule()),
+      clock,
+    );
+    observations.failNextSave = true;
+    await expect(service.markBedtimeNow()).rejects.toThrow('save failed');
+    await service.markBedtimeNow();
+    clock.setTime(new Date('2026-10-04T01:00:00Z'));
+    const [confirmed] = await Promise.all([
+      service.confirm({
+        cycleDate: '2026-10-03',
+        wentToBedAt: new Date('2026-10-03T14:30:00Z'),
+        wokeAt: new Date('2026-10-04T00:50:00Z'),
+      }),
+      service.markWakeNow(),
+    ]);
+    expect(observations.values.get('2026-10-03')).toEqual(confirmed);
+  });
   it('creates one editable draft from a late QR dismissal and keeps its original cycle', async () => {
     const observations = new InMemorySleepObservationRepository();
     const schedules = new InMemorySleepScheduleRepository(schedule());
@@ -142,6 +369,7 @@ describe('SleepObservationService', () => {
 });
 
 class InMemorySleepObservationRepository implements SleepObservationRepository {
+  public failNextSave = false;
   readonly values = new Map<string, SleepObservation>();
   readonly saved: SleepObservation[] = [];
 
@@ -154,6 +382,10 @@ class InMemorySleepObservationRepository implements SleepObservationRepository {
       .sort((left, right) => right.cycleDate.localeCompare(left.cycleDate));
   }
   public async save(observation: SleepObservation): Promise<void> {
+    if (this.failNextSave) {
+      this.failNextSave = false;
+      throw new Error('save failed');
+    }
     this.values.set(observation.cycleDate, observation);
     this.saved.push(observation);
   }

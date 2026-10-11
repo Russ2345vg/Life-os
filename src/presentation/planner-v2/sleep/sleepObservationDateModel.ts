@@ -15,7 +15,7 @@ export function cycleDateFromWakeDate(wakeDate: string): string {
   return shiftDate(wakeDate, -1);
 }
 
-function shiftDate(value: string, days: number): string {
+export function shiftDate(value: string, days: number): string {
   DayDate.create(value);
   const date = new Date(`${value}T12:00:00Z`);
   date.setUTCDate(date.getUTCDate() + days);

@@ -107,7 +107,87 @@ export function buildPreferenceDayAutopilotPlan(input: DayAutopilotInput): DayAu
   const overrides = new Map(
     input.durationOverrides?.map((item) => [item.actionId, item.minutes]) ?? [],
   );
+  const pinned = new Set<string>();
+  for (const pin of input.pinnedWindows ?? []) {
+    if (input.completedActionIds?.includes(pin.actionId)) continue;
+    const action = byId.get(pin.actionId);
+    const same =
+      action?.plannedDate === input.date &&
+      action.scheduledStartMinute === pin.startMinute &&
+      action.scheduledDurationMinutes === pin.durationMinutes;
+    if (
+      !action ||
+      used.has(pin.actionId) ||
+      (groups.excluded.some((item) => item.actionId === pin.actionId) &&
+        !(same && action.protectedBySession)) ||
+      (action.protectedBySession && !same) ||
+      pinned.has(pin.actionId)
+    )
+      throw new DomainError(
+        'day_autopilot.pin_unavailable',
+        'Закреплённое действие недоступно. Снимите закрепление или завершите текущую сессию.',
+      );
+    pinned.add(pin.actionId);
+    if (
+      (!same && pin.startMinute < input.startMinute) ||
+      pin.startMinute + pin.durationMinutes > end ||
+      !Number.isInteger(pin.startMinute) ||
+      pin.startMinute < 0 ||
+      !Number.isInteger(pin.durationMinutes) ||
+      pin.durationMinutes < 1
+    )
+      throw new DomainError(
+        'day_autopilot.pin_range',
+        'Закреплённое окно вне доступного времени. Измените диапазон или снимите закрепление.',
+      );
+    if (
+      timeline.some(
+        (block) =>
+          block.actionId === action.id &&
+          (block.startMinute !== pin.startMinute ||
+            block.endMinute !== pin.startMinute + pin.durationMinutes),
+      )
+    )
+      throw new DomainError(
+        'day_autopilot.pin_conflict',
+        'Закрепление конфликтует с существующим окном действия.',
+      );
+    if (!timeline.some((block) => block.actionId === action.id))
+      timeline.push({
+        id: `action:${action.id}`,
+        kind: 'action',
+        title: action.title,
+        startMinute: pin.startMinute,
+        endMinute: pin.startMinute + pin.durationMinutes,
+        actionId: action.id,
+        sourceId: action.id,
+        protected: true,
+      });
+    if (!same) {
+      used.add(action.id);
+      proposals.push({
+        actionId: action.id,
+        title: action.title,
+        expectedVersion: action.version,
+        previousDate: action.plannedDate ?? null,
+        previousStartMinute: action.scheduledStartMinute,
+        startMinute: pin.startMinute,
+        durationMinutes: pin.durationMinutes,
+        isMain: action.isMain,
+        usedDefaultEstimate: false,
+        estimateSource: 'stored',
+        selectionReference: null,
+        reason: 'pinned',
+      });
+    }
+  }
+  if (proposals.length > maximum)
+    throw new DomainError(
+      'day_autopilot.pin_limit',
+      'Закреплений больше лимита дел. Увеличьте лимит или снимите закрепление.',
+    );
   for (const action of input.actions) {
+    if (proposals.some((item) => item.actionId === action.id)) continue;
     const hasWindow =
       action.scheduledStartMinute !== null &&
       action.scheduledDurationMinutes !== null &&
@@ -198,6 +278,35 @@ export function buildPreferenceDayAutopilotPlan(input: DayAutopilotInput): DayAu
       0,
     );
   const failed = new Set<string>();
+  const rules = new Map(input.actionRules?.map((rule) => [rule.actionId, rule]) ?? []);
+  const completed = new Set(input.completedActionIds ?? []);
+  const visiting = new Set<string>();
+  const ineligible = new Set(groups.excluded.map((item) => item.actionId));
+  const context = (id: string) => rules.get(id)?.context ?? byId.get(id)?.contextKey ?? '';
+  const ordered = (ids: readonly string[]) => {
+    if (!input.groupSimilar) return ids;
+    const last = proposals.at(-1)?.actionId;
+    const contexts = [...new Set(ids.map(context))];
+    if (last && contexts.includes(context(last))) {
+      contexts.splice(contexts.indexOf(context(last)), 1);
+      contexts.unshift(context(last));
+    }
+    return [...ids].sort((a, b) => contexts.indexOf(context(a)) - contexts.indexOf(context(b)));
+  };
+  function deferDependency(id: string): false {
+    const action = byId.get(id)!;
+    failed.add(id);
+    deferred.push({
+      actionId: id,
+      title: action.title,
+      expectedVersion: action.version,
+      reason: 'dependency',
+      requestedMinutes: overrides.get(id) ?? action.estimateMinutes ?? 25,
+      hadScheduledWindow: action.plannedDate === input.date && action.scheduledStartMinute !== null,
+      previousStartMinute: action.scheduledStartMinute,
+    });
+    return false;
+  }
   function recoveryAt(minute: number): { accumulated: number; intervals: number } {
     let accumulated = 0,
       intervals = 0;
@@ -228,7 +337,32 @@ export function buildPreferenceDayAutopilotPlan(input: DayAutopilotInput): DayAu
     reference: AutopilotReference | null,
   ): boolean {
     const action = byId.get(id);
-    if (!action || used.has(id) || failed.has(id) || proposals.length >= maximum) return false;
+    if (!action || used.has(id) || failed.has(id) || ineligible.has(id)) return false;
+    if (visiting.has(id))
+      throw new DomainError('day_autopilot.dependency_cycle', 'В зависимостях обнаружен круг.');
+    visiting.add(id);
+    let earliest = cursor;
+    for (const prerequisite of rules.get(id)?.prerequisiteIds ?? []) {
+      if (completed.has(prerequisite)) continue;
+      if (
+        !(
+          proposals.some((item) => item.actionId === prerequisite) ||
+          locked.some((item) => item.actionId === prerequisite)
+        ) &&
+        !tryAction(prerequisite, 'dependency', null)
+      ) {
+        visiting.delete(id);
+        return deferDependency(id);
+      }
+      const window = timeline.find((block) => block.actionId === prerequisite);
+      if (!window) {
+        visiting.delete(id);
+        return deferDependency(id);
+      }
+      earliest = Math.max(earliest, window.endMinute);
+    }
+    visiting.delete(id);
+    if (proposals.length >= maximum) return false;
     const override = overrides.get(id);
     const duration = override ?? action.estimateMinutes ?? action.scheduledDurationMinutes ?? 25;
     if (!Number.isInteger(duration) || duration < 1 || duration > 1440)
@@ -237,7 +371,11 @@ export function buildPreferenceDayAutopilotPlan(input: DayAutopilotInput): DayAu
         'Длительность дела должна быть целым числом от 1 до 1440 минут.',
       );
     let placement: { start: number; rest: number; long: boolean } | null = null;
-    for (const gap of freeScheduleIntervals(Math.max(cursor, input.startMinute), end!, timeline)) {
+    for (const gap of freeScheduleIntervals(
+      Math.max(cursor, earliest, input.startMinute),
+      end!,
+      timeline,
+    )) {
       const recovery = recoveryAt(gap.startMinute);
       const long = recovery.intervals >= 4;
       const restHere =
@@ -312,18 +450,94 @@ export function buildPreferenceDayAutopilotPlan(input: DayAutopilotInput): DayAu
     budget -= duration + placement.rest;
     return true;
   }
+  const walkActionIds = new Set(
+    timeline
+      .filter((block) => block.kind === 'walk' && block.actionId)
+      .map((block) => block.actionId),
+  );
+  const fixedWindows = [
+    ...locked,
+    ...proposals.filter((item) => pinned.has(item.actionId) || walkActionIds.has(item.actionId)),
+  ];
+  // Reserve preparation for every fixed dependent, including action-backed walks.
+  for (const window of [...fixedWindows].sort((a, b) => a.startMinute - b.startMinute))
+    for (const prerequisite of rules.get(window.actionId)?.prerequisiteIds ?? [])
+      if (!completed.has(prerequisite)) tryAction(prerequisite, 'dependency', null);
   for (const id of groups.main) tryAction(id, 'main_action', null);
-  for (const id of groups.focus) if (tryAction(id, 'focus', null)) break;
+  if (!groups.balance?.length)
+    for (const id of ordered(groups.focus)) if (tryAction(id, 'focus', null)) break;
   for (const wish of groups.wishes)
-    for (const id of wish.actionIds)
+    for (const id of ordered(wish.actionIds))
       if (
         proposals.some((item) => item.actionId === id) ||
         locked.some((item) => item.actionId === id) ||
         tryAction(id, 'wish', wish.reference)
       )
         break;
-  for (const id of groups.focus) tryAction(id, 'focus', null);
-  for (const id of groups.todayFallback) tryAction(id, 'day_order', null);
+  const workMinutes = (item: {
+    readonly actionId: string;
+    readonly startMinute: number;
+    readonly durationMinutes: number;
+  }): number =>
+    walkActionIds.has(item.actionId)
+      ? 0
+      : Math.max(
+          0,
+          Math.min(end!, item.startMinute + item.durationMinutes) -
+            Math.max(input.startMinute, item.startMinute),
+        );
+  const directionMinutes = (directionId: string): number => {
+    const group = groups.balance?.find((item) => item.directionId === directionId);
+    if (!group) return 0;
+    return [...proposals, ...locked]
+      .filter((item) => {
+        const proposal = proposals.find((value) => value.actionId === item.actionId);
+        const selected = proposal?.selectionReference;
+        const owner =
+          selected?.kind === 'direction' &&
+          groups.balance?.some((value) => value.directionId === selected.id)
+            ? selected.id
+            : groups.balance?.find((value) => value.actionIds.includes(item.actionId))?.directionId;
+        return owner === directionId;
+      })
+      .reduce((sum, item) => sum + workMinutes(item), 0);
+  };
+  if (groups.balance?.length) {
+    const exhausted = new Set<string>();
+    while (proposals.length < maximum) {
+      const next = groups.balance
+        .filter((group) => !exhausted.has(group.directionId))
+        .sort(
+          (a, b) =>
+            directionMinutes(a.directionId) / a.percent -
+              directionMinutes(b.directionId) / b.percent || b.percent - a.percent,
+        )[0];
+      if (!next) break;
+      if (
+        !ordered(next.actionIds).some((id) =>
+          tryAction(id, 'balance', { kind: 'direction', id: next.directionId }),
+        )
+      )
+        exhausted.add(next.directionId);
+    }
+  } else {
+    for (const id of ordered(groups.focus)) tryAction(id, 'focus', null);
+    for (const id of ordered(groups.todayFallback)) tryAction(id, 'day_order', null);
+  }
+  for (const window of fixedWindows) {
+    for (const prerequisite of rules.get(window.actionId)?.prerequisiteIds ?? []) {
+      if (completed.has(prerequisite)) continue;
+      if (
+        !timeline.some(
+          (block) => block.actionId === prerequisite && block.endMinute <= window.startMinute,
+        )
+      )
+        throw new DomainError(
+          'day_autopilot.fixed_dependency',
+          'Фиксированное окно действия или прогулки стоит раньше обязательного предшественника. Измените время или исправьте зависимость.',
+        );
+    }
+  }
   if (input.mode === 'rebuild')
     for (const action of input.actions) {
       if (
@@ -362,7 +576,23 @@ export function buildPreferenceDayAutopilotPlan(input: DayAutopilotInput): DayAu
     reserveRemaining -= duration;
   }
   timeline.sort((a, b) => a.startMinute - b.startMinute || a.id.localeCompare(b.id));
-  return {
+  const plan: DayAutopilotPlan = {
+    ...(groups.balance?.length
+      ? {
+          balanceSummary: groups.balance.map((group) => ({
+            directionId: group.directionId,
+            targetPercent: group.percent,
+            plannedMinutes: directionMinutes(group.directionId),
+            actualPercent: Math.round(
+              (100 * directionMinutes(group.directionId)) /
+                Math.max(
+                  1,
+                  [...proposals, ...locked].reduce((sum, item) => sum + workMinutes(item), 0),
+                ),
+            ),
+          })),
+        }
+      : {}),
     date: input.date,
     mode: input.mode,
     startMinute: input.startMinute,
@@ -375,4 +605,68 @@ export function buildPreferenceDayAutopilotPlan(input: DayAutopilotInput): DayAu
     deferred,
     timeline,
   };
+  if (input.groupSimilar && groups.balance?.length) {
+    // Selection satisfies direction weights first. A second placement pass groups
+    // only that selected work, retaining fixed windows, prerequisites and breaks.
+    const regrouped = buildPreferenceDayAutopilotPlan({
+      ...input,
+      groups: {
+        ...groups,
+        balance: [],
+        main: groups.main.filter((id) => used.has(id)),
+        focus: proposals.map((item) => item.actionId),
+        wishes: [],
+        todayFallback: [],
+      },
+    });
+    const selected = new Set([...proposals, ...locked].map((item) => item.actionId));
+    const regroupedSelection = new Set(
+      [...regrouped.proposals, ...regrouped.locked].map((item) => item.actionId),
+    );
+    // Grouping is optional: retain the feasible allocation if moving work between
+    // fixed gaps would lose any of the selected actions or add different work.
+    if (
+      selected.size !== regroupedSelection.size ||
+      [...selected].some((id) => !regroupedSelection.has(id))
+    )
+      return plan;
+    const original = new Map(proposals.map((item) => [item.actionId, item]));
+    const adjusted = regrouped.proposals.map((item) => {
+      const before = original.get(item.actionId);
+      return before
+        ? { ...item, reason: before.reason, selectionReference: before.selectionReference ?? null }
+        : item;
+    });
+    const total = Math.max(
+      1,
+      [...adjusted, ...regrouped.locked].reduce((sum, item) => sum + workMinutes(item), 0),
+    );
+    const minutes = new Map<string, number>();
+    for (const item of [...adjusted, ...regrouped.locked]) {
+      const ref = adjusted.find((value) => value.actionId === item.actionId)?.selectionReference;
+      const owner =
+        ref?.kind === 'direction' && groups.balance.some((group) => group.directionId === ref.id)
+          ? ref.id
+          : groups.balance.find((group) => group.actionIds.includes(item.actionId))?.directionId;
+      if (owner) minutes.set(owner, (minutes.get(owner) ?? 0) + workMinutes(item));
+    }
+    return {
+      ...regrouped,
+      proposals: adjusted,
+      deferred: [
+        ...new Map(
+          [...plan.deferred, ...regrouped.deferred]
+            .filter((item) => !adjusted.some((value) => value.actionId === item.actionId))
+            .map((item) => [item.actionId, item]),
+        ).values(),
+      ],
+      balanceSummary: groups.balance.map((group) => ({
+        directionId: group.directionId,
+        targetPercent: group.percent,
+        plannedMinutes: minutes.get(group.directionId) ?? 0,
+        actualPercent: Math.round((100 * (minutes.get(group.directionId) ?? 0)) / total),
+      })),
+    };
+  }
+  return plan;
 }

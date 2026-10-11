@@ -3,6 +3,8 @@ import { WAKE_OCCURRENCE_STATUS, type SleepScheduleState } from '../../domain/sl
 import { FakeClock, FakeIdGenerator } from '../../test/helpers/Fakes';
 import type { SleepScheduleRepository, SleepScheduleUpdate } from './SleepScheduleRepository';
 import { SleepScheduleService } from './SleepScheduleService';
+import { isCurrentAndroidAlarmReport } from './WakeAlarmConfirmation';
+import { UnsupportedWakeAlarmGateway } from './WakeAlarmGateway';
 import type {
   AlarmSound,
   WakeAlarmGateway,
@@ -12,6 +14,95 @@ import type {
 } from './WakeAlarmGateway';
 
 describe('SleepScheduleService', () => {
+  it('saves timing without scheduling native alarms or invalidating their real report', async () => {
+    const { service, gateway, clock } = await reportFixture();
+    const checked = (await service.syncAlarm()).state;
+    const nativeCalls = gateway.reconciliations.length;
+    const saved = await service.savePreparationTiming({
+      totalPreparationMinutes: 30,
+      stretchingItemId: 'base-room-air',
+      stretchingMinutes: 10,
+    });
+    expect(saved.settings).toEqual(checked.settings);
+    expect(saved.wakeOccurrences).toEqual(checked.wakeOccurrences);
+    expect(saved.androidAlarmReport).toEqual(checked.androidAlarmReport);
+    expect(isCurrentAndroidAlarmReport(saved, clock.now())).toBe(true);
+    expect(gateway.reconciliations.length).toBe(nativeCalls);
+    expect(saved.preparationTiming).toMatchObject({
+      totalPreparationMinutes: 30,
+      stretchingMinutes: 10,
+    });
+    await expect(
+      service.savePreparationTiming({
+        totalPreparationMinutes: 30,
+        stretchingItemId: 'missing',
+        stretchingMinutes: 10,
+      }),
+    ).rejects.toThrow();
+    expect((await service.getState()).preparationTiming).toEqual(saved.preparationTiming);
+  });
+  it('saves a supported report and Windows preserves it', async () => {
+    const { repository, clock, gateway, service } = await reportFixture();
+    const checked = await service.syncAlarm();
+    expect(checked.state.androidAlarmReport?.outcome).toBe('CONFIRMED');
+    expect(checked.state.androidAlarmReport?.checkedAt).toEqual(clock.now());
+    const windows = new SleepScheduleService(
+      repository,
+      clock,
+      new FakeIdGenerator('windows'),
+      new UnsupportedWakeAlarmGateway(),
+    );
+    expect((await windows.syncAlarm()).state.androidAlarmReport).toEqual(
+      checked.state.androidAlarmReport,
+    );
+    gateway.reconcileResult = async (schedule) => ({
+      ...readyStatus(schedule),
+      state: 'PERMISSION_REQUIRED',
+      notificationsGranted: false,
+    });
+    expect((await service.syncAlarm()).state.androidAlarmReport?.outcome).toBe(
+      'PERMISSION_REQUIRED',
+    );
+    gateway.reconcileResult = async () => {
+      throw new Error('native unavailable');
+    };
+    await expect(service.syncAlarm()).rejects.toThrow('native unavailable');
+    expect(repository.state?.androidAlarmReport?.outcome).toBe('ERROR');
+  });
+  it('cannot confirm a changed schedule with a delayed response', async () => {
+    const { repository, clock, gateway, service } = await reportFixture();
+    let reply: ((status: WakeAlarmStatus) => void) | undefined;
+    let began: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => {
+      began = resolve;
+    });
+    let checkedSchedule: WakeAlarmSchedule | undefined;
+    gateway.reconcileResult = (schedule) => {
+      checkedSchedule = schedule;
+      began!();
+      return new Promise((resolve) => {
+        reply = resolve;
+      });
+    };
+    const pending = service.syncAlarm();
+    await started;
+    gateway.reconcileResult = null;
+    await service.setNearestWakeTime('09:00');
+    const reportBeforeReply = repository.state?.androidAlarmReport;
+    reply!(readyStatus(checkedSchedule));
+    const result = await pending;
+    expect(result.state.settings?.wakeOverride?.wakeTime).toBe('09:00');
+    expect(isCurrentAndroidAlarmReport(result.state, clock.now())).toBe(false);
+    expect(repository.state?.androidAlarmReport).toEqual(reportBeforeReply);
+  });
+  it('rejects a failed report write and succeeds on retry', async () => {
+    const { repository, service } = await reportFixture();
+    repository.failReportWrite = true;
+    await expect(service.syncAlarm()).rejects.toThrow('report write failed');
+    expect(repository.state?.androidAlarmReport).toBeUndefined();
+    repository.failReportWrite = false;
+    expect((await service.syncAlarm()).state.androidAlarmReport?.outcome).toBe('CONFIRMED');
+  });
   it('re-enabling the alarm restores future occurrences and native scheduling', async () => {
     const repository = new InMemorySleepScheduleRepository();
     const clock = new FakeClock(new Date('2026-09-20T12:00:00Z'));
@@ -393,11 +484,13 @@ describe('SleepScheduleService', () => {
 });
 
 class FakeWakeAlarmGateway implements WakeAlarmGateway {
+  public reconcileResult: ((schedule: WakeAlarmSchedule) => Promise<WakeAlarmStatus>) | null = null;
   public readonly reconciliations: WakeAlarmSchedule[] = [];
   public nativeStatus: WakeAlarmStatus | null = null;
 
   public async reconcile(schedule: WakeAlarmSchedule): Promise<WakeAlarmStatus> {
     this.reconciliations.push(schedule);
+    if (this.reconcileResult) return this.reconcileResult(schedule);
     return readyStatus(schedule);
   }
 
@@ -463,6 +556,7 @@ function readyStatus(schedule?: WakeAlarmSchedule): WakeAlarmStatus {
 }
 
 class InMemorySleepScheduleRepository implements SleepScheduleRepository {
+  public failReportWrite = false;
   public state: SleepScheduleState | null = null;
   public saveCount = 0;
 
@@ -477,10 +571,31 @@ class InMemorySleepScheduleRepository implements SleepScheduleRepository {
 
   public async update(transform: SleepScheduleUpdate): Promise<SleepScheduleState> {
     const next = transform(this.state);
+    if (this.failReportWrite && next.androidAlarmReport !== this.state?.androidAlarmReport)
+      throw new Error('report write failed');
     if (next !== this.state) {
       this.state = next;
       this.saveCount += 1;
     }
     return next;
   }
+}
+
+async function reportFixture() {
+  const repository = new InMemorySleepScheduleRepository();
+  const clock = new FakeClock(new Date('2026-10-10T12:00:00Z'));
+  const gateway = new FakeWakeAlarmGateway();
+  const service = new SleepScheduleService(
+    repository,
+    clock,
+    new FakeIdGenerator('report'),
+    gateway,
+  );
+  await service.saveSettings({
+    bedtime: '22:30',
+    wakeTime: '07:15',
+    timeZone: 'Asia/Chita',
+    enabled: true,
+  });
+  return { repository, clock, gateway, service };
 }

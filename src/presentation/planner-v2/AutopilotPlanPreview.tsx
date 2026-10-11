@@ -7,11 +7,17 @@ export function AutopilotPlanPreview({
   busy,
   onDuration,
   onExclude,
+  directionNames = [],
+  pinnedActionIds = [],
+  onPin,
 }: {
   readonly preview: DayAutopilotPreview;
   readonly busy: boolean;
   readonly onDuration: (actionId: string, minutes: number) => void;
   readonly onExclude: (actionId: string) => void;
+  readonly directionNames?: readonly { readonly id: string; readonly name: string }[];
+  readonly pinnedActionIds?: readonly string[];
+  readonly onPin?: (block: AutopilotScheduleBlock) => void;
 }) {
   const blocks = preview.timeline ?? [];
   const visible = blocks.filter(
@@ -60,7 +66,28 @@ export function AutopilotPlanPreview({
         busy={busy}
         onDuration={onDuration}
         onExclude={onExclude}
+        pinnedActionIds={pinnedActionIds}
+        {...(onPin ? { onPin } : {})}
       />
+      {preview.balanceSummary?.length ? (
+        <div className="planner-day-autopilot__deferred">
+          <h4>Баланс работы в плане</h4>
+          <ul>
+            {preview.balanceSummary.map((item) => (
+              <li key={item.directionId}>
+                <span>
+                  {directionNames.find((direction) => direction.id === item.directionId)?.name ??
+                    'Направление'}
+                </span>
+                <span>
+                  Ориентир {item.targetPercent}% · в плане {item.actualPercent}% ·{' '}
+                  {durationLabel(item.plannedMinutes)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       {!preview.proposals.length && (
         <p className="planner-empty">Подходящих свободных дел нет. Измените фокус или пожелания.</p>
       )}
@@ -80,9 +107,13 @@ export function AutopilotPlanPreview({
                 <span>
                   {item.reason === 'active_session'
                     ? 'Уже выполняется'
-                    : item.hadScheduledWindow
-                      ? 'Будет убрано из будущего расписания'
-                      : `Нужно ${durationLabel(item.requestedMinutes)}`}
+                    : item.reason === 'dependency'
+                      ? item.hadScheduledWindow && preview.mode === 'rebuild'
+                        ? 'Убрано из будущего расписания: предшественник недоступен или не помещается'
+                        : 'Сначала нужен предшественник: недоступен или не помещается'
+                      : item.hadScheduledWindow
+                        ? 'Будет убрано из будущего расписания'
+                        : `Нужно ${durationLabel(item.requestedMinutes)}`}
                 </span>
               </li>
             ))}
@@ -101,6 +132,8 @@ export function AutopilotTimeline({
   busy,
   onDuration,
   onExclude,
+  pinnedActionIds = [],
+  onPin,
 }: {
   readonly blocks: readonly AutopilotScheduleBlock[];
   readonly proposals: readonly ProposedActionWindow[];
@@ -109,11 +142,14 @@ export function AutopilotTimeline({
   readonly busy: boolean;
   readonly onDuration?: (actionId: string, minutes: number) => void;
   readonly onExclude?: (actionId: string) => void;
+  readonly pinnedActionIds?: readonly string[];
+  readonly onPin?: (block: AutopilotScheduleBlock) => void;
 }) {
   return (
     <ol className="planner-day-autopilot__timeline autopilot-timeline" aria-label={name}>
       {blocks.map((block) => {
         const proposal = proposals.find((item) => item.actionId === block.actionId);
+        const pinned = !!block.actionId && pinnedActionIds.includes(block.actionId);
         return (
           <li key={block.id} data-kind={block.kind}>
             <time>
@@ -126,16 +162,24 @@ export function AutopilotTimeline({
                 {proposal
                   ? proposal.isMain
                     ? 'Главное'
-                    : proposal.reason === 'focus'
-                      ? 'Главный фокус'
-                      : proposal.reason === 'wish'
-                        ? 'Пожелание на день'
-                        : 'Из плана дня'
-                  : block.protected
-                    ? 'Сохранённое окно'
-                    : block.kind === 'reserve'
-                      ? 'Не занят делами'
-                      : 'Распорядок'}{' '}
+                    : pinned
+                      ? 'Закреплённое время'
+                      : proposal.reason === 'dependency'
+                        ? 'Предшественник другого действия'
+                        : proposal.reason === 'balance'
+                          ? 'Баланс направлений'
+                          : proposal.reason === 'focus'
+                            ? 'Главный фокус'
+                            : proposal.reason === 'wish'
+                              ? 'Пожелание на день'
+                              : 'Из плана дня'
+                  : pinned
+                    ? 'Закреплённое время'
+                    : block.protected
+                      ? 'Сохранённое окно'
+                      : block.kind === 'reserve'
+                        ? 'Не занят делами'
+                        : 'Распорядок'}{' '}
                 · {durationLabel(block.endMinute - block.startMinute)}
                 {proposal?.usedDefaultEstimate ? ' · Оценка 25 минут — можно изменить' : ''}
                 {proposal?.previousDate !== undefined && proposal.previousDate !== date
@@ -152,7 +196,7 @@ export function AutopilotTimeline({
                       max={1440}
                       defaultValue={proposal.durationMinutes}
                       key={`${proposal.actionId}:${proposal.durationMinutes}`}
-                      disabled={busy}
+                      disabled={busy || pinned}
                       onBlur={(event) => {
                         const value = Number(event.target.value);
                         if (value !== proposal.durationMinutes)
@@ -168,13 +212,20 @@ export function AutopilotTimeline({
                   </label>
                   <button
                     type="button"
-                    disabled={busy}
+                    disabled={busy || pinned}
                     onClick={() => onExclude(proposal.actionId)}
                   >
                     Исключить
                   </button>
                 </div>
               )}
+              {block.kind === 'action' && block.actionId && onPin ? (
+                <div className="autopilot-timeline__edit">
+                  <button type="button" disabled={busy} onClick={() => onPin(block)}>
+                    {pinned ? 'Снять закрепление' : 'Закрепить время'}
+                  </button>
+                </div>
+              ) : null}
               {block.kind === 'morning' ? (
                 <a href="#/v2/routine/morning">Открыть утренние практики →</a>
               ) : block.kind === 'evening' || block.kind === 'sleep' ? (

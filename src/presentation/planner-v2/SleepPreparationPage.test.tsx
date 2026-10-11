@@ -13,6 +13,21 @@ import { SleepPreparationView } from './SleepPreparationPage';
 import type { WakeAlarmStatus, WakeDismissalSetup } from '../../application/sleep/WakeAlarmGateway';
 
 describe('SleepPreparationView', () => {
+  it('uses the upcoming evening date when no current cycle exists', () => {
+    const configured = updateSleepSettings(
+      createEmptySleepSchedule(),
+      { bedtime: '23:00', wakeTime: '07:00', timeZone: 'Asia/Chita', enabled: true },
+      new Date('2026-10-10T12:00:00Z'),
+    );
+    const html = render(configured, undefined, undefined, {
+      pageMode: 'EVENING',
+      preparationNow: new Date('2026-10-10T13:00:00Z'),
+      onSavePreparationTiming: vi.fn(),
+    });
+    expect(html).toMatch(/Начало подготовки: 10 окт\.?[,]? 22:30/);
+    expect(html).not.toContain('Можно начинать подготовку.');
+  });
+
   it('asks for user-entered times without pre-filling values from the mock', () => {
     const html = render(createEmptySleepSchedule());
 
@@ -62,7 +77,7 @@ describe('SleepPreparationView', () => {
     expect(html).toContain('Завершить подготовку');
     expect(html).toContain('Пропустить на сегодня');
     expect(html).toContain('Будильник Android');
-    expect(html).toContain('Ожидает постановки на 07:15');
+    expect(html).toContain('Нет подтверждения от телефона');
     expect(html.match(/aria-label="Управление подъёмом"/g)).toHaveLength(1);
     expect(html).toContain('Пробный сигнал');
     expect(html).toContain('Пропустить ближайший');
@@ -134,7 +149,7 @@ describe('SleepPreparationView', () => {
       message: 'Нужны системные разрешения.',
     });
 
-    expect(html).toContain('Требуются разрешения Android');
+    expect(html).toContain('Нужны разрешения на телефоне');
     expect(html).toContain('Точные будильники');
     expect(html).toContain('Уведомления');
     expect(html).toContain('Полный экран');
@@ -206,6 +221,7 @@ function render(
     qrSavedTo: null,
     lastWaterCompletedAt: null,
   },
+  extra: Partial<Parameters<typeof SleepPreparationView>[0]> = {},
 ): string {
   const resolvedAlarmStatus: WakeAlarmStatus = alarmStatus ?? {
     supported: false,
@@ -253,6 +269,7 @@ function render(
       onRegenerateDismissalQr: callback,
       onSaveEmergencyPhrase: callback,
       onToggleQuietMode: callback,
+      ...extra,
     }),
   );
 }

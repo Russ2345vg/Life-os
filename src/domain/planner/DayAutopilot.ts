@@ -4,12 +4,14 @@ import { buildPreferenceDayAutopilotPlan, type AutopilotScheduleBlock } from './
 import type { AutopilotCandidateGroups } from './AutopilotSelection';
 import type { AutopilotReference } from './AutopilotPreferences';
 import type { PomodoroSettings } from '../pomodoro/ActionPomodoroCycle';
+import type { AutopilotActionRule, AutopilotPinnedWindow } from './AutopilotOrganization';
 
 export type DayAutopilotMode = 'fill' | 'rebuild';
 export type DayAutopilotLockedReason = 'existing_window' | 'past_window' | 'active_session';
-export type DayAutopilotDeferredReason = 'no_capacity' | 'active_session';
+export type DayAutopilotDeferredReason = 'no_capacity' | 'active_session' | 'dependency';
 
 export interface DayAutopilotActionInput {
+  readonly contextKey?: string | null;
   readonly plannedDate?: string | null;
   readonly id: string;
   readonly title: string;
@@ -24,6 +26,10 @@ export interface DayAutopilotActionInput {
 }
 
 export interface DayAutopilotInput {
+  readonly groupSimilar?: boolean;
+  readonly actionRules?: readonly AutopilotActionRule[];
+  readonly pinnedWindows?: readonly AutopilotPinnedWindow[];
+  readonly completedActionIds?: readonly string[];
   readonly endMinute?: number;
   readonly groups?: AutopilotCandidateGroups;
   readonly maxActions?: number;
@@ -48,7 +54,15 @@ export interface ProposedActionWindow {
   readonly durationMinutes: number;
   readonly isMain: boolean;
   readonly usedDefaultEstimate: boolean;
-  readonly reason: 'main_action' | 'priority' | 'day_order' | 'focus' | 'wish';
+  readonly reason:
+    | 'main_action'
+    | 'priority'
+    | 'day_order'
+    | 'focus'
+    | 'wish'
+    | 'balance'
+    | 'dependency'
+    | 'pinned';
   readonly previousDate?: string | null;
   readonly estimateSource?: 'default' | 'stored' | 'user';
   readonly selectionReference?: AutopilotReference | null;
@@ -73,6 +87,12 @@ export interface DeferredAutopilotAction {
 }
 
 export interface DayAutopilotPlan {
+  readonly balanceSummary?: readonly {
+    readonly directionId: string;
+    readonly targetPercent: number;
+    readonly plannedMinutes: number;
+    readonly actualPercent: number;
+  }[];
   readonly timeline?: readonly AutopilotScheduleBlock[];
   readonly date: string;
   readonly mode: DayAutopilotMode;

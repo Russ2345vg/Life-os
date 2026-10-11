@@ -1,9 +1,16 @@
 import { DayDate } from '../day/DayDate';
 import type { WakeResultKind } from './SleepSchedule';
+import { resolveSleepCycleDate } from './NightTime';
+import {
+  validateSleepMorningFeedback,
+  type SleepMorningFeedback,
+  type SleepMorningFeedbackPatch,
+} from './SleepMorningFeedback';
 
 export type WakeObservationSource = 'ALARM_QR' | 'ALARM_EMERGENCY' | 'MANUAL';
 
 export interface SleepObservation {
+  readonly morningFeedback?: SleepMorningFeedback;
   readonly id: string;
   readonly cycleDate: string;
   readonly nightCycleId: string | null;
@@ -25,6 +32,108 @@ export interface SleepObservationSummary {
   readonly averageWakeMinute: number | null;
   readonly bedtimeVariabilityMinutes: number | null;
   readonly wakeVariabilityMinutes: number | null;
+}
+
+export interface ManualSleepDraftInput {
+  readonly id: string;
+  readonly cycleDate: string;
+  readonly nightCycleId: string | null;
+  readonly timeZone: string;
+  readonly kind: 'BEDTIME' | 'WAKE';
+  readonly recordedAt: Date;
+  readonly now: Date;
+}
+
+export function setSleepMorningFeedback(
+  previous: SleepObservation | null,
+  input: {
+    readonly id: string;
+    readonly cycleDate: string;
+    readonly nightCycleId: string | null;
+    readonly timeZone: string;
+    readonly patch: SleepMorningFeedbackPatch;
+    readonly now: Date;
+  },
+): SleepObservation {
+  DayDate.create(input.cycleDate);
+  if (previous && previous.cycleDate !== input.cycleDate)
+    throw new TypeError('Оценка относится к другой ночи.');
+  validateSleepMorningFeedback({
+    sleepQuality: input.patch.sleepQuality ?? null,
+    energy: input.patch.energy ?? null,
+    recordedAt: input.now,
+  });
+  const timeZone = previous?.timeZone ?? input.timeZone;
+  const wakeDate = new Date(`${input.cycleDate}T12:00:00Z`);
+  wakeDate.setUTCDate(wakeDate.getUTCDate() + 1);
+  if (wakeDate.toISOString().slice(0, 10) > resolveSleepCycleDate(input.now, timeZone, '00:00'))
+    throw new TypeError('Нельзя оценить будущую ночь.');
+  const observation: SleepObservation = {
+    ...(previous ?? {
+      id: input.id,
+      cycleDate: input.cycleDate,
+      nightCycleId: input.nightCycleId,
+      wentToBedAt: null,
+      wokeAt: null,
+      wakeSource: null,
+      wakeOccurrenceId: null,
+      timeZone,
+      confirmedAt: null,
+      createdAt: new Date(input.now),
+    }),
+    updatedAt: new Date(input.now),
+    morningFeedback: {
+      sleepQuality: input.patch.sleepQuality ?? previous?.morningFeedback?.sleepQuality ?? null,
+      energy: input.patch.energy ?? previous?.morningFeedback?.energy ?? null,
+      recordedAt: new Date(input.now),
+    },
+  };
+  validateSleepObservation(observation);
+  return observation;
+}
+
+export function clearSleepMorningFeedback(
+  observation: SleepObservation,
+  now: Date,
+): SleepObservation {
+  const { morningFeedback, ...rest } = observation;
+  if (morningFeedback === undefined) return observation;
+  const cleared = { ...rest, updatedAt: new Date(now) };
+  validateSleepObservation(cleared);
+  return cleared;
+}
+
+export function recordManualSleepDraft(
+  previous: SleepObservation | null,
+  input: ManualSleepDraftInput,
+): SleepObservation {
+  if (previous !== null && previous.cycleDate !== input.cycleDate)
+    throw new TypeError('Отметка относится к другой ночи.');
+  if (
+    previous !== null &&
+    (isConfirmedSleepObservation(previous) ||
+      (input.kind === 'BEDTIME' && previous.wentToBedAt !== null) ||
+      (input.kind === 'WAKE' && previous.wakeSource === 'MANUAL'))
+  )
+    return previous;
+  if (input.recordedAt > input.now) throw new TypeError('Время отметки ещё не наступило.');
+  const observation: SleepObservation = {
+    id: previous?.id ?? input.id,
+    ...(previous?.morningFeedback ? { morningFeedback: previous.morningFeedback } : {}),
+    cycleDate: input.cycleDate,
+    nightCycleId: previous?.nightCycleId ?? input.nightCycleId,
+    wentToBedAt:
+      input.kind === 'BEDTIME' ? new Date(input.recordedAt) : (previous?.wentToBedAt ?? null),
+    wokeAt: input.kind === 'WAKE' ? new Date(input.recordedAt) : (previous?.wokeAt ?? null),
+    wakeSource: input.kind === 'WAKE' ? 'MANUAL' : (previous?.wakeSource ?? null),
+    wakeOccurrenceId: previous?.wakeOccurrenceId ?? null,
+    timeZone: previous?.timeZone ?? input.timeZone,
+    confirmedAt: null,
+    createdAt: previous?.createdAt ?? new Date(input.now),
+    updatedAt: new Date(input.now),
+  };
+  validateSleepObservation(observation);
+  return observation;
 }
 
 export function createWakeObservationDraft(input: {
@@ -76,6 +185,7 @@ export function confirmSleepObservation(
     previous.wokeAt?.getTime() === input.wokeAt.getTime();
   const observation: SleepObservation = {
     id: previous?.id ?? input.id,
+    ...(previous?.morningFeedback ? { morningFeedback: previous.morningFeedback } : {}),
     cycleDate: previous?.cycleDate ?? input.cycleDate,
     nightCycleId: previous?.nightCycleId ?? input.nightCycleId,
     wentToBedAt: new Date(input.wentToBedAt),
@@ -114,6 +224,8 @@ export function reviseSleepObservation(
 }
 
 export function validateSleepObservation(observation: SleepObservation): void {
+  if (observation.morningFeedback !== undefined)
+    validateSleepMorningFeedback(observation.morningFeedback);
   requiredText(observation.id, 'Идентификатор наблюдения');
   DayDate.create(observation.cycleDate);
   if (observation.nightCycleId !== null) requiredText(observation.nightCycleId, 'Ночной цикл');

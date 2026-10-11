@@ -2,15 +2,127 @@ import { describe, expect, it } from 'vitest';
 import {
   confirmSleepObservation,
   createWakeObservationDraft,
+  recordManualSleepDraft,
   isConfirmedSleepObservation,
   reviseSleepObservation,
   summarizeSleepObservations,
   timeInBedMilliseconds,
+  setSleepMorningFeedback,
+  clearSleepMorningFeedback,
 } from './SleepObservation';
 
 const createdAt = new Date('2026-10-03T21:00:00.000Z');
 
 describe('Sleep observation', () => {
+  const feedbackInput = {
+    id: 'sleep-observation:2026-10-10',
+    cycleDate: '2026-10-10',
+    nightCycleId: null,
+    timeZone: 'Asia/Chita',
+    patch: { sleepQuality: 'GOOD' as const },
+    now: new Date('2026-10-11T01:00:00Z'),
+  };
+  it('keeps partial morning feedback independent without inventing sleep times', () => {
+    const first = setSleepMorningFeedback(null, feedbackInput);
+    const second = setSleepMorningFeedback(first, {
+      ...feedbackInput,
+      patch: { energy: 'TIRED' },
+      now: new Date('2026-10-11T01:01:00Z'),
+    });
+    expect(second).toMatchObject({
+      id: 'sleep-observation:2026-10-10',
+      wentToBedAt: null,
+      wokeAt: null,
+      wakeSource: null,
+      confirmedAt: null,
+      createdAt: feedbackInput.now,
+      morningFeedback: { sleepQuality: 'GOOD', energy: 'TIRED' },
+    });
+    expect(summarizeSleepObservations([second])).toMatchObject({
+      confirmedCount: 0,
+      averageTimeInBedMinutes: null,
+      averageBedtimeMinute: null,
+    });
+    expect(isConfirmedSleepObservation(second)).toBe(false);
+  });
+  it('rejects an empty patch even when feedback already exists', () => {
+    const first = setSleepMorningFeedback(null, feedbackInput);
+    expect(() => setSleepMorningFeedback(first, { ...feedbackInput, patch: {} })).toThrow();
+  });
+  it('guards future wake dates using the observation timezone', () => {
+    const input = { ...feedbackInput, now: new Date('2026-10-10T20:00:00Z') };
+    expect(() =>
+      setSleepMorningFeedback(null, { ...input, timeZone: 'America/Los_Angeles' }),
+    ).toThrow('будущ');
+    expect(
+      setSleepMorningFeedback(null, { ...input, timeZone: 'Pacific/Kiritimati' }).cycleDate,
+    ).toBe('2026-10-10');
+  });
+  it('preserves feedback through manual marks, confirmation and revision', () => {
+    const rated = setSleepMorningFeedback(null, feedbackInput);
+    const bed = recordManualSleepDraft(rated, {
+      ...feedbackInput,
+      kind: 'BEDTIME',
+      recordedAt: new Date('2026-10-10T14:00:00Z'),
+    });
+    const wake = recordManualSleepDraft(bed, {
+      ...feedbackInput,
+      kind: 'WAKE',
+      recordedAt: new Date('2026-10-10T21:00:00Z'),
+    });
+    expect(bed.morningFeedback).toEqual(rated.morningFeedback);
+    expect(wake.morningFeedback).toEqual(rated.morningFeedback);
+    const confirmed = confirmSleepObservation(wake, {
+      ...feedbackInput,
+      wentToBedAt: bed.wentToBedAt!,
+      wokeAt: wake.wokeAt!,
+      confirmedAt: feedbackInput.now,
+    });
+    const revised = reviseSleepObservation(confirmed, {
+      wentToBedAt: new Date('2026-10-10T14:10:00Z'),
+      wokeAt: wake.wokeAt!,
+      updatedAt: new Date('2026-10-11T01:02:00Z'),
+    });
+    expect(confirmed.morningFeedback).toEqual(rated.morningFeedback);
+    expect(revised.morningFeedback).toEqual(rated.morningFeedback);
+    const cleared = clearSleepMorningFeedback(revised, new Date('2026-10-11T01:03:00Z'));
+    expect(cleared).not.toHaveProperty('morningFeedback');
+    expect(cleared).toMatchObject({
+      id: revised.id,
+      createdAt: rated.createdAt,
+      wentToBedAt: revised.wentToBedAt,
+      wokeAt: revised.wokeAt,
+      confirmedAt: revised.confirmedAt,
+    });
+  });
+  it('keeps both manual stamps as an editable draft and preserves the first tap', () => {
+    const input = {
+      id: 'manual',
+      cycleDate: '2026-10-03',
+      nightCycleId: null,
+      timeZone: 'Asia/Chita',
+      kind: 'BEDTIME' as const,
+      recordedAt: new Date('2026-10-03T14:30:00Z'),
+      now: new Date('2026-10-03T14:30:00Z'),
+    };
+    const bed = recordManualSleepDraft(null, input);
+    expect(
+      recordManualSleepDraft(bed, { ...input, recordedAt: new Date('2026-10-03T15:00:00Z') }),
+    ).toBe(bed);
+    const wake = recordManualSleepDraft(bed, {
+      ...input,
+      kind: 'WAKE',
+      recordedAt: new Date('2026-10-04T00:30:00Z'),
+      now: new Date('2026-10-04T00:30:00Z'),
+    });
+    expect(wake).toMatchObject({
+      wentToBedAt: input.recordedAt,
+      wakeSource: 'MANUAL',
+      confirmedAt: null,
+    });
+    expect(summarizeSleepObservations([wake]).confirmedCount).toBe(0);
+    expect(() => recordManualSleepDraft(bed, { ...input, kind: 'WAKE' })).toThrow('раньше');
+  });
   it('creates one incomplete draft from a trustworthy alarm result', () => {
     const draft = createWakeObservationDraft({
       id: 'observation-1',

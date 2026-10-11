@@ -20,10 +20,49 @@ import {
   clearNearestWakeTime,
   skipNearestWakeOccurrence,
   updateSleepSettings,
+  setSleepPreparationTiming,
+  renamePreparationItem,
   WAKE_OCCURRENCE_STATUS,
 } from './SleepSchedule';
+import { resolveStretchingItem } from './SleepPreparationTiming';
 
 describe('SleepSchedule', () => {
+  it('binds timing by enabled item ID without changing old snapshots or native settings', () => {
+    const catalog = addCustomPreparationItem(enabledSchedule(), {
+      id: 'stretch',
+      groupId: 'personal',
+      title: 'Растяжка',
+    });
+    const initial = ensureNightCycle(catalog, {
+      cycleDate: '2026-10-10',
+      cycleId: 'timed-night',
+      createdAt: new Date('2026-10-10T12:00:00Z'),
+    }).state;
+    const timing = {
+      totalPreparationMinutes: 30,
+      stretchingItemId: 'stretch',
+      stretchingMinutes: 10,
+    };
+    const saved = setSleepPreparationTiming(initial, timing);
+    expect(saved.settings).toBe(initial.settings);
+    expect(saved.nightCycles).toBe(initial.nightCycles);
+    expect(saved.version).toBe(initial.version + 1);
+    const renamed = renamePreparationItem(saved, 'stretch', 'Мягкая растяжка');
+    expect(resolveStretchingItem(renamed.preparationTiming!, renamed.preparationItems)?.id).toBe(
+      'stretch',
+    );
+    const disabled = setPreparationItemEnabled(renamed, 'stretch', false);
+    expect(
+      resolveStretchingItem(disabled.preparationTiming!, disabled.preparationItems),
+    ).toBeNull();
+    expect(() => setSleepPreparationTiming(disabled, timing)).toThrow();
+    const deleted = deletePreparationItem(renamed, 'stretch');
+    expect(resolveStretchingItem(deleted.preparationTiming!, deleted.preparationItems)).toBeNull();
+    expect(deleted.nightCycles).toBe(initial.nightCycles);
+    expect(() =>
+      setSleepPreparationTiming(saved, { ...timing, stretchingItemId: 'unknown' }),
+    ).toThrow();
+  });
   it('rejects stale confirmations instead of changing or skipping the following morning', () => {
     const scheduled = rebuildWakeSchedule(enabledSchedule(), {
       cycleDates: ['2026-09-20', '2026-09-21'],

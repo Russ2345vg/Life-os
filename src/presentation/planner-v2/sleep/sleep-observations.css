@@ -154,6 +154,59 @@
   background: var(--surface-1);
 }
 
+.planner-v2 .sleep-morning-feedback {
+  margin-block: var(--space-4) var(--space-6);
+  padding: var(--space-4);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-large);
+  background: var(--surface-1);
+}
+.planner-v2 .sleep-morning-feedback h3 {
+  margin-top: 0;
+}
+.planner-v2 .sleep-morning-feedback__groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+.planner-v2 .sleep-morning-feedback__groups p {
+  margin-block: 0 var(--space-2);
+}
+.planner-v2 .sleep-morning-feedback .planner-segments {
+  display: flex;
+  width: 100%;
+}
+.planner-v2 .sleep-morning-feedback button {
+  min-width: 44px;
+  min-height: 44px;
+}
+.planner-v2 .sleep-morning-feedback .planner-segments button {
+  flex: 1;
+}
+.planner-v2 .sleep-morning-feedback button:focus-visible {
+  outline: 2px solid var(--planner-accent);
+  outline-offset: 2px;
+}
+.planner-v2 .sleep-morning-feedback__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+.planner-v2 .sleep-morning-feedback__hint {
+  color: var(--text-secondary);
+}
+.planner-v2 .sleep-morning-feedback [role='alert'] {
+  color: var(--danger);
+}
+@media (max-width: 760px) {
+  .planner-v2 .sleep-morning-feedback__groups {
+    grid-template-columns: 1fr;
+  }
+}
+
 .planner-v2 .sleep-observation-chart--state {
   min-height: 148px;
   display: grid;
@@ -220,6 +273,53 @@
 
 .planner-v2 .sleep-observation-chart__fact {
   fill: var(--planner-accent);
+}
+
+.planner-v2 .sleep-observation-chart__gap {
+  stroke: var(--border-soft);
+  stroke-width: 0.3;
+  stroke-dasharray: 1 2;
+}
+
+.planner-v2 .sleep-mode-control {
+  width: fit-content;
+  margin-block: var(--space-4);
+}
+.planner-v2 .sleep-mode-control button {
+  min-height: var(--control-lg);
+}
+.planner-v2 .sleep-quick-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-block: var(--space-4) var(--space-6);
+}
+.planner-v2 .sleep-quick-entry p {
+  margin-block: var(--space-1);
+}
+.planner-v2 .sleep-quick-entry small {
+  color: var(--text-secondary);
+}
+.planner-v2 .sleep-quick-entry > button {
+  min-height: var(--control-lg);
+  min-width: 160px;
+}
+.planner-v2 .sleep-quick-entry button:focus-visible {
+  outline: 2px solid var(--planner-accent);
+  outline-offset: 2px;
+}
+@media (max-width: 760px) {
+  .planner-v2 .sleep-quick-entry {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .planner-v2 .sleep-mode-control {
+    width: 100%;
+  }
+  .planner-v2 .sleep-mode-control button {
+    flex: 1;
+  }
 }
 
 .planner-v2 .sleep-observation-chart__mobile {

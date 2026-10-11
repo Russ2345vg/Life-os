@@ -6,6 +6,7 @@ import {
   type SleepScheduleState,
 } from '../../domain/sleep/SleepSchedule';
 import { IndexedDbSleepScheduleRepository } from './IndexedDbSleepScheduleRepository';
+import { SleepScheduleRecordMapper } from './mappers/SleepScheduleRecordMapper';
 import {
   LIFE_OS_DATABASE_NAME,
   LIFE_OS_DATABASE_VERSION,
@@ -14,6 +15,38 @@ import {
 } from './indexed-db/LifeOsIndexedDb';
 
 describe('Sleep schedule persistence migration', () => {
+  it('round-trips timing with a stale item ID without modifying the main schedule', async () => {
+    const database = new LifeOsIndexedDb(new IDBFactory());
+    try {
+      const state = {
+        ...fullState(),
+        preparationTiming: {
+          totalPreparationMinutes: 30,
+          stretchingItemId: 'old-stretch',
+          stretchingMinutes: 10,
+        },
+      };
+      const record = SleepScheduleRecordMapper.toRecord(state);
+      expect(record.schemaVersion).toBe(1);
+      expect(record.preparationTiming).toEqual(state.preparationTiming);
+      await new IndexedDbSleepScheduleRepository(database).save(state);
+      expect(await new IndexedDbSleepScheduleRepository(database).load()).toEqual(state);
+    } finally {
+      database.close();
+    }
+  });
+  it.each([
+    { totalPreparationMinutes: 0, stretchingItemId: null, stretchingMinutes: 10 },
+    { totalPreparationMinutes: 181, stretchingItemId: null, stretchingMinutes: 10 },
+    { totalPreparationMinutes: 30, stretchingItemId: 'stretch', stretchingMinutes: 31 },
+    { totalPreparationMinutes: 30, stretchingItemId: '', stretchingMinutes: 10 },
+    { totalPreparationMinutes: 30, stretchingItemId: null, stretchingMinutes: 121 },
+    null,
+  ])('ignores malformed optional timing without losing schedule data %#', (preparationTiming) => {
+    const original = fullState();
+    const record = { ...SleepScheduleRecordMapper.toRecord(original), preparationTiming };
+    expect(SleepScheduleRecordMapper.fromRecord(record)).toEqual(original);
+  });
   it('retains a one-time wake when the repository is reopened', async () => {
     const database = new LifeOsIndexedDb(new IDBFactory());
     const original = fullState();

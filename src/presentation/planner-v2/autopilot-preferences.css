@@ -41,6 +41,58 @@
   border-inline-start: 2px solid var(--warning);
   padding-inline-start: var(--space-3);
 }
+.planner-v2 .autopilot-form__organization > summary {
+  min-height: 44px;
+  cursor: pointer;
+}
+.planner-v2 .autopilot-organization {
+  display: grid;
+  gap: var(--space-4);
+  padding-top: var(--space-3);
+}
+.planner-v2 .autopilot-organization fieldset {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+}
+.planner-v2 .autopilot-organization legend {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.planner-v2 .autopilot-organization button {
+  min-height: 44px;
+}
+.planner-v2 .autopilot-organization__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.planner-v2 .autopilot-organization__balance {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--space-3);
+}
+.planner-v2 .autopilot-organization__dependencies {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.planner-v2 .autopilot-organization__dependencies li {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: space-between;
+  margin-block: var(--space-2);
+}
+.planner-v2 .autopilot-organization__dependencies span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .planner-v2 .autopilot-timeline__edit {
   display: flex;
   gap: var(--space-3);
@@ -74,6 +126,9 @@
   overflow-wrap: anywhere;
 }
 @media (max-width: 40rem) {
+  .planner-v2 .autopilot-organization__balance {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .planner-v2 .autopilot-form__range {
     grid-template-columns: minmax(0, 1fr);
   }

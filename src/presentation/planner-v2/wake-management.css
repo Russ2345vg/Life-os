@@ -82,6 +82,20 @@
 .planner-v2 .wake-management .sleep-alarm-status__heading strong {
   color: var(--text-secondary);
 }
+.planner-v2 .wake-management .sleep-alarm-status--success .sleep-alarm-status__heading strong {
+  color: var(--success);
+}
+.planner-v2 .wake-management .sleep-alarm-status--attention .sleep-alarm-status__heading strong {
+  color: var(--warning);
+}
+.planner-v2 .wake-management .sleep-alarm-status--error .sleep-alarm-status__heading strong {
+  color: var(--danger);
+}
+.wake-management .sleep-alarm-next-action {
+  line-height: 1.6;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
 .wake-management .sleep-alarm-status small {
   display: block;
   margin-top: 10px;

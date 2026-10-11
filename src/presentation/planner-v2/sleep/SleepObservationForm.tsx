@@ -38,6 +38,7 @@ export function SleepObservationForm({
   const [wentToBed, setWentToBed] = useState(suggestedBedtime);
   const [wokeAt, setWokeAt] = useState(suggestedWake);
   const [localError, setLocalError] = useState<string | null>(null);
+  const dirty = wentToBed !== suggestedBedtime || wokeAt !== suggestedWake;
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -83,11 +84,13 @@ export function SleepObservationForm({
               value={wakeDate}
               max={latestWakeDate}
               required
-              disabled={busy}
+              disabled={busy || dirty}
               onChange={(event) => onWakeDateChange(event.currentTarget.value)}
             />
             <small id="sleep-recording-date-help">
-              Выберите другую дату, если пропустили ночь.
+              {dirty
+                ? 'Сохраните или сбросьте изменения перед выбором другой даты.'
+                : 'Выберите другую дату, если пропустили ночь.'}
             </small>
           </label>
         ) : null}
@@ -101,10 +104,16 @@ export function SleepObservationForm({
             disabled={busy}
             onChange={(event) => {
               setWentToBed(event.currentTarget.value);
-              onDirtyChange?.(true);
+              onDirtyChange?.(
+                event.currentTarget.value !== suggestedBedtime || wokeAt !== suggestedWake,
+              );
             }}
           />
-          <small>Плановое время — только подсказка.</small>
+          <small>
+            {observation?.wentToBedAt
+              ? 'Сохранённую отметку можно исправить.'
+              : 'Плановое время — только подсказка.'}
+          </small>
         </label>
         <label>
           <span>Во сколько встал?</span>
@@ -116,7 +125,9 @@ export function SleepObservationForm({
             disabled={busy}
             onChange={(event) => {
               setWokeAt(event.currentTarget.value);
-              onDirtyChange?.(true);
+              onDirtyChange?.(
+                wentToBed !== suggestedBedtime || event.currentTarget.value !== suggestedWake,
+              );
             }}
           />
           <small>{wakeSourceLabel(observation)}</small>
@@ -130,6 +141,20 @@ export function SleepObservationForm({
               </p>
             ) : null}
           </div>
+          {dirty ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setWentToBed(suggestedBedtime);
+                setWokeAt(suggestedWake);
+                setLocalError(null);
+                onDirtyChange?.(false);
+              }}
+            >
+              Сбросить изменения
+            </button>
+          ) : null}
           <button className="planner-primary" type="submit" disabled={busy}>
             {busy ? 'Сохраняем…' : 'Сохранить ночь'}
           </button>

@@ -15,6 +15,7 @@ import {
 import { autopilotLocalTime } from '../../application/planner/AutopilotConstraints';
 import { AutopilotPreferencesForm } from './AutopilotPreferencesForm';
 import { AutopilotPlanPreview, AutopilotTimeline } from './AutopilotPlanPreview';
+import type { AutopilotScheduleBlock } from '../../domain/planner/AutopilotSchedule';
 import './autopilot-preferences.css';
 export type DayAutopilotClient = Pick<
   DayAutopilotService,
@@ -70,6 +71,28 @@ export function PreferenceAutopilotCard({
     };
   }, [dateKey, service]);
   const disabled = busy || working;
+  const persistPreferences = async (value: AutopilotPreferences): Promise<boolean> => {
+    if (!setup || disabled) return false;
+    const current = generation.current;
+    setWorking(true);
+    setError(null);
+    setPreview(null);
+    try {
+      const saved = await service.savePreferences(
+        validateAutopilotPreferences(value),
+        setup.preferences.version,
+      );
+      if (generation.current !== current) return false;
+      setPreferences(saved.value);
+      setSetup((old) => (old ? { ...old, preferences: saved } : old));
+      return true;
+    } catch (reason: unknown) {
+      if (generation.current === current) setError(errorText(reason));
+      return false;
+    } finally {
+      if (generation.current === current) setWorking(false);
+    }
+  };
   const build = async (editedDraft = draft) => {
     if (!setup || !preferences || !editedDraft || disabled) return;
     const current = generation.current;
@@ -104,6 +127,44 @@ export function PreferenceAutopilotCard({
     setDraft(next);
     setPreview(null);
     void build(next);
+  };
+  const pin = async (block: AutopilotScheduleBlock) => {
+    if (!draft || !setup || disabled || !block.actionId) return;
+    const current = generation.current;
+    const exists = draft.pinnedWindows?.some((item) => item.actionId === block.actionId);
+    const next: AutopilotDayDraft = {
+      ...draft,
+      pinnedWindows: exists
+        ? draft.pinnedWindows!.filter((item) => item.actionId !== block.actionId)
+        : [
+            ...(draft.pinnedWindows ?? []),
+            {
+              actionId: block.actionId,
+              startMinute: block.startMinute,
+              durationMinutes: block.endMinute - block.startMinute,
+            },
+          ],
+    };
+    setDraft(next);
+    if (preview) {
+      edit(next);
+      return;
+    }
+    setWorking(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const saved = await service.saveDraft(next, setup.draft.version);
+      if (generation.current === current) {
+        setDraft(saved.value);
+        setSetup((old) => (old ? { ...old, draft: saved } : old));
+        setMessage(exists ? 'Закрепление снято.' : 'Время закреплено для этого дня.');
+      }
+    } catch (reason: unknown) {
+      if (generation.current === current) setError(errorText(reason));
+    } finally {
+      if (generation.current === current) setWorking(false);
+    }
   };
   const apply = async () => {
     if (!preview || disabled) return;
@@ -191,6 +252,7 @@ export function PreferenceAutopilotCard({
                 setPreview(null);
               }}
               onBuild={() => void build()}
+              onPersistPreferences={persistPreferences}
             />
           ) : !error ? (
             <p role="status">Загружаю предпочтения…</p>
@@ -200,6 +262,14 @@ export function PreferenceAutopilotCard({
               <AutopilotPlanPreview
                 preview={preview}
                 busy={disabled}
+                directionNames={
+                  setup?.catalog.directions.map((item) => ({
+                    id: item.id.toString(),
+                    name: item.name,
+                  })) ?? []
+                }
+                pinnedActionIds={draft?.pinnedWindows?.map((item) => item.actionId) ?? []}
+                onPin={(block) => void pin(block)}
                 onDuration={(actionId, minutes) =>
                   draft &&
                   edit({
@@ -255,6 +325,8 @@ export function PreferenceAutopilotCard({
                 date={applied.date}
                 name="Сохранённое расписание"
                 busy={disabled}
+                pinnedActionIds={draft?.pinnedWindows?.map((item) => item.actionId) ?? []}
+                onPin={(block) => void pin(block)}
               />
               <p className="planner-muted">
                 В расписании {applied.blocks.filter((block) => block.kind !== 'sleep').length}{' '}
@@ -273,6 +345,34 @@ export function PreferenceAutopilotCard({
             >
               Вернуть исключённые дела ({draft.excludedActionIds.length})
             </button>
+          ) : null}
+          {draft?.pinnedWindows?.length ? (
+            <details>
+              <summary>Закреплённые действия ({draft.pinnedWindows.length})</summary>
+              <ul>
+                {draft.pinnedWindows.map((item) => (
+                  <li key={item.actionId}>
+                    {setup?.catalog.actions
+                      .find((action) => action.id.toString() === item.actionId)
+                      ?.title.toString() ?? 'Недоступное действие'}{' '}
+                    <button
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => {
+                        edit({
+                          ...draft,
+                          pinnedWindows: draft.pinnedWindows!.filter(
+                            (pin) => pin.actionId !== item.actionId,
+                          ),
+                        });
+                      }}
+                    >
+                      Снять закрепление
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </details>
           ) : null}
         </div>
       </details>

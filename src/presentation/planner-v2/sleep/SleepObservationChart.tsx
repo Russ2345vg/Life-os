@@ -1,27 +1,40 @@
 import { useMemo, useState } from 'react';
 import {
   summarizeSleepObservations,
+  isConfirmedSleepObservation,
   timeInBedMilliseconds,
   type SleepObservation,
 } from '../../../domain/sleep/SleepObservation';
 import type { NightCycle } from '../../../domain/sleep/SleepSchedule';
-import { selectChartObservations, type SleepChartPeriod } from './sleepObservationChartModel';
+import { selectSleepChartDays, type SleepChartPeriod } from './sleepObservationChartModel';
+import { morningFeedbackLabels } from './sleepMorningFeedbackModel';
 
 export function SleepObservationChart({
   observations,
   plans,
   loading,
   error,
+  endCycleDate,
+  onRecord,
+  onRetry,
+  timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone,
 }: {
   readonly observations: readonly SleepObservation[];
   readonly plans: readonly NightCycle[];
   readonly loading: boolean;
   readonly error: string | null;
+  readonly endCycleDate: string;
+  readonly onRecord?: () => void;
+  readonly onRetry?: () => void;
+  readonly timeZone?: string;
 }) {
   const [period, setPeriod] = useState<SleepChartPeriod>(7);
-  const selected = useMemo(
-    () => selectChartObservations(observations, period),
-    [observations, period],
+  const days = useMemo(
+    () => selectSleepChartDays(observations, period, endCycleDate),
+    [observations, period, endCycleDate],
+  );
+  const selected = days.flatMap(({ observation }) =>
+    observation && isConfirmedSleepObservation(observation) ? [observation] : [],
   );
   const planByDate = useMemo(() => new Map(plans.map((plan) => [plan.cycleDate, plan])), [plans]);
 
@@ -39,15 +52,11 @@ export function SleepObservationChart({
     return (
       <section className="sleep-observation-chart sleep-observation-chart--state">
         <p role="alert">{error}</p>
-      </section>
-    );
-  }
-  if (selected.length === 0) {
-    return (
-      <section className="sleep-observation-chart sleep-observation-chart--state">
-        <h2>Режим сна</h2>
-        <p>График появится после первой подтверждённой ночи.</p>
-        <p>В форме «Записать сон» выше укажите время, когда легли и встали, и сохраните ночь.</p>
+        {onRetry ? (
+          <button type="button" onClick={onRetry}>
+            Повторить загрузку
+          </button>
+        ) : null}
       </section>
     );
   }
@@ -57,11 +66,13 @@ export function SleepObservationChart({
     <section className="sleep-observation-chart" aria-labelledby="sleep-chart-title">
       <header className="sleep-observation-chart__header">
         <div>
-          <p className="planner-eyebrow">Подтверждённые наблюдения</p>
+          <p className="planner-eyebrow">
+            {dateLabel(days.at(-1)!.cycleDate)} — {dateLabel(endCycleDate)}
+          </p>
           <h2 id="sleep-chart-title">Режим сна</h2>
           <p>
             {summary.averageTimeInBedMinutes === null
-              ? 'Недостаточно данных'
+              ? 'Сохраните ночь, чтобы увидеть фактическое время в постели.'
               : `Среднее время в постели: ${durationLabel(summary.averageTimeInBedMinutes)}`}
           </p>
         </div>
@@ -78,6 +89,11 @@ export function SleepObservationChart({
           ))}
         </div>
       </header>
+      {selected.length === 0 && onRecord ? (
+        <button type="button" className="planner-button" onClick={onRecord}>
+          Записать сон
+        </button>
+      ) : null}
 
       <div className="sleep-observation-chart__desktop" aria-hidden="true">
         <div className="sleep-observation-chart__axis">
@@ -86,20 +102,34 @@ export function SleepObservationChart({
           <span>06:00</span>
           <span>12:00</span>
         </div>
-        <svg viewBox={`0 0 100 ${selected.length * 15 + 5}`} preserveAspectRatio="none">
-          {selected.map((observation, index) => {
+        <svg
+          viewBox={`0 0 100 ${days.length * 15 + 5}`}
+          preserveAspectRatio="none"
+          style={{ height: `calc(${days.length} * var(--space-6))` }}
+        >
+          {days.map(({ cycleDate, observation }, index) => {
             const y = index * 15 + 4;
-            const fact = intervalBar(
-              observation.wentToBedAt,
-              observation.wokeAt,
-              observation.timeZone,
-            );
-            const plan = planByDate.get(observation.cycleDate);
+            const fact =
+              observation && isConfirmedSleepObservation(observation)
+                ? intervalBar(observation.wentToBedAt, observation.wokeAt, observation.timeZone)
+                : null;
+            const plan = planByDate.get(cycleDate);
             const planned = plan
-              ? intervalBar(plan.plannedSleepAt, plan.plannedWakeAt, observation.timeZone)
+              ? intervalBar(
+                  plan.plannedSleepAt,
+                  plan.plannedWakeAt,
+                  observation?.timeZone ?? timeZone,
+                )
               : null;
             return (
-              <g key={observation.id}>
+              <g key={cycleDate}>
+                <line
+                  x1="0"
+                  x2="100"
+                  y1={y + 3}
+                  y2={y + 3}
+                  className="sleep-observation-chart__gap"
+                />
                 {planned ? (
                   <rect
                     className="sleep-observation-chart__plan"
@@ -110,14 +140,16 @@ export function SleepObservationChart({
                     rx="2"
                   />
                 ) : null}
-                <rect
-                  className="sleep-observation-chart__fact"
-                  x={fact.x}
-                  y={y + 2}
-                  width={fact.width}
-                  height="3"
-                  rx="1.5"
-                />
+                {fact ? (
+                  <rect
+                    className="sleep-observation-chart__fact"
+                    x={fact.x}
+                    y={y + 2}
+                    width={fact.width}
+                    height="3"
+                    rx="1.5"
+                  />
+                ) : null}
               </g>
             );
           })}
@@ -125,24 +157,44 @@ export function SleepObservationChart({
       </div>
 
       <ul className="sleep-observation-chart__mobile">
-        {selected.map((observation) => {
-          const plan = planByDate.get(observation.cycleDate);
+        {days.map(({ cycleDate, observation }) => {
+          const plan = planByDate.get(cycleDate);
+          const feedback = morningFeedbackLabels(observation?.morningFeedback);
+          const confirmed =
+            observation !== null && isConfirmedSleepObservation(observation) ? observation : null;
           return (
-            <li key={observation.id}>
-              <time dateTime={observation.cycleDate}>{dateLabel(observation.cycleDate)}</time>
+            <li key={cycleDate}>
+              <time dateTime={cycleDate}>{dateLabel(cycleDate)}</time>
               <div>
-                <strong>
-                  Факт:{' '}
-                  {timeRange(observation.wentToBedAt, observation.wokeAt, observation.timeZone)}
-                </strong>
+                {confirmed ? (
+                  <strong>
+                    Факт: {timeRange(confirmed.wentToBedAt, confirmed.wokeAt, confirmed.timeZone)}
+                  </strong>
+                ) : (
+                  <span>
+                    {observation
+                      ? observation.wentToBedAt === null && observation.wokeAt === null
+                        ? 'Время сна не записано'
+                        : 'Не подтверждено'
+                      : 'Нет записи'}
+                  </span>
+                )}
                 <span>
                   {plan
-                    ? `План: ${timeRange(plan.plannedSleepAt, plan.plannedWakeAt, observation.timeZone)}`
-                    : 'План для этой ночи недоступен'}
+                    ? `План: ${timeRange(plan.plannedSleepAt, plan.plannedWakeAt, observation?.timeZone ?? timeZone)}`
+                    : confirmed
+                      ? 'План для этой ночи недоступен'
+                      : ''}
                 </span>
-                <small>
-                  Время в постели: {durationLabel(timeInBedMilliseconds(observation) / 60_000)}
-                </small>
+                {confirmed ? (
+                  <small>
+                    Время в постели: {durationLabel(timeInBedMilliseconds(confirmed) / 60_000)}
+                  </small>
+                ) : null}
+                {feedback.sleepQuality ? (
+                  <small>Качество сна: {feedback.sleepQuality}</small>
+                ) : null}
+                {feedback.energy ? <small>Утром: {feedback.energy}</small> : null}
               </div>
             </li>
           );

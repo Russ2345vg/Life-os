@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   confirmSleepObservation,
   type SleepObservation,
+  setSleepMorningFeedback,
+  clearSleepMorningFeedback,
 } from '../../domain/sleep/SleepObservation';
 import { IndexedDbSleepObservationRepository } from './IndexedDbSleepObservationRepository';
 import {
@@ -14,6 +16,54 @@ import {
 import { SleepObservationRecordMapper } from './mappers/SleepObservationRecordMapper';
 
 describe('Sleep observation persistence', () => {
+  it('round-trips partial feedback and removes it on reset after reopening', async () => {
+    const factory = new IDBFactory();
+    const database = new LifeOsIndexedDb(factory);
+    const rated = setSleepMorningFeedback(confirmedObservation(), {
+      id: 'unused',
+      cycleDate: '2026-10-03',
+      nightCycleId: null,
+      timeZone: 'UTC',
+      patch: { energy: 'TIRED' },
+      now: new Date('2026-10-04T01:00:00Z'),
+    });
+    const record = SleepObservationRecordMapper.toRecord(rated);
+    expect(record.morningFeedback).toEqual({
+      sleepQuality: null,
+      energy: 'TIRED',
+      recordedAt: '2026-10-04T01:00:00.000Z',
+    });
+    expect(SleepObservationRecordMapper.fromRecord(record)).toEqual(rated);
+    await new IndexedDbSleepObservationRepository(database).save(rated);
+    database.close();
+    const reopened = new LifeOsIndexedDb(factory);
+    try {
+      const repo = new IndexedDbSleepObservationRepository(reopened);
+      const restored = (await repo.getByCycleDate('2026-10-03'))!;
+      expect(restored.morningFeedback).toEqual(rated.morningFeedback);
+      await repo.save(clearSleepMorningFeedback(restored, new Date('2026-10-04T01:01:00Z')));
+      expect(await repo.getByCycleDate('2026-10-03')).not.toHaveProperty('morningFeedback');
+      expect((await repo.getByCycleDate('2026-10-03'))?.confirmedAt).toEqual(rated.confirmedAt);
+    } finally {
+      reopened.close();
+    }
+  });
+  it.each([
+    { sleepQuality: 'GREAT', energy: null, recordedAt: '2026-10-04T01:00:00Z' },
+    { sleepQuality: null, energy: 'UP', recordedAt: '2026-10-04T01:00:00Z' },
+    { sleepQuality: null, energy: null, recordedAt: '2026-10-04T01:00:00Z' },
+    { sleepQuality: 'GOOD', energy: null, recordedAt: 'bad' },
+    { sleepQuality: 'GOOD', recordedAt: '2026-10-04T01:00:00Z' },
+    null,
+  ])(
+    'ignores malformed optional feedback while preserving the primary night %#',
+    (morningFeedback) => {
+      const original = confirmedObservation();
+      const record = { ...SleepObservationRecordMapper.toRecord(original), morningFeedback };
+      expect(SleepObservationRecordMapper.fromRecord(record)).toEqual(original);
+      expect(() => SleepObservationRecordMapper.fromRecord({ ...record, wokeAt: 'bad' })).toThrow();
+    },
+  );
   it('round-trips a confirmed observation as schema v1 ISO data', () => {
     const observation = confirmedObservation('2026-10-03');
     const record = SleepObservationRecordMapper.toRecord(observation);

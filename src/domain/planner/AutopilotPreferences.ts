@@ -1,5 +1,13 @@
 import { DayDate } from '../day/DayDate';
 import { DomainError } from '../../shared/errors/DomainError';
+import {
+  validateOrganization,
+  validatePins,
+  type AutopilotBalance,
+  type AutopilotActionRule,
+  type AutopilotTemplate,
+  type AutopilotPinnedWindow,
+} from './AutopilotOrganization';
 
 export type AutopilotReference = {
   readonly kind: 'direction' | 'goal' | 'action';
@@ -7,6 +15,10 @@ export type AutopilotReference = {
 };
 export type AutopilotFocus = { readonly kind: 'direction' | 'goal'; readonly id: string };
 export interface AutopilotPreferences {
+  readonly balance?: readonly AutopilotBalance[];
+  readonly groupSimilar?: boolean;
+  readonly actionRules?: readonly AutopilotActionRule[];
+  readonly templates?: readonly AutopilotTemplate[];
   readonly focus: AutopilotFocus | null;
   readonly maxActions: number;
   readonly morningMinutes: number;
@@ -20,6 +32,7 @@ export interface AutopilotPreferences {
   readonly manualBedtimeMinute: number | null;
 }
 export interface AutopilotDayDraft {
+  readonly pinnedWindows?: readonly AutopilotPinnedWindow[];
   readonly date: string;
   readonly wishes: string;
   readonly startMinute: number | null;
@@ -86,6 +99,7 @@ export function validateAutopilotPreferences(value: unknown): AutopilotPreferenc
   const focus = raw.focus === null ? null : reference(raw.focus);
   if (focus?.kind === 'action' || typeof walk.enabled !== 'boolean') return invalid();
   return {
+    ...validateOrganization(raw, validateAutopilotPreferences),
     focus: focus ? { kind: focus.kind, id: focus.id } : null,
     maxActions: integer(raw.maxActions, 1, 12),
     morningMinutes: integer(raw.morningMinutes, 1, 1440),
@@ -126,6 +140,7 @@ export function validateAutopilotDayDraft(value: unknown): AutopilotDayDraft {
   )
     return invalid();
   return {
+    ...(raw.pinnedWindows !== undefined ? { pinnedWindows: validatePins(raw.pinnedWindows) } : {}),
     date,
     wishes: raw.wishes,
     startMinute,

@@ -1,11 +1,39 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { createWakeObservationDraft } from '../../../domain/sleep/SleepObservation';
+import {
+  createWakeObservationDraft,
+  recordManualSleepDraft,
+} from '../../../domain/sleep/SleepObservation';
 import { SleepObservationForm } from './SleepObservationForm';
 import { observationWindowFromTimes } from './sleepObservationFormModel';
 
 describe('SleepObservationForm', () => {
+  it('labels a recorded bedtime as an editable mark instead of a planned suggestion', () => {
+    const observation = recordManualSleepDraft(null, {
+      id: 'manual',
+      cycleDate: '2026-10-03',
+      nightCycleId: null,
+      timeZone: 'Asia/Chita',
+      kind: 'BEDTIME',
+      recordedAt: new Date('2026-10-03T14:30:00Z'),
+      now: new Date('2026-10-03T14:30:00Z'),
+    });
+    const html = renderToStaticMarkup(
+      createElement(SleepObservationForm, {
+        cycleDate: observation.cycleDate,
+        timeZone: observation.timeZone,
+        plannedWentToBedAt: null,
+        observation,
+        busy: false,
+        error: null,
+        saved: false,
+        onSave: vi.fn(),
+      }),
+    );
+    expect(html).toContain('Сохранённую отметку можно исправить');
+    expect(html).not.toContain('Плановое время — только подсказка');
+  });
   it('prefills the planned bedtime only as an editable suggestion and labels the alarm wake', () => {
     const observation = createWakeObservationDraft({
       id: 'sleep-observation:2026-10-03',

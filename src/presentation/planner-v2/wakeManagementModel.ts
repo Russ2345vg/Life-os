@@ -1,5 +1,6 @@
 import type { SleepScheduleState } from '../../domain/sleep/SleepSchedule';
 import type { WakeAlarmStatus } from '../../application/sleep/WakeAlarmGateway';
+export { isWakeScheduleAcknowledged } from '../../application/sleep/WakeAlarmConfirmation';
 
 export function futureWakeOccurrences(state: SleepScheduleState, now: Date) {
   return state.wakeOccurrences
@@ -7,26 +8,6 @@ export function futureWakeOccurrences(state: SleepScheduleState, now: Date) {
       ({ status, scheduledAt }) => status === 'SCHEDULED' && scheduledAt.getTime() > now.getTime(),
     )
     .sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime());
-}
-
-export function isWakeScheduleAcknowledged(
-  state: SleepScheduleState,
-  status: WakeAlarmStatus,
-  now: Date,
-): boolean {
-  const next = futureWakeOccurrences(state, now)[0];
-  return (
-    state.settings?.enabled === true &&
-    next !== undefined &&
-    status.supported &&
-    status.state === 'SCHEDULED' &&
-    status.exactAlarmGranted &&
-    status.notificationsGranted &&
-    status.fullScreenGranted &&
-    status.acknowledgedSettingsVersion === state.settings.version &&
-    status.nextOccurrenceId === next.id &&
-    status.nextScheduledAt?.getTime() === next.scheduledAt.getTime()
-  );
 }
 
 export function wakeProbeLabel(status: WakeAlarmStatus, now: Date): string {
