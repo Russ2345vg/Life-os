@@ -4,6 +4,8 @@ import type { LifeAction } from '../../../domain/life-action/LifeAction';
 import type { PlannerRoute } from '../PlannerNavigation';
 import { useWalkMutation, walkError } from './useWalkState';
 import { WalkPreferencesView } from './WalkPreferences';
+import { SunsetWalkSettings } from './SunsetWalkSettings';
+import { WalkTimeLabel } from './SunsetWalkContext';
 
 export function WalkPlan({
   services,
@@ -54,6 +56,7 @@ export function WalkPlan({
 
   return (
     <div className="walk-plan-layout">
+      <SunsetWalkSettings services={services} date={date} />
       <section className="walk-panel">
         <span className="walk-label">Своя регулярность</span>
         <h2>Запланировать прогулку</h2>
@@ -119,6 +122,8 @@ export function WalkPlan({
                   <strong>{action.title.toString()}</strong>
                   <small>
                     {action.plannedDate?.toString() ?? 'Дата не указана'}
+                    {' · '}
+                    <WalkTimeLabel date={action.plannedDate?.toString() ?? null} />
                     {action.walkPlan?.targetMinutes
                       ? ` · ${action.walkPlan.targetMinutes} мин`
                       : ''}

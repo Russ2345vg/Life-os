@@ -26,6 +26,8 @@ import { PlannerActionTimeSheet, type SetActionTime } from './PlannerActionTimeS
 import { clockTime, durationLabel } from './timePresentation';
 import { PlannerDisclosureCard } from './PlannerDisclosureCard';
 import { AppIcon } from '../components/AppIcon';
+import { useSunsetWalkDay } from './walks/SunsetWalkContext';
+import { effectiveActionTime } from '../../application/walk/WalkScheduleProjection';
 
 export type { PlannerActionOperations } from './plannerActionOperations';
 export function PlannerActionList({
@@ -151,6 +153,8 @@ export function PlannerActionList({
   const activeGroups = groupPlannerActions(activeActions, today);
   const completedGroups = groupPlannerActions(completedActions, today);
   const selected = selectedId ? actions.find((a) => a.id.toString() === selectedId) : null;
+  const { day: sunsetWalk } = useSunsetWalkDay(selected?.plannedDate?.toString() ?? null);
+  const selectedTime = selected ? effectiveActionTime(selected, sunsetWalk) : null;
   const children = selectedId
     ? actions.filter(
         (action) => action.parentActionId?.toString() === selectedId && !action.isArchived(),
@@ -249,11 +253,14 @@ export function PlannerActionList({
                 {selected.estimateMinutes === null
                   ? 'не задана'
                   : durationLabel(selected.estimateMinutes)}
-                {selected.scheduledStartMinute !== null && (
+                {selectedTime?.startMinute !== null && selectedTime && (
                   <>
                     {' '}
-                    · {clockTime(selected.scheduledStartMinute)}–
-                    {clockTime(selected.scheduledStartMinute + selected.scheduledDurationMinutes!)}
+                    · {clockTime(selectedTime.startMinute)}–
+                    {clockTime((selectedTime.startMinute + selectedTime.durationMinutes!) % 1440)}
+                    {selectedTime.startMinute + selectedTime.durationMinutes! > 1440
+                      ? ' (+1 день)'
+                      : ''}
                   </>
                 )}
               </p>

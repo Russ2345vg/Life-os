@@ -32,6 +32,57 @@ export class RecurringActions {
     readonly ids: IdGenerator,
     readonly currentDate?: CurrentDateProvider,
   ) {}
+  async linkWalkAction(input: {
+    actionId: EntityId;
+    targetMinutes: number | null;
+    scope: 'action' | 'series';
+  }): Promise<void> {
+    await this.repository.change((s) => {
+      const action = requireAction(s, input.actionId.toString());
+      const now = this.clock.now();
+      const date = this.currentDate?.getCurrentDate().toString() ?? localDate(now);
+      const rule =
+        input.scope === 'series' && action.occurrence
+          ? this.requireActiveRule(s, action.occurrence.ruleId)
+          : null;
+      if (input.scope === 'series' && !rule)
+        throw new DomainError('walk.series_required', 'У действия нет активной серии.');
+      // Validate before changing a series or any occurrence; the repository commits atomically.
+      const meta = { kind: 'walk' as const, targetMinutes: input.targetMinutes };
+      action.setWalkPlan(meta);
+      if (rule) {
+        const next = validateRule({
+          ...rule,
+          walkPlan: meta,
+          revision: rule.revision + 1,
+          version: rule.version + 1,
+          effectiveFrom: date,
+          updatedAt: now.toISOString(),
+        });
+        put(s.rules, next);
+        this.reconcileFuture(s, next, date, rule.need ?? null);
+        for (const occurrence of s.actions)
+          if (
+            occurrence.occurrence?.ruleId === rule.id &&
+            (occurrence.plannedDate?.toString() ?? '') >= date &&
+            !occurrence.isArchived() &&
+            !occurrence.isDeleted() &&
+            ['draft', 'ready'].includes(occurrence.status)
+          )
+            occurrence.setWalkPlan(meta);
+      }
+      s.journal.push(
+        planningJournal(
+          this.ids.generate().toString(),
+          'LifeAction',
+          action.id.toString(),
+          'Действие связано с прогулкой',
+          now,
+          { scope: input.scope, targetMinutes: input.targetMinutes },
+        ),
+      );
+    });
+  }
   async save(input: RecurrenceInput, id?: string, actionId?: string) {
     return this.repository.change((s) => {
       const now = this.clock.now(),

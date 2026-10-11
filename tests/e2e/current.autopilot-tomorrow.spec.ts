@@ -118,7 +118,8 @@ test('build tomorrow, discard the other date preview and save only the selected 
   await expect(card.getByLabel('Начать с', { exact: true })).toHaveValue('09:00');
   await card.getByLabel('Закончить до', { exact: true }).fill('22:00');
   await card.locator('.autopilot-form__routine > summary').click();
-  await card.getByLabel('Начало прогулки', { exact: true }).fill('14:00');
+  await expect(card.getByLabel('Начало прогулки', { exact: true })).toBeDisabled();
+  await expect(card.getByLabel('Начало прогулки', { exact: true })).toHaveValue('18:16');
   await card
     .getByRole('combobox', { name: 'Главный фокус', exact: true })
     .selectOption(JSON.stringify({ kind: 'direction', id: 'tomorrow-investments' }));

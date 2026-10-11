@@ -14,6 +14,26 @@ import type {
 } from './WakeAlarmGateway';
 
 describe('SleepScheduleService', () => {
+  it('notifies timezone consumers after saving and supports unsubscribe', async () => {
+    const { service } = await reportFixture();
+    const zones: string[] = [];
+    const unsubscribe = service.subscribeSettings((state) => zones.push(state.settings!.timeZone));
+    await service.saveSettings({
+      bedtime: '23:00',
+      wakeTime: '07:00',
+      timeZone: 'Europe/Berlin',
+      enabled: false,
+    });
+    expect(zones).toEqual(['Europe/Berlin']);
+    unsubscribe();
+    await service.saveSettings({
+      bedtime: '23:00',
+      wakeTime: '07:00',
+      timeZone: 'Asia/Chita',
+      enabled: false,
+    });
+    expect(zones).toEqual(['Europe/Berlin']);
+  });
   it('saves timing without scheduling native alarms or invalidating their real report', async () => {
     const { service, gateway, clock } = await reportFixture();
     const checked = (await service.syncAlarm()).state;

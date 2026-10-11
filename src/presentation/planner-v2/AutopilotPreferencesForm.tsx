@@ -13,6 +13,7 @@ import { VoiceField } from '../voice-input/VoiceField';
 import { VoiceTextArea } from '../voice-input/VoiceTextArea';
 import { clockTime } from './timePresentation';
 import { AutopilotOrganizationForm } from './AutopilotOrganizationForm';
+import { sunsetWalkLabel } from './walks/SunsetWalkContext';
 
 export function AutopilotPreferencesForm({
   day = 'today',
@@ -326,8 +327,12 @@ export function AutopilotPreferencesForm({
               Начало прогулки
               <input
                 type="time"
-                disabled={busy}
-                value={inputTime(preferences.walk.startMinute)}
+                disabled={busy || Boolean(setup.sunsetWalk && setup.sunsetWalk.kind !== 'disabled')}
+                value={inputTime(
+                  setup.sunsetWalk && setup.sunsetWalk.kind !== 'disabled'
+                    ? setup.sunsetWalk.startMinute
+                    : preferences.walk.startMinute,
+                )}
                 onChange={(event) =>
                   onPreferences({
                     ...preferences,
@@ -354,6 +359,12 @@ export function AutopilotPreferencesForm({
               />
             </label>
           </div>
+        )}
+        {setup.sunsetWalk && setup.sunsetWalk.kind !== 'disabled' && (
+          <p>
+            {sunsetWalkLabel(setup.sunsetWalk, setup.timeZone)} · {setup.sunsetWalk.city.name}.{' '}
+            <a href="#/v2/walks/plan">Изменить город и время</a>
+          </p>
         )}
         <label>
           Окончание текущей прогулки, если время неизвестно

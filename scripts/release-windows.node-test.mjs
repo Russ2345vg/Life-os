@@ -11,7 +11,14 @@ import {
   resolveWindowsSigningDirectory,
 } from './release-windows.mjs';
 import { join } from 'node:path';
-import { mkdtempSync, mkdirSync, writeFileSync, unlinkSync, rmdirSync } from 'node:fs';
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  unlinkSync,
+  rmdirSync,
+  readFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import {
   extractBuiltSyncEnvironment,
@@ -24,6 +31,26 @@ const publicEnvironment = {
   VITE_LIFEOS_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_synthetic-release-test',
   VITE_LIFEOS_ACCOUNT_SYNC_ENABLED: 'true',
 };
+
+test('walk reminder installer cleanup is scoped and deferred until uninstall completes', () => {
+  const config = JSON.parse(
+    readFileSync(new URL('../src-tauri/tauri.conf.json', import.meta.url), 'utf8'),
+  );
+  assert.equal(config.bundle.windows.nsis.installMode, 'currentUser');
+  const hooks = readFileSync(
+    new URL('../src-tauri/' + config.bundle.windows.nsis.installerHooks, import.meta.url),
+    'utf8',
+  );
+  const pre = hooks.split('!macro NSIS_HOOK_PREUNINSTALL')[1].split('!macroend')[0];
+  assert.match(pre, /CopyFiles \/SILENT/);
+  assert.doesNotMatch(pre, /--walk-reminder-remove/);
+  assert.match(pre, /\$UpdateMode <> 1/);
+  const post = hooks.split('!macro NSIS_HOOK_POSTUNINSTALL')[1].split('!macroend')[0];
+  assert.match(post, /\$PLUGINSDIR\\lifeos-walk-cleanup\.exe.*--walk-reminder-remove/);
+  assert.match(post, /\$UpdateMode <> 1/);
+  assert.match(hooks, /\$INSTDIR\\\$\{MAINBINARYNAME\}\.exe/);
+  assert.match(hooks, /--walk-reminder-maintain/);
+});
 
 test('the real prepare command stops at configuration before touching signing or compilation', () => {
   const result = spawnSync(

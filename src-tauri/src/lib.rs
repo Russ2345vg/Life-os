@@ -1,6 +1,8 @@
 #[cfg(target_os = "android")]
 mod android_alarm;
 #[cfg(target_os = "android")]
+mod android_walk_reminder;
+#[cfg(target_os = "android")]
 mod android_speech;
 #[cfg(target_os = "android")]
 mod android_today_widget;
@@ -9,10 +11,19 @@ mod android_updater;
 mod secure_key_store;
 mod sync_commands;
 mod sync_crypto;
+mod walk_reminder_contract;
 #[cfg(target_os = "windows")]
 mod windows_voice_typing;
 #[cfg(target_os = "windows")]
 mod windows_focus_window;
+#[cfg(target_os = "windows")]
+mod windows_walk_reminder;
+#[cfg(target_os = "windows")]
+mod windows_walk_tasks;
+#[cfg(target_os = "windows")]
+mod windows_walk_toast;
+#[cfg(target_os = "windows")]
+pub use windows_walk_reminder::handle_walk_reminder_cli;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -53,6 +64,9 @@ pub fn run() {
             sync_commands::sync_render_pairing_qr,
             sync_commands::sync_platform,
             windows_focus_window::focus_window_set_active,
+            windows_walk_reminder::walk_reminder_reconcile,
+            windows_walk_reminder::walk_reminder_status,
+            windows_walk_reminder::walk_reminder_open_settings,
             windows_focus_window::focus_window_restore,
             windows_focus_window::focus_window_is_compact,
             windows_focus_window::focus_window_drag,
@@ -73,6 +87,9 @@ pub fn run() {
             android_today_widget::android_today_widget_update,
             android_today_widget::android_today_widget_consume_open,
             android_alarm::android_alarm_reconcile,
+            android_walk_reminder::walk_reminder_reconcile,
+            android_walk_reminder::walk_reminder_status,
+            android_walk_reminder::walk_reminder_open_settings,
             android_alarm::android_alarm_status,
             android_alarm::android_alarm_list_sounds,
             android_alarm::android_alarm_schedule_test,

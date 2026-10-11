@@ -15,6 +15,8 @@ import {
   type PlannerActionPanelLeaveGuard,
 } from './PlannerActionPanelGuard';
 import './planner-action-panel.css';
+import { useSunsetWalkContext } from './walks/SunsetWalkContext';
+import { EntityId } from '../../domain';
 
 export function PlannerActionPanel({
   actionId,
@@ -71,6 +73,8 @@ export function PlannerActionPanel({
   const [confirm, setConfirm] = useState(false);
   const [busyMessage, setBusyMessage] = useState(false);
   const [walkStartError, setWalkStartError] = useState('');
+  const { services: walkServices } = useSunsetWalkContext();
+  const [linkSeries, setLinkSeries] = useState(false);
   const [walkStartBusy, setWalkStartBusy] = useState(false);
   const walkRequestId = useRef<string | null>(null);
   const decide = useRef<((value: boolean) => void) | null>(null);
@@ -149,6 +153,50 @@ export function PlannerActionPanel({
                 <span>Цель, план, вклад и прогулки действия</span>
               </button>
             )}
+            {selected &&
+              !selected.walkPlan &&
+              walkServices &&
+              !selected.isArchived() &&
+              !selected.isDeleted() &&
+              ['draft', 'ready'].includes(selected.status) && (
+                <div className="planner-inline-actions">
+                  {selected.occurrence && (
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={linkSeries}
+                        onChange={(event) => setLinkSeries(event.target.checked)}
+                      />
+                      Связать всю серию
+                    </label>
+                  )}
+                  <button
+                    type="button"
+                    disabled={walkStartBusy}
+                    onClick={() => {
+                      setWalkStartBusy(true);
+                      setWalkStartError('');
+                      void walkServices.planning
+                        .linkAction({
+                          actionId: EntityId.create(actionId),
+                          targetMinutes:
+                            selected.scheduledDurationMinutes ?? selected.estimateMinutes,
+                          scope: linkSeries ? 'series' : 'action',
+                        })
+                        .then(() => onRetry())
+                        .catch((error: unknown) =>
+                          setWalkStartError(
+                            error instanceof Error ? error.message : 'Не удалось связать действие.',
+                          ),
+                        )
+                        .finally(() => setWalkStartBusy(false));
+                    }}
+                  >
+                    Связать с прогулкой
+                  </button>
+                  {walkStartError && <p role="alert">{walkStartError}</p>}
+                </div>
+              )}
             {selected?.walkPlan && onStartWalk && (
               <div>
                 <button

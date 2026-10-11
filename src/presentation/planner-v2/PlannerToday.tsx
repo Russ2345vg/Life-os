@@ -22,6 +22,8 @@ import { EntityContextMenu, type EntityMenuAction } from './EntityContextMenu';
 import type { SleepTodayEntry } from '../../application/sleep/SleepTodayEntry';
 import { buildTimeScheduleDay } from '../../application/queries/GetTimeSchedule';
 import { clockTime, durationLabel } from './timePresentation';
+import { useSunsetWalkDay } from './walks/SunsetWalkContext';
+import { effectiveActionTime } from '../../application/walk/WalkScheduleProjection';
 import {
   MonthlyDirectionFocusCard,
   type MonthlyDirectionFocusView,
@@ -122,7 +124,14 @@ export function PlannerToday({
 
   const total = overview.actions.length + overview.completed.length + (overview.main ? 1 : 0);
   const plannedCount = overview.actions.length + (overview.main ? 1 : 0);
-  const schedule = buildTimeScheduleDay(date.toString(), availableActions, capacityMinutes);
+  const { day: sunsetWalk } = useSunsetWalkDay(date.toString());
+  const schedule = buildTimeScheduleDay(
+    date.toString(),
+    availableActions,
+    capacityMinutes,
+    [],
+    sunsetWalk,
+  );
   const percent = total ? Math.round((overview.completed.length / total) * 100) : 0;
   const dateLabel = new Intl.DateTimeFormat('ru-RU', {
     weekday: 'long',
@@ -135,6 +144,7 @@ export function PlannerToday({
     extra?: ReactNode,
   ) => {
     const id = action.id.toString();
+    const time = effectiveActionTime(action, sunsetWalk);
     const goal = goals.find((item) => item.id === action.goalId?.toString());
     const direction = directions.find(
       (item) => item.id === (goal ? goal.directionId : action.directionId?.toString()),
@@ -189,10 +199,11 @@ export function PlannerToday({
                     ) : null}
                   </span>
                 ) : null}
-                {action.scheduledStartMinute !== null ? (
+                {time.startMinute !== null ? (
                   <span className="planner-muted">
-                    {clockTime(action.scheduledStartMinute)}–
-                    {clockTime(action.scheduledStartMinute + action.scheduledDurationMinutes!)}
+                    {clockTime(time.startMinute)}–
+                    {clockTime((time.startMinute + time.durationMinutes!) % 1440)}
+                    {time.startMinute + time.durationMinutes! > 1440 ? ' (+1 день)' : ''}
                   </span>
                 ) : action.estimateMinutes !== null ? (
                   <span className="planner-muted">

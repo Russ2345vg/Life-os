@@ -9,6 +9,33 @@ import { BrowserLocalSettingsStore } from '../../app/settings/BrowserLocalSettin
 import { IndexedDbPilotSyncStore } from './pilot/IndexedDbPilotSyncStore';
 
 describe('MeaningfulLocalSettingsSync', () => {
+  it('keeps city and native calendar local without changing the shared settings wire format', async () => {
+    const indexedDb = new LifeOsIndexedDb(new IDBFactory());
+    const database = await indexedDb.open();
+    await put(database, LIFE_OS_SYNC_STORE.settings, activeSettings());
+    await put(database, LIFE_OS_SYNC_STORE.settings, {
+      id: 'sunset-walk-settings:v1',
+      revision: 9,
+      city: { name: 'Борзя', id: '2026126' },
+      enabled: true,
+      remindersEnabled: true,
+    });
+    const sync = new MeaningfulLocalSettingsSync(
+      indexedDb,
+      new IndexedDbPilotMutationRecorder({ createId: () => 'local-city-wire-test' }),
+      {
+        readEveningRitualForSync: () => DEFAULT_EVENING_RITUAL_SETTINGS,
+        applyEveningRitualFromSync: () => true,
+      },
+    );
+    await sync.reconcile();
+    const payloads = await all<{ serializedPayload: string }>(database, LIFE_OS_SYNC_STORE.outbox);
+    expect(payloads.length).toBeGreaterThan(0);
+    expect(payloads.map((row) => row.serializedPayload).join('')).not.toMatch(
+      /sunset-walk|Борзя|2026126|remindersEnabled/,
+    );
+    indexedDb.close();
+  });
   it('does not publish an unset goal when a newly paired device first joins format 2', async () => {
     const indexedDb = new LifeOsIndexedDb(new IDBFactory());
     const database = await indexedDb.open();

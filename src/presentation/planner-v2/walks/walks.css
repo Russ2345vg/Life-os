@@ -912,3 +912,22 @@
     flex-wrap: wrap;
   }
 }
+.walk-form label.sunset-walk-check {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+.walk-form .sunset-walk-check input {
+  width: auto;
+  min-height: auto;
+  flex: 0 0 auto;
+}
+.sunset-walk-time {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.sunset-walk-status {
+  border-left: 2px solid var(--border-accent);
+  padding-left: 12px;
+}

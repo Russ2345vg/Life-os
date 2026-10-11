@@ -102,6 +102,12 @@ import { WalkCaptureProcessing } from '../../application/walk/WalkCaptureProcess
 import { WalkAnalytics } from '../../application/walk/WalkAnalytics';
 import { WalkMemoryExport } from '../../application/walk/WalkMemoryExport';
 import { WalkPlanning } from '../../application/walk/WalkPlanning';
+import { SunsetWalkSettings } from '../../application/walk/SunsetWalkSettings';
+import { WalkScheduleProjection } from '../../application/walk/WalkScheduleProjection';
+import { IndexedDbSunsetWalkSettingsStore } from '../../infrastructure/persistence/IndexedDbSunsetWalkSettingsStore';
+import { OpenMeteoCitySearchGateway } from '../../infrastructure/location/OpenMeteoCitySearchGateway';
+import { WalkReminderCoordinator } from '../../application/walk/WalkReminderCoordinator';
+import { TauriWalkReminderGateway } from '../../infrastructure/notifications/TauriWalkReminderGateway';
 import { WalkContextResolver } from '../../application/walk/WalkContextResolver';
 import { WalkPreferences } from '../../application/walk/WalkPreferences';
 import { IndexedDbWalkPreferencesStore } from '../../infrastructure/persistence/IndexedDbWalkPreferencesStore';
@@ -317,6 +323,14 @@ export async function createLifeOsApplication(
     );
 
     const walkRepository = new IndexedDbWalkRepository(database);
+    const sunsetSettings = new SunsetWalkSettings(new IndexedDbSunsetWalkSettingsStore(database));
+    const walkSchedule = new WalkScheduleProjection(sunsetSettings);
+    const walkReminders = new WalkReminderCoordinator(
+      sunsetSettings,
+      new TauriWalkReminderGateway(),
+      () => clock.now().getTime(),
+    );
+    void walkReminders.reconcile().catch(() => undefined);
     const pomodoroPreferences = new LocalPomodoroPreferences(
       typeof window === 'undefined' ? null : window.localStorage,
     );
@@ -336,6 +350,7 @@ export async function createLifeOsApplication(
         planning: planningRepository,
         blocks: new IndexedDbRoutineBlockRepository(database),
         walks: walkRepository,
+        walkSchedule,
         pomodoro: pomodoroPreferences,
         ids: idGenerator,
       },
@@ -356,6 +371,12 @@ export async function createLifeOsApplication(
       analytics,
       aiContext: new ReadAiContext(analyticsReader, plannerInbox, analytics),
       walks: {
+        sunset: {
+          settings: sunsetSettings,
+          schedule: walkSchedule,
+          cities: new OpenMeteoCitySearchGateway(),
+          reminders: walkReminders,
+        },
         preferences: new WalkPreferences(
           new IndexedDbWalkPreferencesStore(database, () => {
             void meaningfulSettingsSync?.reconcile().catch(() => undefined);
@@ -368,6 +389,7 @@ export async function createLifeOsApplication(
           lifeActionRepository,
           walkRepository,
           walkCommands,
+          planning.recurrence,
         ),
         memoryExport: new WalkMemoryExport(walkRepository, walkRepository, memory),
         analytics: new WalkAnalytics(walkRepository),

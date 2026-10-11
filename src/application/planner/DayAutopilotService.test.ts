@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   ActionSession,
+  Walk,
   DayDate,
   EntityId,
   type LifeAction,
@@ -15,6 +16,76 @@ import { preferenceAutopilotFixture } from '../../test/helpers/PreferenceAutopil
 import { Direction } from '../../domain';
 
 describe('preference day autopilot service', () => {
+  it('does not carry an already completed previous-day walk into the selected day', async () => {
+    const f = await preferenceAutopilotFixture();
+    try {
+      const walk = Walk.create({
+        id: EntityId.create('finished-walk'),
+        date: DayDate.create('2026-10-09'),
+        type: 'reflection',
+        intent: 'reflection',
+        now: new Date('2026-10-09T10:00:00Z'),
+      })
+        .start({ mode: 'stopwatch', startedAt: new Date('2026-10-09T10:00:00Z') })
+        .complete({ endedAt: new Date('2026-10-09T10:30:00Z') });
+      await f.profile.walks.run(
+        { requestId: 'completed-walk-fixture', operation: 'create', inputHash: 'fixture' },
+        async (transaction) => {
+          await transaction.saveWalk(walk, null);
+          return walk;
+        },
+      );
+      const walkSchedule = f.walkSchedule;
+      const projection = await walkSchedule.forPlannerDate(f.date.toString(), 'Asia/Chita');
+      vi.spyOn(walkSchedule, 'forPlannerDate').mockResolvedValue({
+        ...projection,
+        startMinute: 1430,
+        previousStartMinute: 1430,
+      });
+      const preferences = await f.settings.getPreferences();
+      await f.settings.savePreferences(
+        { ...preferences.value, walk: { ...preferences.value.walk, enabled: true, minutes: 30 } },
+        preferences.version,
+      );
+      const service = new DayAutopilotService({
+        ...f.dependencies,
+        profile: { ...f.profile, walkSchedule },
+      });
+      const schedule = await service.readSchedule(f.date, f.date);
+      expect(schedule[0]!.blocks.some((block) => block.id.startsWith('carry-walk:'))).toBe(false);
+    } finally {
+      f.db.close();
+    }
+  });
+  it.each(['fill', 'rebuild'] as const)(
+    'keeps several linked walks in one solar slot in %s',
+    async (mode) => {
+      const f = await preferenceAutopilotFixture();
+      try {
+        for (const id of ['walk-a', 'walk-b']) {
+          const action = createLifeActionDraft(id);
+          action.setPlan(f.date, false);
+          action.setWalkPlan({ kind: 'walk', targetMinutes: 30 });
+          await f.actions.save(action);
+        }
+        const walkSchedule = f.walkSchedule;
+        const service = new DayAutopilotService({
+          ...f.dependencies,
+          profile: { ...f.profile, walkSchedule },
+        });
+        const preview = await service.preview({ date: f.date, mode });
+        expect(preview.timeline!.filter((block) => block.kind === 'walk')).toHaveLength(1);
+        expect(preview.proposals.filter((item) => item.actionId.startsWith('walk-'))).toEqual([]);
+        expect((await service.readSchedule(f.date, f.date))[0]!.conflictIds.size).toBe(0);
+        expect((await f.actions.findAll()).map((action) => action.scheduledStartMinute)).toEqual([
+          null,
+          null,
+        ]);
+      } finally {
+        f.db.close();
+      }
+    },
+  );
   it('requires full catalog support and an explicit range instead of the eight hour fallback', async () => {
     const f = await preferenceAutopilotFixture();
     try {

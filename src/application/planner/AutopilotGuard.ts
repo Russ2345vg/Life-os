@@ -10,6 +10,7 @@ import type {
 import type { AutopilotCatalog } from '../../domain/planner/AutopilotSelection';
 import type { AutopilotStored } from '../ports/AutopilotSettingsStore';
 import { shiftAutopilotDate } from './AutopilotConstraints';
+import type { WalkScheduleDay } from '../walk/WalkScheduleProjection';
 export interface AutopilotGuardSource {
   readonly date: string;
   readonly catalog: AutopilotCatalog;
@@ -20,8 +21,10 @@ export interface AutopilotGuardSource {
   readonly walks: readonly Walk[];
   readonly preferences: AutopilotStored<AutopilotPreferences>;
   readonly draft: AutopilotStored<AutopilotDayDraft>;
+  readonly sunsetWalk?: WalkScheduleDay | undefined;
 }
 export interface AutopilotGuardSnapshot {
+  readonly sunsetWalkSettingsRevision?: number;
   readonly date: string;
   readonly sourceFingerprint: string;
 }
@@ -91,7 +94,10 @@ export function buildAutopilotGuard(source: AutopilotGuardSource): AutopilotGuar
       source.walks.filter(
         (walk) =>
           walk.deletedAt === null &&
-          (walk.date.toString() === date || walk.status === 'running' || walk.status === 'paused'),
+          (walk.date.toString() === date ||
+            walk.date.toString() === shiftAutopilotDate(date, -1) ||
+            walk.status === 'running' ||
+            walk.status === 'paused'),
       ),
     ).map((walk) => [
       walk.id.toString(),
@@ -106,6 +112,13 @@ export function buildAutopilotGuard(source: AutopilotGuardSource): AutopilotGuar
     ]),
     preferences: source.preferences,
     draft: source.draft,
+    sunsetWalk: source.sunsetWalk,
   };
-  return { date, sourceFingerprint: JSON.stringify(payload) };
+  return {
+    date,
+    sourceFingerprint: JSON.stringify(payload),
+    ...(source.sunsetWalk
+      ? { sunsetWalkSettingsRevision: source.sunsetWalk.settingsRevision }
+      : {}),
+  };
 }

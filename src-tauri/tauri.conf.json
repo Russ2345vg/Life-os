@@ -39,7 +39,8 @@
     "icon": ["icons/icon.ico"],
     "windows": {
       "nsis": {
-        "installMode": "currentUser"
+        "installMode": "currentUser",
+        "installerHooks": "windows/walk-reminder-hooks.nsh"
       }
     }
   },

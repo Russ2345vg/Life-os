@@ -6,6 +6,7 @@ import './planner-time-calendar.css';
 import { useQuickAccessGuard } from './QuickAccessContext';
 import { clockTime } from './timePresentation';
 import { PlannerUnsavedChangesConfirmation } from './PlannerUnsavedChangesConfirmation';
+import { useSunsetWalkContext, useSunsetWalkDay, sunsetWalkLabel } from './walks/SunsetWalkContext';
 
 export type SetActionTime = (
   id: string,
@@ -25,6 +26,9 @@ export function PlannerActionTimeSheet({
   readonly onClose: () => void;
 }) {
   const [action] = useState(sourceAction);
+  const { services } = useSunsetWalkContext();
+  const { day: sunsetWalk, timeZone } = useSunsetWalkDay(action.plannedDate?.toString() ?? null);
+  const automatic = Boolean(action.walkPlan && services && sunsetWalk?.kind !== 'disabled');
   const [expectedVersion] = useState(sourceAction.version);
   const [estimate, setEstimate] = useState(
     action.estimateMinutes === null ? '' : String(action.estimateMinutes),
@@ -63,9 +67,19 @@ export function PlannerActionTimeSheet({
   const save = async (onlyEstimate: boolean) => {
     if (working.current) return;
     const nextEstimate = estimate.trim() === '' ? null : Number(estimate);
-    const nextDuration = onlyEstimate ? null : Number(duration);
+    const nextDuration = automatic
+      ? action.scheduledDurationMinutes
+      : onlyEstimate
+        ? null
+        : Number(duration);
     const parts = start.split(':').map(Number);
-    const nextStart = onlyEstimate ? null : parts.length === 2 ? parts[0]! * 60 + parts[1]! : NaN;
+    const nextStart = automatic
+      ? action.scheduledStartMinute
+      : onlyEstimate
+        ? null
+        : parts.length === 2
+          ? parts[0]! * 60 + parts[1]!
+          : NaN;
     if (
       (nextEstimate !== null &&
         (!Number.isInteger(nextEstimate) || nextEstimate < 1 || nextEstimate > 1440)) ||
@@ -118,7 +132,13 @@ export function PlannerActionTimeSheet({
             disabled={saving}
           />
         </label>
-        {action.plannedDate && (
+        {automatic && (
+          <p>
+            {sunsetWalk ? sunsetWalkLabel(sunsetWalk, timeZone) : 'Читаем автоматическое время…'}.{' '}
+            <a href="#/v2/walks/plan">Изменить общее правило прогулки</a>
+          </p>
+        )}
+        {action.plannedDate && !automatic && (
           <>
             <label>
               Начало{' '}
@@ -150,7 +170,7 @@ export function PlannerActionTimeSheet({
           </p>
         )}
         <div className="planner-time-form-actions">
-          {action.plannedDate && (
+          {action.plannedDate && !automatic && (
             <button type="button" onClick={() => void save(true)} disabled={saving}>
               {action.scheduledStartMinute !== null ? 'Убрать время' : 'Сохранить только оценку'}
             </button>

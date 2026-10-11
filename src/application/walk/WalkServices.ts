@@ -10,7 +10,17 @@ import type { WalkMemoryExport } from './WalkMemoryExport';
 import type { WalkPlanning } from './WalkPlanning';
 import type { WalkContextResolver } from './WalkContextResolver';
 import type { WalkPreferences } from './WalkPreferences';
+import type { SunsetWalkSettings } from './SunsetWalkSettings';
+import type { WalkScheduleProjection } from './WalkScheduleProjection';
+import type { CitySearchGateway } from '../ports/CitySearchGateway';
+import type { WalkReminderCoordinator } from './WalkReminderCoordinator';
 export interface WalkServices {
+  readonly sunset: {
+    readonly settings: SunsetWalkSettings;
+    readonly schedule: WalkScheduleProjection;
+    readonly cities: CitySearchGateway;
+    readonly reminders: WalkReminderCoordinator;
+  };
   readonly preferences: WalkPreferences;
   readonly context: WalkContextResolver;
   readonly planning: WalkPlanning;

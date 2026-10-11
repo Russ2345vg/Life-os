@@ -58,12 +58,32 @@ class AndroidAlarmSettingsArgs {
 }
 
 @InvokeArg
+class AndroidWalkReminderArgs {
+  lateinit var configurationJson: String
+}
+
+@InvokeArg
 class AndroidEmergencyPhraseArgs {
   lateinit var phrase: String
 }
 
 @TauriPlugin
 class LifeOsAlarmPlugin(private val activity: Activity) : Plugin(activity) {
+  @Command
+  fun walkReminderReconcile(invoke: Invoke) {
+    try {
+      val raw = invoke.parseArgs(AndroidWalkReminderArgs::class.java).configurationJson
+      invoke.resolve(LifeOsWalkReminderScheduler.reconcile(activity, raw))
+    } catch (error: Exception) {
+      invoke.reject(error.message ?: "Walk reminder failed.", "WALK_REMINDER_FAILED", error)
+    }
+  }
+
+  @Command
+  fun walkReminderStatus(invoke: Invoke) {
+    invoke.resolve(LifeOsWalkReminderScheduler.restorePersisted(activity))
+  }
+
   @Command
   fun reconcile(invoke: Invoke) {
     try {

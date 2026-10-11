@@ -16,6 +16,9 @@ import { IndexedDbJournalUnitOfWork } from '../../infrastructure/persistence/Ind
 import { LifeOsIndexedDb } from '../../infrastructure/persistence/indexed-db/LifeOsIndexedDb';
 import { LocalPomodoroPreferences } from '../../infrastructure/time/LocalPomodoroPreferences';
 import { FakeClock, FakeIdGenerator } from './Fakes';
+import { SunsetWalkSettings } from '../../application/walk/SunsetWalkSettings';
+import { WalkScheduleProjection } from '../../application/walk/WalkScheduleProjection';
+import { IndexedDbSunsetWalkSettingsStore } from '../../infrastructure/persistence/IndexedDbSunsetWalkSettingsStore';
 export async function preferenceAutopilotFixture() {
   const db = new LifeOsIndexedDb(new IDBFactory());
   const date = DayDate.create('2026-10-10');
@@ -69,5 +72,8 @@ export async function preferenceAutopilotFixture() {
     profile,
     dependencies,
     service: new DayAutopilotService(dependencies),
+    walkSchedule: new WalkScheduleProjection(
+      new SunsetWalkSettings(new IndexedDbSunsetWalkSettingsStore(db)),
+    ),
   };
 }

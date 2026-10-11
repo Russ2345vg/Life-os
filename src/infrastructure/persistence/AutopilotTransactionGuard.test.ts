@@ -25,6 +25,9 @@ import { WalkRecordMapper } from './mappers/WalkRecordMapper';
 import { routineTestBlock } from '../../test/helpers/AutopilotTestFactory';
 import { IndexedDbPilotMutationRecorder } from '../sync/pilot/IndexedDbPilotMutationRecorder';
 import { LIFE_OS_SYNC_REGISTRY } from '../sync/LifeOsSyncRegistry';
+import { SunsetWalkSettings } from '../../application/walk/SunsetWalkSettings';
+import { WalkScheduleProjection } from '../../application/walk/WalkScheduleProjection';
+import { IndexedDbSunsetWalkSettingsStore } from './IndexedDbSunsetWalkSettingsStore';
 
 const opened: LifeOsIndexedDb[] = [];
 afterEach(() => {
@@ -80,6 +83,21 @@ async function state(db: LifeOsIndexedDb) {
   return Promise.all(names.map((name) => request(tx.objectStore(name).getAll())));
 }
 describe('autopilot transaction source guards', () => {
+  it('accepts the current city and rejects a city change atomically', async () => {
+    const f = await fixture();
+    const settings = new SunsetWalkSettings(new IndexedDbSunsetWalkSettingsStore(f.db));
+    const schedule = new WalkScheduleProjection(settings);
+    const sunsetWalk = await schedule.forPlannerDate(
+      f.source.date,
+      Intl.DateTimeFormat().resolvedOptions().timeZone,
+    );
+    const guard = buildAutopilotGuard({ ...f.source, sunsetWalk });
+    await expect(
+      f.unit.commit({ autopilotGuard: guard, journalEntries: [] }),
+    ).resolves.toBeUndefined();
+    await settings.save({ ...(await settings.get()), remindersEnabled: false });
+    await expect(f.unit.commit({ autopilotGuard: guard, journalEntries: [] })).rejects.toThrow();
+  });
   it('applies an unchanged source and rejects a repeated stale guard without duplicate blocks', async () => {
     const f = await fixture(),
       block = routineTestBlock('day-autopilot:v1:2026-10-10:rest:0');

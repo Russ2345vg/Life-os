@@ -13,7 +13,10 @@ class LifeOsAlarmBootReceiver : BroadcastReceiver() {
       Intent.ACTION_TIME_CHANGED,
       Intent.ACTION_TIMEZONE_CHANGED,
       AlarmManagerPermissionAction,
-      -> runCatching { LifeOsAlarmScheduler.reschedulePersisted(context) }
+      -> {
+        runCatching { LifeOsAlarmScheduler.reschedulePersisted(context) }
+        runCatching { LifeOsWalkReminderScheduler.restorePersisted(context) }
+      }
     }
   }
 

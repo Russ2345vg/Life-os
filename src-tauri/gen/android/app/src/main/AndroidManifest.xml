@@ -57,6 +57,11 @@
             android:exported="false" />
 
         <receiver
+            android:name=".LifeOsWalkReminderReceiver"
+            android:directBootAware="true"
+            android:exported="false" />
+
+        <receiver
             android:name=".LifeOsTodayWidgetProvider"
             android:exported="true">
             <intent-filter>

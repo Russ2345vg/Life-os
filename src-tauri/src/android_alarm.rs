@@ -112,7 +112,7 @@ pub struct WakeDismissalSetupStatus {
     last_water_completed_at_epoch_millis: Option<i64>,
 }
 
-struct AndroidAlarm<R: Runtime>(tauri::plugin::PluginHandle<R>);
+pub(crate) struct AndroidAlarm<R: Runtime>(pub(crate) tauri::plugin::PluginHandle<R>);
 
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     tauri::plugin::Builder::new("lifeos-alarm")

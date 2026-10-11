@@ -13,6 +13,9 @@ import { plannerDateLabel, type PlannerViews } from './plannerViewsModel';
 import { PlannerActionTimeSheet } from './PlannerActionTimeSheet';
 import { clockTime, durationLabel } from './timePresentation';
 import './planner-time-calendar.css';
+import { useSunsetWalkRange } from './walks/SunsetWalkContext';
+import { SUNSET_WALK_SETTINGS_CHANGED } from '../../application/walk/SunsetWalkSettings';
+import { effectiveActionTime } from '../../application/walk/WalkScheduleProjection';
 
 interface Props {
   readonly autopilot?: Pick<DayAutopilotService, 'readSchedule'> | undefined;
@@ -69,6 +72,15 @@ export function PlannerTimeCalendar({
   const visibleDates = mode === 'week' ? dates : [selected];
   const from = visibleDates[0]!,
     to = visibleDates.at(-1)!;
+  const sunsetDays = useSunsetWalkRange(from, to);
+  const time = (action: LifeAction) =>
+    effectiveActionTime(action, sunsetDays.get(action.plannedDate?.toString() ?? ''));
+  const [sunsetRevision, setSunsetRevision] = useState(0);
+  useEffect(() => {
+    const changed = () => setSunsetRevision((value) => value + 1);
+    window.addEventListener(SUNSET_WALK_SETTINGS_CHANGED, changed);
+    return () => window.removeEventListener(SUNSET_WALK_SETTINGS_CHANGED, changed);
+  }, []);
   useEffect(() => {
     let cancelled = false;
     if (autopilot)
@@ -91,7 +103,7 @@ export function PlannerTimeCalendar({
     return () => {
       cancelled = true;
     };
-  }, [from, to, autopilot, data.actions]);
+  }, [from, to, autopilot, data.actions, sunsetRevision]);
   const days = new Map(
     visibleDates.map((date) => [
       date,
@@ -100,6 +112,7 @@ export function PlannerTimeCalendar({
         data.actions,
         capacity[weekday(date)] ?? null,
         schedule.find((day) => day.date === date)?.blocks,
+        sunsetDays.get(date),
       ),
     ]),
   );
@@ -108,22 +121,20 @@ export function PlannerTimeCalendar({
     data.actions,
     capacity[weekday(selected)] ?? null,
     schedule.find((day) => day.date === selected)?.blocks,
+    sunsetDays.get(selected),
   );
   const allTimed = [...days.values()].flatMap((day) => day.timed);
   const allRoutine = [...days.values()].flatMap((day) => day.blocks);
   const startHour = Math.min(
     7,
     ...allRoutine.map((block) => Math.floor(block.startMinute / 60)),
-    ...allTimed.map((action) => Math.max(0, Math.floor(action.scheduledStartMinute! / 60) - 1)),
+    ...allTimed.map((action) => Math.max(0, Math.floor(time(action).startMinute! / 60) - 1)),
   );
   const endHour = Math.max(
     21,
     ...allRoutine.map((block) => Math.ceil(block.endMinute / 60)),
     ...allTimed.map((action) =>
-      Math.min(
-        24,
-        Math.ceil((action.scheduledStartMinute! + action.scheduledDurationMinutes!) / 60) + 1,
-      ),
+      Math.min(24, Math.ceil((time(action).startMinute! + time(action).durationMinutes!) / 60) + 1),
     ),
   );
   const gridHeight = (endHour - startHour) * 48;
@@ -297,11 +308,16 @@ export function PlannerTimeCalendar({
                     </div>
                   ))}
                   {day.timed.map((action) => {
-                    const interactive = action.scheduledDurationMinutes! >= 60;
+                    const actionTime = time(action);
+                    const interactive = actionTime.durationMinutes! >= 60;
                     const Block = interactive ? 'button' : 'div';
                     const position: CSSProperties = {
-                      top: ((action.scheduledStartMinute! - startHour * 60) / 60) * 48,
-                      height: (action.scheduledDurationMinutes! / 60) * 48 - (interactive ? 3 : 0),
+                      top: ((actionTime.startMinute! - startHour * 60) / 60) * 48,
+                      height:
+                        (Math.min(actionTime.durationMinutes!, 1440 - actionTime.startMinute!) /
+                          60) *
+                          48 -
+                        (interactive ? 3 : 0),
                     };
                     return (
                       <Block
@@ -320,11 +336,11 @@ export function PlannerTimeCalendar({
                         {...(interactive
                           ? { disabled: busy || action.status === 'completed' }
                           : {})}
-                        aria-label={`${action.title}, ${clockTime(action.scheduledStartMinute!)}–${clockTime(action.scheduledStartMinute! + action.scheduledDurationMinutes!)}`}
+                        aria-label={`${action.title}, ${clockTime(actionTime.startMinute!)}–${clockTime((actionTime.startMinute! + actionTime.durationMinutes!) % 1440)}`}
                       >
                         <span>
-                          {clockTime(action.scheduledStartMinute!)} ·{' '}
-                          {durationLabel(action.scheduledDurationMinutes!)}
+                          {clockTime(actionTime.startMinute!)} ·{' '}
+                          {durationLabel(actionTime.durationMinutes!)}
                         </span>
                         <strong>{action.title.toString()}</strong>
                       </Block>
@@ -411,8 +427,8 @@ export function PlannerTimeCalendar({
                     {action.title.toString()}
                   </a>
                   <span>
-                    {clockTime(action.scheduledStartMinute!)}–
-                    {clockTime(action.scheduledStartMinute! + action.scheduledDurationMinutes!)}
+                    {clockTime(time(action).startMinute!)}–
+                    {clockTime((time(action).startMinute! + time(action).durationMinutes!) % 1440)}
                     {action.status === 'completed' ? ' · Выполнено' : ''}
                   </span>
                   {(action.status === 'draft' || action.status === 'ready') && (

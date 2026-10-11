@@ -25,6 +25,65 @@ function planned(
 }
 
 describe('buildTimeScheduleDay', () => {
+  it('counts several linked walk rows once while preserving their identical display time', () => {
+    const actions = ['walk-a', 'walk-b'].map((id) => {
+      const action = planned(id, 500, 30, 30);
+      action.setWalkPlan({ kind: 'walk', targetMinutes: 30 });
+      return action;
+    });
+    const projection = {
+      date: date.toString(),
+      settingsRevision: 1,
+      kind: 'available' as const,
+      startMinute: 1096,
+      city: {
+        id: '2026126',
+        name: 'Борзя',
+        region: 'Забайкальский край',
+        country: 'Россия',
+        latitude: 50.39138,
+        longitude: 116.53355,
+        timeZone: 'Asia/Chita',
+      },
+      sunsetAt: 0,
+      walkStartAt: 0,
+    };
+    const day = buildTimeScheduleDay(date.toString(), actions, null, [], projection);
+    expect(day.timed).toHaveLength(2);
+    expect([...day.effectiveTimes.values()].map((time) => time.startMinute)).toEqual([1096, 1096]);
+    expect(day.scheduledMinutes).toBe(30);
+    expect(day.conflictIds.size).toBe(0);
+  });
+  it('uses effective walk times for conflicts without rewriting the action', () => {
+    const walk = planned('walk', 500, 30, 30);
+    walk.setWalkPlan({ kind: 'walk', targetMinutes: 30 });
+    const day = buildTimeScheduleDay(
+      date.toString(),
+      [walk, planned('meeting', 1090, 30, null)],
+      null,
+      [],
+      {
+        date: date.toString(),
+        settingsRevision: 1,
+        kind: 'available',
+        startMinute: 1096,
+        city: {
+          id: '2026126',
+          name: 'Борзя',
+          region: 'Забайкальский край',
+          country: 'Россия',
+          latitude: 50.39138,
+          longitude: 116.53355,
+          timeZone: 'Asia/Chita',
+        },
+        sunsetAt: 0,
+        walkStartAt: 0,
+      },
+    );
+    expect(day.conflictIds).toEqual(new Set(['walk', 'meeting']));
+    expect(day.effectiveTimes.get('walk')?.startMinute).toBe(1096);
+    expect(walk.scheduledStartMinute).toBe(500);
+  });
   it('uses routine and rest windows for conflicts and free slots without counting them as work', () => {
     const day = buildTimeScheduleDay(date.toString(), [planned('a', 600, 30, null)], null, [
       {

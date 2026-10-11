@@ -17,6 +17,7 @@ import {
 } from '../../domain/planner/AutopilotSchedule';
 import { isAutopilotOpenAction } from '../../domain/planner/AutopilotSelection';
 import { DomainError } from '../../shared/errors/DomainError';
+import type { WalkScheduleDay } from '../walk/WalkScheduleProjection';
 
 export interface AutopilotConstraintInput {
   readonly date: string;
@@ -27,6 +28,7 @@ export interface AutopilotConstraintInput {
   readonly routineBlocks: readonly RoutineBlock[];
   readonly walks: readonly Walk[];
   readonly actions: readonly LifeAction[];
+  readonly sunsetWalk?: WalkScheduleDay | undefined;
   /** Only preview rebuild discards future owned blocks; persisted readback retains them. */
   readonly rebuild?: boolean;
   readonly readback?: boolean;
@@ -69,6 +71,18 @@ export function buildAutopilotConstraints(
   const nowLocal = autopilotLocalTime(input.now, zone);
   const current = nowLocal.date === date ? nowLocal.minute : 0;
   const blocks: AutopilotScheduleBlock[] = [];
+  const solarWalk = input.sunsetWalk?.kind !== 'disabled' ? input.sunsetWalk : undefined;
+  const planned = input.actions
+    .filter(
+      (action) =>
+        isAutopilotOpenAction(action) && action.walkPlan && action.plannedDate?.toString() === date,
+    )
+    .sort(
+      (a, b) =>
+        (b.scheduledDurationMinutes ?? b.walkPlan!.targetMinutes ?? 30) -
+          (a.scheduledDurationMinutes ?? a.walkPlan!.targetMinutes ?? 30) ||
+        a.id.toString().localeCompare(b.id.toString()),
+    )[0];
   function add(
     kind: AutopilotBlockKind,
     start: number,
@@ -177,12 +191,55 @@ export function buildAutopilotConstraints(
       }
     }
   }
+  if (solarWalk?.previousStartMinute !== undefined && solarWalk.previousStartMinute !== null) {
+    const previousDate = shiftAutopilotDate(date, -1);
+    const previousAction = input.actions.find(
+      (action) =>
+        isAutopilotOpenAction(action) &&
+        action.walkPlan &&
+        action.plannedDate?.toString() === previousDate,
+    );
+    const previousRoutine = input.routineBlocks.find(
+      (block) => block.assignment.kind === 'walk' && block.occursOn(DayDate.create(previousDate)),
+    );
+    const minutes =
+      previousAction?.scheduledDurationMinutes ??
+      previousAction?.walkPlan?.targetMinutes ??
+      (previousRoutine
+        ? (() => {
+            const [sh, sm] = previousRoutine.startTime.split(':').map(Number),
+              [eh, em] = previousRoutine.endTime.split(':').map(Number);
+            return eh! * 60 + em! - sh! * 60 - sm!;
+          })()
+        : preferences.walk.minutes);
+    if (
+      (preferences.walk.enabled || previousAction || previousRoutine) &&
+      !input.walks.some(
+        (walk) => walk.status === 'completed' && walk.date.toString() === previousDate,
+      )
+    )
+      add(
+        'walk',
+        0,
+        solarWalk.previousStartMinute + minutes - 1440,
+        `carry-walk:${previousDate}`,
+        'Прогулка (с предыдущего дня)',
+      );
+  }
   for (const block of input.routineBlocks) {
     if (!block.occursOn(DayDate.create(date))) continue;
     const [sh, sm] = block.startTime.split(':').map(Number),
       [eh, em] = block.endTime.split(':').map(Number);
-    const start = sh! * 60 + sm!,
+    let start = sh! * 60 + sm!,
       end = eh! * 60 + em!;
+    if (block.assignment.kind === 'walk' && solarWalk && date >= nowLocal.date) {
+      if (solarWalk.startMinute === null) continue;
+      const duration = end - start;
+      start = solarWalk.startMinute;
+      end = start + duration;
+      if (blocks.some((item) => item.kind === 'walk' && !item.id.startsWith('carry-walk:')))
+        continue;
+    }
     const owned = isAutopilotOwnedBlock(block.id.toString(), date);
     if (input.rebuild && owned && start >= Math.max(current, draft.startMinute ?? 0)) continue;
     const assignment = block.assignment;
@@ -203,13 +260,20 @@ export function buildAutopilotConstraints(
           )
         : undefined;
     add(
-      owned ? (block.assignment.kind === 'walk' ? 'walk' : 'rest') : 'manual',
+      block.assignment.kind === 'walk' && solarWalk
+        ? 'walk'
+        : owned
+          ? block.assignment.kind === 'walk'
+            ? 'walk'
+            : 'rest'
+          : 'manual',
       start,
       end,
       block.id.toString(),
       block.title,
       block.id.toString(),
-      linked?.id.toString() ?? null,
+      linked?.id.toString() ??
+        (block.assignment.kind === 'walk' && solarWalk ? (planned?.id.toString() ?? null) : null),
     );
   }
   const walks = input.walks.filter((walk) => walk.deletedAt === null);
@@ -251,32 +315,34 @@ export function buildAutopilotConstraints(
   );
   const existingWalk = blocks.some(
     (block) =>
-      block.kind === 'walk' ||
+      (block.kind === 'walk' && !block.id.startsWith('carry-walk:')) ||
       (block.kind === 'manual' &&
         input.routineBlocks.some(
           (routine) =>
             routine.id.toString() === block.sourceId && routine.assignment.kind === 'walk',
         )),
   );
-  const planned = input.actions
-    .filter(
-      (action) =>
-        isAutopilotOpenAction(action) && action.walkPlan && action.plannedDate?.toString() === date,
-    )
-    .sort((a, b) => a.id.toString().localeCompare(b.id.toString()))[0];
   if (
-    !input.readback &&
+    (!input.readback || solarWalk) &&
     !completed &&
     active.length === 0 &&
     !existingWalk &&
     (preferences.walk.enabled || planned)
   ) {
-    const start = planned?.scheduledStartMinute ?? preferences.walk.startMinute;
+    const start = solarWalk
+      ? solarWalk.startMinute
+      : (planned?.scheduledStartMinute ?? preferences.walk.startMinute);
     const minutes =
       planned?.scheduledDurationMinutes ??
       planned?.walkPlan?.targetMinutes ??
       preferences.walk.minutes;
-    if (start === null || start < current || start + minutes > 1439)
+    if (solarWalk && (start === null || (!input.readback && start < current)))
+      return blocks.sort((a, b) => a.startMinute - b.startMinute || a.id.localeCompare(b.id));
+    if (
+      start === null ||
+      (start < current && !input.readback) ||
+      (!solarWalk && start + minutes > 1439)
+    )
       throw new DomainError(
         'day_autopilot.walk_time_required',
         'Выберите время прогулки в оставшейся части дня.',
@@ -289,7 +355,7 @@ export function buildAutopilotConstraints(
       'Прогулка',
       planned?.id.toString() ?? null,
       planned?.id.toString() ?? null,
-      false,
+      Boolean(solarWalk),
     );
   }
   return blocks.sort((a, b) => a.startMinute - b.startMinute || a.id.localeCompare(b.id));

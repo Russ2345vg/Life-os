@@ -27,6 +27,12 @@ import {
   AUTOPILOT_PREFERENCES_KEY,
   autopilotDraftKey,
 } from './IndexedDbAutopilotSettingsStore';
+import { SUNSET_WALK_SETTINGS_KEY } from './IndexedDbSunsetWalkSettingsStore';
+import {
+  defaultSunsetWalkSettings,
+  validateSunsetWalkSettings,
+} from '../../application/walk/SunsetWalkSettings';
+import { projectWalkSchedule } from '../../application/walk/WalkScheduleProjection';
 
 export const AUTOPILOT_GUARD_STORES = [
   'lifeActions',
@@ -57,6 +63,7 @@ export async function validateAutopilotGuard(
     walks,
     preferences,
     draft,
+    sunsetSettings,
   ] = await Promise.all([
     read('lifeActions'),
     read('goals'),
@@ -71,7 +78,10 @@ export async function validateAutopilotGuard(
     request<unknown>(
       transaction.objectStore('sync_settings').get(autopilotDraftKey(expected.date)),
     ),
+    request<unknown>(transaction.objectStore('sync_settings').get(SUNSET_WALK_SETTINGS_KEY)),
   ]);
+  const sleepState =
+    sleep === undefined ? createEmptySleepSchedule() : SleepScheduleRecordMapper.fromRecord(sleep);
   const actual = buildAutopilotGuard({
     date: expected.date,
     catalog: {
@@ -90,6 +100,17 @@ export async function validateAutopilotGuard(
     sleepObservations: observations.map(SleepObservationRecordMapper.fromRecord),
     routineBlocks: blocks.map(RoutineBlockRecordMapper.fromRecord),
     walks: walks.map(WalkRecordMapper.fromRecord),
+    ...(expected.sunsetWalkSettingsRevision === undefined
+      ? {}
+      : {
+          sunsetWalk: projectWalkSchedule(
+            sunsetSettings === undefined
+              ? defaultSunsetWalkSettings()
+              : validateSunsetWalkSettings(sunsetSettings),
+            expected.date,
+            sleepState.settings?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
+          ),
+        }),
     preferences:
       preferences === undefined
         ? { schemaVersion: 1, version: 0, value: defaultAutopilotPreferences() }

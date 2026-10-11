@@ -43,6 +43,7 @@ import {
 import { buildAutopilotGuard, type AutopilotGuardSource } from './AutopilotGuard';
 import { prepareLifeActionPlan } from '../commands/prepareLifeActionPlan';
 import { DomainError } from '../../shared/errors/DomainError';
+import { effectiveActionTime } from '../walk/WalkScheduleProjection';
 import {
   recoverySignalForDate,
   toPlannerInput,
@@ -53,6 +54,7 @@ import {
 } from './DayAutopilotService';
 
 export interface AutopilotProfile {
+  readonly walkSchedule?: import('../walk/WalkScheduleProjection').WalkScheduleProjection;
   readonly settings: AutopilotSettingsService;
   readonly schedule: Pick<SleepScheduleService, 'getState'>;
   readonly goals: GoalRepository;
@@ -64,6 +66,7 @@ export interface AutopilotProfile {
   readonly ids: IdGenerator;
 }
 export interface AutopilotSetup {
+  readonly sunsetWalk?: import('../walk/WalkScheduleProjection').WalkScheduleDay | undefined;
   readonly preferences: AutopilotStored<AutopilotPreferences>;
   readonly draft: AutopilotStored<AutopilotDayDraft>;
   readonly catalog: AutopilotCatalog;
@@ -121,7 +124,7 @@ export class PreferenceDayAutopilot {
     let cursor: string | undefined;
     do {
       const page = await this.profile.walks.list({
-        from: date,
+        from: shiftAutopilotDate(date, -1),
         to: date,
         ...(cursor ? { cursor } : {}),
       });
@@ -138,6 +141,10 @@ export class PreferenceDayAutopilot {
       walks: [...walks.values()],
       preferences,
       draft,
+      sunsetWalk: await this.profile.walkSchedule?.forPlannerDate(
+        date,
+        sleep.settings?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
+      ),
     };
   }
 
@@ -161,6 +168,7 @@ export class PreferenceDayAutopilot {
           : Math.min(1440, (source.draft.value.startMinute ?? 540) + capacity),
       sleepConfigured: source.sleep.settings !== null,
       timeZone: source.sleep.settings?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
+      sunsetWalk: source.sunsetWalk,
     };
   }
 
@@ -225,6 +233,7 @@ export class PreferenceDayAutopilot {
       routineBlocks: source.routineBlocks,
       walks: source.walks,
       actions: source.catalog.actions,
+      sunsetWalk: source.sunsetWalk,
       rebuild: input.mode === 'rebuild',
     });
     const plan = buildDayAutopilotPlan({
@@ -247,6 +256,17 @@ export class PreferenceDayAutopilot {
         .filter((action) => !action.isDeleted() && action.status === LIFE_ACTION_STATUS.completed)
         .map((action) => action.id.toString()),
       actions: source.catalog.actions
+        // Linked rows describe one shared walk; its representative lives in constraints.
+        .filter(
+          (action) =>
+            !(
+              source.sunsetWalk &&
+              source.sunsetWalk.kind !== 'disabled' &&
+              action.walkPlan &&
+              isAutopilotOpenAction(action) &&
+              action.plannedDate?.toString() === date
+            ),
+        )
         .filter(
           (action) =>
             isAutopilotOpenAction(action) ||
@@ -255,6 +275,8 @@ export class PreferenceDayAutopilot {
         )
         .map((action) => ({
           ...toPlannerInput(action, activeIds),
+          scheduledStartMinute: effectiveActionTime(action, source.sunsetWalk).startMinute,
+          scheduledDurationMinutes: effectiveActionTime(action, source.sunsetWalk).durationMinutes,
           plannedDate: action.plannedDate?.toString() ?? null,
           contextKey:
             action.directionId?.toString() ??
@@ -461,17 +483,26 @@ export class PreferenceDayAutopilot {
           routineBlocks: source.routineBlocks,
           walks: source.walks,
           actions: source.catalog.actions,
+          sunsetWalk: source.sunsetWalk,
           readback: true,
         }),
       ];
       for (const action of source.catalog.actions) {
+        const effective = effectiveActionTime(action, source.sunsetWalk);
         if (
           action.plannedDate?.toString() !== date ||
           action.isArchived() ||
           action.isDeleted() ||
           action.status === 'cancelled' ||
-          action.scheduledStartMinute === null ||
-          action.scheduledDurationMinutes === null
+          effective.startMinute === null ||
+          effective.durationMinutes === null
+        )
+          continue;
+        if (
+          source.sunsetWalk?.kind === 'available' &&
+          action.walkPlan &&
+          isAutopilotOpenAction(action) &&
+          blocks.some((block) => block.kind === 'walk')
         )
           continue;
         if (!blocks.some((block) => block.actionId === action.id.toString()))
@@ -479,8 +510,8 @@ export class PreferenceDayAutopilot {
             id: `action:${action.id.toString()}`,
             kind: 'action',
             title: action.title.toString(),
-            startMinute: action.scheduledStartMinute,
-            endMinute: action.scheduledStartMinute + action.scheduledDurationMinutes,
+            startMinute: effective.startMinute,
+            endMinute: effective.startMinute + effective.durationMinutes,
             sourceId: action.id.toString(),
             actionId: action.id.toString(),
             protected: true,

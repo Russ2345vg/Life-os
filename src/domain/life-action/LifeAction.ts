@@ -198,6 +198,22 @@ export class LifeAction extends Entity {
   public get walkPlan(): WalkPlanMetadata | null {
     return this.#walkPlan;
   }
+
+  public setWalkPlan(value: WalkPlanMetadata | null): void {
+    this.assertNotArchived();
+    if (
+      this.isDeleted() ||
+      (this.#status !== LIFE_ACTION_STATUS.draft && this.#status !== LIFE_ACTION_STATUS.ready)
+    )
+      throw new DomainError(
+        'walk.action_not_open',
+        'Связать с прогулкой можно только открытое действие.',
+      );
+    const next = validateWalkPlan(value);
+    if (JSON.stringify(next) === JSON.stringify(this.#walkPlan)) return;
+    this.#walkPlan = next;
+    this.#version++;
+  }
   public recordContributionManifest(values: readonly { id: string; goalId: string }[]): void {
     if (
       this.#status !== 'completed' ||

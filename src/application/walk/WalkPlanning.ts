@@ -5,6 +5,7 @@ import type { LifeActionRepository } from '../ports/LifeActionRepository';
 import type { WalkExportReservations } from './WalkMemoryExport';
 import { WalkCommands, walkRequest } from './WalkCommands';
 import { DomainError } from '../../shared/errors/DomainError';
+import type { RecurringActions } from '../planner/RecurringActions';
 export class WalkPlanning {
   public constructor(
     private readonly create: CreateLifeActionDraft,
@@ -12,7 +13,17 @@ export class WalkPlanning {
     private readonly actions: LifeActionRepository,
     private readonly reservations: WalkExportReservations,
     private readonly walks: WalkCommands,
+    private readonly linker?: Pick<RecurringActions, 'linkWalkAction'>,
   ) {}
+  public async linkAction(input: {
+    actionId: EntityId;
+    targetMinutes: number | null;
+    scope: 'action' | 'series';
+  }): Promise<void> {
+    if (!this.linker)
+      throw new DomainError('walk.planning_unavailable', 'Связь с прогулкой недоступна.');
+    await this.linker.linkWalkAction(input);
+  }
   public async plan(input: {
     requestId: string;
     date: string;

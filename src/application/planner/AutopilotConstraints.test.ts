@@ -4,7 +4,9 @@ import {
   defaultAutopilotDayDraft,
 } from '../../domain/planner/AutopilotPreferences';
 import { createEmptySleepSchedule, updateSleepSettings } from '../../domain/sleep/SleepSchedule';
-import { DayDate, EntityId, Walk } from '../../domain';
+import { DayDate, EntityId, Walk, RoutineBlock, RoutineBlockRecurrence } from '../../domain';
+import { createLifeActionDraft } from '../../test/helpers/LifeActionTestFactory';
+import { BORZYA_CITY } from '../../domain/walk/SunsetWalkSchedule';
 import { buildAutopilotConstraints } from './AutopilotConstraints';
 const now = new Date('2026-10-10T00:00:00Z');
 function input(
@@ -32,6 +34,127 @@ function input(
   };
 }
 describe('autopilot ritual constraints', () => {
+  it('uses one solar slot for a routine walk and a linked action', () => {
+    const source = input();
+    const action = createLifeActionDraft('linked-walk');
+    action.setPlan(DayDate.create(source.date), false);
+    action.setWalkPlan({ kind: 'walk', targetMinutes: 30 });
+    const routine = RoutineBlock.create({
+      id: EntityId.create('routine-walk'),
+      anchorDate: DayDate.create(source.date),
+      title: 'Прогулка',
+      startTime: '15:00',
+      endTime: '15:30',
+      category: 'rest',
+      recurrence: RoutineBlockRecurrence.create('daily'),
+      required: false,
+      assignment: { kind: 'walk' },
+      now,
+    });
+    const blocks = buildAutopilotConstraints({
+      ...source,
+      actions: [action],
+      routineBlocks: [routine],
+      sunsetWalk: {
+        date: source.date,
+        settingsRevision: 1,
+        kind: 'available',
+        city: BORZYA_CITY,
+        sunsetAt: 0,
+        walkStartAt: 0,
+        startMinute: 1096,
+      },
+    });
+    expect(blocks.filter((b) => b.kind === 'walk')).toMatchObject([
+      { startMinute: 1096, endMinute: 1126, actionId: 'linked-walk' },
+    ]);
+  });
+  it('keeps the user duration when a solar walk crosses the planner midnight', () => {
+    const source = input();
+    const blocks = buildAutopilotConstraints({
+      ...source,
+      preferences: {
+        ...source.preferences,
+        walk: { enabled: true, minutes: 30, startMinute: null },
+      },
+      sunsetWalk: {
+        date: source.date,
+        settingsRevision: 1,
+        kind: 'available',
+        city: BORZYA_CITY,
+        sunsetAt: 0,
+        walkStartAt: 0,
+        startMinute: 1430,
+        previousStartMinute: 1430,
+      },
+    });
+    expect(blocks.filter((b) => b.kind === 'walk')).toMatchObject([
+      { startMinute: 0, endMinute: 20 },
+      { startMinute: 1430, endMinute: 1440 },
+    ]);
+    expect(source.preferences.walk.minutes).toBe(30);
+  });
+  it('protects the shared solar walk slot instead of the old manual time', () => {
+    const source = input();
+    const blocks = buildAutopilotConstraints({
+      ...source,
+      preferences: {
+        ...source.preferences,
+        walk: { enabled: true, minutes: 30, startMinute: 700 },
+      },
+      sunsetWalk: {
+        date: source.date,
+        settingsRevision: 2,
+        kind: 'available',
+        city: {
+          id: '2026126',
+          name: 'Борзя',
+          region: 'Забайкальский край',
+          country: 'Россия',
+          latitude: 50.39138,
+          longitude: 116.53355,
+          timeZone: 'Asia/Chita',
+        },
+        sunsetAt: 0,
+        walkStartAt: 0,
+        startMinute: 1096,
+      },
+    });
+    expect(blocks.filter((b) => b.kind === 'walk')).toMatchObject([
+      { startMinute: 1096, endMinute: 1126, protected: true },
+    ]);
+  });
+  it('reads a solar walk that has already passed without asking for a replacement time', () => {
+    const source = input();
+    expect(() =>
+      buildAutopilotConstraints({
+        ...source,
+        now: new Date('2026-10-10T12:00:00Z'),
+        readback: true,
+        preferences: {
+          ...source.preferences,
+          walk: { enabled: true, minutes: 30, startMinute: 700 },
+        },
+        sunsetWalk: {
+          date: source.date,
+          settingsRevision: 1,
+          kind: 'available',
+          city: {
+            id: '2026126',
+            name: 'Борзя',
+            region: 'Забайкальский край',
+            country: 'Россия',
+            latitude: 50.39138,
+            longitude: 116.53355,
+            timeZone: 'Asia/Chita',
+          },
+          sunsetAt: 0,
+          walkStartAt: 0,
+          startMinute: 1096,
+        },
+      }),
+    ).not.toThrow();
+  });
   it('protects morning evening and sleep with disabled alarm without mutating settings', () => {
     const source = input();
     const before = structuredClone(source.sleep);

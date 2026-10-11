@@ -55,6 +55,7 @@ export class SleepScheduleService {
   readonly #clock: Clock;
   readonly #idGenerator: IdGenerator;
   readonly #alarmGateway: WakeAlarmGateway;
+  readonly #settingsListeners = new Set<(state: SleepScheduleState) => void>();
 
   public constructor(
     repository: SleepScheduleRepository,
@@ -70,6 +71,13 @@ export class SleepScheduleService {
 
   public async getState(): Promise<SleepScheduleState> {
     return (await this.#repository.load()) ?? createEmptySleepSchedule();
+  }
+
+  public subscribeSettings(listener: (state: SleepScheduleState) => void): () => void {
+    this.#settingsListeners.add(listener);
+    return () => {
+      this.#settingsListeners.delete(listener);
+    };
   }
 
   public async savePreparationTiming(timing: SleepPreparationTiming): Promise<SleepScheduleState> {
@@ -91,6 +99,7 @@ export class SleepScheduleService {
         nextId: () => this.#idGenerator.generate().toString(),
       });
     });
+    for (const listener of this.#settingsListeners) listener(state);
     await this.#reconcileNative(state);
     return state;
   }

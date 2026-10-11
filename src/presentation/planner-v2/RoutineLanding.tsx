@@ -1,4 +1,5 @@
 import { buildPlannerRoute, type PlannerRoute } from './PlannerNavigation';
+import { WalkTimeLabel } from './walks/SunsetWalkContext';
 
 const moments = [
   {
@@ -34,8 +35,10 @@ const moments = [
 
 export function RoutineLanding({
   onNavigate,
+  today,
 }: {
   readonly onNavigate: (route: PlannerRoute) => void;
+  readonly today?: string;
 }) {
   return (
     <section className="routine-page" aria-labelledby="routine-title">
@@ -65,6 +68,11 @@ export function RoutineLanding({
               <span className="routine-timeline__period">{moment.label}</span>
               <span className="routine-timeline__title">{moment.title}</span>
               <span className="routine-timeline__description">{moment.description}</span>
+              {moment.title === 'Прогулка' && today && (
+                <span className="routine-timeline__description">
+                  <WalkTimeLabel date={today} />
+                </span>
+              )}
               <span className="routine-timeline__arrow" aria-hidden="true">
                 ↗
               </span>

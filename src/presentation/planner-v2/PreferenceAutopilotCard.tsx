@@ -17,6 +17,7 @@ import { AutopilotPreferencesForm } from './AutopilotPreferencesForm';
 import { AutopilotPlanPreview, AutopilotTimeline } from './AutopilotPlanPreview';
 import type { AutopilotScheduleBlock } from '../../domain/planner/AutopilotSchedule';
 import './autopilot-preferences.css';
+import { SUNSET_WALK_SETTINGS_CHANGED } from '../../application/walk/SunsetWalkSettings';
 export type DayAutopilotClient = Pick<
   DayAutopilotService,
   'getSetup' | 'savePreferences' | 'saveDraft' | 'readSchedule' | 'preview' | 'apply'
@@ -44,6 +45,15 @@ export function PreferenceAutopilotCard({
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const generation = useRef(0);
+  const [sunsetRevision, setSunsetRevision] = useState(0);
+  useEffect(() => {
+    const changed = () => {
+      setPreview(null);
+      setSunsetRevision((value) => value + 1);
+    };
+    window.addEventListener(SUNSET_WALK_SETTINGS_CHANGED, changed);
+    return () => window.removeEventListener(SUNSET_WALK_SETTINGS_CHANGED, changed);
+  }, []);
   const dateKey = date.toString();
   useEffect(() => {
     const current = ++generation.current;
@@ -71,7 +81,7 @@ export function PreferenceAutopilotCard({
     return () => {
       generation.current += 1;
     };
-  }, [dateKey, service]);
+  }, [dateKey, service, sunsetRevision]);
   const disabled = busy || working;
   const persistPreferences = async (value: AutopilotPreferences): Promise<boolean> => {
     if (!setup || disabled) return false;

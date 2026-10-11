@@ -82,6 +82,7 @@ import type { MonthlyDirectionFocusView } from './MonthlyDirectionFocusCard';
 import { PlannerMemory } from './memory/PlannerMemory';
 import './memory/memory.css';
 import { PlannerWalks } from './walks/PlannerWalks';
+import { SunsetWalkProvider } from './walks/SunsetWalkContext';
 import { PlannerAnalytics } from './analytics/PlannerAnalytics';
 import './walks/walks.css';
 import type { PlannerServices } from '../../application/planner/PlannerServices';
@@ -107,7 +108,9 @@ interface PlannerData {
 export function PlannerWorkspace(props: Parameters<typeof PlannerWorkspaceContent>[0]) {
   return (
     <QuickAccessProvider>
-      <PlannerWorkspaceContent {...props} />
+      <SunsetWalkProvider services={props.services.walks} schedule={props.services.sleepSchedule}>
+        <PlannerWorkspaceContent {...props} />
+      </SunsetWalkProvider>
     </QuickAccessProvider>
   );
 }
@@ -1235,7 +1238,7 @@ function PlannerWorkspaceContent({
                 }
               />
             ) : route.view === 'routine' ? (
-              <RoutineLanding onNavigate={navigate} />
+              <RoutineLanding onNavigate={navigate} today={currentDate.toString()} />
             ) : route.view === 'planning' ? (
               <PlannerLibraryWorkspace
                 reads={libraryReads}
