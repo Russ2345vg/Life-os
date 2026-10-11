@@ -71,12 +71,15 @@ export function RoutineMorningPage({
 
 export function RoutineAutopilotPage({
   date,
+  day,
   service,
   busy,
   onApplied,
+  onSelectDay,
   onBack,
 }: {
   readonly date: DayDate;
+  readonly day: 'today' | 'tomorrow';
   readonly service?:
     | (Pick<DayAutopilotService, 'preview' | 'apply'> &
         Partial<
@@ -85,8 +88,15 @@ export function RoutineAutopilotPage({
     | undefined;
   readonly busy: boolean;
   readonly onApplied: () => Promise<void> | void;
+  readonly onSelectDay: (day: 'today' | 'tomorrow') => void;
   readonly onBack: () => void;
 }) {
+  const dateLabel = new Intl.DateTimeFormat('ru-RU', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    timeZone: 'UTC',
+  }).format(new Date(`${date.toString()}T12:00:00Z`));
   return (
     <div className="routine-subpage">
       <RoutineBack onBack={onBack} />
@@ -95,8 +105,39 @@ export function RoutineAutopilotPage({
         <h1 id="routine-autopilot-title">Автопилот дня</h1>
         <p>Соберите план и проверьте его перед применением.</p>
       </header>
+      <div className="planner-page-heading routine-autopilot-day">
+        <p className="planner-eyebrow">
+          {day === 'tomorrow' ? 'План на завтра' : 'План на сегодня'} ·{' '}
+          <time dateTime={date.toString()}>{dateLabel}</time>
+        </p>
+        <div className="planner-day-switch" role="group" aria-label="День автопилота">
+          <button
+            type="button"
+            aria-pressed={day === 'today'}
+            disabled={busy}
+            onClick={() => onSelectDay('today')}
+          >
+            Сегодня
+          </button>
+          <button
+            type="button"
+            aria-pressed={day === 'tomorrow'}
+            disabled={busy}
+            onClick={() => onSelectDay('tomorrow')}
+          >
+            Завтра
+          </button>
+        </div>
+      </div>
       {service ? (
-        <DayAutopilotCard date={date} service={service} busy={busy} onApplied={onApplied} />
+        <DayAutopilotCard
+          key={date.toString()}
+          date={date}
+          day={day}
+          service={service}
+          busy={busy}
+          onApplied={onApplied}
+        />
       ) : (
         <p role="alert">Автопилот недоступен в этой сборке.</p>
       )}

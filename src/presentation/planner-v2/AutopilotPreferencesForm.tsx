@@ -15,6 +15,7 @@ import { clockTime } from './timePresentation';
 import { AutopilotOrganizationForm } from './AutopilotOrganizationForm';
 
 export function AutopilotPreferencesForm({
+  day = 'today',
   setup,
   preferences,
   draft,
@@ -26,6 +27,7 @@ export function AutopilotPreferencesForm({
   onBuild,
   onPersistPreferences,
 }: {
+  readonly day?: 'today' | 'tomorrow';
   readonly setup: AutopilotSetup;
   readonly preferences: AutopilotPreferences;
   readonly draft: AutopilotDayDraft;
@@ -392,7 +394,7 @@ export function AutopilotPreferencesForm({
       </label>
       <div className="planner-day-autopilot__actions">
         <button className="planner-primary" disabled={busy} type="submit">
-          {busy ? 'Собираю…' : 'Собрать мой день'}
+          {busy ? 'Собираю…' : day === 'tomorrow' ? 'Собрать план на завтра' : 'Собрать мой день'}
         </button>
       </div>
     </form>

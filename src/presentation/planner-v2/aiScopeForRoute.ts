@@ -4,10 +4,10 @@ import type { PlannerRoute } from './PlannerNavigation';
 export function aiScopeForRoute(route: PlannerRoute, today: string): AiScope {
   switch (route.view) {
     case 'today':
+    case 'autopilot':
       return { section: 'today', date: today, tomorrow: route.day === 'tomorrow' };
     case 'routine':
     case 'morning':
-    case 'autopilot':
       return { section: 'today', date: today };
     case 'sphere':
       return { section: 'spheres', date: today, selectedId: route.id };

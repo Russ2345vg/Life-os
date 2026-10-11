@@ -6,6 +6,7 @@ import { PreferenceAutopilotCard, type DayAutopilotClient } from './PreferenceAu
 
 export function DayAutopilotCard(props: {
   readonly date: DayDate;
+  readonly day?: 'today' | 'tomorrow';
   readonly service: Pick<DayAutopilotService, 'preview' | 'apply'> & Partial<DayAutopilotClient>;
   readonly busy: boolean;
   readonly onApplied: () => Promise<void> | void;
@@ -26,16 +27,20 @@ export function DayAutopilotCard(props: {
 
 function LegacyDayAutopilotCard({
   date,
+  day = 'today',
   service,
   busy,
   onApplied,
 }: {
   readonly date: DayDate;
+  readonly day?: 'today' | 'tomorrow';
   readonly service: Pick<DayAutopilotService, 'preview' | 'apply'>;
   readonly busy: boolean;
   readonly onApplied: () => Promise<void> | void;
 }) {
-  const [startTime, setStartTime] = useState(defaultStartTime);
+  const [startTime, setStartTime] = useState(() =>
+    day === 'tomorrow' ? '09:00' : defaultStartTime(),
+  );
   const [rebuild, setRebuild] = useState(false);
   const [preview, setPreview] = useState<DayAutopilotPreview | null>(null);
   const [working, setWorking] = useState<'preview' | 'apply' | null>(null);
@@ -72,7 +77,7 @@ function LegacyDayAutopilotCard({
       await onApplied();
       setPreview(null);
       setRebuild(true);
-      setStartTime(defaultStartTime());
+      setStartTime(day === 'tomorrow' ? '09:00' : defaultStartTime());
       setMessage(`План применён: ${result.updatedCount} ${actionWord(result.updatedCount)}.`);
     } catch (reason: unknown) {
       setError(errorMessage(reason, 'Не удалось применить план. Соберите его ещё раз.'));
@@ -89,7 +94,7 @@ function LegacyDayAutopilotCard({
             <span className="planner-eyebrow">Умное планирование</span>
             <h3 id="day-autopilot-title">Автопилот дня</h3>
             <p>
-              Расставит задачи по времени, сохранит резерв и покажет, что сегодня не помещается.
+              Расставит задачи по времени, сохранит резерв и покажет, что в этот день не помещается.
             </p>
           </div>
           <span className="planner-day-autopilot__mark" aria-hidden="true">
@@ -125,7 +130,11 @@ function LegacyDayAutopilotCard({
               <span>Пересобрать будущие блоки</span>
             </label>
             <button className="planner-primary" type="button" disabled={disabled} onClick={build}>
-              {working === 'preview' ? 'Собираю…' : 'Собрать мой день'}
+              {working === 'preview'
+                ? 'Собираю…'
+                : day === 'tomorrow'
+                  ? 'Собрать план на завтра'
+                  : 'Собрать мой день'}
             </button>
           </div>
 

@@ -275,7 +275,7 @@ function PlannerWorkspaceContent({
     if (!previous && actionPanelId && quickAccess?.open) quickAccess.close();
   }, [actionPanelId, validReturnTarget, quickAccess]);
   const selectedDate =
-    route.view === 'today' && route.day === 'tomorrow'
+    (route.view === 'today' || route.view === 'autopilot') && route.day === 'tomorrow'
       ? DayDate.create(addDays(currentDate.toString(), 1))
       : currentDate;
   const selectedDateKey = selectedDate.toString();
@@ -1309,10 +1309,16 @@ function PlannerWorkspaceContent({
               />
             ) : route.view === 'autopilot' ? (
               <RoutineAutopilotPage
-                date={currentDate}
+                date={selectedDate}
+                day={route.day === 'tomorrow' ? 'tomorrow' : 'today'}
                 service={services.dayAutopilot}
                 busy={busy}
                 onApplied={() => load()}
+                onSelectDay={(day) =>
+                  void navigate(
+                    day === 'tomorrow' ? { view: 'autopilot', day } : { view: 'autopilot' },
+                  )
+                }
                 onBack={() => void navigate({ view: 'routine' })}
               />
             ) : route.view === 'today' ? (

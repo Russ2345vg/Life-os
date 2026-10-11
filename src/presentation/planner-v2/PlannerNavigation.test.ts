@@ -35,11 +35,22 @@ describe('V2 preview routes', () => {
       { view: 'routine' },
       { view: 'morning' },
       { view: 'autopilot' },
+      { view: 'autopilot', day: 'tomorrow' },
       { view: 'sleep', from: 'routine' },
     ] as const) {
       expect(parsePlannerRoute(buildPlannerRoute(route))).toEqual(route);
     }
     expect(parsePlannerRoute('#/v2/sleep')).toEqual({ view: 'sleep' });
+  });
+  it('keeps tomorrow selected when opening or reloading the day autopilot', () => {
+    expect(buildPlannerRoute({ view: 'autopilot', day: 'tomorrow' })).toBe(
+      '#/v2/routine/day?day=tomorrow',
+    );
+    expect(parsePlannerRoute('#/v2/routine/day?day=tomorrow')).toEqual({
+      view: 'autopilot',
+      day: 'tomorrow',
+    });
+    expect(parsePlannerRoute('#/v2/routine/day?day=invalid')).toEqual({ view: 'autopilot' });
   });
   it('opens the needs catalog and an encoded need', () => {
     expect(parsePlannerRoute('#/v2/needs')).toEqual({ view: 'needs' });

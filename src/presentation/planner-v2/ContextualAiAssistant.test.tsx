@@ -38,6 +38,10 @@ describe('assistant route context', () => {
       section: 'today',
       tomorrow: true,
     });
+    expect(aiScopeForRoute({ view: 'autopilot', day: 'tomorrow' }, '2026-10-03')).toMatchObject({
+      section: 'today',
+      tomorrow: true,
+    });
     expect(
       aiScopeForRoute(
         { view: 'analytics', period: 'month', date: '2026-09-01', topic: 'rest' },

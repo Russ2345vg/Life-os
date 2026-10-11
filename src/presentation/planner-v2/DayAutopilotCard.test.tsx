@@ -56,6 +56,19 @@ const preview: DayAutopilotPreview = {
 };
 
 describe('DayAutopilotCard', () => {
+  it('clearly builds tomorrow and starts a future legacy day at nine', () => {
+    const html = renderToStaticMarkup(
+      createElement(DayAutopilotCard, {
+        date: DayDate.create('2026-10-05'),
+        day: 'tomorrow',
+        service: { preview: vi.fn(), apply: vi.fn() },
+        busy: false,
+        onApplied: vi.fn(),
+      }),
+    );
+    expect(html).toContain('Собрать план на завтра');
+    expect(html).toContain('value="09:00"');
+  });
   it('renders an accessible preview-first entry point', () => {
     const html = renderToStaticMarkup(
       createElement(DayAutopilotCard, {

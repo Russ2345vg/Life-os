@@ -23,11 +23,13 @@ export type DayAutopilotClient = Pick<
 >;
 export function PreferenceAutopilotCard({
   date,
+  day = 'today',
   service,
   busy,
   onApplied,
 }: {
   readonly date: DayDate;
+  readonly day?: 'today' | 'tomorrow';
   readonly service: DayAutopilotClient;
   readonly busy: boolean;
   readonly onApplied: () => Promise<void> | void;
@@ -232,6 +234,7 @@ export function PreferenceAutopilotCard({
         <div className="planner-day-autopilot__body">
           {setup && preferences && draft ? (
             <AutopilotPreferencesForm
+              day={day}
               setup={setup}
               preferences={preferences}
               draft={draft}

@@ -35,7 +35,7 @@ export type PlannerRoute =
   | { readonly view: 'today'; readonly day?: 'tomorrow' }
   | { readonly view: 'routine' }
   | { readonly view: 'morning' }
-  | { readonly view: 'autopilot' }
+  | { readonly view: 'autopilot'; readonly day?: 'tomorrow' }
   | { readonly view: 'sleep'; readonly from?: 'routine' }
   | { readonly view: 'account' }
   | {
@@ -145,7 +145,11 @@ export function parsePlannerRoute(hash: string): PlannerRoute | null {
     };
   if (path === '#/v2/routine') return { view: 'routine' };
   if (path === '#/v2/routine/morning') return { view: 'morning' };
-  if (path === '#/v2/routine/day') return { view: 'autopilot' };
+  if (path === '#/v2/routine/day')
+    return {
+      view: 'autopilot',
+      ...(new URLSearchParams(query).get('day') === 'tomorrow' ? { day: 'tomorrow' as const } : {}),
+    };
   if (path === '#/v2/sleep')
     return new URLSearchParams(query).get('from') === 'routine'
       ? { view: 'sleep', from: 'routine' }
@@ -318,7 +322,8 @@ export function buildPlannerRoute(route: PlannerRoute): string {
     return route.day === 'tomorrow' ? '#/v2/today?day=tomorrow' : '#/v2/today';
   if (route.view === 'routine') return '#/v2/routine';
   if (route.view === 'morning') return '#/v2/routine/morning';
-  if (route.view === 'autopilot') return '#/v2/routine/day';
+  if (route.view === 'autopilot')
+    return route.day === 'tomorrow' ? '#/v2/routine/day?day=tomorrow' : '#/v2/routine/day';
   if (route.view === 'sleep')
     return route.from === 'routine' ? '#/v2/sleep?from=routine' : '#/v2/sleep';
   if (route.view === 'account') return '#/v2/account';
