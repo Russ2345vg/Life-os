@@ -93,6 +93,13 @@ export function PlannerToday({
   const [choosing, setChoosing] = useState(false);
   const planning = usePlanning();
   const [search, setSearch] = useState('');
+  const [mainSearch, setMainSearch] = useState('');
+  const mainCandidates = overview.actions.filter((action) =>
+    action.title
+      .toString()
+      .toLocaleLowerCase('ru-RU')
+      .includes(mainSearch.trim().toLocaleLowerCase('ru-RU')),
+  );
   const candidates = selectActionOptions(
     availableActions,
     planning?.state?.rules ?? [],
@@ -278,12 +285,57 @@ export function PlannerToday({
                 <h2>С чего начать?</h2>
                 <p>
                   {plannedCount
-                    ? 'Отметьте звёздочкой одно дело из плана. Оно появится здесь.'
+                    ? 'Выберите одно дело из плана. Оно появится здесь.'
                     : 'Выберите существующее действие или добавьте новое.'}
                 </p>
-                <button type="button" onClick={() => setChoosing(true)} aria-expanded={choosing}>
-                  Выбрать из действий →
-                </button>
+                {plannedCount ? (
+                  <details className="planner-details">
+                    <summary>Выбрать главное →</summary>
+                    <div
+                      className="planner-tomorrow-candidates"
+                      role="region"
+                      aria-label="Выбор главного дела"
+                    >
+                      <VoiceTextInput
+                        id="planner-main-search"
+                        aria-label="Поиск главного дела"
+                        value={mainSearch}
+                        onValueChange={setMainSearch}
+                        readOnly={busy}
+                      />
+                      {mainCandidates.length ? (
+                        <ul>
+                          {mainCandidates.map((action) => (
+                            <li key={action.id.toString()}>
+                              <span>
+                                {action.title.toString()} <RecurrenceBadge action={action} />
+                              </span>
+                              <button
+                                type="button"
+                                disabled={busy}
+                                aria-label={`Сделать главным: ${action.title.toString()}`}
+                                onClick={() => onPlan(action.id.toString(), true)}
+                              >
+                                Сделать главным
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="planner-empty">В плане нет дел по этому запросу.</p>
+                      )}
+                    </div>
+                  </details>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => setChoosing(true)}
+                    aria-expanded={choosing}
+                  >
+                    Выбрать из действий →
+                  </button>
+                )}
               </div>
             )}
           </section>
